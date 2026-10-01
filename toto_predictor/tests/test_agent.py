@@ -40,6 +40,15 @@ class AgentLoopTest(unittest.TestCase):
         self.assertEqual(agent._call_with_submit(client, None, "p", agent.ROUND_TOOL), {"x": 2})
         self.assertEqual(client.calls[1]["messages"][-1]["role"], "user")
 
+    def test_prompts_format(self):
+        match = {"index": 1, "home_he": "מכבי חיפה", "away_he": "הפועל באר שבע",
+                 "home_en": "Maccabi Haifa", "away_en": "Hapoel Beer Sheva",
+                 "league": "Ligat HaAl", "kickoff": "2026-10-03T19:30:00+03:00"}
+        text = agent.RESEARCH_PROMPT.format(today="2026-10-01", round_number="1", **match)
+        self.assertIn("מכבי חיפה - הפועל באר שבע", text)
+        self.assertIn("football.org.il", agent.RESEARCH_SYSTEM)
+        agent.ROUND_PROMPT.format(today="2026-10-01")
+
     def test_research_all_survives_failures(self):
         calls = {"n": 0}
 

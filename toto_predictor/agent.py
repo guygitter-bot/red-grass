@@ -151,7 +151,9 @@ Make sure it is the form that is open now, not last week's.
 
 Return the round number, the closing time, and all 16 matches in the order they \
 appear on the form, with team names in Hebrew as written on the form and the \
-common English name of each club, the league, and the exact kickoff date and \
+common English name of each club, the league (for Israeli matches the exact \
+competition, e.g. "Ligat HaAl", "Liga Leumit", "Liga Alef South", "State Cup"), \
+and the exact kickoff date and \
 time of every match as ISO 8601 with the Israel UTC offset \
 (e.g. 2026-10-03T19:30:00+03:00). Kickoff times matter: the form closes 6 \
 minutes before the first match starts, so double-check the earliest one.
@@ -178,7 +180,26 @@ include rumours or long-term absentees whose absence is already old news unless 
 they are still out for this match.
 - If you cannot find a value, use null (or 0 / empty list) instead of guessing.
 - Write summary_he in Hebrew, 2-4 sentences: the key reasons for your estimate.
-- When done, call submit_match_research. Do not answer in plain text."""
+- When done, call submit_match_research. Do not answer in plain text.
+
+Israeli matches (most of the form - Ligat HaAl, Liga Leumit, sometimes Liga \
+Alef, the State Cup and the Toto Cup):
+- Search in Hebrew, using the Hebrew club names from the form. English coverage \
+of Israeli football is thin, especially below Ligat HaAl.
+- Israel Football Association, football.org.il (ההתאחדות לכדורגל): fixtures, \
+results, tables, past meetings between the clubs (for h2h), and the \
+disciplinary court decisions (בית הדין המשמעתי) - suspensions (הרחקות, צהובים \
+מצטברים) and penalties such as a match without fans (משחק ללא קהל) or a ban on \
+away fans (איסור כניסת אוהדי חוץ).
+- Injuries and expected line-ups: Israeli sports media - one.co.il, sport5.co.il, \
+ynet sport, walla sport, Israel Hayom sport, Maariv sport - and the clubs' \
+official sites and social accounts. Transfermarkt covers Ligat HaAl and Liga \
+Leumit squads and injuries.
+- Venue: many Israeli clubs share stadiums or play "home" games away from their \
+city during renovations or after penalties. Set neutral=true when the home team \
+does not play at its usual home ground.
+- Odds for Liga Leumit and lower leagues are often missing online; then set odds \
+to null and put extra care into agent_estimate (table, form, home/away records)."""
 
 RESEARCH_PROMPT = """Today is {today}. Research this Toto 16 match (round {round_number}, match {index}):
 
