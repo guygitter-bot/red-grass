@@ -1,0 +1,35 @@
+name: Monthly Scala invoices
+
+on:
+  schedule:
+    # 1st of every month at 06:00 UTC (08:00/09:00 Israel time).
+    - cron: "0 6 1 * *"
+  workflow_dispatch:
+    inputs:
+      target_month:
+        description: "Month to process as YYYY-MM (empty = previous month)"
+        required: false
+        default: ""
+      dry_run:
+        description: "List the invoices without sending"
+        type: boolean
+        default: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Collect and send invoices
+        env:
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+          SCALA_SENDER_QUERY: ${{ vars.SCALA_SENDER_QUERY }}
+          EXTRA_GMAIL_QUERY: ${{ vars.EXTRA_GMAIL_QUERY }}
+          TARGET_MONTH: ${{ inputs.target_month }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+        run: python scala_invoices/send_scala_invoices.py
