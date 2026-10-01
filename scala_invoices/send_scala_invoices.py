@@ -9,7 +9,8 @@ Configuration (environment variables):
   GMAIL_ADDRESS        Gmail account to read from and send with (required)
   GMAIL_APP_PASSWORD   Gmail App Password for that account (required)
   RECIPIENT_EMAIL      Where to send the invoices; comma-separated for several (required)
-  SCALA_SENDER_QUERY   Gmail "from:" term identifying Scala's emails (default: scala)
+  SCALA_SENDER_QUERY   Gmail "from:" term identifying Scala's emails
+                       (default: donotreply@scala-ev.com)
   EXTRA_GMAIL_QUERY    Extra Gmail search terms to narrow the match (optional)
   TIMEZONE             Time zone that defines "the month" (default: Asia/Jerusalem)
   TARGET_MONTH         YYYY-MM to process instead of the previous month (optional)
@@ -154,7 +155,7 @@ def main():
     address = env("GMAIL_ADDRESS", required=True)
     password = env("GMAIL_APP_PASSWORD", required=True).replace(" ", "")
     recipients = [r.strip() for r in env("RECIPIENT_EMAIL", required=True).split(",") if r.strip()]
-    sender_query = env("SCALA_SENDER_QUERY", "scala")
+    sender_query = env("SCALA_SENDER_QUERY", "donotreply@scala-ev.com")
     extra_query = env("EXTRA_GMAIL_QUERY", "")
     tz = ZoneInfo(env("TIMEZONE", "Asia/Jerusalem"))
     dry_run = env("DRY_RUN", "0") in ("1", "true", "yes")

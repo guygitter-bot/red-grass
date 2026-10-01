@@ -20,8 +20,8 @@ runs `send_scala_invoices.py`. The script:
    | `GMAIL_APP_PASSWORD` | the App Password from step 1 |
    | `RECIPIENT_EMAIL` | where to send the invoices (separate several with commas) |
 4. *(Optional)* Add **variables** on the same page, under the *Variables* tab:
-   - `SCALA_SENDER_QUERY`: the Gmail `from:` term for Scala's emails. The default is `scala`.
-     If that matches other emails, set the exact sender address, for example `invoices@scala.co.il`.
+   - `SCALA_SENDER_QUERY`: the Gmail `from:` term for Scala's emails. The default is
+     `donotreply@scala-ev.com`; set this only if Scala starts sending from another address.
    - `EXTRA_GMAIL_QUERY`: extra Gmail search terms, for example `subject:חשבונית`.
 
 ## Test it
