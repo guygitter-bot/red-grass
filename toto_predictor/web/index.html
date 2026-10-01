@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>טוטו חכם</title>
+<style>
+  :root {
+    --bg: #f6f7f5; --card: #ffffff; --text: #1d2420; --muted: #66706a; --line: #dfe3e0;
+    --pick: #1f7a4d; --pick-text: #ffffff; --warn: #b4441c; --accent: #1f7a4d;
+    --bar: #cfe6da;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121614; --card: #1b201d; --text: #e8ece9; --muted: #9aa49e; --line: #2d3430;
+      --pick: #3fa874; --pick-text: #0b130f; --warn: #f08a5d; --accent: #5cc08d; --bar: #24402f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Arial, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .muted { color: var(--muted); font-size: .9rem; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin: 12px 0; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+  .stat b { display: block; font-size: 1.3rem; }
+  .stat.close { grid-column: 1 / -1; }
+  .warn { color: var(--warn); font-weight: 600; }
+  .banner { background: var(--warn); color: #fff; padding: 8px 12px; border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; }
+  td, th { padding: 6px 4px; border-bottom: 1px solid var(--line); text-align: right; vertical-align: middle; }
+  th { font-size: .8rem; color: var(--muted); font-weight: 500; }
+  .num { width: 28px; color: var(--muted); }
+  .match { cursor: pointer; }
+  .match small { color: var(--muted); display: block; }
+  .cell { width: 54px; text-align: center; }
+  .cell button { width: 50px; padding: 6px 0; border-radius: 6px; border: 1px solid var(--line);
+                 background: transparent; color: var(--muted); font: inherit; cursor: pointer; line-height: 1.1; }
+  .cell button.on { background: var(--pick); border-color: var(--pick); color: var(--pick-text); font-weight: 700; }
+  .cell button span { display: block; font-size: .7rem; font-weight: 400; }
+  .details td { background: var(--bg); font-size: .9rem; }
+  .details ul { margin: 4px 0; padding-inline-start: 18px; }
+  .details a { color: var(--accent); word-break: break-all; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .toolbar button, select { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line);
+                            background: var(--card); color: var(--text); cursor: pointer; }
+  .toolbar button.primary { background: var(--accent); color: var(--pick-text); border-color: var(--accent); }
+  .alts td { font-size: .9rem; }
+  @media (max-width: 520px) {
+    .cell { width: 44px; } .cell button { width: 42px; }
+    td, th { padding: 6px 2px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>טוטו חכם</h1>
+  <div class="muted" id="subtitle">טוען…</div>
+  <div id="app"></div>
+</main>
+<script>
+const OUT = ["1", "X", "2"];
+const ADJ = {history: "עונות קודמות", league_draws: "נטיית תיקו בליגה", heat: "חום", rain: "גשם", wind: "רוח",
+             absences: "נעדרים", rotation: "רוטציה", fatigue: "עומס", internationals: "נבחרות", venue: "ביתיות", h2h: "ראש בראש"};
+let data = null, covers = [], openRow = null;
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pct = p => (p * 100).toFixed(p < 0.01 ? 2 : 1) + "%";
+const safeUrl = u => /^https?:\/\//i.test(u || "") ? u : null;
+
+async function getJson(path) {
+  const r = await fetch(path, {cache: "no-store"});
+  if (!r.ok) throw new Error(path + ": " + r.status);
+  return r.json();
+}
+
+function summary() {
+  let doubles = 0, triples = 0, p16 = 1;
+  data.matches.forEach((m, i) => {
+    const c = covers[i];
+    if (c.length === 2) doubles++;
+    if (c.length === 3) triples++;
+    p16 *= c.reduce((s, o) => s + m.prob[o], 0);
+  });
+  const columns = 2 ** doubles * 3 ** triples;
+  return {doubles, triples, columns, cost: columns * data.column_price, p16};
+}
+
+function closeInfo() {
+  const t = Date.parse(data.close_time || "");
+  if (isNaN(t)) return {left: "לא ידוע", at: "", urgent: false};
+  const at = new Date(t).toLocaleString("he-IL", {timeZone: "Asia/Jerusalem", weekday: "long",
+    day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"});
+  const ms = t - Date.now();
+  if (ms <= 0) return {left: "הטופס נסגר", at, urgent: true};
+  const mins = Math.floor(ms / 6e4), h = Math.floor(mins / 60), d = Math.floor(h / 24);
+  const left = d ? `${d === 1 ? "יום" : d + " ימים"} ו-${h % 24} שעות` : h ? `${h} שעות ו-${mins % 60} דק'` : `${mins} דקות`;
+  return {left: "בעוד " + left, at, urgent: ms < 2 * 36e5};
+}
+
+function ticketText() {
+  const s = summary();
+  return [`טוטו 16 – מחזור ${data.round_number}`,
+    ...data.matches.map((m, i) => `${m.index}. ${m.home_he} – ${m.away_he}: ${covers[i].join("")}`),
+    `${s.columns} טורים · ${s.cost} ₪`].join("\n");
+}
+
+function detailsHtml(m) {
+  const r = m.research;
+  if (!r) return `<p class="warn">המחקר למשחק הזה נכשל. ההסתברויות הן ברירת מחדל.</p>`;
+  const adj = Object.entries(m.adjustments).filter(([, v]) => v)
+    .map(([k, v]) => `${esc(ADJ[k] || k)}: ${v > 0 ? "+" : ""}${v.toFixed(2)} (${v > 0 ? "לטובת המארחת" : "לטובת האורחת"})`);
+  const abs = (r.absences || []).map(a => {
+    const u = safeUrl(a.source);
+    return `<li>${a.team === "home" ? esc(m.home_he) : esc(m.away_he)}: ${esc(a.player)} (${a.status === "doubtful" ? "בספק" : "בחוץ"} · ${esc({injury: "פציעה", suspension: "הרחקה", other: "אחר"}[a.reason] || a.reason)} · חשיבות ${a.importance})${u ? ` – <a href="${esc(u)}" target="_blank" rel="noopener">מקור</a>` : ""}</li>`;
+  });
+  const src = (r.sources || []).map(safeUrl).filter(Boolean)
+    .map(u => `<li><a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a></li>`);
+  const h = r.history || {}, w = r.weather;
+  const wx = w ? [w.temperature_c != null ? `${w.temperature_c}°` : "", w.precipitation_mm ? `גשם ${w.precipitation_mm} מ"מ` : "",
+    w.wind_kmh != null ? `רוח ${w.wind_kmh} קמ"ש` : ""].filter(Boolean).join(", ") : "";
+  const drawAdj = Object.entries(m.draw_adjustments || {}).filter(([, v]) => v)
+    .map(([k, v]) => `${esc(ADJ[k] || k)}: ${v > 0 ? "יותר" : "פחות"} תיקו (${v > 0 ? "+" : ""}${v.toFixed(2)})`);
+  const odds = r.odds ? OUT.map(o => `${o}: ${r.odds[o]}`).join(" · ") : "לא נמצאו";
+  return `<p>${esc(r.summary_he)}</p>
+    <div>יחסים: ${odds} · בסיס: ${esc({"odds+agent": "יחסים + הערכת הסוכן", odds: "יחסים", agent: "הערכת הסוכן", fallback: "ברירת מחדל"}[m.base_source] || m.base_source)} · ביטחון: ${Math.round((r.confidence || 0) * 100)}%</div>
+    <div>ראש בראש (10 שנים): ${r.h2h.home_wins}-${r.h2h.draws}-${r.h2h.away_wins} · כושר: ${esc(r.form.home_last6)} / ${esc(r.form.away_last6)}</div>
+    <div>מנוחה: ${r.fatigue.home_rest_days ?? "?"} / ${r.fatigue.away_rest_days ?? "?"} ימים · ${esc(r.venue.stadium)}${r.venue.home_fan_ban ? " · <b>ללא קהל</b>" : ""}${r.venue.neutral ? " · מגרש ניטרלי" : ""}</div>
+    ${adj.length ? `<div>התאמות: ${adj.join(" · ")}</div>` : ""}
+    ${drawAdj.length ? `<div>השפעה על התיקו: ${drawAdj.join(" · ")}</div>` : ""}
+    <div>שעת פתיחה: ${esc(m.kickoff_local || "לא ידוע")}${wx ? ` · מזג אוויר: ${wx}` : ""}</div>
+    ${h.home_prev_seasons || h.away_prev_seasons ? `<div>עונות קודמות: ${esc(m.home_he)}: ${esc(h.home_prev_seasons)} · ${esc(m.away_he)}: ${esc(h.away_prev_seasons)}</div>` : ""}
+    ${h.home_team_home_ppg != null ? `<div>נקודות למשחק: ${esc(m.home_he)} בבית ${h.home_team_home_ppg} · ${esc(m.away_he)} בחוץ ${h.away_team_away_ppg ?? "?"}${h.league_draw_rate ? ` · תיקו בליגה ${Math.round(h.league_draw_rate * 100)}%` : ""}</div>` : ""}
+    ${abs.length ? `<div>נעדרים:</div><ul>${abs.join("")}</ul>` : ""}
+    ${r.motivation ? `<div>מוטיבציה: ${esc(r.motivation)}</div>` : ""}
+    ${src.length ? `<details><summary>מקורות (${src.length})</summary><ul>${src.join("")}</ul></details>` : ""}`;
+}
+
+function render(index) {
+  const s = summary(), over = s.cost > data.budget, close = closeInfo();
+  const rec = data.ticket;
+  document.getElementById("subtitle").textContent =
+    `מחזור ${data.round_number} · עודכן ${new Date(data.generated_at).toLocaleString("he-IL")}`;
+  const rows = data.matches.map((m, i) => `
+    <tr>
+      <td class="num">${m.index}</td>
+      <td class="match" data-row="${i}">${esc(m.home_he)} – ${esc(m.away_he)}
+        <small>${esc(m.league)}${m.kickoff_local ? " · " + esc(m.kickoff_local) : ""}${m.researched ? "" : ` · <span class="warn">ללא מחקר</span>`}</small></td>
+      ${OUT.map(o => `<td class="cell"><button data-i="${i}" data-o="${o}" class="${covers[i].includes(o) ? "on" : ""}"
+          aria-pressed="${covers[i].includes(o)}">${o}<span>${pct(m.prob[o])}</span></button></td>`).join("")}
+    </tr>
+    ${openRow === i ? `<tr class="details"><td></td><td colspan="4">${detailsHtml(m)}</td></tr>` : ""}`).join("");
+  const alts = data.alternatives.map(a => `<tr><td>${a.triples} משולשים, ${a.doubles} כפולים</td>
+      <td>${a.columns} טורים</td><td>${a.cost} ₪</td><td>${pct(a.p16)}</td></tr>`).join("");
+  document.getElementById("app").innerHTML = `
+    ${data.round_number === "demo" ? `<p class="banner">אלה נתוני הדגמה. הטופס האמיתי יופיע כאן אחרי הריצה הראשונה ביום חמישי.</p>` : ""}
+    <div class="card stats">
+      <div class="stat close"><span class="muted">לשלוח עד</span><b class="${close.urgent ? "warn" : ""}">${close.left}</b>
+        <span class="muted">${esc(close.at)}${data.close_time_source === "first_kickoff" ? " · 6 דק' לפני המשחק הראשון" : ""}</span></div>
+      <div class="stat"><span class="muted">טורים</span><b>${s.columns}</b></div>
+      <div class="stat"><span class="muted">עלות</span><b class="${over ? "warn" : ""}">${s.cost} ₪</b></div>
+      <div class="stat"><span class="muted">סיכוי ל-16</span><b>${pct(s.p16)}</b></div>
+    </div>
+    ${over ? `<p class="warn">חריגה מהתקציב (${data.budget} ₪). הורד כפול או משולש.</p>` : ""}
+    <div class="toolbar">
+      <button class="primary" id="copy">העתק טופס</button>
+      <button id="reset">חזרה להמלצה</button>
+      ${index.length > 1 ? `<select id="round">${index.slice().reverse().map(r =>
+        `<option value="${esc(r)}" ${r === data.round_number ? "selected" : ""}>מחזור ${esc(r)}</option>`).join("")}</select>` : ""}
+      <span class="muted">התחזית מבוססת על מה שידוע ביום חמישי, לפני פרסום ההרכבים.</span>
+      <span class="muted">לחיצה על 1/X/2 משנה את הסימון · לחיצה על משחק מציגה את הנימוקים</span>
+    </div>
+    <div class="card"><table>
+      <thead><tr><th>#</th><th>משחק</th><th class="cell">1</th><th class="cell">X</th><th class="cell">2</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <div class="card alts"><div class="muted">ההמלצה: ${rec.triples} משולשים ו-${rec.doubles} כפולים. כל הצירופים שנבדקו:</div>
+      <table><tbody>${alts}</tbody></table></div>`;
+
+  document.querySelectorAll(".cell button").forEach(b => b.onclick = () => {
+    const i = +b.dataset.i, o = b.dataset.o, c = covers[i];
+    if (c.includes(o)) { if (c.length > 1) covers[i] = c.filter(x => x !== o); }
+    else covers[i] = OUT.filter(x => x === o || c.includes(x));
+    render(index);
+  });
+  document.querySelectorAll(".match").forEach(td => td.onclick = () => {
+    const i = +td.dataset.row; openRow = openRow === i ? null : i; render(index);
+  });
+  document.getElementById("copy").onclick = async e => {
+    try { await navigator.clipboard.writeText(ticketText()); e.target.textContent = "הועתק ✓"; }
+    catch { alert(ticketText()); }
+  };
+  document.getElementById("reset").onclick = () => { covers = data.matches.map(m => [...m.cover]); render(index); };
+  const sel = document.getElementById("round");
+  if (sel) sel.onchange = () => load(index, sel.value);
+}
+
+async function load(index, round) {
+  data = await getJson(round ? `data/rounds/${encodeURIComponent(round)}.json` : "data/latest.json");
+  covers = data.matches.map(m => [...m.cover]);
+  openRow = null;
+  render(index);
+}
+
+(async () => {
+  try {
+    const index = await getJson("data/index.json").catch(() => []);
+    await load(index);
+  } catch (e) {
+    document.getElementById("subtitle").textContent = "עדיין אין טופס. הריצה הראשונה תיצור אותו.";
+  }
+})();
+</script>
+</body>
+</html>
