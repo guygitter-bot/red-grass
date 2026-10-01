@@ -72,7 +72,8 @@ ROUND_TOOL = {
 RESEARCH_TOOL = {
     "name": "submit_match_research",
     "description": "Submit the structured research for one match. Use null where nothing reliable was found.",
-    "strict": True,
+    # Not strict: this schema is too large for strict mode's compiled grammar
+    # (the API rejects it). model.py reads every field defensively instead.
     "input_schema": _obj(
         {
             "odds": {"anyOf": [TRIPLE, {"type": "null"}]},

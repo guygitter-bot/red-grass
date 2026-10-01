@@ -111,27 +111,30 @@ function detailsHtml(m) {
   if (!r) return `<p class="warn">המחקר למשחק הזה נכשל. ההסתברויות הן ברירת מחדל.</p>`;
   const adj = Object.entries(m.adjustments).filter(([, v]) => v)
     .map(([k, v]) => `${esc(ADJ[k] || k)}: ${v > 0 ? "+" : ""}${v.toFixed(2)} (${v > 0 ? "לטובת המארחת" : "לטובת האורחת"})`);
-  const abs = (r.absences || []).map(a => {
+  const obj = v => (v && typeof v === "object" && !Array.isArray(v)) ? v : {};
+  const list = v => Array.isArray(v) ? v : [];
+  const h2h = obj(r.h2h), form = obj(r.form), fat = obj(r.fatigue), venue = obj(r.venue);
+  const abs = list(r.absences).filter(a => a && typeof a === "object").map(a => {
     const u = safeUrl(a.source);
-    return `<li>${a.team === "home" ? esc(m.home_he) : esc(m.away_he)}: ${esc(a.player)} (${a.status === "doubtful" ? "בספק" : "בחוץ"} · ${esc({injury: "פציעה", suspension: "הרחקה", other: "אחר"}[a.reason] || a.reason)} · חשיבות ${a.importance})${u ? ` – <a href="${esc(u)}" target="_blank" rel="noopener">מקור</a>` : ""}</li>`;
+    return `<li>${a.team === "home" ? esc(m.home_he) : esc(m.away_he)}: ${esc(a.player)} (${a.status === "doubtful" ? "בספק" : "בחוץ"} · ${esc({injury: "פציעה", suspension: "הרחקה", other: "אחר"}[a.reason] || a.reason)} · חשיבות ${esc(a.importance)})${u ? ` – <a href="${esc(u)}" target="_blank" rel="noopener">מקור</a>` : ""}</li>`;
   });
-  const src = (r.sources || []).map(safeUrl).filter(Boolean)
+  const src = list(r.sources).map(safeUrl).filter(Boolean)
     .map(u => `<li><a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a></li>`);
-  const h = r.history || {}, w = r.weather;
-  const wx = w ? [w.temperature_c != null ? `${w.temperature_c}°` : "", w.precipitation_mm ? `גשם ${w.precipitation_mm} מ"מ` : "",
-    w.wind_kmh != null ? `רוח ${w.wind_kmh} קמ"ש` : ""].filter(Boolean).join(", ") : "";
+  const h = obj(r.history), w = r.weather && typeof r.weather === "object" ? r.weather : null;
+  const wx = w ? [w.temperature_c != null ? `${esc(w.temperature_c)}°` : "", w.precipitation_mm ? `גשם ${esc(w.precipitation_mm)} מ"מ` : "",
+    w.wind_kmh != null ? `רוח ${esc(w.wind_kmh)} קמ"ש` : ""].filter(Boolean).join(", ") : "";
   const drawAdj = Object.entries(m.draw_adjustments || {}).filter(([, v]) => v)
     .map(([k, v]) => `${esc(ADJ[k] || k)}: ${v > 0 ? "יותר" : "פחות"} תיקו (${v > 0 ? "+" : ""}${v.toFixed(2)})`);
-  const odds = r.odds ? OUT.map(o => `${o}: ${r.odds[o]}`).join(" · ") : "לא נמצאו";
+  const odds = r.odds && typeof r.odds === "object" ? OUT.map(o => `${o}: ${esc(r.odds[o])}`).join(" · ") : "לא נמצאו";
   return `<p>${esc(r.summary_he)}</p>
-    <div>יחסים: ${odds} · בסיס: ${esc({"odds+agent": "יחסים + הערכת הסוכן", odds: "יחסים", agent: "הערכת הסוכן", fallback: "ברירת מחדל"}[m.base_source] || m.base_source)} · ביטחון: ${Math.round((r.confidence || 0) * 100)}%</div>
-    <div>ראש בראש (10 שנים): ${r.h2h.home_wins}-${r.h2h.draws}-${r.h2h.away_wins} · כושר: ${esc(r.form.home_last6)} / ${esc(r.form.away_last6)}</div>
-    <div>מנוחה: ${r.fatigue.home_rest_days ?? "?"} / ${r.fatigue.away_rest_days ?? "?"} ימים · ${esc(r.venue.stadium)}${r.venue.home_fan_ban ? " · <b>ללא קהל</b>" : ""}${r.venue.neutral ? " · מגרש ניטרלי" : ""}</div>
+    <div>יחסים: ${odds} · בסיס: ${esc({"odds+agent": "יחסים + הערכת הסוכן", odds: "יחסים", agent: "הערכת הסוכן", fallback: "ברירת מחדל"}[m.base_source] || m.base_source)} · ביטחון: ${Math.round((Number(r.confidence) || 0) * 100)}%</div>
+    <div>ראש בראש (10 שנים): ${esc(h2h.home_wins ?? "?")}-${esc(h2h.draws ?? "?")}-${esc(h2h.away_wins ?? "?")} · כושר: ${esc(form.home_last6)} / ${esc(form.away_last6)}</div>
+    <div>מנוחה: ${esc(fat.home_rest_days ?? "?")} / ${esc(fat.away_rest_days ?? "?")} ימים · ${esc(venue.stadium)}${venue.home_fan_ban === true ? " · <b>ללא קהל</b>" : ""}${venue.neutral === true ? " · מגרש ניטרלי" : ""}</div>
     ${adj.length ? `<div>התאמות: ${adj.join(" · ")}</div>` : ""}
     ${drawAdj.length ? `<div>השפעה על התיקו: ${drawAdj.join(" · ")}</div>` : ""}
     <div>שעת פתיחה: ${esc(m.kickoff_local || "לא ידוע")}${wx ? ` · מזג אוויר: ${wx}` : ""}</div>
     ${h.home_prev_seasons || h.away_prev_seasons ? `<div>עונות קודמות: ${esc(m.home_he)}: ${esc(h.home_prev_seasons)} · ${esc(m.away_he)}: ${esc(h.away_prev_seasons)}</div>` : ""}
-    ${h.home_team_home_ppg != null ? `<div>נקודות למשחק: ${esc(m.home_he)} בבית ${h.home_team_home_ppg} · ${esc(m.away_he)} בחוץ ${h.away_team_away_ppg ?? "?"}${h.league_draw_rate ? ` · תיקו בליגה ${Math.round(h.league_draw_rate * 100)}%` : ""}</div>` : ""}
+    ${h.home_team_home_ppg != null ? `<div>נקודות למשחק: ${esc(m.home_he)} בבית ${esc(h.home_team_home_ppg)} · ${esc(m.away_he)} בחוץ ${esc(h.away_team_away_ppg ?? "?")}${h.league_draw_rate ? ` · תיקו בליגה ${Math.round(Number(h.league_draw_rate) * 100)}%` : ""}</div>` : ""}
     ${abs.length ? `<div>נעדרים:</div><ul>${abs.join("")}</ul>` : ""}
     ${r.motivation ? `<div>מוטיבציה: ${esc(r.motivation)}</div>` : ""}
     ${src.length ? `<details><summary>מקורות (${src.length})</summary><ul>${src.join("")}</ul></details>` : ""}`;
@@ -144,7 +147,7 @@ function render(index) {
     `מחזור ${data.round_number} · עודכן ${new Date(data.generated_at).toLocaleString("he-IL")}`;
   const rows = data.matches.map((m, i) => `
     <tr>
-      <td class="num">${m.index}</td>
+      <td class="num">${esc(m.index)}</td>
       <td class="match" data-row="${i}">${esc(m.home_he)} – ${esc(m.away_he)}
         <small>${esc(m.league)}${m.kickoff_local ? " · " + esc(m.kickoff_local) : ""}${m.researched ? "" : ` · <span class="warn">ללא מחקר</span>`}</small></td>
       ${OUT.map(o => `<td class="cell"><button data-i="${i}" data-o="${o}" class="${covers[i].includes(o) ? "on" : ""}"

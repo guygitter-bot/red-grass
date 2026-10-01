@@ -83,8 +83,8 @@ def add_weather(matches: list[dict], research: list[dict | None], fetch=None) ->
     for match, res in zip(matches, research):
         if not res:
             continue
-        venue = res.get("venue") or {}
-        lat, lon = venue.get("latitude"), venue.get("longitude")
+        venue = res.get("venue") if isinstance(res.get("venue"), dict) else {}
+        lat, lon = model._num(venue.get("latitude")), model._num(venue.get("longitude"))
         kickoff = closing.parse_time(match.get("kickoff"))
         if lat is None or lon is None or kickoff is None:
             continue
