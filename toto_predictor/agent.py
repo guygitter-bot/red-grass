@@ -58,7 +58,10 @@ ROUND_TOOL = {
                         "home_en": {"type": "string"},
                         "away_en": {"type": "string"},
                         "league": {"type": "string"},
-                        "kickoff": {"type": "string"},
+                        "kickoff": {
+                            "type": "string",
+                            "description": "ISO 8601 with offset, e.g. 2026-10-03T19:30:00+03:00",
+                        },
                     }
                 ),
             },
@@ -138,7 +141,10 @@ Make sure it is the form that is open now, not last week's.
 
 Return the round number, the closing time, and all 16 matches in the order they \
 appear on the form, with team names in Hebrew as written on the form and the \
-common English name of each club, the league, and the kickoff time.
+common English name of each club, the league, and the exact kickoff date and \
+time of every match as ISO 8601 with the Israel UTC offset \
+(e.g. 2026-10-03T19:30:00+03:00). Kickoff times matter: the form closes 6 \
+minutes before the first match starts, so double-check the earliest one.
 
 When you are done, call submit_round. Do not answer in plain text."""
 

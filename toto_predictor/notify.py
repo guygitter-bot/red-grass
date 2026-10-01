@@ -10,6 +10,8 @@ import urllib.parse
 import urllib.request
 from email.message import EmailMessage
 
+from toto_predictor import closing
+
 log = logging.getLogger(__name__)
 
 CALLMEBOT_URL = "https://api.callmebot.com/whatsapp.php"
@@ -23,11 +25,15 @@ def ticket_text(result: dict) -> str:
     t = result["ticket"]
     lines = [
         f"⚽ טוטו 16 – מחזור {result['round_number']}",
-        f"סגירה: {result.get('close_time') or 'לא ידוע'}",
+        f"⏰ לשלוח עד: {closing.format_he(closing.parse_time(result.get('close_time')))}",
+        "(6 דקות לפני שריקת הפתיחה של המשחק הראשון)"
+        if result.get("close_time_source") == "first_kickoff"
+        else "",
         "",
     ]
     for m in result["matches"]:
         lines.append(f"{m['index']}. {m['home_he']} – {m['away_he']}: {_pick_label(m['cover'])}")
+    lines = [line for i, line in enumerate(lines) if line or i == 3]
     lines += [
         "",
         f"{t['doubles']} כפולים, {t['triples']} משולשים · {t['columns']} טורים · {t['cost']:.0f} ₪",

@@ -10,6 +10,10 @@ on:
         description: "Optional: 16 matches 'home - away' separated by ';' (skips finding the form)"
         required: false
         default: ""
+      manual_first_kickoff:
+        description: "With manual matches: first kickoff, Israel time (e.g. 2026-10-03T19:30). The form closes 6 minutes earlier"
+        required: false
+        default: ""
       manual_round:
         description: "Optional round number for manual matches"
         required: false
@@ -57,6 +61,7 @@ jobs:
           TOTO_SITE_URL: ${{ vars.TOTO_SITE_URL || format('https://{0}.github.io/{1}/', github.repository_owner, github.event.repository.name) }}
           MANUAL_MATCHES: ${{ inputs.manual_matches }}
           MANUAL_ROUND: ${{ inputs.manual_round }}
+          MANUAL_FIRST_KICKOFF: ${{ inputs.manual_first_kickoff }}
           DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
           DEMO: ${{ inputs.demo && '1' || '0' }}
         run: python toto_predictor/run_weekly.py

@@ -18,6 +18,8 @@ COLUMN_PRICE = _env_float("TOTO_COLUMN_PRICE", 3.0)
 BUDGET = _env_float("TOTO_BUDGET", 120.0)
 # Number of matches on the form.
 MATCH_COUNT = 16
+# The form can be sent until this many minutes before the first kickoff.
+CLOSE_BEFORE_KICKOFF_MINUTES = 6
 
 # Claude model used by the research agent.
 MODEL = os.environ.get("TOTO_MODEL", "").strip() or "claude-opus-5-5"

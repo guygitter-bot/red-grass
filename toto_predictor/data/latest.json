@@ -1,8 +1,10 @@
 {
   "round_number": "demo",
-  "close_time": null,
+  "close_time": "2026-10-03T14:54:00+03:00",
+  "close_time_source": "first_kickoff",
+  "first_kickoff_rule_minutes": 6,
   "source_url": "demo",
-  "generated_at": "2026-10-01T17:08:53+00:00",
+  "generated_at": "2026-10-01T17:14:08+00:00",
   "column_price": 3.0,
   "budget": 120.0,
   "site_url": null,
@@ -273,7 +275,7 @@
       "home_en": "מכבי חיפה",
       "away_en": "הפועל באר שבע",
       "league": "demo",
-      "kickoff": "demo",
+      "kickoff": "2026-10-03T15:00:00+03:00",
       "research": {
         "odds": {
           "1": 2.5,
@@ -352,7 +354,7 @@
       "home_en": "מכבי ת\"א",
       "away_en": "בית\"ר ירושלים",
       "league": "demo",
-      "kickoff": "demo",
+      "kickoff": "2026-10-03T15:30:00+03:00",
       "research": {
         "odds": {
           "1": 2.88,
@@ -432,7 +434,7 @@
       "home_en": "הפועל ת\"א",
       "away_en": "מכבי נתניה",
       "league": "demo",
-      "kickoff": "demo",
+      "kickoff": "2026-10-03T16:00:00+03:00",
       "research": {
         "odds": {
           "1": 1.9,
@@ -510,7 +512,7 @@
       "home_en": "בני סכנין",
       "away_en": "הפועל חיפה",
       "league": "demo",
-      "kickoff": "demo",
+      "kickoff": "2026-10-03T16:30:00+03:00",
       "research": {
         "odds": {
           "1": 1.84,
@@ -588,7 +590,7 @@
       "home_en": "מ.ס. אשדוד",
       "away_en": "הפועל ירושלים",
       "league": "demo",
-      "kickoff": "demo",
+      "kickoff": "2026-10-03T17:00:00+03:00",
       "research": {
         "odds": {
           "1": 1.6,
@@ -666,7 +668,7 @@
       "home_en": "עירוני קריית שמונה",
       "away_en": "מכבי בני ריינה",
       "league": "demo",
-      "kickoff": "demo",
+      "kickoff": "2026-10-03T17:30:00+03:00",
       "research": {
         "odds": {
           "1": 4.28,
@@ -744,7 +746,7 @@
       "home_en": "ארסנל",
       "away_en": "צ'לסי",
       "league": "demo",
-      "kickoff": "demo",
+      "kickoff": "2026-10-03T18:00:00+03:00",
       "research": {
         "odds": {
           "1": 2.68,
@@ -823,7 +825,7 @@
       "home_en": "ליברפול",
       "away_en": "אסטון וילה",
       "league": "demo",
-      "kickoff": "demo",
+      "kickoff": "2026-10-03T18:30:00+03:00",
       "research": {
         "odds": {
           "1": 2.25,
@@ -903,7 +905,7 @@
       "home_en": "ריאל מדריד",
       "away_en": "סביליה",
       "league": "demo",
-      "kickoff": "demo",
+      "kickoff": "2026-10-03T19:00:00+03:00",
       "research": {
         "odds": {
           "1": 2.11,
@@ -981,7 +983,7 @@
       "home_en": "ברצלונה",
       "away_en": "אתלטיקו מדריד",
       "league": "demo",
-      "kickoff": "demo",
+      "kickoff": "2026-10-03T19:30:00+03:00",
       "research": {
         "odds": {
           "1": 1.79,
@@ -1059,7 +1061,7 @@
       "home_en": "אינטר",
       "away_en": "נאפולי",
       "league": "demo",
-      "kickoff": "demo",
+      "kickoff": "2026-10-03T20:00:00+03:00",
       "research": {
         "odds": {
           "1": 3.03,
@@ -1137,7 +1139,7 @@
       "home_en": "יובנטוס",
       "away_en": "רומא",
       "league": "demo",
-      "kickoff": "demo",
+      "kickoff": "2026-10-03T20:30:00+03:00",
       "research": {
         "odds": {
           "1": 4.25,
@@ -1215,7 +1217,7 @@
       "home_en": "באיירן מינכן",
       "away_en": "דורטמונד",
       "league": "demo",
-      "kickoff": "demo",
+      "kickoff": "2026-10-03T21:00:00+03:00",
       "research": {
         "odds": {
           "1": 2.9,
@@ -1293,7 +1295,7 @@
       "home_en": "פ.ס.ז'",
       "away_en": "מרסיי",
       "league": "demo",
-      "kickoff": "demo",
+      "kickoff": "2026-10-03T21:30:00+03:00",
       "research": {
         "odds": {
           "1": 3.47,
@@ -1371,7 +1373,7 @@
       "home_en": "הפועל פתח תקווה",
       "away_en": "הפועל רעננה",
       "league": "demo",
-      "kickoff": "demo",
+      "kickoff": "2026-10-03T22:00:00+03:00",
       "research": {
         "odds": {
           "1": 4.33,
@@ -1449,7 +1451,7 @@
       "home_en": "הפועל כפר סבא",
       "away_en": "מכבי הרצליה",
       "league": "demo",
-      "kickoff": "demo",
+      "kickoff": "2026-10-03T22:30:00+03:00",
       "research": {
         "odds": {
           "1": 1.57,

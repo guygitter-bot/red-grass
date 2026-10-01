@@ -25,6 +25,7 @@
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin: 12px 0; }
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
   .stat b { display: block; font-size: 1.3rem; }
+  .stat.close { grid-column: 1 / -1; }
   .warn { color: var(--warn); font-weight: 600; }
   .banner { background: var(--warn); color: #fff; padding: 8px 12px; border-radius: 8px; }
   table { width: 100%; border-collapse: collapse; }
@@ -85,13 +86,16 @@ function summary() {
   return {doubles, triples, columns, cost: columns * data.column_price, p16};
 }
 
-function countdown() {
+function closeInfo() {
   const t = Date.parse(data.close_time || "");
-  if (isNaN(t)) return esc(data.close_time || "לא ידוע");
+  if (isNaN(t)) return {left: "לא ידוע", at: "", urgent: false};
+  const at = new Date(t).toLocaleString("he-IL", {timeZone: "Asia/Jerusalem", weekday: "long",
+    day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"});
   const ms = t - Date.now();
-  if (ms <= 0) return "הטופס נסגר";
-  const h = Math.floor(ms / 36e5), d = Math.floor(h / 24);
-  return `בעוד ${d ? d + " ימים ו-" : ""}${h % 24} שעות`;
+  if (ms <= 0) return {left: "הטופס נסגר", at, urgent: true};
+  const mins = Math.floor(ms / 6e4), h = Math.floor(mins / 60), d = Math.floor(h / 24);
+  const left = d ? `${d === 1 ? "יום" : d + " ימים"} ו-${h % 24} שעות` : h ? `${h} שעות ו-${mins % 60} דק'` : `${mins} דקות`;
+  return {left: "בעוד " + left, at, urgent: ms < 2 * 36e5};
 }
 
 function ticketText() {
@@ -124,7 +128,7 @@ function detailsHtml(m) {
 }
 
 function render(index) {
-  const s = summary(), over = s.cost > data.budget;
+  const s = summary(), over = s.cost > data.budget, close = closeInfo();
   const rec = data.ticket;
   document.getElementById("subtitle").textContent =
     `מחזור ${data.round_number} · עודכן ${new Date(data.generated_at).toLocaleString("he-IL")}`;
@@ -142,7 +146,8 @@ function render(index) {
   document.getElementById("app").innerHTML = `
     ${data.round_number === "demo" ? `<p class="banner">אלה נתוני הדגמה. הטופס האמיתי יופיע כאן אחרי הריצה הראשונה ביום חמישי.</p>` : ""}
     <div class="card stats">
-      <div class="stat"><span class="muted">סגירה</span><b>${countdown()}</b></div>
+      <div class="stat close"><span class="muted">לשלוח עד</span><b class="${close.urgent ? "warn" : ""}">${close.left}</b>
+        <span class="muted">${esc(close.at)}${data.close_time_source === "first_kickoff" ? " · 6 דק' לפני המשחק הראשון" : ""}</span></div>
       <div class="stat"><span class="muted">טורים</span><b>${s.columns}</b></div>
       <div class="stat"><span class="muted">עלות</span><b class="${over ? "warn" : ""}">${s.cost} ₪</b></div>
       <div class="stat"><span class="muted">סיכוי ל-16</span><b>${pct(s.p16)}</b></div>

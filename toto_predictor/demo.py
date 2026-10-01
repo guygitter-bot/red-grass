@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import random
+
+from toto_predictor.closing import ISRAEL
 
 TEAMS = [
     ("מכבי חיפה", "הפועל באר שבע"), ("מכבי ת\"א", "בית\"ר ירושלים"),
@@ -16,13 +19,17 @@ TEAMS = [
 
 
 def find_round() -> dict:
+    today = dt.date.today()
+    saturday = today + dt.timedelta(days=(5 - today.weekday()) % 7 or 7)
+    first = dt.datetime.combine(saturday, dt.time(15, 0), ISRAEL)
     return {
         "round_number": "demo",
         "close_time": None,
         "source_url": "demo",
         "matches": [
             {"index": i + 1, "home_he": h, "away_he": a, "home_en": h, "away_en": a,
-             "league": "demo", "kickoff": "demo"}
+             "league": "demo",
+             "kickoff": (first + dt.timedelta(minutes=30 * i)).isoformat()}
             for i, (h, a) in enumerate(TEAMS)
         ],
     }

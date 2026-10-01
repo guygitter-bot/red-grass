@@ -5,6 +5,8 @@ Environment variables:
   MANUAL_MATCHES           Optional. 16 matches "מארחת - אורחת", one per line or separated by ";",
                            to skip finding the form.
   MANUAL_ROUND             Optional round number to use with MANUAL_MATCHES.
+  MANUAL_FIRST_KICKOFF     Optional first kickoff with MANUAL_MATCHES, e.g. 2026-10-03T19:30
+                           (Israel time); the form closes 6 minutes earlier.
   DRY_RUN=1                Build and save the ticket but do not send notifications.
   DEMO=1                   No API calls: use canned research (for testing the pipeline).
   TOTO_SITE_URL            Link to the web app, included in the notifications.
@@ -23,7 +25,7 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from toto_predictor import config, model, notify, optimizer  # noqa: E402
+from toto_predictor import closing, config, model, notify, optimizer  # noqa: E402
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 log = logging.getLogger("toto")
@@ -64,10 +66,12 @@ def parse_manual_matches(text: str) -> list[dict]:
 def get_round(agent) -> dict:
     manual = os.environ.get("MANUAL_MATCHES", "").strip()
     if manual:
+        first = closing.parse_time(os.environ.get("MANUAL_FIRST_KICKOFF", "").strip())
+        close = first - dt.timedelta(minutes=config.CLOSE_BEFORE_KICKOFF_MINUTES) if first else None
         return {
             "round_number": os.environ.get("MANUAL_ROUND", "").strip()
             or f"manual-{dt.date.today().isoformat()}",
-            "close_time": None,
+            "close_time": close.isoformat() if close else None,
             "source_url": "manual",
             "matches": parse_manual_matches(manual),
         }
@@ -95,9 +99,12 @@ def build_result(round_info: dict, research: list[dict | None]) -> dict:
             "p16": round(t.p16, 6),
         }
 
+    close, close_source = closing.close_time(round_info["matches"], round_info.get("close_time"))
     return {
         "round_number": str(round_info["round_number"]),
-        "close_time": round_info.get("close_time"),
+        "close_time": close.isoformat() if close else None,
+        "close_time_source": close_source,
+        "first_kickoff_rule_minutes": config.CLOSE_BEFORE_KICKOFF_MINUTES,
         "source_url": round_info.get("source_url"),
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "column_price": config.COLUMN_PRICE,
@@ -123,13 +130,20 @@ def save(result: dict, data_dir: Path = DATA_DIR) -> Path:
     return path
 
 
+def agent_module():
+    """The research agent, or the offline demo stand-in when DEMO=1."""
+    if _flag("DEMO"):
+        from toto_predictor import demo
+
+        return demo
+    from toto_predictor import agent
+
+    return agent
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    if _flag("DEMO"):
-        from toto_predictor import demo as agent
-    else:
-        from toto_predictor import agent
-
+    agent = agent_module()
     round_info = get_round(agent)
     log.info("Round %s: %d matches", round_info["round_number"], len(round_info["matches"]))
     research = agent.research_all(round_info["matches"], str(round_info["round_number"]))
@@ -143,6 +157,10 @@ def main() -> int:
     log.info("Saved %s", path)
     print(notify.ticket_text(result))
 
+    close = closing.parse_time(result["close_time"])
+    if close and close <= dt.datetime.now(dt.timezone.utc):
+        log.error("The form already closed at %s; not sending notifications", result["close_time"])
+        return 1
     if _flag("DRY_RUN"):
         log.info("DRY_RUN: skipping notifications")
     else:
