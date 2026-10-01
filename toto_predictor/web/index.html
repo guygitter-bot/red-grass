@@ -67,6 +67,8 @@ let data = null, covers = [], openRow = null;
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const pct = p => (p * 100).toFixed(p < 0.01 ? 2 : 1) + "%";
+// P(16) is tiny; "1 in N" reads better than 0.00%.
+const chance = p => p >= 0.01 ? pct(p) : p > 0 ? `1 ל-${Math.round(1 / p).toLocaleString("he-IL")}` : "0";
 const safeUrl = u => /^https?:\/\//i.test(u || "") ? u : null;
 
 async function getJson(path) {
@@ -155,7 +157,7 @@ function render(index) {
     </tr>
     ${openRow === i ? `<tr class="details"><td></td><td colspan="4">${detailsHtml(m)}</td></tr>` : ""}`).join("");
   const alts = data.alternatives.map(a => `<tr><td>${a.triples} משולשים, ${a.doubles} כפולים</td>
-      <td>${a.columns} טורים</td><td>${a.cost} ₪</td><td>${pct(a.p16)}</td></tr>`).join("");
+      <td>${a.columns} טורים</td><td>${a.cost} ₪</td><td>${chance(a.p16)}</td></tr>`).join("");
   document.getElementById("app").innerHTML = `
     ${data.round_number === "demo" ? `<p class="banner">אלה נתוני הדגמה. הטופס האמיתי יופיע כאן אחרי הריצה הראשונה ביום חמישי.</p>` : ""}
     <div class="card stats">
@@ -163,7 +165,7 @@ function render(index) {
         <span class="muted">${esc(close.at)}${data.close_time_source === "first_kickoff" ? " · 6 דק' לפני המשחק הראשון" : ""}</span></div>
       <div class="stat"><span class="muted">טורים</span><b>${s.columns}</b></div>
       <div class="stat"><span class="muted">עלות</span><b class="${over ? "warn" : ""}">${s.cost} ₪</b></div>
-      <div class="stat"><span class="muted">סיכוי ל-16</span><b>${pct(s.p16)}</b></div>
+      <div class="stat"><span class="muted">סיכוי ל-16</span><b>${chance(s.p16)}</b></div>
     </div>
     ${over ? `<p class="warn">חריגה מהתקציב (${data.budget} ₪). הורד כפול או משולש.</p>` : ""}
     <div class="toolbar">
