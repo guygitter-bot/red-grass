@@ -25,7 +25,7 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from toto_predictor import closing, config, model, notify, optimizer  # noqa: E402
+from toto_predictor import closing, config, model, notify, optimizer, weather  # noqa: E402
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 log = logging.getLogger("toto")
@@ -78,11 +78,38 @@ def get_round(agent) -> dict:
     return agent.find_round()
 
 
+def add_weather(matches: list[dict], research: list[dict | None], fetch=None) -> None:
+    """Attach the kickoff-hour forecast to each researched match (best effort)."""
+    for match, res in zip(matches, research):
+        if not res:
+            continue
+        venue = res.get("venue") or {}
+        lat, lon = venue.get("latitude"), venue.get("longitude")
+        kickoff = closing.parse_time(match.get("kickoff"))
+        if lat is None or lon is None or kickoff is None:
+            continue
+        try:
+            kwargs = {"fetch": fetch} if fetch else {}
+            res["weather"] = weather.kickoff_weather(lat, lon, kickoff, **kwargs)
+        except Exception:  # weather is a nice-to-have; never fail the run
+            log.warning("Weather lookup failed for match %s", match.get("index"), exc_info=True)
+
+
 def build_result(round_info: dict, research: list[dict | None]) -> dict:
     matches = []
     for match, res in zip(round_info["matches"], research):
         pred = model.predict(res or {})
-        matches.append({**match, "research": res, "researched": res is not None, **pred})
+        kickoff = closing.parse_time(match.get("kickoff"))
+        local = kickoff.astimezone(closing.ISRAEL) if kickoff else None
+        matches.append(
+            {
+                **match,
+                "kickoff_local": local.strftime("%d.%m %H:%M") if local else None,
+                "research": res,
+                "researched": res is not None,
+                **pred,
+            }
+        )
 
     ticket, alternatives = optimizer.build_ticket(
         [m["prob"] for m in matches], config.max_columns(), config.COLUMN_PRICE
@@ -147,6 +174,8 @@ def main() -> int:
     round_info = get_round(agent)
     log.info("Round %s: %d matches", round_info["round_number"], len(round_info["matches"]))
     research = agent.research_all(round_info["matches"], str(round_info["round_number"]))
+    if not _flag("DEMO"):
+        add_weather(round_info["matches"], research)
     failed = sum(r is None for r in research)
     if failed > config.MATCH_COUNT // 2:
         log.error("Research failed for %d matches; not publishing a ticket", failed)

@@ -61,7 +61,8 @@
 </main>
 <script>
 const OUT = ["1", "X", "2"];
-const ADJ = {absences: "נעדרים", rotation: "רוטציה", fatigue: "עומס", internationals: "נבחרות", venue: "ביתיות", h2h: "ראש בראש"};
+const ADJ = {history: "עונות קודמות", league_draws: "נטיית תיקו בליגה", heat: "חום", rain: "גשם", wind: "רוח",
+             absences: "נעדרים", rotation: "רוטציה", fatigue: "עומס", internationals: "נבחרות", venue: "ביתיות", h2h: "ראש בראש"};
 let data = null, covers = [], openRow = null;
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -116,12 +117,21 @@ function detailsHtml(m) {
   });
   const src = (r.sources || []).map(safeUrl).filter(Boolean)
     .map(u => `<li><a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a></li>`);
+  const h = r.history || {}, w = r.weather;
+  const wx = w ? [w.temperature_c != null ? `${w.temperature_c}°` : "", w.precipitation_mm ? `גשם ${w.precipitation_mm} מ"מ` : "",
+    w.wind_kmh != null ? `רוח ${w.wind_kmh} קמ"ש` : ""].filter(Boolean).join(", ") : "";
+  const drawAdj = Object.entries(m.draw_adjustments || {}).filter(([, v]) => v)
+    .map(([k, v]) => `${esc(ADJ[k] || k)}: ${v > 0 ? "יותר" : "פחות"} תיקו (${v > 0 ? "+" : ""}${v.toFixed(2)})`);
   const odds = r.odds ? OUT.map(o => `${o}: ${r.odds[o]}`).join(" · ") : "לא נמצאו";
   return `<p>${esc(r.summary_he)}</p>
     <div>יחסים: ${odds} · בסיס: ${esc({"odds+agent": "יחסים + הערכת הסוכן", odds: "יחסים", agent: "הערכת הסוכן", fallback: "ברירת מחדל"}[m.base_source] || m.base_source)} · ביטחון: ${Math.round((r.confidence || 0) * 100)}%</div>
     <div>ראש בראש (10 שנים): ${r.h2h.home_wins}-${r.h2h.draws}-${r.h2h.away_wins} · כושר: ${esc(r.form.home_last6)} / ${esc(r.form.away_last6)}</div>
     <div>מנוחה: ${r.fatigue.home_rest_days ?? "?"} / ${r.fatigue.away_rest_days ?? "?"} ימים · ${esc(r.venue.stadium)}${r.venue.home_fan_ban ? " · <b>ללא קהל</b>" : ""}${r.venue.neutral ? " · מגרש ניטרלי" : ""}</div>
     ${adj.length ? `<div>התאמות: ${adj.join(" · ")}</div>` : ""}
+    ${drawAdj.length ? `<div>השפעה על התיקו: ${drawAdj.join(" · ")}</div>` : ""}
+    <div>שעת פתיחה: ${esc(m.kickoff_local || "לא ידוע")}${wx ? ` · מזג אוויר: ${wx}` : ""}</div>
+    ${h.home_prev_seasons || h.away_prev_seasons ? `<div>עונות קודמות: ${esc(m.home_he)}: ${esc(h.home_prev_seasons)} · ${esc(m.away_he)}: ${esc(h.away_prev_seasons)}</div>` : ""}
+    ${h.home_team_home_ppg != null ? `<div>נקודות למשחק: ${esc(m.home_he)} בבית ${h.home_team_home_ppg} · ${esc(m.away_he)} בחוץ ${h.away_team_away_ppg ?? "?"}${h.league_draw_rate ? ` · תיקו בליגה ${Math.round(h.league_draw_rate * 100)}%` : ""}</div>` : ""}
     ${abs.length ? `<div>נעדרים:</div><ul>${abs.join("")}</ul>` : ""}
     ${r.motivation ? `<div>מוטיבציה: ${esc(r.motivation)}</div>` : ""}
     ${src.length ? `<details><summary>מקורות (${src.length})</summary><ul>${src.join("")}</ul></details>` : ""}`;
@@ -136,7 +146,7 @@ function render(index) {
     <tr>
       <td class="num">${m.index}</td>
       <td class="match" data-row="${i}">${esc(m.home_he)} – ${esc(m.away_he)}
-        <small>${esc(m.league)}${m.researched ? "" : ` · <span class="warn">ללא מחקר</span>`}</small></td>
+        <small>${esc(m.league)}${m.kickoff_local ? " · " + esc(m.kickoff_local) : ""}${m.researched ? "" : ` · <span class="warn">ללא מחקר</span>`}</small></td>
       ${OUT.map(o => `<td class="cell"><button data-i="${i}" data-o="${o}" class="${covers[i].includes(o) ? "on" : ""}"
           aria-pressed="${covers[i].includes(o)}">${o}<span>${pct(m.prob[o])}</span></button></td>`).join("")}
     </tr>

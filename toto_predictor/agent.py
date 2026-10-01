@@ -120,6 +120,9 @@ RESEARCH_TOOL = {
             "venue": _obj(
                 {
                     "stadium": {"type": "string"},
+                    "city": {"type": "string"},
+                    "latitude": _nullable("number"),
+                    "longitude": _nullable("number"),
                     "neutral": {"type": "boolean"},
                     "home_fan_ban": {"type": "boolean"},
                     "away_fans_banned": {"type": "boolean"},
@@ -133,6 +136,17 @@ RESEARCH_TOOL = {
                 }
             ),
             "form": _obj({"home_last6": {"type": "string"}, "away_last6": {"type": "string"}}),
+            "history": _obj(
+                {
+                    "home_prev_seasons": {"type": "string"},
+                    "away_prev_seasons": {"type": "string"},
+                    "home_team_home_ppg": _nullable("number"),
+                    "away_team_away_ppg": _nullable("number"),
+                    "league_draw_rate": _nullable("number"),
+                    "time_slot_note": {"type": "string"},
+                    "sources": {"type": "array", "items": {"type": "string"}},
+                }
+            ),
             "motivation": {"type": "string"},
             "other_factors": {"type": "string"},
             "confidence": {"type": "number"},
@@ -198,6 +212,9 @@ Leumit squads and injuries.
 - Venue: many Israeli clubs share stadiums or play "home" games away from their \
 city during renovations or after penalties. Set neutral=true when the home team \
 does not play at its usual home ground.
+- Previous seasons: the IFA site and sport5/one keep archives of every league's \
+tables and results by season - use them for history and h2h, including seasons \
+when one of the clubs was in a different league.
 - Odds for Liga Leumit and lower leagues are often missing online; then set odds \
 to null and put extra care into agent_estimate (table, form, home/away records)."""
 
@@ -233,12 +250,27 @@ low / high.
 6. internationals: number of key players per team who played for their \
 national team in the last international break and returned with long travel \
 (relevant only if the break ended within the last ~7 days, else 0).
-7. venue: stadium, whether it is neutral ground, whether the home team plays \
+7. venue: stadium, its city and coordinates (latitude/longitude, used to fetch \
+the weather forecast for kickoff), whether it is neutral ground, whether the home team plays \
 without fans (fan ban penalty), whether away fans are banned.
 8. form: last 6 results per team as a string like WWDLWD (most recent last).
 9. motivation (title race, relegation, cup distraction, derby, new coach) and \
 other_factors (weather, pitch, off-field issues, referee) in short English.
-10. confidence 0-1 in your data quality, and the Hebrew summary.
+10. history - previous seasons, from table and results archives (football.org.il, \
+sport5.co.il, one.co.il, Transfermarkt, soccerway, worldfootball and similar):
+   - home_prev_seasons / away_prev_seasons: final league and position for each \
+of the last 3 seasons, e.g. "2025/26 Ligat HaAl 4th; 2024/25 Ligat HaAl 7th; \
+2023/24 Liga Leumit 1st (promoted)".
+   - home_team_home_ppg: the home team's points per game in HOME matches over \
+the last full season plus this season so far; away_team_away_ppg: the same for \
+the away team in AWAY matches. null if not found.
+   - league_draw_rate: share of draws in this league over the last 2-3 seasons \
+(e.g. 0.29). null if not found.
+   - time_slot_note: the kickoff is at {kickoff}. Note in short English whether \
+it is a midday/afternoon or evening game and any known pattern (e.g. a team \
+that struggles in afternoon heat, a late kickoff after a long trip).
+   - sources: the archive pages you used.
+11. confidence 0-1 in your data quality, and the Hebrew summary.
 """
 
 

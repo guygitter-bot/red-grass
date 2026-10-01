@@ -33,6 +33,21 @@ WEIGHTS = {
     "away_fans_banned": 0.05,
     "h2h": 0.15,  # times (home wins - away wins) / meetings
     "h2h_min_meetings": 3,
+    # Previous seasons: home team's home points-per-game minus the away
+    # team's away points-per-game, beyond the typical league home edge.
+    "history_ppg": 0.12,
+    "history_typical_gap": 0.35,
+    "history_cap": 0.15,
+    # Draw tendency (multiplies P(X) by e^shift).
+    "typical_draw_rate": 0.27,
+    "league_draw": 0.6,  # times log(league draw rate / typical)
+    "heat_c": 30.0,  # at or above: slower game, fewer goals
+    "heat": 0.06,
+    "rain_mm": 2.0,  # per hour, at or above
+    "rain": 0.06,
+    "wind_kmh": 35.0,
+    "wind": 0.04,
+    "draw_cap": 0.15,
 }
 
 FALLBACK = {"1": 0.45, "X": 0.28, "2": 0.27}
@@ -127,6 +142,30 @@ def adjustments(research: dict) -> dict[str, float]:
     hw, d, aw = (h2h.get(k) or 0 for k in ("home_wins", "draws", "away_wins"))
     meetings = hw + d + aw
     out["h2h"] = w["h2h"] * (hw - aw) / meetings if meetings >= w["h2h_min_meetings"] else 0.0
+
+    hist = research.get("history") or {}
+    hppg, appg = hist.get("home_team_home_ppg"), hist.get("away_team_away_ppg")
+    if hppg is not None and appg is not None:
+        gap = w["history_ppg"] * ((hppg - appg) - w["history_typical_gap"])
+        out["history"] = max(-w["history_cap"], min(w["history_cap"], gap))
+    else:
+        out["history"] = 0.0
+    return out
+
+
+def draw_adjustments(research: dict) -> dict[str, float]:
+    """Each factor's log shift of P(X): league draw tendency and weather."""
+    w = WEIGHTS
+    out = {}
+    rate = (research.get("history") or {}).get("league_draw_rate")
+    out["league_draws"] = (
+        w["league_draw"] * math.log(rate / w["typical_draw_rate"]) if rate and 0 < rate < 1 else 0.0
+    )
+    weather = research.get("weather") or {}
+    temp, rain, wind = (weather.get(k) for k in ("temperature_c", "precipitation_mm", "wind_kmh"))
+    out["heat"] = w["heat"] if temp is not None and temp >= w["heat_c"] else 0.0
+    out["rain"] = w["rain"] if rain is not None and rain >= w["rain_mm"] else 0.0
+    out["wind"] = w["wind"] if wind is not None and wind >= w["wind_kmh"] else 0.0
     return out
 
 
@@ -135,8 +174,14 @@ def predict(research: dict) -> dict:
     adj = adjustments(research)
     damping = WEIGHTS["damping_with_odds"] if source.startswith("odds") else 1.0
     delta = damping * sum(adj.values())
+    draw_adj = draw_adjustments(research)
+    draw_shift = damping * max(-WEIGHTS["draw_cap"], min(WEIGHTS["draw_cap"], sum(draw_adj.values())))
     p = _normalise(
-        {"1": base["1"] * math.exp(delta), "X": base["X"], "2": base["2"] * math.exp(-delta)}
+        {
+            "1": base["1"] * math.exp(delta),
+            "X": base["X"] * math.exp(draw_shift),
+            "2": base["2"] * math.exp(-delta),
+        }
     )
     p = _normalise({k: min(max(v, 0.02), 0.96) for k, v in p.items()})
     return {
@@ -144,4 +189,5 @@ def predict(research: dict) -> dict:
         "base": {k: round(v, 4) for k, v in base.items()},
         "base_source": source,
         "adjustments": {k: round(v * damping, 4) for k, v in adj.items()},
+        "draw_adjustments": {k: round(v * damping, 4) for k, v in draw_adj.items()},
     }

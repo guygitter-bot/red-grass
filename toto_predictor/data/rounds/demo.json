@@ -4,7 +4,7 @@
   "close_time_source": "first_kickoff",
   "first_kickoff_rule_minutes": 6,
   "source_url": "demo",
-  "generated_at": "2026-10-01T17:14:08+00:00",
+  "generated_at": "2026-10-01T17:23:56+00:00",
   "column_price": 3.0,
   "budget": 120.0,
   "site_url": null,
@@ -13,7 +13,7 @@
     "triples": 2,
     "columns": 36,
     "cost": 108.0,
-    "p16": 0.000136
+    "p16": 0.000165
   },
   "alternatives": [
     {
@@ -21,11 +21,18 @@
       "triples": 2,
       "columns": 36,
       "cost": 108.0,
-      "p16": 0.000136,
+      "p16": 0.000165,
       "covers": [
         [
-          "1",
           "2"
+        ],
+        [
+          "1",
+          "X",
+          "2"
+        ],
+        [
+          "1"
         ],
         [
           "1",
@@ -42,18 +49,6 @@
           "1"
         ],
         [
-          "2"
-        ],
-        [
-          "1",
-          "2"
-        ],
-        [
-          "1",
-          "X",
-          "2"
-        ],
-        [
           "1"
         ],
         [
@@ -63,16 +58,21 @@
           "2"
         ],
         [
+          "1",
           "2"
         ],
         [
+          "1"
+        ],
+        [
+          "1",
           "2"
         ],
         [
-          "2"
+          "1"
         ],
         [
-          "2"
+          "1"
         ],
         [
           "1"
@@ -84,7 +84,7 @@
       "triples": 0,
       "columns": 32,
       "cost": 96.0,
-      "p16": 0.000123,
+      "p16": 0.000151,
       "covers": [
         [
           "1",
@@ -98,6 +98,19 @@
           "1"
         ],
         [
+          "1",
+          "2"
+        ],
+        [
+          "1"
+        ],
+        [
+          "1"
+        ],
+        [
+          "1"
+        ],
+        [
           "1"
         ],
         [
@@ -111,6 +124,9 @@
           "2"
         ],
         [
+          "1"
+        ],
+        [
           "1",
           "2"
         ],
@@ -119,22 +135,6 @@
         ],
         [
           "1"
-        ],
-        [
-          "2"
-        ],
-        [
-          "2"
-        ],
-        [
-          "1",
-          "2"
-        ],
-        [
-          "2"
-        ],
-        [
-          "2"
         ],
         [
           "1"
@@ -146,30 +146,9 @@
       "triples": 1,
       "columns": 24,
       "cost": 72.0,
-      "p16": 9.8e-05,
+      "p16": 0.000116,
       "covers": [
         [
-          "1",
-          "2"
-        ],
-        [
-          "1",
-          "2"
-        ],
-        [
-          "1"
-        ],
-        [
-          "1"
-        ],
-        [
-          "1"
-        ],
-        [
-          "2"
-        ],
-        [
-          "1",
           "2"
         ],
         [
@@ -181,22 +160,43 @@
           "1"
         ],
         [
+          "1",
+          "2"
+        ],
+        [
+          "1"
+        ],
+        [
+          "1"
+        ],
+        [
+          "1"
+        ],
+        [
+          "1"
+        ],
+        [
           "1"
         ],
         [
           "2"
         ],
         [
+          "1",
           "2"
         ],
         [
+          "1"
+        ],
+        [
+          "1",
           "2"
         ],
         [
-          "2"
+          "1"
         ],
         [
-          "2"
+          "1"
         ],
         [
           "1"
@@ -208,11 +208,9 @@
       "triples": 3,
       "columns": 27,
       "cost": 81.0,
-      "p16": 9.8e-05,
+      "p16": 0.000111,
       "covers": [
         [
-          "1",
-          "X",
           "2"
         ],
         [
@@ -222,18 +220,6 @@
         ],
         [
           "1"
-        ],
-        [
-          "1"
-        ],
-        [
-          "1"
-        ],
-        [
-          "2"
-        ],
-        [
-          "2"
         ],
         [
           "1",
@@ -247,7 +233,13 @@
           "1"
         ],
         [
-          "2"
+          "1"
+        ],
+        [
+          "1"
+        ],
+        [
+          "1"
         ],
         [
           "2"
@@ -256,10 +248,18 @@
           "2"
         ],
         [
+          "1"
+        ],
+        [
+          "1",
+          "X",
           "2"
         ],
         [
-          "2"
+          "1"
+        ],
+        [
+          "1"
         ],
         [
           "1"
@@ -276,6 +276,7 @@
       "away_en": "הפועל באר שבע",
       "league": "demo",
       "kickoff": "2026-10-03T15:00:00+03:00",
+      "kickoff_local": "03.10 15:00",
       "research": {
         "odds": {
           "1": 2.5,
@@ -309,9 +310,27 @@
         },
         "venue": {
           "stadium": "",
+          "city": "",
+          "latitude": null,
+          "longitude": null,
           "neutral": false,
           "home_fan_ban": false,
           "away_fans_banned": false
+        },
+        "history": {
+          "home_prev_seasons": "",
+          "away_prev_seasons": "",
+          "home_team_home_ppg": 1.34,
+          "away_team_away_ppg": 1.4,
+          "league_draw_rate": 0.29,
+          "time_slot_note": "",
+          "sources": []
+        },
+        "weather": {
+          "temperature_c": 24.0,
+          "precipitation_mm": 0.0,
+          "wind_kmh": 12.0,
+          "source": "demo"
         },
         "form": {
           "home_last6": "WDLWWD",
@@ -325,9 +344,9 @@
       },
       "researched": true,
       "prob": {
-        "1": 0.3528,
-        "X": 0.2576,
-        "2": 0.3896
+        "1": 0.342,
+        "X": 0.2614,
+        "2": 0.3966
       },
       "base": {
         "1": 0.3806,
@@ -338,12 +357,19 @@
       "adjustments": {
         "absences": 0.0,
         "fatigue": -0.075,
+        "rotation": 0.0,
         "internationals": 0.0,
         "venue": 0.0,
-        "h2h": 0.0
+        "h2h": 0.0,
+        "history": -0.0246
+      },
+      "draw_adjustments": {
+        "league_draws": 0.0214,
+        "heat": 0.0,
+        "rain": 0.0,
+        "wind": 0.0
       },
       "cover": [
-        "1",
         "2"
       ]
     },
@@ -355,30 +381,31 @@
       "away_en": "בית\"ר ירושלים",
       "league": "demo",
       "kickoff": "2026-10-03T15:30:00+03:00",
+      "kickoff_local": "03.10 15:30",
       "research": {
         "odds": {
-          "1": 2.88,
-          "X": 3.44,
-          "2": 2.41
+          "1": 2.73,
+          "X": 3.19,
+          "2": 2.68
         },
         "odds_source": "demo",
         "agent_estimate": {
-          "1": 0.3294276909450391,
-          "X": 0.2761995108924181,
-          "2": 0.3943727981625428
+          "1": 0.34829868190751856,
+          "X": 0.29778933912670313,
+          "2": 0.3539119789657783
         },
         "h2h": {
-          "home_wins": 0,
-          "draws": 2,
-          "away_wins": 2,
+          "home_wins": 5,
+          "draws": 1,
+          "away_wins": 5,
           "note": ""
         },
         "absences": [],
         "fatigue": {
-          "home_rest_days": 4,
-          "away_rest_days": 7,
+          "home_rest_days": 6,
+          "away_rest_days": 4,
           "home_matches_14d": 2,
-          "away_matches_14d": 4,
+          "away_matches_14d": 2,
           "note": ""
         },
         "internationals": {
@@ -388,9 +415,27 @@
         },
         "venue": {
           "stadium": "",
+          "city": "",
+          "latitude": null,
+          "longitude": null,
           "neutral": false,
           "home_fan_ban": false,
           "away_fans_banned": false
+        },
+        "history": {
+          "home_prev_seasons": "",
+          "away_prev_seasons": "",
+          "home_team_home_ppg": 2.24,
+          "away_team_away_ppg": 0.98,
+          "league_draw_rate": 0.29,
+          "time_slot_note": "",
+          "sources": []
+        },
+        "weather": {
+          "temperature_c": 24.0,
+          "precipitation_mm": 0.0,
+          "wind_kmh": 12.0,
+          "source": "demo"
         },
         "form": {
           "home_last6": "WDLWWD",
@@ -404,22 +449,30 @@
       },
       "researched": true,
       "prob": {
-        "1": 0.3306,
-        "X": 0.2762,
-        "2": 0.3933
+        "1": 0.3649,
+        "X": 0.302,
+        "2": 0.3331
       },
       "base": {
-        "1": 0.3297,
-        "X": 0.2761,
-        "2": 0.3942
+        "1": 0.348,
+        "X": 0.2977,
+        "2": 0.3543
       },
       "base_source": "odds+agent",
       "adjustments": {
         "absences": 0.0,
-        "fatigue": 0.04,
+        "fatigue": 0.0,
+        "rotation": 0.0,
         "internationals": 0.0,
         "venue": 0.0,
-        "h2h": -0.0375
+        "h2h": 0.0,
+        "history": 0.0546
+      },
+      "draw_adjustments": {
+        "league_draws": 0.0214,
+        "heat": 0.0,
+        "rain": 0.0,
+        "wind": 0.0
       },
       "cover": [
         "1",
@@ -435,30 +488,31 @@
       "away_en": "מכבי נתניה",
       "league": "demo",
       "kickoff": "2026-10-03T16:00:00+03:00",
+      "kickoff_local": "03.10 16:00",
       "research": {
         "odds": {
-          "1": 1.9,
-          "X": 4.69,
-          "2": 3.21
+          "1": 1.57,
+          "X": 3.39,
+          "2": 8.18
         },
         "odds_source": "demo",
         "agent_estimate": {
-          "1": 0.5010539684821227,
-          "X": 0.20266180973283232,
-          "2": 0.296284221785045
+          "1": 0.6038184121476415,
+          "X": 0.2800902762689793,
+          "2": 0.11609131158337915
         },
         "h2h": {
-          "home_wins": 1,
-          "draws": 4,
-          "away_wins": 2,
+          "home_wins": 0,
+          "draws": 3,
+          "away_wins": 3,
           "note": ""
         },
         "absences": [],
         "fatigue": {
-          "home_rest_days": 2,
-          "away_rest_days": 3,
+          "home_rest_days": 6,
+          "away_rest_days": 7,
           "home_matches_14d": 4,
-          "away_matches_14d": 4,
+          "away_matches_14d": 3,
           "note": ""
         },
         "internationals": {
@@ -468,9 +522,27 @@
         },
         "venue": {
           "stadium": "",
+          "city": "",
+          "latitude": null,
+          "longitude": null,
           "neutral": false,
           "home_fan_ban": false,
           "away_fans_banned": false
+        },
+        "history": {
+          "home_prev_seasons": "",
+          "away_prev_seasons": "",
+          "home_team_home_ppg": 2.28,
+          "away_team_away_ppg": 1.56,
+          "league_draw_rate": 0.29,
+          "time_slot_note": "",
+          "sources": []
+        },
+        "weather": {
+          "temperature_c": 31.0,
+          "precipitation_mm": 0.0,
+          "wind_kmh": 12.0,
+          "source": "demo"
         },
         "form": {
           "home_last6": "WDLWWD",
@@ -484,22 +556,30 @@
       },
       "researched": true,
       "prob": {
-        "1": 0.4665,
-        "X": 0.2058,
-        "2": 0.3277
+        "1": 0.5843,
+        "X": 0.2953,
+        "2": 0.1204
       },
       "base": {
-        "1": 0.5008,
-        "X": 0.2028,
-        "2": 0.2964
+        "1": 0.6041,
+        "X": 0.2799,
+        "2": 0.116
       },
       "base_source": "odds+agent",
       "adjustments": {
         "absences": 0.0,
-        "fatigue": -0.075,
+        "fatigue": -0.02,
+        "rotation": 0.0,
         "internationals": 0.0,
         "venue": 0.0,
-        "h2h": -0.0107
+        "h2h": -0.0375,
+        "history": 0.0222
+      },
+      "draw_adjustments": {
+        "league_draws": 0.0214,
+        "heat": 0.03,
+        "rain": 0.0,
+        "wind": 0.0
       },
       "cover": [
         "1"
@@ -513,17 +593,125 @@
       "away_en": "הפועל חיפה",
       "league": "demo",
       "kickoff": "2026-10-03T16:30:00+03:00",
+      "kickoff_local": "03.10 16:30",
       "research": {
         "odds": {
-          "1": 1.84,
-          "X": 3.71,
-          "2": 4.15
+          "1": 2.89,
+          "X": 3.23,
+          "2": 2.52
         },
         "odds_source": "demo",
         "agent_estimate": {
-          "1": 0.5154779971665492,
-          "X": 0.2557674772651091,
-          "2": 0.2287545255683417
+          "1": 0.32911752395436633,
+          "X": 0.2945390255027477,
+          "2": 0.376343450542886
+        },
+        "h2h": {
+          "home_wins": 2,
+          "draws": 3,
+          "away_wins": 3,
+          "note": ""
+        },
+        "absences": [],
+        "fatigue": {
+          "home_rest_days": 6,
+          "away_rest_days": 7,
+          "home_matches_14d": 2,
+          "away_matches_14d": 4,
+          "note": ""
+        },
+        "internationals": {
+          "home_key_players": 0,
+          "away_key_players": 0,
+          "note": ""
+        },
+        "venue": {
+          "stadium": "",
+          "city": "",
+          "latitude": null,
+          "longitude": null,
+          "neutral": false,
+          "home_fan_ban": false,
+          "away_fans_banned": false
+        },
+        "history": {
+          "home_prev_seasons": "",
+          "away_prev_seasons": "",
+          "home_team_home_ppg": 1.38,
+          "away_team_away_ppg": 0.75,
+          "league_draw_rate": 0.29,
+          "time_slot_note": "",
+          "sources": []
+        },
+        "weather": {
+          "temperature_c": 24.0,
+          "precipitation_mm": 0.0,
+          "wind_kmh": 12.0,
+          "source": "demo"
+        },
+        "form": {
+          "home_last6": "WDLWWD",
+          "away_last6": "LDWDLW"
+        },
+        "motivation": "",
+        "other_factors": "",
+        "confidence": 0.5,
+        "summary_he": "נתוני הדגמה – לא מחקר אמיתי.",
+        "sources": []
+      },
+      "researched": true,
+      "prob": {
+        "1": 0.3432,
+        "X": 0.2992,
+        "2": 0.3577
+      },
+      "base": {
+        "1": 0.3289,
+        "X": 0.2943,
+        "2": 0.3769
+      },
+      "base_source": "odds+agent",
+      "adjustments": {
+        "absences": 0.0,
+        "fatigue": 0.04,
+        "rotation": 0.0,
+        "internationals": 0.0,
+        "venue": 0.0,
+        "h2h": -0.0094,
+        "history": 0.0168
+      },
+      "draw_adjustments": {
+        "league_draws": 0.0214,
+        "heat": 0.0,
+        "rain": 0.0,
+        "wind": 0.0
+      },
+      "cover": [
+        "1",
+        "X",
+        "2"
+      ]
+    },
+    {
+      "index": 5,
+      "home_he": "מ.ס. אשדוד",
+      "away_he": "הפועל ירושלים",
+      "home_en": "מ.ס. אשדוד",
+      "away_en": "הפועל ירושלים",
+      "league": "demo",
+      "kickoff": "2026-10-03T17:00:00+03:00",
+      "kickoff_local": "03.10 17:00",
+      "research": {
+        "odds": {
+          "1": 1.54,
+          "X": 3.22,
+          "2": 10.69
+        },
+        "odds_source": "demo",
+        "agent_estimate": {
+          "1": 0.6162852838633286,
+          "X": 0.2948397439773516,
+          "2": 0.08887497215931983
         },
         "h2h": {
           "home_wins": 4,
@@ -533,8 +721,8 @@
         },
         "absences": [],
         "fatigue": {
-          "home_rest_days": 4,
-          "away_rest_days": 4,
+          "home_rest_days": 5,
+          "away_rest_days": 3,
           "home_matches_14d": 3,
           "away_matches_14d": 3,
           "note": ""
@@ -546,9 +734,27 @@
         },
         "venue": {
           "stadium": "",
+          "city": "",
+          "latitude": null,
+          "longitude": null,
           "neutral": false,
           "home_fan_ban": false,
           "away_fans_banned": false
+        },
+        "history": {
+          "home_prev_seasons": "",
+          "away_prev_seasons": "",
+          "home_team_home_ppg": 1.41,
+          "away_team_away_ppg": 1.2,
+          "league_draw_rate": 0.29,
+          "time_slot_note": "",
+          "sources": []
+        },
+        "weather": {
+          "temperature_c": 24.0,
+          "precipitation_mm": 0.0,
+          "wind_kmh": 12.0,
+          "source": "demo"
         },
         "form": {
           "home_last6": "WDLWWD",
@@ -562,100 +768,30 @@
       },
       "researched": true,
       "prob": {
-        "1": 0.5274,
-        "X": 0.2533,
-        "2": 0.2193
+        "1": 0.6193,
+        "X": 0.2955,
+        "2": 0.0851
       },
       "base": {
-        "1": 0.5156,
-        "X": 0.2557,
-        "2": 0.2287
+        "1": 0.6164,
+        "X": 0.2948,
+        "2": 0.0888
       },
       "base_source": "odds+agent",
       "adjustments": {
         "absences": 0.0,
         "fatigue": 0.0,
+        "rotation": 0.0,
         "internationals": 0.0,
         "venue": 0.0,
-        "h2h": 0.0321
+        "h2h": 0.0321,
+        "history": -0.0084
       },
-      "cover": [
-        "1"
-      ]
-    },
-    {
-      "index": 5,
-      "home_he": "מ.ס. אשדוד",
-      "away_he": "הפועל ירושלים",
-      "home_en": "מ.ס. אשדוד",
-      "away_en": "הפועל ירושלים",
-      "league": "demo",
-      "kickoff": "2026-10-03T17:00:00+03:00",
-      "research": {
-        "odds": {
-          "1": 1.6,
-          "X": 3.93,
-          "2": 5.78
-        },
-        "odds_source": "demo",
-        "agent_estimate": {
-          "1": 0.5939126062614486,
-          "X": 0.24173366531219437,
-          "2": 0.16435372842635704
-        },
-        "h2h": {
-          "home_wins": 3,
-          "draws": 4,
-          "away_wins": 5,
-          "note": ""
-        },
-        "absences": [],
-        "fatigue": {
-          "home_rest_days": 3,
-          "away_rest_days": 6,
-          "home_matches_14d": 3,
-          "away_matches_14d": 4,
-          "note": ""
-        },
-        "internationals": {
-          "home_key_players": 0,
-          "away_key_players": 0,
-          "note": ""
-        },
-        "venue": {
-          "stadium": "",
-          "neutral": false,
-          "home_fan_ban": false,
-          "away_fans_banned": false
-        },
-        "form": {
-          "home_last6": "WDLWWD",
-          "away_last6": "LDWDLW"
-        },
-        "motivation": "",
-        "other_factors": "",
-        "confidence": 0.5,
-        "summary_he": "נתוני הדגמה – לא מחקר אמיתי.",
-        "sources": []
-      },
-      "researched": true,
-      "prob": {
-        "1": 0.5964,
-        "X": 0.241,
-        "2": 0.1626
-      },
-      "base": {
-        "1": 0.5939,
-        "X": 0.2418,
-        "2": 0.1644
-      },
-      "base_source": "odds+agent",
-      "adjustments": {
-        "absences": 0.0,
-        "fatigue": 0.02,
-        "internationals": 0.0,
-        "venue": 0.0,
-        "h2h": -0.0125
+      "draw_adjustments": {
+        "league_draws": 0.0214,
+        "heat": 0.0,
+        "rain": 0.0,
+        "wind": 0.0
       },
       "cover": [
         "1"
@@ -669,30 +805,31 @@
       "away_en": "מכבי בני ריינה",
       "league": "demo",
       "kickoff": "2026-10-03T17:30:00+03:00",
+      "kickoff_local": "03.10 17:30",
       "research": {
         "odds": {
-          "1": 4.28,
-          "X": 3.0,
-          "2": 2.06
+          "1": 1.73,
+          "X": 3.31,
+          "2": 5.83
         },
         "odds_source": "demo",
         "agent_estimate": {
-          "1": 0.22200330154150272,
-          "X": 0.3168661249431417,
-          "2": 0.4611305735153556
+          "1": 0.5496426101112881,
+          "X": 0.2873458950368718,
+          "2": 0.16301149485184008
         },
         "h2h": {
-          "home_wins": 6,
-          "draws": 0,
-          "away_wins": 4,
+          "home_wins": 0,
+          "draws": 3,
+          "away_wins": 6,
           "note": ""
         },
         "absences": [],
         "fatigue": {
-          "home_rest_days": 4,
-          "away_rest_days": 3,
+          "home_rest_days": 5,
+          "away_rest_days": 2,
           "home_matches_14d": 3,
-          "away_matches_14d": 2,
+          "away_matches_14d": 4,
           "note": ""
         },
         "internationals": {
@@ -702,9 +839,27 @@
         },
         "venue": {
           "stadium": "",
+          "city": "",
+          "latitude": null,
+          "longitude": null,
           "neutral": false,
           "home_fan_ban": false,
           "away_fans_banned": false
+        },
+        "history": {
+          "home_prev_seasons": "",
+          "away_prev_seasons": "",
+          "home_team_home_ppg": 2.03,
+          "away_team_away_ppg": 1.2,
+          "league_draw_rate": 0.29,
+          "time_slot_note": "",
+          "sources": []
+        },
+        "weather": {
+          "temperature_c": 24.0,
+          "precipitation_mm": 0.0,
+          "wind_kmh": 12.0,
+          "source": "demo"
         },
         "form": {
           "home_last6": "WDLWWD",
@@ -718,25 +873,33 @@
       },
       "researched": true,
       "prob": {
-        "1": 0.2206,
-        "X": 0.3164,
-        "2": 0.463
+        "1": 0.5708,
+        "X": 0.2831,
+        "2": 0.1461
       },
       "base": {
-        "1": 0.222,
-        "X": 0.3168,
-        "2": 0.4612
+        "1": 0.5496,
+        "X": 0.2873,
+        "2": 0.1631
       },
       "base_source": "odds+agent",
       "adjustments": {
         "absences": 0.0,
-        "fatigue": -0.02,
+        "fatigue": 0.095,
+        "rotation": 0.0,
         "internationals": 0.0,
         "venue": 0.0,
-        "h2h": 0.015
+        "h2h": -0.05,
+        "history": 0.0288
+      },
+      "draw_adjustments": {
+        "league_draws": 0.0214,
+        "heat": 0.0,
+        "rain": 0.0,
+        "wind": 0.0
       },
       "cover": [
-        "2"
+        "1"
       ]
     },
     {
@@ -747,165 +910,7 @@
       "away_en": "צ'לסי",
       "league": "demo",
       "kickoff": "2026-10-03T18:00:00+03:00",
-      "research": {
-        "odds": {
-          "1": 2.68,
-          "X": 3.99,
-          "2": 2.33
-        },
-        "odds_source": "demo",
-        "agent_estimate": {
-          "1": 0.35443710723608013,
-          "X": 0.237968948895528,
-          "2": 0.4075939438683919
-        },
-        "h2h": {
-          "home_wins": 3,
-          "draws": 0,
-          "away_wins": 1,
-          "note": ""
-        },
-        "absences": [],
-        "fatigue": {
-          "home_rest_days": 7,
-          "away_rest_days": 5,
-          "home_matches_14d": 4,
-          "away_matches_14d": 2,
-          "note": ""
-        },
-        "internationals": {
-          "home_key_players": 0,
-          "away_key_players": 0,
-          "note": ""
-        },
-        "venue": {
-          "stadium": "",
-          "neutral": false,
-          "home_fan_ban": false,
-          "away_fans_banned": false
-        },
-        "form": {
-          "home_last6": "WDLWWD",
-          "away_last6": "LDWDLW"
-        },
-        "motivation": "",
-        "other_factors": "",
-        "confidence": 0.5,
-        "summary_he": "נתוני הדגמה – לא מחקר אמיתי.",
-        "sources": []
-      },
-      "researched": true,
-      "prob": {
-        "1": 0.3535,
-        "X": 0.238,
-        "2": 0.4086
-      },
-      "base": {
-        "1": 0.3544,
-        "X": 0.238,
-        "2": 0.4076
-      },
-      "base_source": "odds+agent",
-      "adjustments": {
-        "absences": 0.0,
-        "fatigue": -0.04,
-        "internationals": 0.0,
-        "venue": 0.0,
-        "h2h": 0.0375
-      },
-      "cover": [
-        "1",
-        "2"
-      ]
-    },
-    {
-      "index": 8,
-      "home_he": "ליברפול",
-      "away_he": "אסטון וילה",
-      "home_en": "ליברפול",
-      "away_en": "אסטון וילה",
-      "league": "demo",
-      "kickoff": "2026-10-03T18:30:00+03:00",
-      "research": {
-        "odds": {
-          "1": 2.25,
-          "X": 3.13,
-          "2": 3.47
-        },
-        "odds_source": "demo",
-        "agent_estimate": {
-          "1": 0.4225663097293242,
-          "X": 0.3037150631769287,
-          "2": 0.2737186270937471
-        },
-        "h2h": {
-          "home_wins": 0,
-          "draws": 3,
-          "away_wins": 5,
-          "note": ""
-        },
-        "absences": [],
-        "fatigue": {
-          "home_rest_days": 2,
-          "away_rest_days": 5,
-          "home_matches_14d": 4,
-          "away_matches_14d": 2,
-          "note": ""
-        },
-        "internationals": {
-          "home_key_players": 0,
-          "away_key_players": 0,
-          "note": ""
-        },
-        "venue": {
-          "stadium": "",
-          "neutral": false,
-          "home_fan_ban": false,
-          "away_fans_banned": false
-        },
-        "form": {
-          "home_last6": "WDLWWD",
-          "away_last6": "LDWDLW"
-        },
-        "motivation": "",
-        "other_factors": "",
-        "confidence": 0.5,
-        "summary_he": "נתוני הדגמה – לא מחקר אמיתי.",
-        "sources": []
-      },
-      "researched": true,
-      "prob": {
-        "1": 0.3648,
-        "X": 0.3083,
-        "2": 0.3269
-      },
-      "base": {
-        "1": 0.4225,
-        "X": 0.3037,
-        "2": 0.2739
-      },
-      "base_source": "odds+agent",
-      "adjustments": {
-        "absences": 0.0,
-        "fatigue": -0.115,
-        "internationals": 0.0,
-        "venue": 0.0,
-        "h2h": -0.0469
-      },
-      "cover": [
-        "1",
-        "X",
-        "2"
-      ]
-    },
-    {
-      "index": 9,
-      "home_he": "ריאל מדריד",
-      "away_he": "סביליה",
-      "home_en": "ריאל מדריד",
-      "away_en": "סביליה",
-      "league": "demo",
-      "kickoff": "2026-10-03T19:00:00+03:00",
+      "kickoff_local": "03.10 18:00",
       "research": {
         "odds": {
           "1": 2.11,
@@ -939,9 +944,27 @@
         },
         "venue": {
           "stadium": "",
+          "city": "",
+          "latitude": null,
+          "longitude": null,
           "neutral": false,
           "home_fan_ban": false,
           "away_fans_banned": false
+        },
+        "history": {
+          "home_prev_seasons": "",
+          "away_prev_seasons": "",
+          "home_team_home_ppg": 1.86,
+          "away_team_away_ppg": 1.14,
+          "league_draw_rate": 0.29,
+          "time_slot_note": "",
+          "sources": []
+        },
+        "weather": {
+          "temperature_c": 31.0,
+          "precipitation_mm": 0.0,
+          "wind_kmh": 12.0,
+          "source": "demo"
         },
         "form": {
           "home_last6": "WDLWWD",
@@ -955,9 +978,9 @@
       },
       "researched": true,
       "prob": {
-        "1": 0.4518,
-        "X": 0.2024,
-        "2": 0.3458
+        "1": 0.4559,
+        "X": 0.2103,
+        "2": 0.3338
       },
       "base": {
         "1": 0.4498,
@@ -968,44 +991,53 @@
       "adjustments": {
         "absences": 0.0,
         "fatigue": 0.035,
+        "rotation": 0.0,
         "internationals": 0.0,
         "venue": 0.0,
-        "h2h": -0.03
+        "h2h": -0.03,
+        "history": 0.0222
+      },
+      "draw_adjustments": {
+        "league_draws": 0.0214,
+        "heat": 0.03,
+        "rain": 0.0,
+        "wind": 0.0
       },
       "cover": [
         "1"
       ]
     },
     {
-      "index": 10,
-      "home_he": "ברצלונה",
-      "away_he": "אתלטיקו מדריד",
-      "home_en": "ברצלונה",
-      "away_en": "אתלטיקו מדריד",
+      "index": 8,
+      "home_he": "ליברפול",
+      "away_he": "אסטון וילה",
+      "home_en": "ליברפול",
+      "away_en": "אסטון וילה",
       "league": "demo",
-      "kickoff": "2026-10-03T19:30:00+03:00",
+      "kickoff": "2026-10-03T18:30:00+03:00",
+      "kickoff_local": "03.10 18:30",
       "research": {
         "odds": {
-          "1": 1.79,
-          "X": 3.83,
-          "2": 4.27
+          "1": 2.17,
+          "X": 3.39,
+          "2": 3.38
         },
         "odds_source": "demo",
         "agent_estimate": {
-          "1": 0.5296831423422942,
-          "X": 0.2480013119612463,
-          "2": 0.2223155456964595
+          "1": 0.43873838600189385,
+          "X": 0.28022098060199563,
+          "2": 0.2810406333961105
         },
         "h2h": {
-          "home_wins": 2,
-          "draws": 3,
-          "away_wins": 4,
+          "home_wins": 6,
+          "draws": 0,
+          "away_wins": 1,
           "note": ""
         },
         "absences": [],
         "fatigue": {
-          "home_rest_days": 7,
-          "away_rest_days": 7,
+          "home_rest_days": 4,
+          "away_rest_days": 2,
           "home_matches_14d": 4,
           "away_matches_14d": 2,
           "note": ""
@@ -1017,9 +1049,27 @@
         },
         "venue": {
           "stadium": "",
+          "city": "",
+          "latitude": null,
+          "longitude": null,
           "neutral": false,
           "home_fan_ban": false,
           "away_fans_banned": false
+        },
+        "history": {
+          "home_prev_seasons": "",
+          "away_prev_seasons": "",
+          "home_team_home_ppg": 1.7,
+          "away_team_away_ppg": 0.97,
+          "league_draw_rate": 0.29,
+          "time_slot_note": "",
+          "sources": []
+        },
+        "weather": {
+          "temperature_c": 31.0,
+          "precipitation_mm": 0.0,
+          "wind_kmh": 12.0,
+          "source": "demo"
         },
         "form": {
           "home_last6": "WDLWWD",
@@ -1033,127 +1083,58 @@
       },
       "researched": true,
       "prob": {
-        "1": 0.509,
-        "X": 0.2519,
-        "2": 0.2391
+        "1": 0.4726,
+        "X": 0.2847,
+        "2": 0.2427
       },
       "base": {
-        "1": 0.53,
-        "X": 0.2478,
-        "2": 0.2222
+        "1": 0.4383,
+        "X": 0.2804,
+        "2": 0.2813
       },
       "base_source": "odds+agent",
       "adjustments": {
         "absences": 0.0,
-        "fatigue": -0.04,
+        "fatigue": 0.035,
+        "rotation": 0.0,
         "internationals": 0.0,
         "venue": 0.0,
-        "h2h": -0.0167
+        "h2h": 0.0536,
+        "history": 0.0228
+      },
+      "draw_adjustments": {
+        "league_draws": 0.0214,
+        "heat": 0.03,
+        "rain": 0.0,
+        "wind": 0.0
       },
       "cover": [
         "1"
       ]
     },
     {
-      "index": 11,
-      "home_he": "אינטר",
-      "away_he": "נאפולי",
-      "home_en": "אינטר",
-      "away_en": "נאפולי",
+      "index": 9,
+      "home_he": "ריאל מדריד",
+      "away_he": "סביליה",
+      "home_en": "ריאל מדריד",
+      "away_en": "סביליה",
       "league": "demo",
-      "kickoff": "2026-10-03T20:00:00+03:00",
+      "kickoff": "2026-10-03T19:00:00+03:00",
+      "kickoff_local": "03.10 19:00",
       "research": {
         "odds": {
-          "1": 3.03,
-          "X": 4.48,
-          "2": 2.0
+          "1": 1.85,
+          "X": 3.06,
+          "2": 5.37
         },
         "odds_source": "demo",
         "agent_estimate": {
-          "1": 0.31390552043906483,
-          "X": 0.21210851851782989,
-          "2": 0.4739859610431053
+          "1": 0.5127905132122192,
+          "X": 0.3102504400997289,
+          "2": 0.17695904668805185
         },
         "h2h": {
           "home_wins": 0,
-          "draws": 4,
-          "away_wins": 0,
-          "note": ""
-        },
-        "absences": [],
-        "fatigue": {
-          "home_rest_days": 3,
-          "away_rest_days": 2,
-          "home_matches_14d": 3,
-          "away_matches_14d": 4,
-          "note": ""
-        },
-        "internationals": {
-          "home_key_players": 0,
-          "away_key_players": 0,
-          "note": ""
-        },
-        "venue": {
-          "stadium": "",
-          "neutral": false,
-          "home_fan_ban": false,
-          "away_fans_banned": false
-        },
-        "form": {
-          "home_last6": "WDLWWD",
-          "away_last6": "LDWDLW"
-        },
-        "motivation": "",
-        "other_factors": "",
-        "confidence": 0.5,
-        "summary_he": "נתוני הדגמה – לא מחקר אמיתי.",
-        "sources": []
-      },
-      "researched": true,
-      "prob": {
-        "1": 0.3488,
-        "X": 0.2145,
-        "2": 0.4367
-      },
-      "base": {
-        "1": 0.3135,
-        "X": 0.212,
-        "2": 0.4745
-      },
-      "base_source": "odds+agent",
-      "adjustments": {
-        "absences": 0.0,
-        "fatigue": 0.095,
-        "internationals": 0.0,
-        "venue": 0.0,
-        "h2h": 0.0
-      },
-      "cover": [
-        "2"
-      ]
-    },
-    {
-      "index": 12,
-      "home_he": "יובנטוס",
-      "away_he": "רומא",
-      "home_en": "יובנטוס",
-      "away_en": "רומא",
-      "league": "demo",
-      "kickoff": "2026-10-03T20:30:00+03:00",
-      "research": {
-        "odds": {
-          "1": 4.25,
-          "X": 3.15,
-          "2": 2.0
-        },
-        "odds_source": "demo",
-        "agent_estimate": {
-          "1": 0.22329806580675265,
-          "X": 0.30118570486927065,
-          "2": 0.47551622932397664
-        },
-        "h2h": {
-          "home_wins": 5,
           "draws": 0,
           "away_wins": 6,
           "note": ""
@@ -1173,9 +1154,27 @@
         },
         "venue": {
           "stadium": "",
+          "city": "",
+          "latitude": null,
+          "longitude": null,
           "neutral": false,
           "home_fan_ban": false,
           "away_fans_banned": false
+        },
+        "history": {
+          "home_prev_seasons": "",
+          "away_prev_seasons": "",
+          "home_team_home_ppg": 1.33,
+          "away_team_away_ppg": 0.9,
+          "league_draw_rate": 0.29,
+          "time_slot_note": "",
+          "sources": []
+        },
+        "weather": {
+          "temperature_c": 24.0,
+          "precipitation_mm": 0.0,
+          "wind_kmh": 12.0,
+          "source": "demo"
         },
         "form": {
           "home_last6": "WDLWWD",
@@ -1189,135 +1188,66 @@
       },
       "researched": true,
       "prob": {
-        "1": 0.2215,
-        "X": 0.3009,
-        "2": 0.4775
+        "1": 0.4856,
+        "X": 0.3218,
+        "2": 0.1926
       },
       "base": {
-        "1": 0.2235,
-        "X": 0.3015,
-        "2": 0.4751
+        "1": 0.513,
+        "X": 0.3102,
+        "2": 0.1768
       },
       "base_source": "odds+agent",
       "adjustments": {
         "absences": 0.0,
         "fatigue": 0.0,
+        "rotation": 0.0,
         "internationals": 0.0,
         "venue": 0.0,
-        "h2h": -0.0068
+        "h2h": -0.075,
+        "history": 0.0048
+      },
+      "draw_adjustments": {
+        "league_draws": 0.0214,
+        "heat": 0.0,
+        "rain": 0.0,
+        "wind": 0.0
       },
       "cover": [
-        "2"
+        "1"
       ]
     },
     {
-      "index": 13,
-      "home_he": "באיירן מינכן",
-      "away_he": "דורטמונד",
-      "home_en": "באיירן מינכן",
-      "away_en": "דורטמונד",
+      "index": 10,
+      "home_he": "ברצלונה",
+      "away_he": "אתלטיקו מדריד",
+      "home_en": "ברצלונה",
+      "away_en": "אתלטיקו מדריד",
       "league": "demo",
-      "kickoff": "2026-10-03T21:00:00+03:00",
+      "kickoff": "2026-10-03T19:30:00+03:00",
+      "kickoff_local": "03.10 19:30",
       "research": {
         "odds": {
-          "1": 2.9,
-          "X": 4.29,
+          "1": 2.97,
+          "X": 4.14,
           "2": 2.11
         },
         "odds_source": "demo",
         "agent_estimate": {
-          "1": 0.32773771300779686,
-          "X": 0.22137761227677294,
-          "2": 0.4508846747154302
+          "1": 0.31945937769637744,
+          "X": 0.2293330963721727,
+          "2": 0.45120752593144986
         },
         "h2h": {
           "home_wins": 0,
-          "draws": 1,
-          "away_wins": 4,
+          "draws": 0,
+          "away_wins": 5,
           "note": ""
         },
         "absences": [],
         "fatigue": {
           "home_rest_days": 3,
-          "away_rest_days": 2,
-          "home_matches_14d": 2,
-          "away_matches_14d": 4,
-          "note": ""
-        },
-        "internationals": {
-          "home_key_players": 0,
-          "away_key_players": 0,
-          "note": ""
-        },
-        "venue": {
-          "stadium": "",
-          "neutral": false,
-          "home_fan_ban": false,
-          "away_fans_banned": false
-        },
-        "form": {
-          "home_last6": "WDLWWD",
-          "away_last6": "LDWDLW"
-        },
-        "motivation": "",
-        "other_factors": "",
-        "confidence": 0.5,
-        "summary_he": "נתוני הדגמה – לא מחקר אמיתי.",
-        "sources": []
-      },
-      "researched": true,
-      "prob": {
-        "1": 0.3483,
-        "X": 0.2228,
-        "2": 0.4289
-      },
-      "base": {
-        "1": 0.3278,
-        "X": 0.2215,
-        "2": 0.4506
-      },
-      "base_source": "odds+agent",
-      "adjustments": {
-        "absences": 0.0,
-        "fatigue": 0.115,
-        "internationals": 0.0,
-        "venue": 0.0,
-        "h2h": -0.06
-      },
-      "cover": [
-        "2"
-      ]
-    },
-    {
-      "index": 14,
-      "home_he": "פ.ס.ז'",
-      "away_he": "מרסיי",
-      "home_en": "פ.ס.ז'",
-      "away_en": "מרסיי",
-      "league": "demo",
-      "kickoff": "2026-10-03T21:30:00+03:00",
-      "research": {
-        "odds": {
-          "1": 3.47,
-          "X": 3.85,
-          "2": 1.98
-        },
-        "odds_source": "demo",
-        "agent_estimate": {
-          "1": 0.2736187855437371,
-          "X": 0.2465998218122054,
-          "2": 0.4797813926440575
-        },
-        "h2h": {
-          "home_wins": 0,
-          "draws": 3,
-          "away_wins": 3,
-          "note": ""
-        },
-        "absences": [],
-        "fatigue": {
-          "home_rest_days": 7,
-          "away_rest_days": 5,
+          "away_rest_days": 4,
           "home_matches_14d": 3,
           "away_matches_14d": 3,
           "note": ""
@@ -1329,9 +1259,27 @@
         },
         "venue": {
           "stadium": "",
+          "city": "",
+          "latitude": null,
+          "longitude": null,
           "neutral": false,
           "home_fan_ban": false,
           "away_fans_banned": false
+        },
+        "history": {
+          "home_prev_seasons": "",
+          "away_prev_seasons": "",
+          "home_team_home_ppg": 1.05,
+          "away_team_away_ppg": 1.21,
+          "league_draw_rate": 0.29,
+          "time_slot_note": "",
+          "sources": []
+        },
+        "weather": {
+          "temperature_c": 31.0,
+          "precipitation_mm": 0.0,
+          "wind_kmh": 12.0,
+          "source": "demo"
         },
         "form": {
           "home_last6": "WDLWWD",
@@ -1345,25 +1293,455 @@
       },
       "researched": true,
       "prob": {
-        "1": 0.2614,
-        "X": 0.2446,
-        "2": 0.4939
+        "1": 0.2794,
+        "X": 0.2345,
+        "2": 0.4861
       },
       "base": {
-        "1": 0.2737,
-        "X": 0.2467,
-        "2": 0.4797
+        "1": 0.3199,
+        "X": 0.2295,
+        "2": 0.4506
       },
       "base_source": "odds+agent",
       "adjustments": {
         "absences": 0.0,
         "fatigue": 0.0,
+        "rotation": 0.0,
         "internationals": 0.0,
         "venue": 0.0,
-        "h2h": -0.0375
+        "h2h": -0.075,
+        "history": -0.0306
+      },
+      "draw_adjustments": {
+        "league_draws": 0.0214,
+        "heat": 0.03,
+        "rain": 0.0,
+        "wind": 0.0
       },
       "cover": [
         "2"
+      ]
+    },
+    {
+      "index": 11,
+      "home_he": "אינטר",
+      "away_he": "נאפולי",
+      "home_en": "אינטר",
+      "away_en": "נאפולי",
+      "league": "demo",
+      "kickoff": "2026-10-03T20:00:00+03:00",
+      "kickoff_local": "03.10 20:00",
+      "research": {
+        "odds": {
+          "1": 2.21,
+          "X": 4.64,
+          "2": 2.6
+        },
+        "odds_source": "demo",
+        "agent_estimate": {
+          "1": 0.430376769825356,
+          "X": 0.2046842778257493,
+          "2": 0.36493895234889473
+        },
+        "h2h": {
+          "home_wins": 0,
+          "draws": 1,
+          "away_wins": 3,
+          "note": ""
+        },
+        "absences": [],
+        "fatigue": {
+          "home_rest_days": 7,
+          "away_rest_days": 4,
+          "home_matches_14d": 4,
+          "away_matches_14d": 3,
+          "note": ""
+        },
+        "internationals": {
+          "home_key_players": 0,
+          "away_key_players": 0,
+          "note": ""
+        },
+        "venue": {
+          "stadium": "",
+          "city": "",
+          "latitude": null,
+          "longitude": null,
+          "neutral": false,
+          "home_fan_ban": false,
+          "away_fans_banned": false
+        },
+        "history": {
+          "home_prev_seasons": "",
+          "away_prev_seasons": "",
+          "home_team_home_ppg": 1.13,
+          "away_team_away_ppg": 0.94,
+          "league_draw_rate": 0.29,
+          "time_slot_note": "",
+          "sources": []
+        },
+        "weather": {
+          "temperature_c": 31.0,
+          "precipitation_mm": 0.0,
+          "wind_kmh": 12.0,
+          "source": "demo"
+        },
+        "form": {
+          "home_last6": "WDLWWD",
+          "away_last6": "LDWDLW"
+        },
+        "motivation": "",
+        "other_factors": "",
+        "confidence": 0.5,
+        "summary_he": "נתוני הדגמה – לא מחקר אמיתי.",
+        "sources": []
+      },
+      "researched": true,
+      "prob": {
+        "1": 0.3914,
+        "X": 0.2138,
+        "2": 0.3948
+      },
+      "base": {
+        "1": 0.43,
+        "X": 0.2047,
+        "2": 0.3653
+      },
+      "base_source": "odds+agent",
+      "adjustments": {
+        "absences": 0.0,
+        "fatigue": -0.02,
+        "rotation": 0.0,
+        "internationals": 0.0,
+        "venue": 0.0,
+        "h2h": -0.0562,
+        "history": -0.0096
+      },
+      "draw_adjustments": {
+        "league_draws": 0.0214,
+        "heat": 0.03,
+        "rain": 0.0,
+        "wind": 0.0
+      },
+      "cover": [
+        "1",
+        "2"
+      ]
+    },
+    {
+      "index": 12,
+      "home_he": "יובנטוס",
+      "away_he": "רומא",
+      "home_en": "יובנטוס",
+      "away_en": "רומא",
+      "league": "demo",
+      "kickoff": "2026-10-03T20:30:00+03:00",
+      "kickoff_local": "03.10 20:30",
+      "research": {
+        "odds": {
+          "1": 1.84,
+          "X": 4.06,
+          "2": 3.8
+        },
+        "odds_source": "demo",
+        "agent_estimate": {
+          "1": 0.5162757795611133,
+          "X": 0.23405169407952928,
+          "2": 0.24967252635935747
+        },
+        "h2h": {
+          "home_wins": 3,
+          "draws": 3,
+          "away_wins": 1,
+          "note": ""
+        },
+        "absences": [],
+        "fatigue": {
+          "home_rest_days": 5,
+          "away_rest_days": 3,
+          "home_matches_14d": 2,
+          "away_matches_14d": 2,
+          "note": ""
+        },
+        "internationals": {
+          "home_key_players": 0,
+          "away_key_players": 0,
+          "note": ""
+        },
+        "venue": {
+          "stadium": "",
+          "city": "",
+          "latitude": null,
+          "longitude": null,
+          "neutral": false,
+          "home_fan_ban": false,
+          "away_fans_banned": false
+        },
+        "history": {
+          "home_prev_seasons": "",
+          "away_prev_seasons": "",
+          "home_team_home_ppg": 2.14,
+          "away_team_away_ppg": 1.18,
+          "league_draw_rate": 0.29,
+          "time_slot_note": "",
+          "sources": []
+        },
+        "weather": {
+          "temperature_c": 24.0,
+          "precipitation_mm": 0.0,
+          "wind_kmh": 12.0,
+          "source": "demo"
+        },
+        "form": {
+          "home_last6": "WDLWWD",
+          "away_last6": "LDWDLW"
+        },
+        "motivation": "",
+        "other_factors": "",
+        "confidence": 0.5,
+        "summary_he": "נתוני הדגמה – לא מחקר אמיתי.",
+        "sources": []
+      },
+      "researched": true,
+      "prob": {
+        "1": 0.5353,
+        "X": 0.2339,
+        "2": 0.2307
+      },
+      "base": {
+        "1": 0.5162,
+        "X": 0.234,
+        "2": 0.2499
+      },
+      "base_source": "odds+agent",
+      "adjustments": {
+        "absences": 0.0,
+        "fatigue": 0.0,
+        "rotation": 0.0,
+        "internationals": 0.0,
+        "venue": 0.0,
+        "h2h": 0.0214,
+        "history": 0.0366
+      },
+      "draw_adjustments": {
+        "league_draws": 0.0214,
+        "heat": 0.0,
+        "rain": 0.0,
+        "wind": 0.0
+      },
+      "cover": [
+        "1"
+      ]
+    },
+    {
+      "index": 13,
+      "home_he": "באיירן מינכן",
+      "away_he": "דורטמונד",
+      "home_en": "באיירן מינכן",
+      "away_en": "דורטמונד",
+      "league": "demo",
+      "kickoff": "2026-10-03T21:00:00+03:00",
+      "kickoff_local": "03.10 21:00",
+      "research": {
+        "odds": {
+          "1": 2.39,
+          "X": 3.9,
+          "2": 2.65
+        },
+        "odds_source": "demo",
+        "agent_estimate": {
+          "1": 0.3977711438559035,
+          "X": 0.24347773701020922,
+          "2": 0.35875111913388724
+        },
+        "h2h": {
+          "home_wins": 3,
+          "draws": 1,
+          "away_wins": 6,
+          "note": ""
+        },
+        "absences": [],
+        "fatigue": {
+          "home_rest_days": 5,
+          "away_rest_days": 3,
+          "home_matches_14d": 4,
+          "away_matches_14d": 3,
+          "note": ""
+        },
+        "internationals": {
+          "home_key_players": 0,
+          "away_key_players": 0,
+          "note": ""
+        },
+        "venue": {
+          "stadium": "",
+          "city": "",
+          "latitude": null,
+          "longitude": null,
+          "neutral": false,
+          "home_fan_ban": false,
+          "away_fans_banned": false
+        },
+        "history": {
+          "home_prev_seasons": "",
+          "away_prev_seasons": "",
+          "home_team_home_ppg": 2.1,
+          "away_team_away_ppg": 1.24,
+          "league_draw_rate": 0.29,
+          "time_slot_note": "",
+          "sources": []
+        },
+        "weather": {
+          "temperature_c": 31.0,
+          "precipitation_mm": 0.0,
+          "wind_kmh": 12.0,
+          "source": "demo"
+        },
+        "form": {
+          "home_last6": "WDLWWD",
+          "away_last6": "LDWDLW"
+        },
+        "motivation": "",
+        "other_factors": "",
+        "confidence": 0.5,
+        "summary_he": "נתוני הדגמה – לא מחקר אמיתי.",
+        "sources": []
+      },
+      "researched": true,
+      "prob": {
+        "1": 0.3882,
+        "X": 0.2533,
+        "2": 0.3585
+      },
+      "base": {
+        "1": 0.3977,
+        "X": 0.2436,
+        "2": 0.3587
+      },
+      "base_source": "odds+agent",
+      "adjustments": {
+        "absences": 0.0,
+        "fatigue": -0.02,
+        "rotation": 0.0,
+        "internationals": 0.0,
+        "venue": 0.0,
+        "h2h": -0.0225,
+        "history": 0.0306
+      },
+      "draw_adjustments": {
+        "league_draws": 0.0214,
+        "heat": 0.03,
+        "rain": 0.0,
+        "wind": 0.0
+      },
+      "cover": [
+        "1",
+        "2"
+      ]
+    },
+    {
+      "index": 14,
+      "home_he": "פ.ס.ז'",
+      "away_he": "מרסיי",
+      "home_en": "פ.ס.ז'",
+      "away_en": "מרסיי",
+      "league": "demo",
+      "kickoff": "2026-10-03T21:30:00+03:00",
+      "kickoff_local": "03.10 21:30",
+      "research": {
+        "odds": {
+          "1": 1.38,
+          "X": 3.15,
+          "2": 19.0
+        },
+        "odds_source": "demo",
+        "agent_estimate": {
+          "1": 0.687114422484325,
+          "X": 0.30170127994674684,
+          "2": 0.05
+        },
+        "h2h": {
+          "home_wins": 6,
+          "draws": 2,
+          "away_wins": 5,
+          "note": ""
+        },
+        "absences": [],
+        "fatigue": {
+          "home_rest_days": 5,
+          "away_rest_days": 3,
+          "home_matches_14d": 4,
+          "away_matches_14d": 4,
+          "note": ""
+        },
+        "internationals": {
+          "home_key_players": 0,
+          "away_key_players": 0,
+          "note": ""
+        },
+        "venue": {
+          "stadium": "",
+          "city": "",
+          "latitude": null,
+          "longitude": null,
+          "neutral": false,
+          "home_fan_ban": false,
+          "away_fans_banned": false
+        },
+        "history": {
+          "home_prev_seasons": "",
+          "away_prev_seasons": "",
+          "home_team_home_ppg": 1.61,
+          "away_team_away_ppg": 1.35,
+          "league_draw_rate": 0.29,
+          "time_slot_note": "",
+          "sources": []
+        },
+        "weather": {
+          "temperature_c": 24.0,
+          "precipitation_mm": 0.0,
+          "wind_kmh": 12.0,
+          "source": "demo"
+        },
+        "form": {
+          "home_last6": "WDLWWD",
+          "away_last6": "LDWDLW"
+        },
+        "motivation": "",
+        "other_factors": "",
+        "confidence": 0.5,
+        "summary_he": "נתוני הדגמה – לא מחקר אמיתי.",
+        "sources": []
+      },
+      "researched": true,
+      "prob": {
+        "1": 0.6578,
+        "X": 0.2945,
+        "2": 0.0478
+      },
+      "base": {
+        "1": 0.6618,
+        "X": 0.2901,
+        "2": 0.0481
+      },
+      "base_source": "odds+agent",
+      "adjustments": {
+        "absences": 0.0,
+        "fatigue": 0.0,
+        "rotation": 0.0,
+        "internationals": 0.0,
+        "venue": 0.0,
+        "h2h": 0.0058,
+        "history": -0.0054
+      },
+      "draw_adjustments": {
+        "league_draws": 0.0214,
+        "heat": 0.0,
+        "rain": 0.0,
+        "wind": 0.0
+      },
+      "cover": [
+        "1"
       ]
     },
     {
@@ -1374,30 +1752,31 @@
       "away_en": "הפועל רעננה",
       "league": "demo",
       "kickoff": "2026-10-03T22:00:00+03:00",
+      "kickoff_local": "03.10 22:00",
       "research": {
         "odds": {
-          "1": 4.33,
-          "X": 4.67,
-          "2": 1.65
+          "1": 2.13,
+          "X": 4.53,
+          "2": 2.75
         },
         "odds_source": "demo",
         "agent_estimate": {
-          "1": 0.21951782427395533,
-          "X": 0.20363934073486872,
-          "2": 0.5768428349911761
+          "1": 0.4451587489001281,
+          "X": 0.2095441130667557,
+          "2": 0.34529713803311624
         },
         "h2h": {
-          "home_wins": 1,
-          "draws": 3,
+          "home_wins": 5,
+          "draws": 0,
           "away_wins": 5,
           "note": ""
         },
         "absences": [],
         "fatigue": {
-          "home_rest_days": 4,
-          "away_rest_days": 6,
-          "home_matches_14d": 3,
-          "away_matches_14d": 2,
+          "home_rest_days": 7,
+          "away_rest_days": 4,
+          "home_matches_14d": 2,
+          "away_matches_14d": 3,
           "note": ""
         },
         "internationals": {
@@ -1407,9 +1786,27 @@
         },
         "venue": {
           "stadium": "",
+          "city": "",
+          "latitude": null,
+          "longitude": null,
           "neutral": false,
           "home_fan_ban": false,
           "away_fans_banned": false
+        },
+        "history": {
+          "home_prev_seasons": "",
+          "away_prev_seasons": "",
+          "home_team_home_ppg": 1.1,
+          "away_team_away_ppg": 1.25,
+          "league_draw_rate": 0.29,
+          "time_slot_note": "",
+          "sources": []
+        },
+        "weather": {
+          "temperature_c": 24.0,
+          "precipitation_mm": 0.0,
+          "wind_kmh": 12.0,
+          "source": "demo"
         },
         "form": {
           "home_last6": "WDLWWD",
@@ -1423,25 +1820,33 @@
       },
       "researched": true,
       "prob": {
-        "1": 0.2041,
-        "X": 0.1997,
-        "2": 0.5962
+        "1": 0.4394,
+        "X": 0.2133,
+        "2": 0.3473
       },
       "base": {
-        "1": 0.2197,
-        "X": 0.2037,
-        "2": 0.5766
+        "1": 0.4454,
+        "X": 0.2095,
+        "2": 0.3451
       },
       "base_source": "odds+agent",
       "adjustments": {
         "absences": 0.0,
-        "fatigue": -0.02,
+        "fatigue": 0.02,
+        "rotation": 0.0,
         "internationals": 0.0,
         "venue": 0.0,
-        "h2h": -0.0333
+        "h2h": 0.0,
+        "history": -0.03
+      },
+      "draw_adjustments": {
+        "league_draws": 0.0214,
+        "heat": 0.0,
+        "rain": 0.0,
+        "wind": 0.0
       },
       "cover": [
-        "2"
+        "1"
       ]
     },
     {
@@ -1452,29 +1857,30 @@
       "away_en": "מכבי הרצליה",
       "league": "demo",
       "kickoff": "2026-10-03T22:30:00+03:00",
+      "kickoff_local": "03.10 22:30",
       "research": {
         "odds": {
-          "1": 1.57,
-          "X": 4.45,
-          "2": 5.27
+          "1": 2.08,
+          "X": 3.6,
+          "2": 3.4
         },
         "odds_source": "demo",
         "agent_estimate": {
-          "1": 0.6060750686225456,
-          "X": 0.21364277847046578,
-          "2": 0.18028215290698865
+          "1": 0.45667701041264797,
+          "X": 0.2637961332542896,
+          "2": 0.27952685633306246
         },
         "h2h": {
-          "home_wins": 5,
-          "draws": 0,
-          "away_wins": 2,
+          "home_wins": 0,
+          "draws": 2,
+          "away_wins": 3,
           "note": ""
         },
         "absences": [],
         "fatigue": {
-          "home_rest_days": 2,
+          "home_rest_days": 4,
           "away_rest_days": 5,
-          "home_matches_14d": 3,
+          "home_matches_14d": 2,
           "away_matches_14d": 2,
           "note": ""
         },
@@ -1485,9 +1891,27 @@
         },
         "venue": {
           "stadium": "",
+          "city": "",
+          "latitude": null,
+          "longitude": null,
           "neutral": false,
           "home_fan_ban": false,
           "away_fans_banned": false
+        },
+        "history": {
+          "home_prev_seasons": "",
+          "away_prev_seasons": "",
+          "home_team_home_ppg": 1.25,
+          "away_team_away_ppg": 0.93,
+          "league_draw_rate": 0.29,
+          "time_slot_note": "",
+          "sources": []
+        },
+        "weather": {
+          "temperature_c": 24.0,
+          "precipitation_mm": 0.0,
+          "wind_kmh": 12.0,
+          "source": "demo"
         },
         "form": {
           "home_last6": "WDLWWD",
@@ -1501,22 +1925,30 @@
       },
       "researched": true,
       "prob": {
-        "1": 0.5837,
-        "X": 0.2192,
-        "2": 0.1971
+        "1": 0.4366,
+        "X": 0.2701,
+        "2": 0.2933
       },
       "base": {
-        "1": 0.6059,
-        "X": 0.2137,
-        "2": 0.1804
+        "1": 0.4567,
+        "X": 0.2639,
+        "2": 0.2794
       },
       "base_source": "odds+agent",
       "adjustments": {
         "absences": 0.0,
-        "fatigue": -0.095,
+        "fatigue": 0.0,
+        "rotation": 0.0,
         "internationals": 0.0,
         "venue": 0.0,
-        "h2h": 0.0321
+        "h2h": -0.045,
+        "history": -0.0018
+      },
+      "draw_adjustments": {
+        "league_draws": 0.0214,
+        "heat": 0.0,
+        "rain": 0.0,
+        "wind": 0.0
       },
       "cover": [
         "1"
