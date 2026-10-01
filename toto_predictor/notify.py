@@ -17,6 +17,13 @@ log = logging.getLogger(__name__)
 CALLMEBOT_URL = "https://api.callmebot.com/whatsapp.php"
 
 
+def format_chance(p: float) -> str:
+    """P(16) is usually tiny: '1 ל-30,303' reads better than '0.00%'."""
+    if p >= 0.01:
+        return f"{p * 100:.1f}%"
+    return f"1 ל-{round(1 / p):,}" if p > 0 else "0"
+
+
 def _pick_label(cover: list[str]) -> str:
     return "".join(cover)
 
@@ -37,7 +44,7 @@ def ticket_text(result: dict) -> str:
     lines += [
         "",
         f"{t['doubles']} כפולים, {t['triples']} משולשים · {t['columns']} טורים · {t['cost']:.0f} ₪",
-        f"סיכוי משוער ל-16: {t['p16'] * 100:.2f}%",
+        f"סיכוי משוער ל-16: {format_chance(t['p16'])}",
         "התחזית מבוססת על המידע הידוע היום. ההרכבים עוד לא פורסמו, ושחקנים בספק נספרים כחצי היעדרות.",
     ]
     failed = [str(m["index"]) for m in result["matches"] if not m.get("researched")]

@@ -42,6 +42,11 @@ class RunWeeklyTest(unittest.TestCase):
             self.assertEqual(run_weekly.main(), 1)
         sent.assert_not_called()
 
+    def test_format_chance(self):
+        self.assertEqual(notify.format_chance(3.3e-05), "1 ל-30,303")
+        self.assertEqual(notify.format_chance(0.25), "25.0%")
+        self.assertEqual(notify.format_chance(0), "0")
+
     def test_parse_manual_matches(self):
         lines = "\n".join(f"קבוצה {i} - יריבה {i}" for i in range(16))
         matches = run_weekly.parse_manual_matches(lines)

@@ -275,8 +275,11 @@ Hebrew on the form: {home_he} - {away_he}
 League: {league}. Kickoff: {kickoff}.
 
 Collect:
-1. odds: current decimal 1/X/2 odds from a major bookmaker or odds comparison \
-site (e.g. oddsportal, flashscore). null if this match has no odds online.
+1. odds - look these up FIRST, before anything else: they are the strongest \
+input of the model. Search "<home> v <away> odds" and use an odds comparison \
+page (oddsportal.com, oddschecker.com, flashscore, betexplorer.com) or a major \
+bookmaker. Give current decimal 1/X/2 odds. null only if this match really has \
+no odds online.
 2. agent_estimate: your own 1/X/2 probability estimate (summing to 1) based on \
 form, table position, strength (Elo/xG where available) and everything below.
 3. h2h: results of all meetings between the two clubs in the last 10 years \
