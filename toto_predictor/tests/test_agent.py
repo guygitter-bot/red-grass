@@ -40,6 +40,16 @@ class AgentLoopTest(unittest.TestCase):
         self.assertEqual(agent._call_with_submit(client, None, "p", agent.ROUND_TOOL), {"x": 2})
         self.assertEqual(client.calls[1]["messages"][-1]["role"], "user")
 
+    def test_usage_cost(self):
+        usage = agent.Usage()
+        u = SimpleNamespace(input_tokens=1_000_000, output_tokens=100_000, cache_read_input_tokens=0,
+                            cache_creation_input_tokens=0,
+                            server_tool_use=SimpleNamespace(web_search_requests=10))
+        usage.add("claude-opus-5-5", u)
+        usage.add("claude-opus-5-5", None)
+        self.assertEqual(usage.summary()["estimated_cost_usd"], 6.1)  # 4 + 2 + 0.1
+        self.assertEqual(usage.summary()["web_searches"], 10)
+
     def test_prompts_format(self):
         match = {"index": 1, "home_he": "מכבי חיפה", "away_he": "הפועל באר שבע",
                  "home_en": "Maccabi Haifa", "away_en": "Hapoel Beer Sheva",

@@ -30,6 +30,20 @@ class ModelTest(unittest.TestCase):
         adj = model.adjustments({"rotation_risk": {"home": "high", "away": "none"}})
         self.assertLess(adj["rotation"], 0)
 
+    def test_loosely_typed_research_does_not_crash(self):
+        messy = {
+            "odds": "n/a", "agent_estimate": {"1": "0.5", "X": "0.3", "2": "0.2"},
+            "absences": ["x", {"team": "home", "importance": "high"}],
+            "fatigue": {"home_rest_days": "2", "away_rest_days": None, "home_matches_14d": "?"},
+            "internationals": None, "venue": "Bloomfield", "h2h": {"home_wins": "3", "draws": 1},
+            "history": {"league_draw_rate": "0.3", "home_team_home_ppg": "x"},
+            "weather": {"temperature_c": "31"}, "rotation_risk": "high",
+        }
+        out = model.predict(messy)
+        self.assertEqual(out["base_source"], "agent")
+        self.assertAlmostEqual(sum(out["prob"].values()), 1.0, places=3)
+        self.assertLess(out["adjustments"]["fatigue"], 0)  # "2" rest days parsed
+
     def test_fan_ban_reduces_home_edge(self):
         base = {"agent_estimate": {"1": 0.5, "X": 0.25, "2": 0.25}}
         ban = {**base, "venue": {"home_fan_ban": True}}

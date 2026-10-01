@@ -53,6 +53,20 @@ WEIGHTS = {
 FALLBACK = {"1": 0.45, "X": 0.28, "2": 0.27}
 
 
+def _num(value) -> float | None:
+    """A number from loosely typed agent output (str, int, None...)."""
+    if isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _dict(value) -> dict:
+    return value if isinstance(value, dict) else {}
+
+
 def _normalise(p: dict[str, float]) -> dict[str, float]:
     total = sum(p.values())
     return {k: v / total for k, v in p.items()}
@@ -99,52 +113,54 @@ def adjustments(research: dict) -> dict[str, float]:
     w = WEIGHTS
     out: dict[str, float] = {}
 
-    absences = research.get("absences") or []
+    absences = research.get("absences")
     imp = {"home": 0.0, "away": 0.0}
-    for a in absences:
+    for a in absences if isinstance(absences, list) else []:
+        if not isinstance(a, dict):
+            continue
         side = a.get("team")
         if side in imp:
             miss = w["doubtful_miss_chance"] if a.get("status") == "doubtful" else 1.0
-            imp[side] += miss * max(0.0, min(1.0, float(a.get("importance") or 0)))
+            imp[side] += miss * max(0.0, min(1.0, _num(a.get("importance")) or 0.0))
     imp = {k: min(v, w["absence_cap"]) for k, v in imp.items()}
     out["absences"] = w["absence"] * (imp["away"] - imp["home"])
 
-    fatigue = research.get("fatigue") or {}
+    fatigue = _dict(research.get("fatigue"))
     shift = 0.0
     for side, sign in (("home", -1), ("away", 1)):
-        rest = fatigue.get(f"{side}_rest_days")
+        rest = _num(fatigue.get(f"{side}_rest_days"))
         if rest is not None and rest < 3:
             shift += sign * w["short_rest"]
-    hm, am = fatigue.get("home_matches_14d"), fatigue.get("away_matches_14d")
+    hm, am = _num(fatigue.get("home_matches_14d")), _num(fatigue.get("away_matches_14d"))
     if hm is not None and am is not None:
         load = w["match_load"] * (am - hm)
         shift += max(-w["match_load_cap"], min(w["match_load_cap"], load))
     out["fatigue"] = shift
 
-    rot = research.get("rotation_risk") or {}
+    rot = _dict(research.get("rotation_risk"))
     out["rotation"] = w["rotation"].get(rot.get("away"), 0.0) - w["rotation"].get(rot.get("home"), 0.0)
 
-    intl = research.get("internationals") or {}
-    diff = (intl.get("away_key_players") or 0) - (intl.get("home_key_players") or 0)
+    intl = _dict(research.get("internationals"))
+    diff = (_num(intl.get("away_key_players")) or 0) - (_num(intl.get("home_key_players")) or 0)
     out["internationals"] = max(
         -w["international_cap"], min(w["international_cap"], w["international"] * diff)
     )
 
-    venue = research.get("venue") or {}
+    venue = _dict(research.get("venue"))
     shift = 0.0
-    if venue.get("neutral") or venue.get("home_fan_ban"):
+    if venue.get("neutral") is True or venue.get("home_fan_ban") is True:
         shift -= w["no_home_advantage"]
-    if venue.get("away_fans_banned"):
+    if venue.get("away_fans_banned") is True:
         shift += w["away_fans_banned"]
     out["venue"] = shift
 
-    h2h = research.get("h2h") or {}
-    hw, d, aw = (h2h.get(k) or 0 for k in ("home_wins", "draws", "away_wins"))
+    h2h = _dict(research.get("h2h"))
+    hw, d, aw = (_num(h2h.get(k)) or 0 for k in ("home_wins", "draws", "away_wins"))
     meetings = hw + d + aw
     out["h2h"] = w["h2h"] * (hw - aw) / meetings if meetings >= w["h2h_min_meetings"] else 0.0
 
-    hist = research.get("history") or {}
-    hppg, appg = hist.get("home_team_home_ppg"), hist.get("away_team_away_ppg")
+    hist = _dict(research.get("history"))
+    hppg, appg = _num(hist.get("home_team_home_ppg")), _num(hist.get("away_team_away_ppg"))
     if hppg is not None and appg is not None:
         gap = w["history_ppg"] * ((hppg - appg) - w["history_typical_gap"])
         out["history"] = max(-w["history_cap"], min(w["history_cap"], gap))
@@ -157,12 +173,12 @@ def draw_adjustments(research: dict) -> dict[str, float]:
     """Each factor's log shift of P(X): league draw tendency and weather."""
     w = WEIGHTS
     out = {}
-    rate = (research.get("history") or {}).get("league_draw_rate")
+    rate = _num(_dict(research.get("history")).get("league_draw_rate"))
     out["league_draws"] = (
         w["league_draw"] * math.log(rate / w["typical_draw_rate"]) if rate and 0 < rate < 1 else 0.0
     )
-    weather = research.get("weather") or {}
-    temp, rain, wind = (weather.get(k) for k in ("temperature_c", "precipitation_mm", "wind_kmh"))
+    weather = _dict(research.get("weather"))
+    temp, rain, wind = (_num(weather.get(k)) for k in ("temperature_c", "precipitation_mm", "wind_kmh"))
     out["heat"] = w["heat"] if temp is not None and temp >= w["heat_c"] else 0.0
     out["rain"] = w["rain"] if rain is not None and rain >= w["rain_mm"] else 0.0
     out["wind"] = w["wind"] if wind is not None and wind >= w["wind_kmh"] else 0.0

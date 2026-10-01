@@ -18,6 +18,9 @@ TEAMS = [
 ]
 
 
+USAGE = None
+
+
 def find_round() -> dict:
     today = dt.date.today()
     saturday = today + dt.timedelta(days=(5 - today.weekday()) % 7 or 7)

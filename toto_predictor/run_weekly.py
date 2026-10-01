@@ -83,8 +83,8 @@ def add_weather(matches: list[dict], research: list[dict | None], fetch=None) ->
     for match, res in zip(matches, research):
         if not res:
             continue
-        venue = res.get("venue") or {}
-        lat, lon = venue.get("latitude"), venue.get("longitude")
+        venue = res.get("venue") if isinstance(res.get("venue"), dict) else {}
+        lat, lon = model._num(venue.get("latitude")), model._num(venue.get("longitude"))
         kickoff = closing.parse_time(match.get("kickoff"))
         if lat is None or lon is None or kickoff is None:
             continue
@@ -176,12 +176,16 @@ def main() -> int:
     research = agent.research_all(round_info["matches"], str(round_info["round_number"]))
     if not _flag("DEMO"):
         add_weather(round_info["matches"], research)
+    usage = agent.USAGE.summary() if agent.USAGE else None
+    if usage:
+        log.info("API usage: %s", usage)
     failed = sum(r is None for r in research)
     if failed > config.MATCH_COUNT // 2:
         log.error("Research failed for %d matches; not publishing a ticket", failed)
         return 1
 
     result = build_result(round_info, research)
+    result["usage"] = usage
     path = save(result)
     log.info("Saved %s", path)
     print(notify.ticket_text(result))

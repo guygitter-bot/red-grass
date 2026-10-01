@@ -58,6 +58,11 @@ jobs:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           TOTO_EMAIL_TO: ${{ vars.TOTO_EMAIL_TO }}
+          TOTO_MODEL: ${{ vars.TOTO_MODEL }}
+          TOTO_RESEARCH_MODEL: ${{ vars.TOTO_RESEARCH_MODEL }}
+          TOTO_EFFORT: ${{ vars.TOTO_EFFORT }}
+          TOTO_MAX_SEARCHES: ${{ vars.TOTO_MAX_SEARCHES }}
+          TOTO_MAX_FETCHES: ${{ vars.TOTO_MAX_FETCHES }}
           TOTO_SITE_URL: ${{ vars.TOTO_SITE_URL || format('https://{0}.github.io/{1}/', github.repository_owner, github.event.repository.name) }}
           MANUAL_MATCHES: ${{ inputs.manual_matches }}
           MANUAL_ROUND: ${{ inputs.manual_round }}

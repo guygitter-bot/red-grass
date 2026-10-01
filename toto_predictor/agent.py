@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor
 
 import anthropic
@@ -19,9 +20,57 @@ log = logging.getLogger(__name__)
 
 MAX_STEPS = 10
 WEB_TOOLS = [
-    {"type": "web_search_20260209", "name": "web_search", "max_uses": 15},
-    {"type": "web_fetch_20260209", "name": "web_fetch", "max_uses": 10},
+    {"type": "web_search_20260209", "name": "web_search", "max_uses": config.MAX_SEARCHES},
+    {"type": "web_fetch_20260209", "name": "web_fetch", "max_uses": config.MAX_FETCHES},
 ]
+
+# USD per million tokens: (input, output, cache read). Cache writes cost 1.25x input.
+PRICES = {
+    "claude-opus-5-5": (4.0, 20.0, 0.20),
+    "claude-sonnet-5-5": (2.0, 10.0, 0.20),
+    "claude-haiku-4-5": (1.0, 5.0, 0.10),
+}
+SEARCH_PRICE = 10.0 / 1000  # USD per web search
+
+
+class Usage:
+    """Thread-safe running total of tokens, searches and estimated cost."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.calls = self.input_tokens = self.output_tokens = self.searches = 0
+        self.cost = 0.0
+
+    def add(self, model: str, usage) -> None:
+        if usage is None:
+            return
+        def n(obj, name):
+            return getattr(obj, name, 0) or 0
+        inp, out = n(usage, "input_tokens"), n(usage, "output_tokens")
+        cache_read, cache_write = n(usage, "cache_read_input_tokens"), n(usage, "cache_creation_input_tokens")
+        searches = n(getattr(usage, "server_tool_use", None), "web_search_requests")
+        p_in, p_out, p_cache = PRICES.get(model, PRICES["claude-opus-5-5"])
+        cost = (
+            inp * p_in + out * p_out + cache_read * p_cache + cache_write * p_in * 1.25
+        ) / 1e6 + searches * SEARCH_PRICE
+        with self._lock:
+            self.calls += 1
+            self.input_tokens += inp + cache_read + cache_write
+            self.output_tokens += out
+            self.searches += searches
+            self.cost += cost
+
+    def summary(self) -> dict:
+        return {
+            "api_calls": self.calls,
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+            "web_searches": self.searches,
+            "estimated_cost_usd": round(self.cost, 2),
+        }
+
+
+USAGE = Usage()
 
 
 def _nullable(schema_type: str) -> dict:
@@ -72,7 +121,8 @@ ROUND_TOOL = {
 RESEARCH_TOOL = {
     "name": "submit_match_research",
     "description": "Submit the structured research for one match. Use null where nothing reliable was found.",
-    "strict": True,
+    # Not strict: this schema is too large for strict mode's compiled grammar
+    # (the API rejects it). model.py reads every field defensively instead.
     "input_schema": _obj(
         {
             "odds": {"anyOf": [TRIPLE, {"type": "null"}]},
@@ -278,7 +328,9 @@ def _client() -> anthropic.Anthropic:
     return anthropic.Anthropic()
 
 
-def _call_with_submit(client, system: str | None, prompt: str, submit_tool: dict) -> dict:
+def _call_with_submit(
+    client, system: str | None, prompt: str, submit_tool: dict, model: str | None = None
+) -> dict:
     """Run the web-research loop until the model calls the submit tool."""
     messages: list = [{"role": "user", "content": prompt}]
     kwargs = {}
@@ -286,7 +338,7 @@ def _call_with_submit(client, system: str | None, prompt: str, submit_tool: dict
         kwargs["system"] = system
     for _ in range(MAX_STEPS):
         response = client.beta.messages.create(
-            model=config.MODEL,
+            model=model or config.MODEL,
             max_tokens=16000,
             betas=["server-side-fallback-2026-07-01"],
             fallbacks="default",
@@ -295,6 +347,7 @@ def _call_with_submit(client, system: str | None, prompt: str, submit_tool: dict
             messages=messages,
             **kwargs,
         )
+        USAGE.add(model or config.MODEL, getattr(response, "usage", None))
         if response.stop_reason == "refusal":
             raise RuntimeError(f"Model refused: {response.stop_details}")
         for block in response.content:
@@ -327,7 +380,7 @@ def find_round(client=None) -> dict:
 def research_match(match: dict, round_number: str, client=None) -> dict:
     client = client or _client()
     prompt = RESEARCH_PROMPT.format(today=_today(), round_number=round_number, **match)
-    return _call_with_submit(client, RESEARCH_SYSTEM, prompt, RESEARCH_TOOL)
+    return _call_with_submit(client, RESEARCH_SYSTEM, prompt, RESEARCH_TOOL, config.RESEARCH_MODEL)
 
 
 def research_all(matches: list[dict], round_number: str, client=None) -> list[dict | None]:
