@@ -21,6 +21,8 @@ WEIGHTS = {
     "market_share": 0.75,  # share of the base taken from odds when present
     "damping_with_odds": 0.5,
     "absence": 0.25,  # per unit of summed absence importance
+    "doubtful_miss_chance": 0.5,  # line-ups are unknown on Thursday
+    "rotation": {"none": 0.0, "low": 0.04, "high": 0.12},
     "absence_cap": 3.0,
     "short_rest": 0.15,  # rest of fewer than 3 days
     "match_load": 0.04,  # per extra match in the last 14 days
@@ -87,7 +89,8 @@ def adjustments(research: dict) -> dict[str, float]:
     for a in absences:
         side = a.get("team")
         if side in imp:
-            imp[side] += max(0.0, min(1.0, float(a.get("importance") or 0)))
+            miss = w["doubtful_miss_chance"] if a.get("status") == "doubtful" else 1.0
+            imp[side] += miss * max(0.0, min(1.0, float(a.get("importance") or 0)))
     imp = {k: min(v, w["absence_cap"]) for k, v in imp.items()}
     out["absences"] = w["absence"] * (imp["away"] - imp["home"])
 
@@ -102,6 +105,9 @@ def adjustments(research: dict) -> dict[str, float]:
         load = w["match_load"] * (am - hm)
         shift += max(-w["match_load_cap"], min(w["match_load_cap"], load))
     out["fatigue"] = shift
+
+    rot = research.get("rotation_risk") or {}
+    out["rotation"] = w["rotation"].get(rot.get("away"), 0.0) - w["rotation"].get(rot.get("home"), 0.0)
 
     intl = research.get("internationals") or {}
     diff = (intl.get("away_key_players") or 0) - (intl.get("home_key_players") or 0)

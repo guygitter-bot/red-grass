@@ -93,6 +93,7 @@ RESEARCH_TOOL = {
                         "team": {"type": "string", "enum": ["home", "away"]},
                         "player": {"type": "string"},
                         "reason": {"type": "string", "enum": ["injury", "suspension", "other"]},
+                        "status": {"type": "string", "enum": ["out", "doubtful"]},
                         "importance": {"type": "number"},
                         "source": {"type": "string"},
                     }
@@ -104,6 +105,8 @@ RESEARCH_TOOL = {
                     "away_rest_days": _nullable("integer"),
                     "home_matches_14d": _nullable("integer"),
                     "away_matches_14d": _nullable("integer"),
+                    "home_matches_before_unplayed": {"type": "integer"},
+                    "away_matches_before_unplayed": {"type": "integer"},
                     "note": {"type": "string"},
                 }
             ),
@@ -120,6 +123,13 @@ RESEARCH_TOOL = {
                     "neutral": {"type": "boolean"},
                     "home_fan_ban": {"type": "boolean"},
                     "away_fans_banned": {"type": "boolean"},
+                }
+            ),
+            "rotation_risk": _obj(
+                {
+                    "home": {"type": "string", "enum": ["none", "low", "high"]},
+                    "away": {"type": "string", "enum": ["none", "low", "high"]},
+                    "note": {"type": "string"},
                 }
             ),
             "form": _obj({"home_last6": {"type": "string"}, "away_last6": {"type": "string"}}),
@@ -152,6 +162,15 @@ RESEARCH_SYSTEM = """You are a football research analyst preparing data for a \
 Toto 16 (1/X/2) prediction model. You collect facts; a separate model computes \
 the final probabilities, so be accurate and conservative.
 
+Timing - this matters:
+- The ticket is submitted on Thursday, before any of these matches. Many of \
+them are played on Friday or Saturday, and official line-ups are published only \
+about an hour before kickoff. So you can NEVER know the line-ups. Estimate who \
+will be available as of today, and mark anything not yet certain as doubtful.
+- Matches that are scheduled between today and this fixture (e.g. a Thursday \
+night European game) have not been played yet: count them for fatigue, but \
+their results and any injuries from them are unknown.
+
 Rules:
 - "home" always means the team hosting THIS fixture, "away" the visiting team.
 - Every absence must have a source URL dated within the last 10 days. Do not \
@@ -175,10 +194,21 @@ form, table position, strength (Elo/xG where available) and everything below.
 3. h2h: results of all meetings between the two clubs in the last 10 years \
 (any venue, all competitions), counted from the perspective of this fixture's \
 home team.
-4. absences: injured / suspended players for both teams. importance 0-1: \
-1 = star or first-choice goalkeeper, 0.5 = regular starter, 0.2 = squad player.
-5. fatigue: days since each team's previous match, and matches each played in \
-the last 14 days (including cups and European games).
+4. absences: injured / suspended players for both teams, as known today. \
+status "out" = confirmed to miss this match (suspension, long injury, club \
+statement); "doubtful" = a race against time, a knock, or "will be assessed". \
+Suspensions for this match are usually already known - check them. Use \
+predicted line-ups from previews and the latest coach press conference. \
+importance 0-1: 1 = star or first-choice goalkeeper, 0.5 = regular starter, \
+0.2 = squad player.
+5. fatigue: days between each team's previous match and this one - counting \
+matches still scheduled before this fixture, such as a Thursday European game - \
+and matches each team has in the 14 days up to this fixture (including cups and \
+European games). *_matches_before_unplayed = how many of those are still \
+scheduled after today.
+5b. rotation_risk: chance the coach rests key players because of a more \
+important match soon after (e.g. Champions League midweek, cup final): none / \
+low / high.
 6. internationals: number of key players per team who played for their \
 national team in the last international break and returned with long travel \
 (relevant only if the break ended within the last ~7 days, else 0).

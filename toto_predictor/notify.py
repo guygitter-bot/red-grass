@@ -38,6 +38,7 @@ def ticket_text(result: dict) -> str:
         "",
         f"{t['doubles']} כפולים, {t['triples']} משולשים · {t['columns']} טורים · {t['cost']:.0f} ₪",
         f"סיכוי משוער ל-16: {t['p16'] * 100:.2f}%",
+        "התחזית מבוססת על המידע הידוע היום. ההרכבים עוד לא פורסמו, ושחקנים בספק נספרים כחצי היעדרות.",
     ]
     failed = [str(m["index"]) for m in result["matches"] if not m.get("researched")]
     if failed:

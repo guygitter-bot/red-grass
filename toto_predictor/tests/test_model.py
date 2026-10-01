@@ -19,6 +19,17 @@ class ModelTest(unittest.TestCase):
         hurt = {**base, "absences": [{"team": "home", "importance": 1.0}] * 2}
         self.assertLess(model.predict(hurt)["prob"]["1"], model.predict(base)["prob"]["1"])
 
+    def test_doubtful_counts_half(self):
+        out = {"absences": [{"team": "home", "status": "out", "importance": 1.0}]}
+        doubtful = {"absences": [{"team": "home", "status": "doubtful", "importance": 1.0}]}
+        self.assertAlmostEqual(
+            model.adjustments(doubtful)["absences"], model.adjustments(out)["absences"] / 2
+        )
+
+    def test_rotation_risk_shifts_against_rotating_team(self):
+        adj = model.adjustments({"rotation_risk": {"home": "high", "away": "none"}})
+        self.assertLess(adj["rotation"], 0)
+
     def test_fan_ban_reduces_home_edge(self):
         base = {"agent_estimate": {"1": 0.5, "X": 0.25, "2": 0.25}}
         ban = {**base, "venue": {"home_fan_ban": True}}

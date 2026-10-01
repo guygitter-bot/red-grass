@@ -61,7 +61,7 @@
 </main>
 <script>
 const OUT = ["1", "X", "2"];
-const ADJ = {absences: "נעדרים", fatigue: "עומס", internationals: "נבחרות", venue: "ביתיות", h2h: "ראש בראש"};
+const ADJ = {absences: "נעדרים", rotation: "רוטציה", fatigue: "עומס", internationals: "נבחרות", venue: "ביתיות", h2h: "ראש בראש"};
 let data = null, covers = [], openRow = null;
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -112,7 +112,7 @@ function detailsHtml(m) {
     .map(([k, v]) => `${esc(ADJ[k] || k)}: ${v > 0 ? "+" : ""}${v.toFixed(2)} (${v > 0 ? "לטובת המארחת" : "לטובת האורחת"})`);
   const abs = (r.absences || []).map(a => {
     const u = safeUrl(a.source);
-    return `<li>${a.team === "home" ? esc(m.home_he) : esc(m.away_he)}: ${esc(a.player)} (${esc(a.reason)}, חשיבות ${a.importance})${u ? ` – <a href="${esc(u)}" target="_blank" rel="noopener">מקור</a>` : ""}</li>`;
+    return `<li>${a.team === "home" ? esc(m.home_he) : esc(m.away_he)}: ${esc(a.player)} (${a.status === "doubtful" ? "בספק" : "בחוץ"} · ${esc({injury: "פציעה", suspension: "הרחקה", other: "אחר"}[a.reason] || a.reason)} · חשיבות ${a.importance})${u ? ` – <a href="${esc(u)}" target="_blank" rel="noopener">מקור</a>` : ""}</li>`;
   });
   const src = (r.sources || []).map(safeUrl).filter(Boolean)
     .map(u => `<li><a href="${esc(u)}" target="_blank" rel="noopener">${esc(u)}</a></li>`);
@@ -158,6 +158,7 @@ function render(index) {
       <button id="reset">חזרה להמלצה</button>
       ${index.length > 1 ? `<select id="round">${index.slice().reverse().map(r =>
         `<option value="${esc(r)}" ${r === data.round_number ? "selected" : ""}>מחזור ${esc(r)}</option>`).join("")}</select>` : ""}
+      <span class="muted">התחזית מבוססת על מה שידוע ביום חמישי, לפני פרסום ההרכבים.</span>
       <span class="muted">לחיצה על 1/X/2 משנה את הסימון · לחיצה על משחק מציגה את הנימוקים</span>
     </div>
     <div class="card"><table>
