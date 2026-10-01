@@ -23,7 +23,12 @@ CLOSE_BEFORE_KICKOFF_MINUTES = 6
 
 # Claude model used by the research agent.
 MODEL = os.environ.get("TOTO_MODEL", "").strip() or "claude-opus-5-5"
+# The per-match research is most of the cost; it can run on a cheaper model.
+RESEARCH_MODEL = os.environ.get("TOTO_RESEARCH_MODEL", "").strip() or MODEL
 EFFORT = os.environ.get("TOTO_EFFORT", "").strip() or "medium"
+# Web tool budget per API call (each search is billed, and fetched pages add input tokens).
+MAX_SEARCHES = int(_env_float("TOTO_MAX_SEARCHES", 15))
+MAX_FETCHES = int(_env_float("TOTO_MAX_FETCHES", 10))
 # How many matches are researched concurrently.
 RESEARCH_WORKERS = int(_env_float("TOTO_RESEARCH_WORKERS", 4))
 
