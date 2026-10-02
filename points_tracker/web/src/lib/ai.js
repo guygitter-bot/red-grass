@@ -168,9 +168,20 @@ Naming:
 
 Call submit_food. Do not answer in plain text.`;
 
+// הסוכן זמין אם יש מפתח אישי, או שרת משותף (שמחזיק את המפתח של מנהל האפליקציה) עם קוד גישה.
+export const aiReady = (settings) => Boolean(settings.apiKey || (settings.proxyUrl && settings.accessCode));
+
 function client(settings) {
-  if (!settings.apiKey) throw new Error('צריך להגדיר מפתח API בהגדרות כדי להשתמש בסוכן.');
-  return new Anthropic({ apiKey: settings.apiKey, dangerouslyAllowBrowser: true });
+  if (settings.apiKey) return new Anthropic({ apiKey: settings.apiKey, dangerouslyAllowBrowser: true });
+  if (settings.proxyUrl && settings.accessCode) {
+    return new Anthropic({
+      apiKey: 'via-proxy', // השרת מחליף במפתח האמיתי
+      baseURL: settings.proxyUrl,
+      defaultHeaders: { 'x-access-code': settings.accessCode },
+      dangerouslyAllowBrowser: true,
+    });
+  }
+  throw new Error('הסוכן לא מוגדר. פתח את קישור ההזמנה או הזן קוד גישה בהגדרות.');
 }
 
 async function callWithSubmit(settings, { system, content, tool, web = false, effort = 'low' }) {
@@ -279,7 +290,7 @@ export async function readNutritionLabel(settings, imageDataUrl) {
 }
 
 export function describeError(err) {
-  if (err instanceof Anthropic.AuthenticationError) return 'מפתח ה-API לא תקין. בדוק בהגדרות.';
+  if (err instanceof Anthropic.AuthenticationError) return 'קוד הגישה או מפתח ה-API לא תקינים. בדוק בהגדרות.';
   if (err instanceof Anthropic.RateLimitError) return 'יותר מדי בקשות. נסה שוב בעוד דקה.';
   if (err instanceof Anthropic.APIConnectionError) return 'אין חיבור לשרת. בדוק את האינטרנט.';
   if (err instanceof Anthropic.APIError) return `שגיאה מהשרת (${err.status}). נסה שוב.`;

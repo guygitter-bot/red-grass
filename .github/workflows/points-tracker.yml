@@ -35,6 +35,9 @@ jobs:
       - run: pip install -r points_tracker/requirements.txt
       - name: Agent tests
         run: python -m unittest discover -s points_tracker/tests -t .
+      - name: Proxy tests
+        working-directory: points_tracker/proxy
+        run: npm test
 
   deploy:
     needs: test

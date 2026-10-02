@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Download, KeyRound, Upload } from 'lucide-react';
+import { Copy, Download, KeyRound, Upload } from 'lucide-react';
 import { Button, Card, ErrorBox, Input, Label } from './ui';
-import { MODELS, describeError, testApiKey } from '../lib/ai';
+import { MODELS, aiReady, describeError, testApiKey } from '../lib/ai';
+import { inviteLink } from '../lib/proxy';
 import FoodDbManager from './FoodDbManager';
 
 function NumberField({ label, value, onChange }) {
@@ -26,17 +27,32 @@ function NumberField({ label, value, onChange }) {
 }
 
 export default function SettingsView({
-  user, setUser, settings, setSettings, foodDb, userFoods, saveFood, removeUserFood, exportData, importData,
+  user, setUser, settings, setSettings, proxyUrl, foodDb, userFoods, saveFood, removeUserFood, exportData, importData,
 }) {
   const [keyStatus, setKeyStatus] = useState('');
   const [keyError, setKeyError] = useState('');
+
+  const ai = { ...settings, proxyUrl };
+  const [showKey, setShowKey] = useState(Boolean(settings.apiKey));
+  const [copied, setCopied] = useState(false);
+
+  const copyInvite = async () => {
+    const link = inviteLink(settings.accessCode);
+    try {
+      if (navigator.share) await navigator.share({ title: 'מעקב נקודות', url: link });
+      else await navigator.clipboard.writeText(link);
+      setCopied(true);
+    } catch {
+      // המשתמש ביטל את השיתוף
+    }
+  };
 
   const test = async () => {
     setKeyStatus('בודק...');
     setKeyError('');
     try {
-      await testApiKey(settings);
-      setKeyStatus('המפתח תקין ✓');
+      await testApiKey(ai);
+      setKeyStatus(settings.apiKey ? 'המפתח תקין ✓' : 'מחובר לשרת המשותף ✓');
     } catch (err) {
       setKeyStatus('');
       setKeyError(describeError(err));
@@ -80,17 +96,42 @@ export default function SettingsView({
         <h3 className="font-bold text-violet-700 flex items-center gap-2">
           <KeyRound size={18} /> הסוכן החכם (צילום, מרכיבים, חיפוש ברשת)
         </h3>
-        <p className="text-xs text-slate-500">
-          מפתח API של Anthropic (מ-console.anthropic.com). המפתח נשמר רק במכשיר הזה, לא נכלל בקובץ הגיבוי, והבקשות נשלחות ישירות
-          ל-Anthropic. כל צילום / חיפוש עולה כמה סנטים.
-        </p>
-        <Input
-          type="password"
-          dir="ltr"
-          placeholder="sk-ant-..."
-          value={settings.apiKey}
-          onChange={(e) => setSettings({ ...settings, apiKey: e.target.value.trim() })}
-        />
+        {proxyUrl ? (
+          <>
+            <p className="text-xs text-slate-500">
+              הסוכן עובד דרך השרת המשותף, עם מפתח ה-API של מנהל האפליקציה. צריך רק קוד גישה - מי שנכנס מקישור ההזמנה מקבל אותו
+              אוטומטית. כל מכשיר שומר יומן וניקוד משלו.
+            </p>
+            <Input
+              dir="ltr"
+              placeholder="קוד גישה"
+              value={settings.accessCode || ''}
+              onChange={(e) => setSettings({ ...settings, accessCode: e.target.value.trim() })}
+            />
+            {settings.accessCode && (
+              <Button variant="outline" className="w-full py-2" onClick={copyInvite}>
+                <Copy size={16} /> {copied ? 'הקישור הועתק / נשלח' : 'שלח קישור הזמנה (כולל הקוד)'}
+              </Button>
+            )}
+            <button className="text-xs text-slate-400 underline" onClick={() => setShowKey(!showKey)}>
+              {showKey ? 'הסתר מפתח אישי' : 'מפתח API אישי (לא חובה)'}
+            </button>
+          </>
+        ) : (
+          <p className="text-xs text-slate-500">
+            מפתח API של Anthropic (מ-console.anthropic.com). המפתח נשמר רק במכשיר הזה ולא נכלל בקובץ הגיבוי. כל צילום / חיפוש
+            עולה כמה סנטים.
+          </p>
+        )}
+        {(!proxyUrl || showKey) && (
+          <Input
+            type="password"
+            dir="ltr"
+            placeholder="sk-ant-..."
+            value={settings.apiKey || ''}
+            onChange={(e) => setSettings({ ...settings, apiKey: e.target.value.trim() })}
+          />
+        )}
         <select
           value={settings.model}
           onChange={(e) => setSettings({ ...settings, model: e.target.value })}
@@ -114,8 +155,8 @@ export default function SettingsView({
             כלום.
           </span>
         </label>
-        <Button variant="secondary" className="w-full" onClick={test} disabled={!settings.apiKey}>
-          בדוק מפתח
+        <Button variant="secondary" className="w-full" onClick={test} disabled={!aiReady(ai)}>
+          בדוק חיבור
         </Button>
         {keyStatus && <p className="text-sm text-center text-emerald-600">{keyStatus}</p>}
         <ErrorBox>{keyError}</ErrorBox>

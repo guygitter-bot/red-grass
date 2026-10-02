@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Calculator, PieChart, Plus, Settings, TrendingDown } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import AddFoodSheet from './components/AddFoodSheet';
@@ -9,6 +9,7 @@ import { usePersistentState, loadJson, newId } from './lib/storage';
 import { addDays, formatDisplayDate, today, weekDates } from './lib/dates';
 import { SHARED_FOODS, extractUserFoods, mergeFoodDb, normalize, upsertUserFood } from './lib/foodDb';
 import { DEFAULT_MODEL } from './lib/ai';
+import { loadProxyUrl, takeInviteCode } from './lib/proxy';
 
 const DEFAULT_USER = { name: 'אורח', dailyTarget: 26, weeklyTarget: 35, startWeight: 80, currentWeight: 80, goalWeight: 70 };
 
@@ -35,6 +36,21 @@ export default function App() {
   const [settings, setSettings] = usePersistentState('pointsApp_settings', { apiKey: '', model: DEFAULT_MODEL, autoAgent: true });
 
   const foodDb = useMemo(() => mergeFoodDb(SHARED_FOODS, userFoods), [userFoods]);
+
+  // השרת המשותף + קוד הגישה מקישור ההזמנה: כך לא צריך להדביק מפתח בכל טלפון.
+  const [proxyUrl, setProxyUrl] = useState('');
+  useEffect(() => {
+    loadProxyUrl().then(setProxyUrl);
+    const applyInvite = () => {
+      const code = takeInviteCode();
+      if (code) setSettings((s) => ({ ...s, accessCode: code }));
+    };
+    applyInvite();
+    // גם כשהאפליקציה כבר פתוחה ונפתח בה קישור הזמנה
+    window.addEventListener('hashchange', applyInvite);
+    return () => window.removeEventListener('hashchange', applyInvite);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const aiSettings = useMemo(() => ({ ...settings, proxyUrl }), [settings, proxyUrl]);
 
   const dayLogs = useMemo(() => logs.filter((l) => l.date === selectedDate), [logs, selectedDate]);
   const dailyUsed = sumPoints(dayLogs);
@@ -128,7 +144,7 @@ export default function App() {
           />
         )}
         {view === 'calculator' && (
-          <CalculatorView settings={settings} onLog={addLog} onSaveFood={saveFood} goHome={() => setView('dashboard')} />
+          <CalculatorView settings={aiSettings} onLog={addLog} onSaveFood={saveFood} goHome={() => setView('dashboard')} />
         )}
         {view === 'weight' && <WeightView user={user} history={weightHistory} addWeight={addWeight} removeWeight={removeWeight} />}
         {view === 'settings' && (
@@ -137,6 +153,7 @@ export default function App() {
             setUser={setUser}
             settings={settings}
             setSettings={setSettings}
+            proxyUrl={proxyUrl}
             foodDb={foodDb}
             userFoods={userFoods}
             saveFood={saveFood}
@@ -166,7 +183,7 @@ export default function App() {
           <AddFoodSheet
             db={foodDb}
             recent={recent}
-            settings={settings}
+            settings={aiSettings}
             dateLabel={formatDisplayDate(selectedDate)}
             onLog={addLog}
             onSaveFood={saveFood}
