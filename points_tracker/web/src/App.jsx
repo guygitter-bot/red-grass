@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Calculator, PieChart, Plus, Settings, TrendingDown } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import AddFoodSheet from './components/AddFoodSheet';
@@ -10,7 +10,7 @@ import { addDays, formatDisplayDate, today, weekDates } from './lib/dates';
 import { SHARED_FOODS, extractUserFoods, findByName, mergeFoodDb, normalize, upsertUserFood } from './lib/foodDb';
 import { addSharedFood, adminDeleteFood, adminUpdateFood, fetchSharedFoods, sharedAvailable } from './lib/sharedFoods';
 import { DEFAULT_MODEL } from './lib/ai';
-import { inviteLink, isIos, isStandalone, loadProxyUrl, redeemInvite, takeInviteToken } from './lib/proxy';
+import { checkOwnerCode, inviteLink, isConnected, isIos, isOwner, isStandalone, loadProxyUrl, redeemInvite, takeInviteToken } from './lib/proxy';
 import IosInviteCard from './components/IosInviteCard';
 
 const DEFAULT_USER = { name: 'אורח', dailyTarget: 26, weeklyTarget: 35, startWeight: 80, currentWeight: 80, goalWeight: 70 };
@@ -42,6 +42,8 @@ export default function App() {
   const [proxyUrl, setProxyUrl] = useState('');
   const [notice, setNotice] = useState(null);
   const [iosInvite, setIosInvite] = useState(null);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
   useEffect(() => {
     const urlReady = loadProxyUrl().then((url) => {
       setProxyUrl(url);
@@ -51,9 +53,15 @@ export default function App() {
     const applyInvite = async () => {
       const token = takeInviteToken();
       if (!token) return;
+      const url = await urlReady;
+      // מכשיר שכבר מחובר לא צריך את הקישור (וגם לא מנצל אותו)
+      const current = settingsRef.current;
+      if (url && (current.deviceKey || current.accessCode) && (await isConnected(url, current))) {
+        return setNotice({ ok: true, text: 'המכשיר הזה כבר מחובר ✓' });
+      }
       // ב-Safari באייפון לא מנצלים את הקישור: מסבירים להתקין קודם ולהדביק אותו בתוך האפליקציה.
       if (isIos() && !isStandalone()) return setIosInvite(token);
-      joinWithToken(token, await urlReady);
+      joinWithToken(token, url);
     };
     applyInvite();
     // גם כשהאפליקציה כבר פתוחה ונפתח בה קישור הזמנה
@@ -61,6 +69,20 @@ export default function App() {
     return () => window.removeEventListener('hashchange', applyInvite);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const aiSettings = useMemo(() => ({ ...settings, proxyUrl }), [settings, proxyUrl]);
+
+  // מאמתים מול השרת שקוד הגישה נכון לפני שמציגים הגדרות של בעל האפליקציה
+  useEffect(() => {
+    const code = settings.accessCode;
+    if (!proxyUrl || !code) return;
+    const timer = setTimeout(async () => {
+      const status = await checkOwnerCode(proxyUrl, code).catch(() => 0);
+      if (status === 200) setSettings((s) => (s.accessCode === code ? { ...s, ownerChecked: code } : s));
+      if (status === 401 || status === 403) {
+        setSettings((s) => (s.accessCode === code ? { ...s, ownerChecked: undefined } : s));
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [proxyUrl, settings.accessCode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // הצטרפות עם קישור הזמנה (מהכתובת, או מהדבקה בהגדרות). מחזיר true בהצלחה.
   async function joinWithToken(token, url = proxyUrl) {
@@ -92,7 +114,7 @@ export default function App() {
       .then(setRemoteFoods)
       .catch((err) => {
         // מכשיר שבעל האפליקציה ניתק: חוזרים למסך ההצטרפות עם קישור הזמנה
-        if (err.status === 401 && settings.deviceKey && !settings.accessCode) {
+        if (err.status === 401 && settings.deviceKey) {
           setSettings((s) => ({ ...s, deviceKey: undefined }));
           setNotice({ ok: false, text: 'המכשיר נותק מהסוכן החכם. כדי לחבר אותו שוב, בקש/י קישור הזמנה חדש.' });
         }
@@ -255,6 +277,7 @@ export default function App() {
             settings={settings}
             setSettings={setSettings}
             proxyUrl={proxyUrl}
+            owner={isOwner(aiSettings)}
             onJoin={joinWithToken}
             foodDb={foodDb}
             userFoods={userFoods}
