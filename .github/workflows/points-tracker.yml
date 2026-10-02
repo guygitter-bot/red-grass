@@ -1,0 +1,44 @@
+name: Points tracker app
+
+on:
+  push:
+    branches: [main]
+    paths: ["points_tracker/**", ".github/workflows/points-tracker.yml", ".github/workflows/pages-deploy.yml"]
+  pull_request:
+    paths: ["points_tracker/**", ".github/workflows/points-*.yml", ".github/workflows/pages-deploy.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: points_tracker/web/package-lock.json
+      - name: App tests and build
+        working-directory: points_tracker/web
+        run: |
+          npm ci
+          npm test
+          npm run build
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r points_tracker/requirements.txt
+      - name: Agent tests
+        run: python -m unittest discover -s points_tracker/tests -t .
+
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/pages-deploy.yml
+    with:
+      ref: ${{ github.ref_name }}
