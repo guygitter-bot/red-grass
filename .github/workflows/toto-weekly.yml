@@ -1,9 +1,8 @@
 name: Weekly Toto 16
 
 on:
-  schedule:
-    # Thursday 05:45 UTC (08:45 Israel summer time / 07:45 winter time).
-    - cron: "45 5 * * 4"
+  # Runs only when started by hand: Actions -> Weekly Toto 16 -> Run workflow
+  # (the site's "הפעל את הסוכן" button links there).
   workflow_dispatch:
     inputs:
       manual_matches:
