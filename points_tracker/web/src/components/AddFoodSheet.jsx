@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, ExternalLink, Globe, MessageSquareText, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
+import { Camera, Globe, MessageSquareText, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
 import { Button, ErrorBox, Input, MealPicker, Sheet, Spinner, Tabs } from './ui';
 import PortionPicker from './PortionPicker';
 import CameraCapture from './CameraCapture';
@@ -9,7 +9,6 @@ import { findByName, normalize, searchFoods } from '../lib/foodDb';
 import { formatPoints, qtyPrefix, round1 } from '../lib/points';
 import { newId } from '../lib/storage';
 
-const REPO_URL = import.meta.env.VITE_REPO_URL || '';
 const AUTO_DELAY_MS = 1500;
 // חיפושים שהסוכן כבר ביצע בהפעלה הזו, כדי לא לשלם פעמיים על אותו חיפוש.
 const researched = new Set();
@@ -161,12 +160,6 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
     });
   };
 
-  const issueUrl =
-    REPO_URL &&
-    `${REPO_URL}/issues/new?labels=food-request&title=${encodeURIComponent(`ניקוד: ${search}`)}&body=${encodeURIComponent(
-      'הסוכן ב-GitHub יחפש את המאכל ברשת, יחשב ניקוד ויוסיף אותו למאגר המשותף.',
-    )}`;
-
   return (
     <Sheet title="הוספת ארוחה" subtitle={`מוסיף ל: ${dateLabel}`} onClose={onClose}>
       <MealPicker value={meal} onChange={setMeal} />
@@ -243,11 +236,6 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
                 <p className="text-xs text-slate-500">כדי שהסוכן יחפש ויוסיף מאכלים, פתח את קישור ההזמנה או הזן קוד גישה בהגדרות.</p>
               ) : null}
               <ErrorBox>{researchError}</ErrorBox>
-              {issueUrl && !researching && !agentFood?.food && (
-                <a href={issueUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-violet-600 underline">
-                  <ExternalLink size={12} /> בקש מהסוכן ב-GitHub להוסיף למאגר המשותף
-                </a>
-              )}
               <ErrorBox>{error}</ErrorBox>
 
               <p className="text-xs text-slate-400">הוספה ידנית של מאכל וניקוד:</p>

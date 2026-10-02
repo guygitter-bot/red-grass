@@ -78,7 +78,8 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             git commit -m "Points proxy: worker URL"
-            git pull --rebase
+            # wrangler-action leaves its install files in the tree; keep them out of the rebase
+            git pull --rebase --autostash
             git push
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
@@ -87,6 +88,7 @@ jobs:
   deploy:
     needs: proxy
     if: needs.proxy.outputs.changed == 'true'
-    uses: ./.github/workflows/pages-deploy.yml
+    uses: ./.github/workflows/bis-deploy.yml
+    secrets: inherit
     with:
       ref: ${{ github.ref_name }}

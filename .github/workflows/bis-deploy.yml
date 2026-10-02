@@ -1,0 +1,53 @@
+name: Deploy Bis app
+
+# Builds points_tracker/web and publishes it to Cloudflare Pages
+# (project "bis-app" -> https://bis-app.pages.dev). Called by every workflow
+# that changes the app, its food database or the proxy URL.
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to build"
+        type: string
+        required: false
+        default: ""
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: bis-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: points_tracker/web/package-lock.json
+      - name: Build
+        working-directory: points_tracker/web
+        run: |
+          npm ci
+          npm run build
+      - name: Create the Pages project (first run only)
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages project create bis-app --production-branch=main
+      - name: Publish
+        id: publish
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy points_tracker/web/dist --project-name=bis-app --branch=main --commit-dirty=true
+      - name: Summary
+        env:
+          URL: ${{ steps.publish.outputs.deployment-url }}
+        run: |
+          echo "Published: $URL (production: https://bis-app.pages.dev)" >> "$GITHUB_STEP_SUMMARY"

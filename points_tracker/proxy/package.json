@@ -1,5 +1,5 @@
 {
-  "name": "points-proxy",
+  "name": "bis-api",
   "private": true,
   "type": "module",
   "scripts": {
