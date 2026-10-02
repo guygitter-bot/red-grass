@@ -79,6 +79,7 @@
   {"name": "קורנפלקס / דגני בוקר ללא סוכר (30 ג')", "points": 3, "source": "builtin"},
   {"name": "פופקורן למיקרו (100 ג')", "points": 13, "source": "builtin"},
   {"name": "בורקס יחידה קטנה", "points": 5, "source": "builtin"},
-  {"name": "בורקס יחידה גדולה", "points": 10, "source": "builtin"}
+  {"name": "בורקס יחידה גדולה", "points": 10, "source": "builtin"},
+  {"name": "במבה נוגט אסם (שקית 60 ג')", "points": 8.7, "grams": 60, "per100": {"kcal": 523, "protein": 8.5, "carbs": 57, "fat": 29, "fiber": 0}, "source": "agent", "confidence": "high", "added": "2026-10-02", "aliases": ["במבה במילוי קרם נוגט", "במבה נוגט", "חטיף במבה במילוי קרם נוגט", "Bamba nougat"], "sources": ["https://www.osem-nestle.co.il/brands/%D7%91%D7%9E%D7%91%D7%94/%D7%97%D7%98%D7%99%D7%A3-%D7%91%D7%9E%D7%91%D7%94-%D7%91%D7%9E%D7%99%D7%9C%D7%95%D7%99-%D7%A7%D7%A8%D7%9D-%D7%A0%D7%95%D7%92%D7%98", "https://www.nestleprofessional.co.il/sm/htyp-bmbh-nwgt-klp"]}
  ]
 }
