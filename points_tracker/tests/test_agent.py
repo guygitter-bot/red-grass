@@ -67,6 +67,10 @@ class AgentLoopTest(unittest.TestCase):
         self.assertEqual(entry["published_points"], 4)
         self.assertIsNone(agent.to_db_entry({**BAMBA, "found": False}))
 
+    def test_db_entry_name_has_no_nested_parentheses(self):
+        entry = agent.to_db_entry({**BAMBA, "name": "במבה (נוגט)", "serving_desc": "חופן / מנה (כ-30 גרם)"})
+        self.assertEqual(entry["name"], "במבה נוגט (חופן / מנה כ-30 גרם)")
+
 
 class RunAgentTest(unittest.TestCase):
     def setUp(self):

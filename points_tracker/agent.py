@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import os
+import re
 import threading
 
 import anthropic
@@ -22,8 +23,8 @@ MODEL = os.environ.get("POINTS_MODEL", "").strip() or "claude-opus-5-5"
 EFFORT = os.environ.get("POINTS_EFFORT", "").strip() or "medium"
 MAX_STEPS = 10
 WEB_TOOLS = [
-    {"type": "web_search_20260209", "name": "web_search", "max_uses": int(os.environ.get("POINTS_MAX_SEARCHES") or 6)},
-    {"type": "web_fetch_20260209", "name": "web_fetch", "max_uses": int(os.environ.get("POINTS_MAX_FETCHES") or 3)},
+    {"type": "web_search_20260209", "name": "web_search", "max_uses": int(os.environ.get("POINTS_MAX_SEARCHES") or 8)},
+    {"type": "web_fetch_20260209", "name": "web_fetch", "max_uses": int(os.environ.get("POINTS_MAX_FETCHES") or 5)},
 ]
 
 # USD per million tokens: (input, output, cache read). Cache writes cost 1.25x input.
@@ -89,9 +90,9 @@ FOOD_TOOL = {
     "input_schema": _obj(
         {
             "found": {"type": "boolean", "description": "false if no reliable data was found"},
-            "name": {"type": "string", "description": "Canonical Hebrew name (brand included for packaged products)"},
+            "name": {"type": "string", "description": "Hebrew product name with brand, no serving info"},
             "aliases": {"type": "array", "items": {"type": "string"}},
-            "serving_desc": {"type": "string", "description": 'Hebrew common serving, e.g. "יחידה", "פרוסה", "כוס"'},
+            "serving_desc": {"type": "string", "description": 'Short Hebrew serving, e.g. "שקית 60 ג\'", "יחידה", "פרוסה"'},
             "serving_grams": {"type": "number"},
             "per100": NUTRITION,
             "published_points": {
@@ -125,18 +126,36 @@ DISCOVER_TOOL = {
 }
 
 RESEARCH_SYSTEM = """You research nutrition data for an Israeli diet-points app. The app computes \
-points from protein, carbs, fat and fiber per 100 g, so those numbers must be accurate.
+points from protein, carbs, fat and fiber per 100 g, so those numbers must be copied from a real \
+nutrition table, not estimated.
 
-Where to look (search in Hebrew first):
-- The manufacturer's site or the product page at Israeli supermarkets (shufersal.co.il, \
-rami-levy.co.il, yochananof.co.il, victoryonline.co.il) - the nutrition table is on the package.
-- The Ministry of Health Tzameret food composition database and nutrition sites (foodsdictionary.co.il).
-- Restaurant / chain menus that publish nutrition values.
-- Israeli points-diet sites, forums and Facebook groups, for a published points value per serving.
-- International databases (USDA FoodData Central) only for generic foods.
+How to research:
+1. Packaged products: find the product page and read its nutrition table ("סימון תזונתי" / \
+"ערכים תזונתיים ל-100 גרם"). Search in Hebrew with the brand, e.g. "<product> <brand> ערכים \
+תזונתיים", "<product> שופרסל". Look at Israeli supermarket product pages (shufersal.co.il, \
+rami-levy.co.il, yochananof.co.il, victoryonline.co.il, carrefour.co.il, mega.co.il) and the \
+manufacturer's own site (osem.co.il, strauss-group.co.il, tnuva.co.il, elite.co.il...). Open the \
+page with web_fetch to read the table itself; a search snippet is not enough.
+2. If the first searches do not reach a nutrition table, try other wording: the English name, the \
+barcode, foodsdictionary.co.il, open food facts (il.openfoodfacts.org).
+3. Generic foods and dishes: the Ministry of Health Tzameret data (through foodsdictionary.co.il), \
+then USDA FoodData Central. Restaurant / chain items: the chain's published nutrition values.
+4. Israeli points-diet sites and forums only for published_points, never for per100.
 
-Use the most common serving in Israel (unit, slice, cup, package). If values disagree, prefer the \
-manufacturer label. Put the URLs you used in sources. If you find nothing reliable, set found=false. \
+News articles, Wikipedia and blogs are not nutrition sources. Put only the pages that contain the \
+numbers you used in sources.
+
+confidence: "high" = copied from the product label or an official table for this exact product; \
+"medium" = official table for a very similar product or a generic food; "low" = estimated. If you \
+could not find any table, set found=false instead of guessing.
+
+Naming:
+- name: the product name with the brand, in Hebrew, without serving info or parentheses \
+(e.g. "במבה נוגט אסם").
+- serving_desc: short Hebrew, at most 3 words, no parentheses. Packaged food: the package as sold \
+("שקית 60 ג'", "בקבוק 500 מ\"ל", "חטיף 40 ג'"); otherwise the natural unit ("יחידה", "פרוסה", \
+"כוס", "מנה"). serving_grams must match it.
+
 Call submit_food. Do not answer in plain text."""
 
 DISCOVER_PROMPT = """Today is {today}. An Israeli diet-points app has the food database below. \
@@ -193,6 +212,11 @@ def _today() -> str:
     return dt.date.today().isoformat()
 
 
+def _clean(text: str) -> str:
+    """Drop parentheses and extra spaces, so names look like "במבה נוגט אסם (שקית 60 ג')"."""
+    return re.sub(r"\s+", " ", re.sub(r"[()]", " ", text or "")).strip(" -/")
+
+
 def to_db_entry(result: dict) -> dict | None:
     """Turn a submit_food result into a foods.json entry (None if nothing usable was found)."""
     grams = result.get("serving_grams") or 0
@@ -200,7 +224,7 @@ def to_db_entry(result: dict) -> dict | None:
     if not result.get("found") or grams <= 0 or not per100:
         return None
     entry = {
-        "name": f'{result["name"]} ({result["serving_desc"]})',
+        "name": f'{_clean(result["name"])} ({_clean(result["serving_desc"])})',
         "points": round1(points_for_grams(per100, grams)),
         "grams": grams,
         "per100": per100,
