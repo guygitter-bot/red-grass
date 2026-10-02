@@ -18,7 +18,7 @@ async function call(s, method, query = '', body) {
     body: body && JSON.stringify(body),
   });
   if (res.status === 403) throw new Error('קוד המנהל לא נכון');
-  if (!res.ok) throw new Error(`שגיאה מהשרת (${res.status})`);
+  if (!res.ok) throw Object.assign(new Error(`שגיאה מהשרת (${res.status})`), { status: res.status });
   return res.json();
 }
 
