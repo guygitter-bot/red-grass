@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { formatQty, pointsForGrams, pointsFromNutrition, qtyPrefix, round1 } from './points';
 import { addDays, weekDates } from './dates';
 import { extractUserFoods, mergeFoodDb, searchFoods, SHARED_FOODS, upsertUserFood } from './foodDb';
-import { scoreComponents } from './ai';
+import { researchToFood, scoreComponents } from './ai';
 
 describe('points', () => {
   // אותם מקרים בדיוק נבדקים ב-points_tracker/tests/test_points.py
@@ -78,5 +78,16 @@ describe('scoreComponents', () => {
     );
     expect(pita.points).toBe(3);
     expect(spread.points).toBe(round1(pointsForGrams(per100, 20)));
+  });
+});
+
+describe('researchToFood', () => {
+  it('builds a clean name and computes points from per100', () => {
+    const food = researchToFood({
+      found: true, name: 'במבה נוגט (אסם)', serving_desc: "שקית 60 ג'", serving_grams: 60, points: 8.5,
+      per100: { kcal: 523, protein: 10.4, carbs: 58.6, fat: 27.4, fiber: 3.4 }, aliases: [], sources: [], published_points: null,
+    });
+    expect(food.name).toBe("במבה נוגט אסם (שקית 60 ג')");
+    expect(researchToFood({ found: false })).toBeNull();
   });
 });
