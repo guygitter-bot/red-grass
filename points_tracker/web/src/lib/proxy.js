@@ -13,13 +13,49 @@ export async function loadProxyUrl() {
   }
 }
 
-// קישור הזמנה: ...#code=XXXX. הקוד נשמר במכשיר ונמחק מהכתובת.
-export function takeInviteCode() {
-  const match = window.location.hash.match(/[#&]code=([^&]+)/);
+// הרשאה מול השרת: בעל האפליקציה עם קוד גישה, או מכשיר שהוזמן עם מפתח מכשיר משלו.
+export const proxyConnected = (s) => Boolean(s.proxyUrl && (s.accessCode || s.deviceKey));
+export const isOwner = (s) => Boolean(s.proxyUrl && s.accessCode);
+
+export function authHeaders(s) {
+  if (s.accessCode) return { 'x-access-code': s.accessCode };
+  if (s.deviceKey) return { 'x-device-key': s.deviceKey };
+  return {};
+}
+
+async function request(s, method, path, body) {
+  const res = await fetch(`${s.proxyUrl}${path}`, {
+    method,
+    headers: { ...authHeaders(s), ...(body ? { 'content-type': 'application/json' } : {}) },
+    body: body && JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(data?.error?.message || data?.error || `שגיאה מהשרת (${res.status})`), { status: res.status });
+  return data;
+}
+
+// קישור הזמנה חד-פעמי: ...#invite=XXXX. נלקח מהכתובת ונמחק ממנה מיד.
+export function takeInviteToken() {
+  const match = window.location.hash.match(/[#&]invite=([^&]+)/);
   if (!match) return null;
   window.history.replaceState(null, '', window.location.pathname + window.location.search);
   return decodeURIComponent(match[1]);
 }
 
-export const inviteLink = (code) =>
-  `${window.location.origin}${window.location.pathname}#code=${encodeURIComponent(code)}`;
+export async function redeemInvite(proxyUrl, token) {
+  const res = await fetch(`${proxyUrl}/redeem`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+  if (res.status === 410) throw new Error('הקישור כבר נוצל או שפג תוקפו. בקש/י קישור חדש.');
+  if (!res.ok) throw new Error(`לא הצלחתי להתחבר (${res.status}). נסה/י שוב.`);
+  return res.json(); // { deviceKey, name }
+}
+
+export const createInvite = (s, name) => request(s, 'POST', '/invites', { name });
+export const listDevices = async (s) => (await request(s, 'GET', '/devices')).devices || [];
+export const removeDevice = (s, id) => request(s, 'DELETE', `/devices?id=${encodeURIComponent(id)}`);
+
+export const inviteLink = (token) =>
+  `${window.location.origin}${window.location.pathname}#invite=${encodeURIComponent(token)}`;

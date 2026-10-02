@@ -3,6 +3,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { pointsForGrams, round1 } from './points';
 import { findByName } from './foodDb';
+import { authHeaders, proxyConnected } from './proxy';
 
 export const DEFAULT_MODEL = 'claude-opus-5-5';
 export const MODELS = [
@@ -169,19 +170,19 @@ Naming:
 Call submit_food. Do not answer in plain text.`;
 
 // הסוכן זמין אם יש מפתח אישי, או שרת משותף (שמחזיק את המפתח של מנהל האפליקציה) עם קוד גישה.
-export const aiReady = (settings) => Boolean(settings.apiKey || (settings.proxyUrl && settings.accessCode));
+export const aiReady = (settings) => Boolean(settings.apiKey || proxyConnected(settings));
 
 function client(settings) {
   if (settings.apiKey) return new Anthropic({ apiKey: settings.apiKey, dangerouslyAllowBrowser: true });
-  if (settings.proxyUrl && settings.accessCode) {
+  if (proxyConnected(settings)) {
     return new Anthropic({
       apiKey: 'via-proxy', // השרת מחליף במפתח האמיתי
       baseURL: settings.proxyUrl,
-      defaultHeaders: { 'x-access-code': settings.accessCode },
+      defaultHeaders: authHeaders(settings),
       dangerouslyAllowBrowser: true,
     });
   }
-  throw new Error('הסוכן לא מוגדר. פתח את קישור ההזמנה או הזן קוד גישה בהגדרות.');
+  throw new Error('הסוכן לא מחובר. פתח/י את קישור ההזמנה שקיבלת.');
 }
 
 async function callWithSubmit(settings, { system, content, tool, web = false, effort = 'low' }) {
@@ -290,7 +291,7 @@ export async function readNutritionLabel(settings, imageDataUrl) {
 }
 
 export function describeError(err) {
-  if (err instanceof Anthropic.AuthenticationError) return 'קוד הגישה או מפתח ה-API לא תקינים. בדוק בהגדרות.';
+  if (err instanceof Anthropic.AuthenticationError) return 'אין הרשאה: המכשיר נותק, או שקוד הגישה / מפתח ה-API לא תקינים. בקש/י קישור הזמנה חדש.';
   if (err instanceof Anthropic.RateLimitError) return 'יותר מדי בקשות. נסה שוב בעוד דקה.';
   if (err instanceof Anthropic.APIConnectionError) return 'אין חיבור לשרת. בדוק את האינטרנט.';
   if (err instanceof Anthropic.APIError) return `שגיאה מהשרת (${err.status}). נסה שוב.`;

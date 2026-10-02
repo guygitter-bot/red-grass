@@ -10,7 +10,7 @@ import { addDays, formatDisplayDate, today, weekDates } from './lib/dates';
 import { SHARED_FOODS, extractUserFoods, findByName, mergeFoodDb, normalize, upsertUserFood } from './lib/foodDb';
 import { addSharedFood, adminDeleteFood, adminUpdateFood, fetchSharedFoods, sharedAvailable } from './lib/sharedFoods';
 import { DEFAULT_MODEL } from './lib/ai';
-import { loadProxyUrl, takeInviteCode } from './lib/proxy';
+import { loadProxyUrl, redeemInvite, takeInviteToken } from './lib/proxy';
 
 const DEFAULT_USER = { name: 'אורח', dailyTarget: 26, weeklyTarget: 35, startWeight: 80, currentWeight: 80, goalWeight: 70 };
 
@@ -39,11 +39,25 @@ export default function App() {
 
   // השרת המשותף + קוד הגישה מקישור ההזמנה: כך לא צריך להדביק מפתח בכל טלפון.
   const [proxyUrl, setProxyUrl] = useState('');
+  const [notice, setNotice] = useState(null);
   useEffect(() => {
-    loadProxyUrl().then(setProxyUrl);
-    const applyInvite = () => {
-      const code = takeInviteCode();
-      if (code) setSettings((s) => ({ ...s, accessCode: code }));
+    const urlReady = loadProxyUrl().then((url) => {
+      setProxyUrl(url);
+      return url;
+    });
+    // קישור הזמנה חד-פעמי: מקבלים מהשרת מפתח מכשיר קבוע, והקישור מפסיק לעבוד.
+    const applyInvite = async () => {
+      const token = takeInviteToken();
+      if (!token) return;
+      const url = await urlReady;
+      if (!url) return setNotice({ ok: false, text: 'השרת לא זמין כרגע. נסה/י לפתוח את הקישור שוב מאוחר יותר.' });
+      try {
+        const { deviceKey } = await redeemInvite(url, token);
+        setSettings((s) => ({ ...s, deviceKey }));
+        setNotice({ ok: true, text: 'ההזמנה התקבלה ✓ הסוכן החכם מחובר במכשיר הזה.' });
+      } catch (err) {
+        setNotice({ ok: false, text: err.message });
+      }
     };
     applyInvite();
     // גם כשהאפליקציה כבר פתוחה ונפתח בה קישור הזמנה
@@ -66,7 +80,7 @@ export default function App() {
     const onVisible = () => document.visibilityState === 'visible' && refreshShared();
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [proxyUrl, settings.accessCode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [proxyUrl, settings.accessCode, settings.deviceKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const foodDb = useMemo(() => {
     const base = [...SHARED_FOODS, ...remoteFoods.filter((f) => !findByName(SHARED_FOODS, f.name))];
@@ -172,6 +186,18 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-24" dir="rtl">
       <div className="max-w-md mx-auto p-4 pt-8">
+        {notice && (
+          <div
+            className={`mb-4 rounded-xl p-3 text-sm flex justify-between items-start gap-2 ${
+              notice.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+            }`}
+          >
+            <span>{notice.text}</span>
+            <button onClick={() => setNotice(null)} aria-label="סגור" className="font-bold">
+              ×
+            </button>
+          </div>
+        )}
         {view === 'dashboard' && (
           <Dashboard
             user={user}

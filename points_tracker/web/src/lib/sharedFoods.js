@@ -1,9 +1,11 @@
 // המאגר המשותף בשרת: מאכלים שכל המשתמשים מוסיפים (ידנית או דרך הסוכן באפליקציה).
 
-export const sharedAvailable = (s) => Boolean(s.proxyUrl && s.accessCode);
+import { authHeaders, proxyConnected } from './proxy';
+
+export const sharedAvailable = proxyConnected;
 
 function headers(s, json) {
-  const h = { 'x-access-code': s.accessCode };
+  const h = { ...authHeaders(s) };
   if (s.adminCode) h['x-admin-code'] = s.adminCode;
   if (json) h['content-type'] = 'application/json';
   return h;

@@ -3,6 +3,7 @@
 // כך המפתח לא נמצא באף טלפון ולא בקוד הציבורי של האתר.
 
 import { SharedFoods } from './foods.js';
+import { sha256 } from './access.js';
 
 export { SharedFoods };
 
@@ -47,11 +48,57 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
 
     if (!env.ANTHROPIC_API_KEY || !env.ACCESS_CODE) return json(500, 'Proxy is not configured', cors);
-    if (!sameCode(request.headers.get('x-access-code') || '', env.ACCESS_CODE)) {
-      return json(401, 'Wrong access code', cors);
+    const url = new URL(request.url);
+    const store = () => env.FOODS.get(env.FOODS.idFromName('shared'));
+    const internal = (path, method, body) =>
+      store().fetch(new Request(`https://store${path}`, {
+        method,
+        headers: { 'content-type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      }));
+    const pass = (res) => new Response(res.body, { status: res.status, headers: { ...cors, 'content-type': 'application/json' } });
+    const smallJson = async () => {
+      const text = await request.text();
+      if (text.length > 2000) return null;
+      try {
+        return JSON.parse(text) || {};
+      } catch {
+        return {};
+      }
+    };
+
+    // פתיחת קישור הזמנה חד-פעמי: בלי קוד, הקישור עצמו הוא ההרשאה (פעם אחת).
+    if (url.pathname === '/redeem' && request.method === 'POST') {
+      if (!env.FOODS) return json(500, 'Storage is not configured', cors);
+      const body = await smallJson();
+      if (!body) return json(413, 'Request too large', cors);
+      return pass(await internal('/access/redeem', 'POST', { token: body.token, deviceName: body.deviceName }));
     }
 
-    const url = new URL(request.url);
+    // בעל האפליקציה (קוד גישה) או מכשיר שהוזמן (מפתח מכשיר)
+    const isOwner = sameCode(request.headers.get('x-access-code') || '', env.ACCESS_CODE);
+    let allowed = isOwner;
+    const deviceKey = request.headers.get('x-device-key') || '';
+    if (!allowed && env.FOODS && deviceKey && deviceKey.length <= 100) {
+      allowed = (await internal('/access/auth', 'POST', { hash: await sha256(deviceKey) })).ok;
+    }
+    if (!allowed) return json(401, 'Wrong access code', cors);
+
+    // הזמנות ומכשירים: רק בעל האפליקציה
+    if (url.pathname === '/invites' || url.pathname === '/devices') {
+      if (!isOwner) return json(403, 'Owner only', cors);
+      if (!env.FOODS) return json(500, 'Storage is not configured', cors);
+      if (url.pathname === '/invites' && request.method === 'POST') {
+        const body = await smallJson();
+        if (!body) return json(413, 'Request too large', cors);
+        return pass(await internal('/access/invite', 'POST', { name: body.name }));
+      }
+      if (url.pathname === '/devices' && request.method === 'GET') return pass(await internal('/access/devices', 'GET'));
+      if (url.pathname === '/devices' && request.method === 'DELETE') {
+        return pass(await internal('/access/devices', 'DELETE', { id: url.searchParams.get('id') }));
+      }
+      return json(405, 'Method not allowed', cors);
+    }
 
     // מאגר המאכלים המשותף
     if (url.pathname === '/foods') {
@@ -60,9 +107,7 @@ export default {
       const headers = new Headers({ 'content-type': 'application/json', 'x-is-admin': admin ? '1' : '0' });
       const body = ['POST', 'PUT'].includes(request.method) ? await request.text() : undefined;
       if (body && body.length > 20000) return json(413, 'Request too large', cors);
-      const stub = env.FOODS.get(env.FOODS.idFromName('shared'));
-      const res = await stub.fetch(new Request(url.toString(), { method: request.method, headers, body }));
-      return new Response(res.body, { status: res.status, headers: { ...cors, 'content-type': 'application/json' } });
+      return pass(await store().fetch(new Request(`https://store/foods${url.search}`, { method: request.method, headers, body })));
     }
 
     const isMessages = request.method === 'POST' && url.pathname === '/v1/messages';

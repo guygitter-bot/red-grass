@@ -2,6 +2,8 @@
 // הוספה: כל מי שיש לו קוד גישה. מאכל שכבר קיים באותו שם לא נדרס.
 // עריכה ומחיקה לכולם: רק עם קוד מנהל.
 
+import { handleAccess } from './access.js';
+
 const MAX_FOODS = 5000;
 const SOURCES = new Set(['user', 'ai', 'agent']);
 
@@ -53,6 +55,7 @@ export class SharedFoods {
 
   async fetch(request) {
     const url = new URL(request.url);
+    if (url.pathname.startsWith('/access/')) return handleAccess(this.storage, url.pathname, request);
     const isAdmin = request.headers.get('x-is-admin') === '1';
 
     if (request.method === 'GET') {
