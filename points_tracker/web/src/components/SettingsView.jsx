@@ -3,6 +3,7 @@ import { Download, KeyRound, Upload } from 'lucide-react';
 import { Button, Card, ErrorBox, Input, Label } from './ui';
 import { MODELS, aiReady, describeError, testApiKey } from '../lib/ai';
 import InviteManager from './InviteManager';
+import { parseInviteToken } from '../lib/proxy';
 import FoodDbManager from './FoodDbManager';
 
 function NumberField({ label, value, onChange }) {
@@ -27,7 +28,7 @@ function NumberField({ label, value, onChange }) {
 }
 
 export default function SettingsView({
-  user, setUser, settings, setSettings, proxyUrl, foodDb, userFoods, saveFood, removeUserFood, remoteFoods, sharedOn, isAdmin,
+  user, setUser, settings, setSettings, proxyUrl, onJoin, foodDb, userFoods, saveFood, removeUserFood, remoteFoods, sharedOn, isAdmin,
   exportData, importData,
 }) {
   const [keyStatus, setKeyStatus] = useState('');
@@ -37,6 +38,14 @@ export default function SettingsView({
   const [showKey, setShowKey] = useState(Boolean(settings.apiKey));
   const owner = Boolean(settings.accessCode);
   const invited = Boolean(settings.deviceKey) && !owner;
+  const [inviteText, setInviteText] = useState('');
+  const [joinError, setJoinError] = useState('');
+  const join = async () => {
+    const token = parseInviteToken(inviteText);
+    if (!token) return setJoinError('זה לא נראה כמו קישור הזמנה. העתק/י את כל הקישור שקיבלת.');
+    setJoinError('');
+    if (await onJoin(token)) setInviteText('');
+  };
 
   const test = async () => {
     setKeyStatus('בודק...');
@@ -95,7 +104,23 @@ export default function SettingsView({
             </p>
             {invited && <p className="text-sm text-emerald-700 font-medium">המכשיר הזה מחובר דרך קישור הזמנה ✓</p>}
             {!invited && !owner && (
-              <p className="text-sm text-slate-600">כדי להשתמש בסוכן, פתח/י את קישור ההזמנה שקיבלת מבעל האפליקציה.</p>
+              <div className="space-y-2 bg-violet-50 rounded-xl p-3">
+                <p className="text-sm font-bold text-violet-700">יש לך קישור הזמנה?</p>
+                <p className="text-xs text-slate-500">הדבק/י כאן את הקישור שקיבלת כדי לחבר את המכשיר הזה.</p>
+                <div className="flex gap-2">
+                  <Input
+                    dir="ltr"
+                    placeholder="https://bis-app.pages.dev/#invite=..."
+                    value={inviteText}
+                    onChange={(e) => setInviteText(e.target.value)}
+                    className="bg-white text-xs"
+                  />
+                  <Button variant="ai" className="px-4 py-2" onClick={join} disabled={!inviteText.trim()}>
+                    התחבר
+                  </Button>
+                </div>
+                <ErrorBox>{joinError}</ErrorBox>
+              </div>
             )}
             <details className="text-xs text-slate-500" open={!owner && !invited}>
               <summary className="cursor-pointer text-slate-400 underline">קוד גישה (רק לבעל האפליקציה)</summary>

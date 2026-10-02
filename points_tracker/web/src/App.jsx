@@ -10,7 +10,8 @@ import { addDays, formatDisplayDate, today, weekDates } from './lib/dates';
 import { SHARED_FOODS, extractUserFoods, findByName, mergeFoodDb, normalize, upsertUserFood } from './lib/foodDb';
 import { addSharedFood, adminDeleteFood, adminUpdateFood, fetchSharedFoods, sharedAvailable } from './lib/sharedFoods';
 import { DEFAULT_MODEL } from './lib/ai';
-import { loadProxyUrl, redeemInvite, takeInviteToken } from './lib/proxy';
+import { inviteLink, isIos, isStandalone, loadProxyUrl, redeemInvite, takeInviteToken } from './lib/proxy';
+import IosInviteCard from './components/IosInviteCard';
 
 const DEFAULT_USER = { name: 'אורח', dailyTarget: 26, weeklyTarget: 35, startWeight: 80, currentWeight: 80, goalWeight: 70 };
 
@@ -40,6 +41,7 @@ export default function App() {
   // השרת המשותף + קוד הגישה מקישור ההזמנה: כך לא צריך להדביק מפתח בכל טלפון.
   const [proxyUrl, setProxyUrl] = useState('');
   const [notice, setNotice] = useState(null);
+  const [iosInvite, setIosInvite] = useState(null);
   useEffect(() => {
     const urlReady = loadProxyUrl().then((url) => {
       setProxyUrl(url);
@@ -49,15 +51,9 @@ export default function App() {
     const applyInvite = async () => {
       const token = takeInviteToken();
       if (!token) return;
-      const url = await urlReady;
-      if (!url) return setNotice({ ok: false, text: 'השרת לא זמין כרגע. נסה/י לפתוח את הקישור שוב מאוחר יותר.' });
-      try {
-        const { deviceKey } = await redeemInvite(url, token);
-        setSettings((s) => ({ ...s, deviceKey }));
-        setNotice({ ok: true, text: 'ההזמנה התקבלה ✓ הסוכן החכם מחובר במכשיר הזה.' });
-      } catch (err) {
-        setNotice({ ok: false, text: err.message });
-      }
+      // ב-Safari באייפון לא מנצלים את הקישור: מסבירים להתקין קודם ולהדביק אותו בתוך האפליקציה.
+      if (isIos() && !isStandalone()) return setIosInvite(token);
+      joinWithToken(token, await urlReady);
     };
     applyInvite();
     // גם כשהאפליקציה כבר פתוחה ונפתח בה קישור הזמנה
@@ -65,6 +61,24 @@ export default function App() {
     return () => window.removeEventListener('hashchange', applyInvite);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const aiSettings = useMemo(() => ({ ...settings, proxyUrl }), [settings, proxyUrl]);
+
+  // הצטרפות עם קישור הזמנה (מהכתובת, או מהדבקה בהגדרות). מחזיר true בהצלחה.
+  async function joinWithToken(token, url = proxyUrl) {
+    if (!url) {
+      setNotice({ ok: false, text: 'השרת לא זמין כרגע. נסה/י שוב מאוחר יותר.' });
+      return false;
+    }
+    try {
+      const { deviceKey } = await redeemInvite(url, token);
+      setSettings((s) => ({ ...s, deviceKey }));
+      setIosInvite(null);
+      setNotice({ ok: true, text: 'ההזמנה התקבלה ✓ הסוכן החכם מחובר במכשיר הזה.' });
+      return true;
+    } catch (err) {
+      setNotice({ ok: false, text: err.message });
+      return false;
+    }
+  }
 
   // המאגר המשותף בשרת (מה שכל המשתמשים הוסיפו). נשמר גם במכשיר לשימוש בלי אינטרנט.
   const [remoteFoods, setRemoteFoods] = usePersistentState('pointsApp_sharedFoods', []);
@@ -186,6 +200,13 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-24" dir="rtl">
       <div className="max-w-md mx-auto p-4 pt-8">
+        {iosInvite && (
+          <IosInviteCard
+            link={inviteLink(iosInvite)}
+            onUseHere={() => joinWithToken(iosInvite)}
+            onClose={() => setIosInvite(null)}
+          />
+        )}
         {notice && (
           <div
             className={`mb-4 rounded-xl p-3 text-sm flex justify-between items-start gap-2 ${
@@ -225,6 +246,7 @@ export default function App() {
             settings={settings}
             setSettings={setSettings}
             proxyUrl={proxyUrl}
+            onJoin={joinWithToken}
             foodDb={foodDb}
             userFoods={userFoods}
             saveFood={saveFood}
