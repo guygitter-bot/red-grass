@@ -79,6 +79,7 @@
   {"name": "קורנפלקס / דגני בוקר ללא סוכר (30 ג')", "points": 3, "source": "builtin"},
   {"name": "פופקורן למיקרו (100 ג')", "points": 13, "source": "builtin"},
   {"name": "בורקס יחידה קטנה", "points": 5, "source": "builtin"},
-  {"name": "בורקס יחידה גדולה", "points": 10, "source": "builtin"}
+  {"name": "בורקס יחידה גדולה", "points": 10, "source": "builtin"},
+  {"name": "במבה במילוי קרם נוגט - אסם (חופן / מנה (כ-30 גרם))", "points": 4.2, "grams": 30, "per100": {"kcal": 523, "protein": 10.4, "carbs": 58.6, "fat": 27.4, "fiber": 3.4}, "source": "agent", "confidence": "low", "added": "2026-10-02", "aliases": ["במבה נוגט", "במבה במילוי נוגט", "Bamba Nougat", "במבה ממולאת נוגט"], "sources": ["https://www.ynet.co.il/articles/0,7340,L-4261681,00.html", "https://en.wikipedia.org/wiki/Bamba_(snack)"]}
  ]
 }
