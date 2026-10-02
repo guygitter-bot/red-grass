@@ -58,6 +58,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: points_tracker/proxy
+          wranglerVersion: "4.146.0"
           secrets: |
             ANTHROPIC_API_KEY
             ACCESS_CODE
