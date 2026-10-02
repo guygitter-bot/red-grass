@@ -50,6 +50,11 @@ test('only the admin code can fix or delete for everyone', async () => {
   assert.equal(foods.length, 0);
 });
 
+test('cleanFood keeps valid household measures', () => {
+  const food = cleanFood({ name: 'פרמזן', points: 8.8, units: [{ name: 'כף', grams: 5 }, { name: 'x'.repeat(30), grams: 1 }, { name: 'כוס', grams: -3 }] });
+  assert.deepEqual(food.units, [{ name: 'כף', grams: 5 }]);
+});
+
 test('cleanFood keeps only known fields', () => {
   const food = cleanFood({ name: ' פיתה ', points: 6.04, evil: '<script>', sources: ['javascript:x', 'https://a.b'], per100: { kcal: 1 } });
   assert.deepEqual(food, { name: 'פיתה', points: 6, source: 'user', sources: ['https://a.b'] });

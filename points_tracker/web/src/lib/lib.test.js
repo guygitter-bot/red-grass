@@ -4,6 +4,7 @@ import { addDays, weekDates } from './dates';
 import { extractUserFoods, mergeFoodDb, searchFoods, SHARED_FOODS, upsertUserFood } from './foodDb';
 import { researchToFood, scoreComponents } from './ai';
 import { parseInviteToken } from './proxy';
+import { GENERIC_UNITS, baseName, portionLabel, portionPoints, unitsFor } from './measures';
 
 describe('points', () => {
   // אותם מקרים בדיוק נבדקים ב-points_tracker/tests/test_points.py
@@ -101,5 +102,30 @@ describe('parseInviteToken', () => {
     expect(parseInviteToken(`  ${token}  `)).toBe(token);
     expect(parseInviteToken('https://bis-app.pages.dev/#code=Points2703')).toBeNull();
     expect(parseInviteToken('שלום')).toBeNull();
+  });
+});
+
+describe('measures', () => {
+  // פתיתי פרמזן תנובה מהתווית: חלבון 32, פחמימות 0, שומן 23 ל-100 ג' = 8.8 נק'
+  const parmesan = { protein: 32, carbs: 0, fat: 23, fiber: 0 };
+
+  it('computes a spoon of parmesan', () => {
+    expect(portionPoints(parmesan, 100)).toBe(8.8);
+    expect(portionPoints(parmesan, 5)).toBe(0.4); // כף פתיתים ~5 ג'
+    expect(portionPoints(parmesan, 2)).toBe(0.2); // כפית ~2 ג'
+  });
+
+  it('lists grams first, then the food units, the serving, or generic units', () => {
+    const own = unitsFor({ units: [{ name: 'כף', grams: 5 }, { name: 'כפית', grams: 2 }], grams: 100 });
+    expect(own.map((u) => u.name)).toEqual(['גרם', 'כף', 'כפית']);
+    expect(unitsFor({ grams: 30 }).map((u) => u.name)).toEqual(['גרם', 'מנה']);
+    expect(unitsFor({}).slice(1)).toEqual(GENERIC_UNITS);
+  });
+
+  it('labels portions and strips the per-100g suffix', () => {
+    expect(portionLabel({ name: 'כף' }, 1, 5)).toBe("כף (5 ג')");
+    expect(portionLabel({ name: 'כף' }, 2, 10)).toBe("2 כף (10 ג')");
+    expect(portionLabel({ name: 'גרם' }, 1, 150)).toBe("150 ג'");
+    expect(baseName("פתיתי פרמזן תנובה (100 ג')")).toBe('פתיתי פרמזן תנובה');
   });
 });

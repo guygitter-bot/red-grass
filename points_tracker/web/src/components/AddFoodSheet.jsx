@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, Globe, MessageSquareText, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
 import { Button, ErrorBox, Input, MealPicker, Sheet, Spinner, Tabs } from './ui';
 import PortionPicker from './PortionPicker';
+import MeasurePicker from './MeasurePicker';
+import { baseName, unitsFor } from '../lib/measures';
 import CameraCapture from './CameraCapture';
 import AnalysisResult from './AnalysisResult';
 import { aiReady, analyzeFood, describeError, researchFood, researchToFood } from '../lib/ai';
@@ -21,6 +23,26 @@ function defaultMeal() {
   return 'ביניים';
 }
 
+// מאכל עם ערכים תזונתיים: בוחרים מידה (כף, כפית, גרם...). אחרת: כמות מתוך היחידה שבשם.
+function MeasuredFood({ item, onAdd, onDone }) {
+  const units = useMemo(() => unitsFor(item), [item]);
+  const [portion, setPortion] = useState(null);
+  const add = () => {
+    const name = baseName(item.name);
+    if (portion.unitName === 'גרם') onAdd({ name: `${name} (${portion.label})`, points: portion.points, qty: 1 });
+    else onAdd({ name: `${name} (${portion.unitName})`, points: portion.points / portion.count, qty: portion.count });
+    onDone();
+  };
+  return (
+    <div className="px-3 pb-3 space-y-3">
+      <MeasurePicker per100={item.per100} units={units} onChange={setPortion} />
+      <Button className="w-full py-2" disabled={!portion?.grams} onClick={add}>
+        <Plus size={18} /> הוסף לצלחת · {portion ? formatPoints(portion.points) : 0} נק'
+      </Button>
+    </div>
+  );
+}
+
 function FoodRow({ item, onAdd }) {
   const [open, setOpen] = useState(false);
   const [qty, setQty] = useState(1);
@@ -33,7 +55,8 @@ function FoodRow({ item, onAdd }) {
         </span>
         <span className="font-bold text-emerald-600 mr-2">{formatPoints(item.points)}</span>
       </button>
-      {open && (
+      {open && item.per100 && <MeasuredFood item={item} onAdd={onAdd} onDone={() => setOpen(false)} />}
+      {open && !item.per100 && (
         <div className="px-3 pb-3 space-y-3">
           <PortionPicker value={qty} onChange={setQty} unitLabel="יחידה" />
           <Button

@@ -95,6 +95,11 @@ FOOD_TOOL = {
             "serving_desc": {"type": "string", "description": 'Short Hebrew serving, e.g. "שקית 60 ג\'", "יחידה", "פרוסה"'},
             "serving_grams": {"type": "number"},
             "per100": NUTRITION,
+            "units": {
+                "type": "array",
+                "description": 'Household measures for THIS food with grams, e.g. [{"name":"כף","grams":5}]',
+                "items": _obj({"name": {"type": "string"}, "grams": {"type": "number"}}),
+            },
             "published_points": {
                 "type": ["number", "null"],
                 "description": "Points per serving if an Israeli points-diet source publishes one, else null",
@@ -155,6 +160,9 @@ Naming:
 - serving_desc: short Hebrew, at most 3 words, no parentheses. Packaged food: the package as sold \
 ("שקית 60 ג'", "בקבוק 500 מ\"ל", "חטיף 40 ג'"); otherwise the natural unit ("יחידה", "פרוסה", \
 "כוס", "מנה"). serving_grams must match it.
+
+units: household measures for this exact food with their weight in grams (כף, כפית, כוס, יחידה, פרוסה...). \
+A tablespoon of grated cheese is ~5 g, of oil ~13 g, of honey ~21 g; a teaspoon is about a third of a tablespoon.
 
 Call submit_food. Do not answer in plain text."""
 
@@ -234,6 +242,9 @@ def to_db_entry(result: dict) -> dict | None:
     }
     if result.get("aliases"):
         entry["aliases"] = result["aliases"]
+    units = [u for u in result.get("units") or [] if u.get("name") and (u.get("grams") or 0) > 0]
+    if units:
+        entry["units"] = units[:8]
     if result.get("published_points") is not None:
         entry["published_points"] = result["published_points"]
     if result.get("sources"):

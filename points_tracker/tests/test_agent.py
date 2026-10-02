@@ -34,6 +34,7 @@ BAMBA = {
     "serving_desc": "שקית 25 ג'",
     "serving_grams": 25,
     "per100": {"kcal": 534, "protein": 15, "carbs": 41, "fat": 35, "fiber": 4},
+    "units": [{"name": "חופן", "grams": 10}],
     "published_points": 4,
     "sources": ["https://www.osem.co.il/bamba"],
     "confidence": "high",
@@ -65,6 +66,7 @@ class AgentLoopTest(unittest.TestCase):
         self.assertEqual(entry["name"], "במבה אסם (שקית 25 ג')")
         self.assertEqual(entry["points"], 3.6)
         self.assertEqual(entry["published_points"], 4)
+        self.assertEqual(entry["units"], [{"name": "חופן", "grams": 10}])
         self.assertIsNone(agent.to_db_entry({**BAMBA, "found": False}))
 
     def test_db_entry_name_has_no_nested_parentheses(self):
