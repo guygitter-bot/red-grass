@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Copy, Download, KeyRound, Upload } from 'lucide-react';
+import { Download, KeyRound, Upload } from 'lucide-react';
 import { Button, Card, ErrorBox, Input, Label } from './ui';
 import { MODELS, aiReady, describeError, testApiKey } from '../lib/ai';
-import { inviteLink } from '../lib/proxy';
+import InviteManager from './InviteManager';
 import FoodDbManager from './FoodDbManager';
 
 function NumberField({ label, value, onChange }) {
@@ -35,18 +35,8 @@ export default function SettingsView({
 
   const ai = { ...settings, proxyUrl };
   const [showKey, setShowKey] = useState(Boolean(settings.apiKey));
-  const [copied, setCopied] = useState(false);
-
-  const copyInvite = async () => {
-    const link = inviteLink(settings.accessCode);
-    try {
-      if (navigator.share) await navigator.share({ title: 'ביס', url: link });
-      else await navigator.clipboard.writeText(link);
-      setCopied(true);
-    } catch {
-      // המשתמש ביטל את השיתוף
-    }
-  };
+  const owner = Boolean(settings.accessCode);
+  const invited = Boolean(settings.deviceKey) && !owner;
 
   const test = async () => {
     setKeyStatus('בודק...');
@@ -100,20 +90,26 @@ export default function SettingsView({
         {proxyUrl ? (
           <>
             <p className="text-xs text-slate-500">
-              הסוכן עובד דרך השרת המשותף, עם מפתח ה-API של מנהל האפליקציה. צריך רק קוד גישה - מי שנכנס מקישור ההזמנה מקבל אותו
-              אוטומטית. כל מכשיר שומר יומן וניקוד משלו.
+              הסוכן עובד דרך השרת המשותף, עם מפתח ה-API של בעל האפליקציה. מצטרפים דרך קישור הזמנה חד-פעמי. כל מכשיר שומר
+              יומן וניקוד משלו.
             </p>
-            <Input
-              dir="ltr"
-              placeholder="קוד גישה"
-              value={settings.accessCode || ''}
-              onChange={(e) => setSettings({ ...settings, accessCode: e.target.value.trim() })}
-            />
-            {settings.accessCode && (
-              <Button variant="outline" className="w-full py-2" onClick={copyInvite}>
-                <Copy size={16} /> {copied ? 'הקישור הועתק / נשלח' : 'שלח קישור הזמנה (כולל הקוד)'}
-              </Button>
+            {invited && <p className="text-sm text-emerald-700 font-medium">המכשיר הזה מחובר דרך קישור הזמנה ✓</p>}
+            {!invited && !owner && (
+              <p className="text-sm text-slate-600">כדי להשתמש בסוכן, פתח/י את קישור ההזמנה שקיבלת מבעל האפליקציה.</p>
             )}
+            <details className="text-xs text-slate-500" open={!owner && !invited}>
+              <summary className="cursor-pointer text-slate-400 underline">קוד גישה (רק לבעל האפליקציה)</summary>
+              <Input
+                dir="ltr"
+                type="password"
+                placeholder="קוד גישה"
+                className="mt-2"
+                value={settings.accessCode || ''}
+                onChange={(e) => setSettings({ ...settings, accessCode: e.target.value.trim() })}
+              />
+            </details>
+            {owner && <InviteManager settings={ai} />}
+            {owner && (
             <details className="text-xs text-slate-500">
               <summary className="cursor-pointer text-slate-400 underline">קוד מנהל (רק למנהל האפליקציה)</summary>
               <p className="my-2">עם קוד המנהל, עריכה ומחיקה של מאכל במאגר המשותף משפיעות על כולם.</p>
@@ -125,6 +121,7 @@ export default function SettingsView({
                 onChange={(e) => setSettings({ ...settings, adminCode: e.target.value.trim() })}
               />
             </details>
+            )}
             <button className="text-xs text-slate-400 underline" onClick={() => setShowKey(!showKey)}>
               {showKey ? 'הסתר מפתח אישי' : 'מפתח API אישי (לא חובה)'}
             </button>
