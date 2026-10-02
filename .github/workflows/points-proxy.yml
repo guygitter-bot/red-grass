@@ -31,12 +31,14 @@ jobs:
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           ACCESS_CODE: ${{ secrets.POINTS_ACCESS_CODE }}
+          ADMIN_CODE: ${{ secrets.POINTS_ADMIN_CODE }}
           API_KEY: ${{ secrets.POINTS_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
         run: |
           missing=""
           [ -n "$CF_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
           [ -n "$CF_ACCOUNT" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
           [ -n "$ACCESS_CODE" ] || missing="$missing POINTS_ACCESS_CODE"
+          [ -n "$ADMIN_CODE" ] || missing="$missing POINTS_ADMIN_CODE"
           [ -n "$API_KEY" ] || missing="$missing ANTHROPIC_API_KEY"
           if [ -n "$missing" ]; then
             echo "::error::Missing repository secrets:$missing (see points_tracker/README.md)"
@@ -54,6 +56,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.POINTS_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
           ACCESS_CODE: ${{ secrets.POINTS_ACCESS_CODE }}
+          ADMIN_CODE: ${{ secrets.POINTS_ADMIN_CODE }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -62,6 +65,7 @@ jobs:
           secrets: |
             ANTHROPIC_API_KEY
             ACCESS_CODE
+            ADMIN_CODE
       - name: Save worker URL for the app
         id: config
         env:

@@ -7,7 +7,8 @@ import WeightView from './components/WeightView';
 import SettingsView from './components/SettingsView';
 import { usePersistentState, loadJson, newId } from './lib/storage';
 import { addDays, formatDisplayDate, today, weekDates } from './lib/dates';
-import { SHARED_FOODS, extractUserFoods, mergeFoodDb, normalize, upsertUserFood } from './lib/foodDb';
+import { SHARED_FOODS, extractUserFoods, findByName, mergeFoodDb, normalize, upsertUserFood } from './lib/foodDb';
+import { addSharedFood, adminDeleteFood, adminUpdateFood, fetchSharedFoods, sharedAvailable } from './lib/sharedFoods';
 import { DEFAULT_MODEL } from './lib/ai';
 import { loadProxyUrl, takeInviteCode } from './lib/proxy';
 
@@ -35,7 +36,6 @@ export default function App() {
   const [userFoods, setUserFoods] = usePersistentState('pointsApp_userFoods', initialUserFoods);
   const [settings, setSettings] = usePersistentState('pointsApp_settings', { apiKey: '', model: DEFAULT_MODEL, autoAgent: true });
 
-  const foodDb = useMemo(() => mergeFoodDb(SHARED_FOODS, userFoods), [userFoods]);
 
   // השרת המשותף + קוד הגישה מקישור ההזמנה: כך לא צריך להדביק מפתח בכל טלפון.
   const [proxyUrl, setProxyUrl] = useState('');
@@ -51,6 +51,29 @@ export default function App() {
     return () => window.removeEventListener('hashchange', applyInvite);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const aiSettings = useMemo(() => ({ ...settings, proxyUrl }), [settings, proxyUrl]);
+
+  // המאגר המשותף בשרת (מה שכל המשתמשים הוסיפו). נשמר גם במכשיר לשימוש בלי אינטרנט.
+  const [remoteFoods, setRemoteFoods] = usePersistentState('pointsApp_sharedFoods', []);
+  // מאכלים משותפים שהמשתמש מחק אצלו בלבד
+  const [hiddenFoods, setHiddenFoods] = usePersistentState('pointsApp_hiddenFoods', []);
+  const sharedOn = sharedAvailable(aiSettings);
+  const isAdmin = sharedOn && Boolean(settings.adminCode);
+  const refreshShared = () => {
+    if (sharedAvailable(aiSettings)) fetchSharedFoods(aiSettings).then(setRemoteFoods).catch(() => {});
+  };
+  useEffect(() => {
+    refreshShared();
+    const onVisible = () => document.visibilityState === 'visible' && refreshShared();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [proxyUrl, settings.accessCode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const foodDb = useMemo(() => {
+    const base = [...SHARED_FOODS, ...remoteFoods.filter((f) => !findByName(SHARED_FOODS, f.name))];
+    const hidden = new Set(hiddenFoods);
+    return mergeFoodDb(base, userFoods).filter((f) => !hidden.has(normalize(f.name)));
+  }, [remoteFoods, userFoods, hiddenFoods]);
+  const inRemote = (name) => Boolean(name && findByName(remoteFoods, name));
 
   const dayLogs = useMemo(() => logs.filter((l) => l.date === selectedDate), [logs, selectedDate]);
   const dailyUsed = sumPoints(dayLogs);
@@ -79,7 +102,29 @@ export default function App() {
   };
 
   // הוספה ידנית ואוטומטית (הסוכן) עובדות בנפרד: ידני גובר תמיד, והסוכן לעולם לא דורס מאכל שהוזן ידנית.
-  const saveFood = (food, oldName) => setUserFoods((prev) => upsertUserFood(prev, { ...food, added: today() }, oldName));
+  // מאכל חדש נשמר במכשיר וגם נשלח למאגר המשותף, כך שכולם רואים אותו.
+  // עריכה נשארת אישית - חוץ ממנהל, שעריכה שלו של מאכל משותף מתקנת אותו לכולם.
+  const saveFood = (food, oldName) => {
+    const clean = { ...food, added: today() };
+    if (oldName !== undefined && isAdmin && inRemote(oldName)) {
+      adminUpdateFood(aiSettings, clean, oldName).then(refreshShared).catch((e) => alert(e.message));
+      return;
+    }
+    const isNew = oldName === undefined && !findByName(foodDb, food.name);
+    setUserFoods((prev) => upsertUserFood(prev, clean, oldName));
+    setHiddenFoods((prev) => prev.filter((n) => n !== normalize(food.name)));
+    if (isNew && sharedOn) addSharedFood(aiSettings, clean).then(refreshShared).catch(() => {});
+  };
+
+  const removeFood = (name) => {
+    if (isAdmin && inRemote(name)) {
+      if (!confirm(`למחוק את "${name}" מהמאגר המשותף אצל כולם?`)) return;
+      adminDeleteFood(aiSettings, name).then(refreshShared).catch((e) => alert(e.message));
+    } else if (inRemote(name)) {
+      setHiddenFoods((prev) => [...new Set([...prev, normalize(name)])]);
+    }
+    setUserFoods((prev) => prev.filter((f) => normalize(f.name) !== normalize(name)));
+  };
 
   const water = waterLogs[selectedDate] || 0;
   const setWater = (n) => setWaterLogs((prev) => ({ ...prev, [selectedDate]: Math.max(0, n) }));
@@ -157,7 +202,10 @@ export default function App() {
             foodDb={foodDb}
             userFoods={userFoods}
             saveFood={saveFood}
-            removeUserFood={(name) => setUserFoods((prev) => prev.filter((f) => normalize(f.name) !== normalize(name)))}
+            removeUserFood={removeFood}
+            remoteFoods={remoteFoods}
+            sharedOn={sharedOn}
+            isAdmin={isAdmin}
             exportData={exportData}
             importData={importData}
           />

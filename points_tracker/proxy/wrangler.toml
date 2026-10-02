@@ -7,5 +7,14 @@ workers_dev = true
 # האתרים שמותר להם לפנות לשרת (האפליקציה ב-Cloudflare Pages ופיתוח מקומי)
 ALLOWED_ORIGINS = "https://bis-app.pages.dev,http://localhost:5173,http://localhost:4173"
 
-# המפתח וקוד הגישה הם סודות, לא כאן:
-#   ANTHROPIC_API_KEY, ACCESS_CODE  (נקבעים אוטומטית מ-GitHub, ראו .github/workflows/points-proxy.yml)
+# המאגר המשותף של המאכלים (Durable Object עם SQLite, כלול בתוכנית החינמית)
+[[durable_objects.bindings]]
+name = "FOODS"
+class_name = "SharedFoods"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SharedFoods"]
+
+# המפתח, קוד הגישה וקוד המנהל הם סודות, לא כאן:
+#   ANTHROPIC_API_KEY, ACCESS_CODE, ADMIN_CODE  (נקבעים אוטומטית מ-GitHub, ראו .github/workflows/points-proxy.yml)
