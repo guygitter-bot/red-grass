@@ -2,6 +2,10 @@
 // האפליקציה שולחת אליו את הבקשות עם קוד גישה, והוא מוסיף את המפתח ומעביר ל-Anthropic.
 // כך המפתח לא נמצא באף טלפון ולא בקוד הציבורי של האתר.
 
+import { SharedFoods } from './foods.js';
+
+export { SharedFoods };
+
 const UPSTREAM = 'https://api.anthropic.com';
 const ALLOWED_MODELS = new Set(['claude-opus-5-5', 'claude-sonnet-5-5']);
 const MAX_TOKENS = 16000;
@@ -11,7 +15,7 @@ function corsHeaders(request, env) {
   const origin = request.headers.get('origin') || '';
   const allowed = (env.ALLOWED_ORIGINS || '').split(',').map((o) => o.trim()).filter(Boolean);
   const headers = {
-    'access-control-allow-methods': 'GET, POST, OPTIONS',
+    'access-control-allow-methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'access-control-allow-headers': '*',
     'access-control-max-age': '86400',
     vary: 'origin',
@@ -48,6 +52,19 @@ export default {
     }
 
     const url = new URL(request.url);
+
+    // מאגר המאכלים המשותף
+    if (url.pathname === '/foods') {
+      if (!env.FOODS) return json(500, 'Shared foods storage is not configured', cors);
+      const admin = env.ADMIN_CODE && sameCode(request.headers.get('x-admin-code') || '', env.ADMIN_CODE);
+      const headers = new Headers({ 'content-type': 'application/json', 'x-is-admin': admin ? '1' : '0' });
+      const body = ['POST', 'PUT'].includes(request.method) ? await request.text() : undefined;
+      if (body && body.length > 20000) return json(413, 'Request too large', cors);
+      const stub = env.FOODS.get(env.FOODS.idFromName('shared'));
+      const res = await stub.fetch(new Request(url.toString(), { method: request.method, headers, body }));
+      return new Response(res.body, { status: res.status, headers: { ...cors, 'content-type': 'application/json' } });
+    }
+
     const isMessages = request.method === 'POST' && url.pathname === '/v1/messages';
     const isModel = request.method === 'GET' && /^\/v1\/models\/[\w.-]+$/.test(url.pathname);
     if (!isMessages && !isModel) return json(404, 'Not found', cors);

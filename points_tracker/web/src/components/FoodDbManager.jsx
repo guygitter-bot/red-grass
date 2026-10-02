@@ -13,6 +13,8 @@ const FILTERS = [
 const isManual = (f) => f.source === 'user' || f.source === 'ai';
 
 function Badge({ food }) {
+  if (food.shared)
+    return <span className="text-[10px] bg-sky-100 text-sky-700 rounded px-1.5 py-0.5">משותף</span>;
   if (food.source === 'agent')
     return (
       <span className="text-[10px] bg-violet-100 text-violet-600 rounded px-1.5 py-0.5 flex items-center gap-0.5">
@@ -75,14 +77,18 @@ function FoodLine({ food, canDelete, onSave, onDelete }) {
 }
 
 // ניהול המאגר: הוספה ועריכה ידנית, בנפרד ממה שהסוכן מוסיף.
-export default function FoodDbManager({ foodDb, userFoods, saveFood, removeUserFood }) {
+export default function FoodDbManager({ foodDb, userFoods, remoteFoods = [], sharedOn, isAdmin, saveFood, removeUserFood }) {
   const [name, setName] = useState('');
   const [points, setPoints] = useState('');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
   const [msg, setMsg] = useState('');
 
-  const localNames = useMemo(() => new Set(userFoods.map((f) => normalize(f.name))), [userFoods]);
+  // אפשר למחוק מאכל שהוספת, או מאכל משותף (אצלך בלבד, או אצל כולם אם יש לך קוד מנהל)
+  const localNames = useMemo(
+    () => new Set([...userFoods, ...remoteFoods].map((f) => normalize(f.name))),
+    [userFoods, remoteFoods],
+  );
   const shown = useMemo(() => {
     let list = query ? searchFoods(foodDb, query, 200) : [...foodDb].reverse();
     if (filter === 'manual') list = list.filter(isManual);
@@ -102,6 +108,11 @@ export default function FoodDbManager({ foodDb, userFoods, saveFood, removeUserF
       <h3 className="font-bold">מאגר המאכלים ({foodDb.length})</h3>
       <p className="text-xs text-slate-500">
         מוסיפים כאן מאכל וניקוד ידנית. הסוכן מוסיף מאכלים בעצמו (מסומנים "סוכן"), ולעולם לא דורס מאכל שהוספת ידנית.
+        {sharedOn
+          ? isAdmin
+            ? ' מאכל חדש נוסף למאגר המשותף של כולם. במצב מנהל, עריכה ומחיקה של מאכל משותף חלות על כולם.'
+            : ' מאכל חדש נוסף גם למאגר המשותף של כולם. עריכה ומחיקה משפיעות רק עליך.'
+          : ''}
       </p>
 
       <div className="flex gap-2">

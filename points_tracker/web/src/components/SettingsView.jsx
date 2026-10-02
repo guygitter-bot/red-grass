@@ -27,7 +27,8 @@ function NumberField({ label, value, onChange }) {
 }
 
 export default function SettingsView({
-  user, setUser, settings, setSettings, proxyUrl, foodDb, userFoods, saveFood, removeUserFood, exportData, importData,
+  user, setUser, settings, setSettings, proxyUrl, foodDb, userFoods, saveFood, removeUserFood, remoteFoods, sharedOn, isAdmin,
+  exportData, importData,
 }) {
   const [keyStatus, setKeyStatus] = useState('');
   const [keyError, setKeyError] = useState('');
@@ -113,6 +114,17 @@ export default function SettingsView({
                 <Copy size={16} /> {copied ? 'הקישור הועתק / נשלח' : 'שלח קישור הזמנה (כולל הקוד)'}
               </Button>
             )}
+            <details className="text-xs text-slate-500">
+              <summary className="cursor-pointer text-slate-400 underline">קוד מנהל (רק למנהל האפליקציה)</summary>
+              <p className="my-2">עם קוד המנהל, עריכה ומחיקה של מאכל במאגר המשותף משפיעות על כולם.</p>
+              <Input
+                dir="ltr"
+                type="password"
+                placeholder="קוד מנהל"
+                value={settings.adminCode || ''}
+                onChange={(e) => setSettings({ ...settings, adminCode: e.target.value.trim() })}
+              />
+            </details>
             <button className="text-xs text-slate-400 underline" onClick={() => setShowKey(!showKey)}>
               {showKey ? 'הסתר מפתח אישי' : 'מפתח API אישי (לא חובה)'}
             </button>
@@ -162,7 +174,15 @@ export default function SettingsView({
         <ErrorBox>{keyError}</ErrorBox>
       </Card>
 
-      <FoodDbManager foodDb={foodDb} userFoods={userFoods} saveFood={saveFood} removeUserFood={removeUserFood} />
+      <FoodDbManager
+        foodDb={foodDb}
+        userFoods={userFoods}
+        remoteFoods={remoteFoods}
+        sharedOn={sharedOn}
+        isAdmin={isAdmin}
+        saveFood={saveFood}
+        removeUserFood={removeUserFood}
+      />
 
       <Card className="bg-emerald-50 border-emerald-100 space-y-3">
         <h3 className="font-bold text-emerald-800">גיבוי ושחזור נתונים</h3>
