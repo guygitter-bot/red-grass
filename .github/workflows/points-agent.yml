@@ -7,9 +7,10 @@ on:
     # Ask for a food: open an issue labelled "food-request" (the app has a link for it).
     types: [opened, labeled]
   schedule:
-    # Daily 03:17 UTC: on its own, find popular foods that are missing and add them
-    # (POINTS_DISCOVER_COUNT a day, default 3), and retry open requests.
-    - cron: "17 3 * * *"
+    # Weekly, Sunday 03:17 UTC: on its own, find popular foods that are missing and add
+    # them (POINTS_DISCOVER_COUNT, default 10), and retry open requests that failed.
+    # Requests (issues, manual runs) run immediately, not on this schedule.
+    - cron: "17 3 * * 0"
   workflow_dispatch:
     inputs:
       foods:
@@ -64,7 +65,7 @@ jobs:
           POINTS_MODEL: ${{ vars.POINTS_MODEL }}
           POINTS_EFFORT: ${{ vars.POINTS_EFFORT }}
           FOODS: ${{ inputs.foods }}
-          DISCOVER: ${{ github.event_name == 'schedule' && (vars.POINTS_DISCOVER_COUNT || '3') || inputs.discover || '0' }}
+          DISCOVER: ${{ github.event_name == 'schedule' && (vars.POINTS_DISCOVER_COUNT || '10') || inputs.discover || '0' }}
           DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
         run: python points_tracker/run_agent.py --issues --discover "$DISCOVER" $DRY_RUN
       - name: Commit database
