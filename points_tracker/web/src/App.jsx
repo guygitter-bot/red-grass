@@ -99,7 +99,7 @@ export default function App() {
     const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `my-points-backup-${today()}.json`;
+    a.download = `bis-backup-${today()}.json`;
     document.body.appendChild(a);
     a.click();
     a.remove();

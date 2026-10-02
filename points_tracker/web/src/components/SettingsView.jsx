@@ -39,7 +39,7 @@ export default function SettingsView({
   const copyInvite = async () => {
     const link = inviteLink(settings.accessCode);
     try {
-      if (navigator.share) await navigator.share({ title: 'מעקב נקודות', url: link });
+      if (navigator.share) await navigator.share({ title: 'ביס', url: link });
       else await navigator.clipboard.writeText(link);
       setCopied(true);
     } catch {

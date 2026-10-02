@@ -3,9 +3,9 @@ name: Points tracker app
 on:
   push:
     branches: [main]
-    paths: ["points_tracker/**", ".github/workflows/points-tracker.yml", ".github/workflows/pages-deploy.yml"]
+    paths: ["points_tracker/**", ".github/workflows/points-tracker.yml", ".github/workflows/pages-deploy.yml", ".github/workflows/bis-deploy.yml"]
   pull_request:
-    paths: ["points_tracker/**", ".github/workflows/points-*.yml", ".github/workflows/pages-deploy.yml"]
+    paths: ["points_tracker/**", ".github/workflows/points-*.yml", ".github/workflows/pages-deploy.yml", ".github/workflows/bis-deploy.yml"]
   workflow_dispatch:
 
 permissions:
@@ -40,6 +40,15 @@ jobs:
         run: npm test
 
   deploy:
+    needs: test
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/bis-deploy.yml
+    secrets: inherit
+    with:
+      ref: ${{ github.ref_name }}
+
+  # Keeps the old GitHub Pages address (/points/) forwarding to the new site.
+  github-pages:
     needs: test
     if: github.event_name != 'pull_request'
     uses: ./.github/workflows/pages-deploy.yml
