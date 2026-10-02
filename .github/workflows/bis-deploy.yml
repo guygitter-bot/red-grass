@@ -38,6 +38,10 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Run from the app folder: the repo root has an old package.json whose
+          # dependencies conflict, so installing wrangler there fails.
+          workingDirectory: points_tracker/web
+          wranglerVersion: "4.146.0"
           command: pages project create bis-app --production-branch=main
       - name: Publish
         id: publish
@@ -45,7 +49,9 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy points_tracker/web/dist --project-name=bis-app --branch=main --commit-dirty=true
+          workingDirectory: points_tracker/web
+          wranglerVersion: "4.146.0"
+          command: pages deploy dist --project-name=bis-app --branch=main --commit-dirty=true
       - name: Summary
         env:
           URL: ${{ steps.publish.outputs.deployment-url }}
