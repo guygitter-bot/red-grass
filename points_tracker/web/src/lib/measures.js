@@ -28,6 +28,15 @@ export function portionPoints(per100, grams) {
   return round1(pointsForGrams(per100, grams));
 }
 
+// פריט לצלחת מתוך מנה שנבחרה: מידה אחת -> "פרמזן (כפית)" × 2; שילוב או גרמים -> פריט אחד עם התיאור המלא.
+export function plateItem(name, portion) {
+  const [only] = portion.parts || [];
+  if (portion.parts?.length === 1 && only.count > 0) {
+    return { name: `${name} (${only.unitName})`, points: portion.points / only.count, qty: only.count };
+  }
+  return { name: `${name} · ${portion.label}`, points: portion.points, qty: 1 };
+}
+
 // תיאור כמות: "2 כף (10 ג')", "150 ג'"
 export function portionLabel(unit, count, grams) {
   if (unit.name === GRAM_UNIT.name) return `${Math.round(grams)} ג'`;

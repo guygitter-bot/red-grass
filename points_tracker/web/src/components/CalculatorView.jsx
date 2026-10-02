@@ -3,7 +3,7 @@ import { ScanLine, X } from 'lucide-react';
 import { Button, Card, ErrorBox, Input, Label, MealPicker, Spinner } from './ui';
 import CameraCapture from './CameraCapture';
 import MeasurePicker from './MeasurePicker';
-import { unitsFor } from '../lib/measures';
+import { plateItem, unitsFor } from '../lib/measures';
 import { aiReady, describeError, readNutritionLabel } from '../lib/ai';
 import { formatPoints, pointsFromNutrition, round1 } from '../lib/points';
 
@@ -58,13 +58,12 @@ export default function CalculatorView({ settings, onLog, onSaveFood, goHome }) 
     if (labelUnits.length) food.units = labelUnits;
     onSaveFood(food);
     if (alsoLog && portion) {
-      const unitName = `${foodName} (${portion.unitName === 'גרם' ? portion.label : portion.unitName})`;
-      const unitPoints = portion.unitName === 'גרם' ? portion.points : round1(portion.points / portion.count);
+      const item = plateItem(foodName, portion);
       onLog({
         foodName: `${foodName} · ${portion.label}`,
         points: portion.points,
         mealType: meal,
-        components: [{ name: unitName, unitPoints, qty: portion.unitName === 'גרם' ? 1 : portion.count }],
+        components: [{ name: item.name, unitPoints: item.points, qty: item.qty }],
       });
       goHome();
     } else {

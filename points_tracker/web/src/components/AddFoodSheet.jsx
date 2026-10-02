@@ -3,7 +3,7 @@ import { Camera, Globe, MessageSquareText, Plus, Search, Sparkles, Trash2 } from
 import { Button, ErrorBox, Input, MealPicker, Sheet, Spinner, Tabs } from './ui';
 import PortionPicker from './PortionPicker';
 import MeasurePicker from './MeasurePicker';
-import { baseName, unitsFor } from '../lib/measures';
+import { baseName, plateItem, unitsFor } from '../lib/measures';
 import CameraCapture from './CameraCapture';
 import AnalysisResult from './AnalysisResult';
 import { aiReady, analyzeFood, describeError, researchFood, researchToFood } from '../lib/ai';
@@ -28,9 +28,7 @@ function MeasuredFood({ item, onAdd, onDone }) {
   const units = useMemo(() => unitsFor(item), [item]);
   const [portion, setPortion] = useState(null);
   const add = () => {
-    const name = baseName(item.name);
-    if (portion.unitName === 'גרם') onAdd({ name: `${name} (${portion.label})`, points: portion.points, qty: 1 });
-    else onAdd({ name: `${name} (${portion.unitName})`, points: portion.points / portion.count, qty: portion.count });
+    onAdd(plateItem(baseName(item.name), portion));
     onDone();
   };
   return (

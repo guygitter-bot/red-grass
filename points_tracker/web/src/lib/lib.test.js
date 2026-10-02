@@ -4,7 +4,7 @@ import { addDays, weekDates } from './dates';
 import { extractUserFoods, mergeFoodDb, searchFoods, SHARED_FOODS, upsertUserFood } from './foodDb';
 import { researchToFood, scoreComponents } from './ai';
 import { parseInviteToken } from './proxy';
-import { GENERIC_UNITS, baseName, portionLabel, portionPoints, unitsFor } from './measures';
+import { GENERIC_UNITS, baseName, plateItem, portionLabel, portionPoints, unitsFor } from './measures';
 
 describe('points', () => {
   // אותם מקרים בדיוק נבדקים ב-points_tracker/tests/test_points.py
@@ -127,5 +127,17 @@ describe('measures', () => {
     expect(portionLabel({ name: 'כף' }, 2, 10)).toBe("2 כף (10 ג')");
     expect(portionLabel({ name: 'גרם' }, 1, 150)).toBe("150 ג'");
     expect(baseName("פתיתי פרמזן תנובה (100 ג')")).toBe('פתיתי פרמזן תנובה');
+  });
+
+  it('turns a chosen portion into a plate item', () => {
+    // 2 כפיות בלבד -> "פרמזן (כפית)" × 2
+    expect(plateItem('פרמזן', { points: 0.4, label: "2 כפית (4 ג')", parts: [{ unitName: 'כפית', count: 2 }] })).toEqual({
+      name: 'פרמזן (כפית)',
+      points: 0.2,
+      qty: 2,
+    });
+    // כף + 2 כפיות -> פריט אחד עם התיאור המלא
+    const combo = { points: 0.8, label: "כף + 2 כפית (9 ג')", parts: [{ unitName: 'כף', count: 1 }, { unitName: 'כפית', count: 2 }] };
+    expect(plateItem('פרמזן', combo)).toEqual({ name: "פרמזן · כף + 2 כפית (9 ג')", points: 0.8, qty: 1 });
   });
 });
