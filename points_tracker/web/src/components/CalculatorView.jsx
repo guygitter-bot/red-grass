@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ScanLine, X } from 'lucide-react';
 import { Button, Card, ErrorBox, Input, Label, MealPicker, Spinner } from './ui';
 import CameraCapture from './CameraCapture';
-import { describeError, readNutritionLabel } from '../lib/ai';
+import { aiReady, describeError, readNutritionLabel } from '../lib/ai';
 import { formatPoints, pointsForGrams, pointsFromNutrition, round1 } from '../lib/points';
 
 const FIELDS = [
@@ -75,11 +75,11 @@ export default function CalculatorView({ settings, onLog, onSaveFood, goHome }) 
         ) : busy ? (
           <Spinner text="קורא את התווית..." />
         ) : (
-          <Button variant="ai" className="w-full" onClick={() => setScanning(true)} disabled={!settings.apiKey}>
+          <Button variant="ai" className="w-full" onClick={() => setScanning(true)} disabled={!aiReady(settings)}>
             <ScanLine size={18} /> סרוק תווית מהאריזה
           </Button>
         )}
-        {!settings.apiKey && <p className="text-xs text-slate-400">סריקת תווית דורשת מפתח API בהגדרות.</p>}
+        {!aiReady(settings) && <p className="text-xs text-slate-400">סריקת תווית דורשת קוד גישה או מפתח API בהגדרות.</p>}
         <ErrorBox>{error}</ErrorBox>
 
         <p className="text-sm text-slate-500">ערכים תזונתיים ל-100 גרם</p>

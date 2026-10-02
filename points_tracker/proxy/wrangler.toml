@@ -1,0 +1,11 @@
+name = "points-proxy"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[vars]
+# האתרים שמותר להם לפנות לשרת (האפליקציה ב-GitHub Pages ופיתוח מקומי)
+ALLOWED_ORIGINS = "https://guygitter-bot.github.io,http://localhost:5173,http://localhost:4173"
+
+# המפתח וקוד הגישה הם סודות, לא כאן:
+#   ANTHROPIC_API_KEY, ACCESS_CODE  (נקבעים אוטומטית מ-GitHub, ראו .github/workflows/points-proxy.yml)

@@ -52,11 +52,43 @@
 עלות משוערת: כ-5–15 סנט למאכל (חיפושים ברשת + טוקנים), כלומר בערך 2–6 דולר בחודש עם 10 מאכלים
 בשבוע, ועוד כמה סנטים לכל בקשה. כל הרצה רושמת את העלות ב-Summary.
 
-## הסוכן בתוך האפליקציה
+## הסוכן בתוך האפליקציה: שרת משותף עם המפתח שלך
 
-הגדרות → "הסוכן החכם": מדביקים מפתח API של Anthropic. המפתח נשמר רק בטלפון, לא בגיבוי, והבקשות
-יוצאות ישירות מהדפדפן ל-Anthropic. בלי מפתח האפליקציה עובדת כרגיל (חיפוש, מחשבון, צלחת), רק בלי
-צילום / ניתוח טקסט / חיפוש ברשת.
+המפתח של Anthropic נשמר בשרת קטן וחינמי ב-Cloudflare (`proxy/worker.js`), לא בטלפונים ולא בקוד הציבורי
+של האתר. מי שמשתמש באפליקציה צריך רק **קוד גישה**, ומי שנכנס מ**קישור ההזמנה** מקבל אותו אוטומטית.
+כל טלפון שומר יומן, צלחת וניקוד משלו; רק המאגר הכללי של המאכלים משותף.
+
+השרת מקבל רק בקשות עם קוד הגישה, רק את המודלים של האפליקציה ורק את סוגי הבקשות שלה.
+
+### הקמה (פעם אחת, כ-10 דקות)
+
+1. נרשמים בחינם ל-Cloudflare: https://dash.cloudflare.com/sign-up
+2. נכנסים פעם אחת ל-**Workers & Pages**: https://dash.cloudflare.com/?to=/:account/workers-and-pages
+   (אם מבקשים לבחור שם לתת-הדומיין `workers.dev`, בוחרים). בצד של הדף מופיע **Account ID** - מעתיקים.
+3. יוצרים טוקן: https://dash.cloudflare.com/profile/api-tokens → **Create Token** → בתבנית
+   **Edit Cloudflare Workers** לוחצים **Use template** → ב-Account Resources בוחרים את החשבון, ב-Zone Resources
+   **All zones** → **Continue to summary** → **Create Token** → מעתיקים.
+4. ב-GitHub: https://github.com/guygitter-bot/red-grass/settings/secrets/actions → **New repository secret**,
+   שלושה סודות:
+   - `CLOUDFLARE_API_TOKEN` - הטוקן משלב 3
+   - `CLOUDFLARE_ACCOUNT_ID` - ה-Account ID משלב 2
+   - `POINTS_ACCESS_CODE` - קוד גישה שתבחר (לפחות 8 תווים, אותיות ומספרים)
+
+   השרת משתמש במפתח `ANTHROPIC_API_KEY` שכבר קיים. כדי להשתמש במפתח נפרד לאפליקציה, מוסיפים
+   `POINTS_ANTHROPIC_API_KEY`.
+5. Actions → **Points proxy server** → **Run workflow**. השרת עולה, הכתובת שלו נכתבת לאפליקציה והאתר
+   מתפרסם מחדש (כ-2 דקות).
+6. באפליקציה: הגדרות → "הסוכן החכם" → מזינים את קוד הגישה → **בדוק חיבור** → **שלח קישור הזמנה**.
+   שולחים את הקישור הזה למי שרוצים (במקום הקישור הרגיל).
+
+### החלפת מפתח או קוד
+
+- **מפתח חדש:** מעדכנים את הסוד ב-GitHub ומריצים שוב את Points proxy server. מתעדכן אצל כולם.
+- **קוד גישה חדש** (למשל אם קישור ההזמנה הגיע למישהו שלא צריך): מעדכנים את `POINTS_ACCESS_CODE`, מריצים
+  שוב, ושולחים קישור הזמנה חדש למי שצריך. הקוד הישן מפסיק לעבוד מיד.
+- מגבלת הוצאה חודשית: https://console.anthropic.com/settings/limits
+
+מי שרוצה יכול עדיין להזין מפתח API אישי בהגדרות ("מפתח API אישי (לא חובה)"), והוא גובר על השרת.
 
 ## פיתוח
 
@@ -65,6 +97,7 @@ cd points_tracker/web
 npm install
 npm run dev      # http://localhost:5173
 npm test
+cd ../proxy && npm test
 cd ../.. && python -m unittest discover -s points_tracker/tests -t .
 ```
 

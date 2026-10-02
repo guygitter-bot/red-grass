@@ -4,7 +4,7 @@ import { Button, ErrorBox, Input, MealPicker, Sheet, Spinner, Tabs } from './ui'
 import PortionPicker from './PortionPicker';
 import CameraCapture from './CameraCapture';
 import AnalysisResult from './AnalysisResult';
-import { analyzeFood, describeError, researchFood, researchToFood } from '../lib/ai';
+import { aiReady, analyzeFood, describeError, researchFood, researchToFood } from '../lib/ai';
 import { findByName, normalize, searchFoods } from '../lib/foodDb';
 import { formatPoints, qtyPrefix, round1 } from '../lib/points';
 import { newId } from '../lib/storage';
@@ -89,7 +89,7 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
 
   const results = useMemo(() => searchFoods(db, search), [db, search]);
   const total = round1(plate.reduce((s, p) => s + p.points * p.qty, 0));
-  const hasKey = Boolean(settings.apiKey);
+  const hasKey = aiReady(settings);
 
   const addToPlate = (item) => setPlate((p) => [...p, { ...item, id: newId() }]);
 
@@ -240,7 +240,7 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
                   <Globe size={18} /> לא זה? הסוכן יחפש "{search}" ברשת
                 </Button>
               ) : !hasKey ? (
-                <p className="text-xs text-slate-500">כדי שהסוכן יחפש ויוסיף מאכלים מתוך האפליקציה, הגדר מפתח API בהגדרות.</p>
+                <p className="text-xs text-slate-500">כדי שהסוכן יחפש ויוסיף מאכלים, פתח את קישור ההזמנה או הזן קוד גישה בהגדרות.</p>
               ) : null}
               <ErrorBox>{researchError}</ErrorBox>
               {issueUrl && !researching && !agentFood?.food && (
@@ -298,7 +298,7 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
 
       {tab === 'photo' &&
         (!hasKey ? (
-          <ErrorBox>כדי לנקד מצילום צריך להגדיר מפתח API בהגדרות.</ErrorBox>
+          <ErrorBox>כדי לנקד מצילום צריך קוד גישה (מקישור ההזמנה) או מפתח API בהגדרות.</ErrorBox>
         ) : busy ? (
           <Spinner text={busy} />
         ) : analysis ? (
@@ -327,7 +327,7 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
 
       {tab === 'text' &&
         (!hasKey ? (
-          <ErrorBox>כדי לנקד מתיאור או ממרכיבים צריך להגדיר מפתח API בהגדרות.</ErrorBox>
+          <ErrorBox>כדי לנקד מתיאור או ממרכיבים צריך קוד גישה (מקישור ההזמנה) או מפתח API בהגדרות.</ErrorBox>
         ) : busy ? (
           <Spinner text={busy} />
         ) : analysis ? (

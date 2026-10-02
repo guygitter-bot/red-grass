@@ -1,0 +1,92 @@
+name: Points proxy server
+
+# Deploys points_tracker/proxy to Cloudflare Workers. The worker holds the
+# Anthropic API key, so app users only need an access code (from the invite link).
+# After deploying, it writes the worker URL to points_tracker/web/public/proxy.json
+# and republishes the app, so every phone picks it up automatically.
+on:
+  push:
+    branches: [main]
+    paths: ["points_tracker/proxy/**", ".github/workflows/points-proxy.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: points-proxy
+  cancel-in-progress: false
+
+jobs:
+  proxy:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.config.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check secrets
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ACCESS_CODE: ${{ secrets.POINTS_ACCESS_CODE }}
+          API_KEY: ${{ secrets.POINTS_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
+        run: |
+          missing=""
+          [ -n "$CF_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -n "$CF_ACCOUNT" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          [ -n "$ACCESS_CODE" ] || missing="$missing POINTS_ACCESS_CODE"
+          [ -n "$API_KEY" ] || missing="$missing ANTHROPIC_API_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing (see points_tracker/README.md)"
+            exit 1
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test
+        working-directory: points_tracker/proxy
+        run: npm test
+      - name: Deploy worker
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.POINTS_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
+          ACCESS_CODE: ${{ secrets.POINTS_ACCESS_CODE }}
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: points_tracker/proxy
+          secrets: |
+            ANTHROPIC_API_KEY
+            ACCESS_CODE
+      - name: Save worker URL for the app
+        id: config
+        env:
+          URL: ${{ steps.deploy.outputs.deployment-url }}
+        run: |
+          if [ -z "$URL" ]; then
+            echo "::error::Wrangler did not report the worker URL. Open Cloudflare > Workers & Pages once to pick a workers.dev subdomain, then run again."
+            exit 1
+          fi
+          printf '{ "url": "%s" }\n' "$URL" > points_tracker/web/public/proxy.json
+          git config user.name "points-agent"
+          git config user.email "points-agent@users.noreply.github.com"
+          git add points_tracker/web/public/proxy.json
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "Points proxy: worker URL"
+            git pull --rebase
+            git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Worker: $URL" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: proxy
+    if: needs.proxy.outputs.changed == 'true'
+    uses: ./.github/workflows/pages-deploy.yml
+    with:
+      ref: ${{ github.ref_name }}
