@@ -1,0 +1,91 @@
+name: Points food agent
+
+# The agent looks up nutrition data on the web for foods that are missing from
+# points_tracker/data/foods.json, computes their points and adds them.
+on:
+  issues:
+    # Ask for a food: open an issue labelled "food-request" (the app has a link for it).
+    types: [opened, labeled]
+  schedule:
+    # Daily 03:17 UTC: on its own, find popular foods that are missing and add them
+    # (POINTS_DISCOVER_COUNT a day, default 3), and retry open requests.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      foods:
+        description: "Foods to add, separated by ';'"
+        required: false
+        default: ""
+      discover:
+        description: "How many missing popular foods to find (0 = none)"
+        required: false
+        default: "0"
+      dry_run:
+        description: "Research without saving or answering issues"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: points-agent
+  cancel-in-progress: false
+
+jobs:
+  agent:
+    # Issue titles go into the agent's prompt, so only trusted people can queue work.
+    if: >-
+      github.event_name != 'issues' ||
+      (contains(github.event.issue.labels.*.name, 'food-request') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      changed: ${{ steps.commit.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r points_tracker/requirements.txt
+      - name: Make sure the request label exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh label create food-request --color 8b5cf6 --description "Food for the points agent to add" 2>/dev/null || true
+      - name: Research missing foods
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          ALLOWED_AUTHORS: ${{ vars.POINTS_ALLOWED_AUTHORS || github.repository_owner }}
+          POINTS_MODEL: ${{ vars.POINTS_MODEL }}
+          POINTS_EFFORT: ${{ vars.POINTS_EFFORT }}
+          FOODS: ${{ inputs.foods }}
+          DISCOVER: ${{ github.event_name == 'schedule' && (vars.POINTS_DISCOVER_COUNT || '3') || inputs.discover || '0' }}
+          DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: python points_tracker/run_agent.py --issues --discover "$DISCOVER" $DRY_RUN
+      - name: Commit database
+        id: commit
+        if: ${{ !inputs.dry_run }}
+        run: |
+          git config user.name "points-agent"
+          git config user.email "points-agent@users.noreply.github.com"
+          git add points_tracker/data/foods.json
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "Points agent: add foods $(date -u +%Y-%m-%d)"
+            git pull --rebase
+            git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy:
+    needs: agent
+    if: needs.agent.outputs.changed == 'true'
+    uses: ./.github/workflows/pages-deploy.yml
+    with:
+      ref: ${{ github.event.repository.default_branch }}

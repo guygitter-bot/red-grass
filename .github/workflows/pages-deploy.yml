@@ -1,0 +1,55 @@
+name: Deploy GitHub Pages
+
+# One Pages site for the whole repo: the Toto site at the root and the
+# points tracker app under /points/. Every workflow that changes either part
+# calls this one, so a deploy never drops the other part.
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to build"
+        type: string
+        required: false
+        default: ""
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: points_tracker/web/package-lock.json
+      - name: Build points tracker
+        working-directory: points_tracker/web
+        env:
+          VITE_REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          npm ci
+          npm run build
+      - name: Assemble site
+        run: |
+          mkdir -p _site
+          cp toto_predictor/web/index.html _site/
+          cp -r toto_predictor/data _site/data
+          cp -r points_tracker/web/dist _site/points
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

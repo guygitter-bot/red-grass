@@ -82,22 +82,6 @@ jobs:
   deploy:
     needs: predict
     if: ${{ always() && (needs.predict.result == 'success' || needs.predict.result == 'skipped') }}
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref_name }}
-      - name: Build site
-        run: |
-          mkdir -p _site
-          cp toto_predictor/web/index.html _site/
-          cp -r toto_predictor/data _site/data
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-      - id: deployment
-        uses: actions/deploy-pages@v4
+    uses: ./.github/workflows/pages-deploy.yml
+    with:
+      ref: ${{ github.ref_name }}
