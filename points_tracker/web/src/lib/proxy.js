@@ -59,3 +59,18 @@ export const removeDevice = (s, id) => request(s, 'DELETE', `/devices?id=${encod
 
 export const inviteLink = (token) =>
   `${window.location.origin}${window.location.pathname}#invite=${encodeURIComponent(token)}`;
+
+// מקבל קישור הזמנה מלא או רק את הטוקן (למשל מהדבקה בהגדרות).
+export function parseInviteToken(text) {
+  const s = String(text || '').trim();
+  const fromLink = s.match(/invite=([A-Za-z0-9_-]{16,100})/);
+  if (fromLink) return fromLink[1];
+  return /^[A-Za-z0-9_-]{16,100}$/.test(s) ? s : null;
+}
+
+// באייפון, אפליקציה שנוספה למסך הבית שומרת נתונים בנפרד מ-Safari. לכן שם לא משתמשים בקישור
+// בדפדפן, אלא מסבירים להתקין קודם ולהדביק את הקישור בתוך האפליקציה.
+export const isIos = () =>
+  /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+export const isStandalone = () =>
+  window.navigator.standalone === true || Boolean(window.matchMedia?.('(display-mode: standalone)').matches);

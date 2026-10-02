@@ -3,6 +3,7 @@ import { formatQty, pointsForGrams, pointsFromNutrition, qtyPrefix, round1 } fro
 import { addDays, weekDates } from './dates';
 import { extractUserFoods, mergeFoodDb, searchFoods, SHARED_FOODS, upsertUserFood } from './foodDb';
 import { researchToFood, scoreComponents } from './ai';
+import { parseInviteToken } from './proxy';
 
 describe('points', () => {
   // אותם מקרים בדיוק נבדקים ב-points_tracker/tests/test_points.py
@@ -89,5 +90,16 @@ describe('researchToFood', () => {
     });
     expect(food.name).toBe("במבה נוגט אסם (שקית 60 ג')");
     expect(researchToFood({ found: false })).toBeNull();
+  });
+});
+
+describe('parseInviteToken', () => {
+  it('reads a full link, a bare token, and rejects other text', () => {
+    const token = 'yKx3NsCL8Xq_abc-DEF123456';
+    expect(parseInviteToken(`https://bis-app.pages.dev/#invite=${token}`)).toBe(token);
+    expect(parseInviteToken(`הזמנה לביס:\nhttps://bis-app.pages.dev/#invite=${token} `)).toBe(token);
+    expect(parseInviteToken(`  ${token}  `)).toBe(token);
+    expect(parseInviteToken('https://bis-app.pages.dev/#code=Points2703')).toBeNull();
+    expect(parseInviteToken('שלום')).toBeNull();
   });
 });
