@@ -1,8 +1,9 @@
 name: Deploy Bis app
 
-# Builds points_tracker/web and publishes it to Cloudflare Pages
-# (project "bis-app" -> https://bis-app.pages.dev). Called by every workflow
-# that changes the app, its food database or the proxy URL.
+# Builds points_tracker/web and publishes it to Cloudflare Pages, project "bis-app":
+#   target production -> branch main    -> https://bis-app.pages.dev
+#   target staging    -> branch staging -> https://staging.bis-app.pages.dev
+#     (uses the staging proxy bis-api-staging and shows a "סביבת בדיקות" banner)
 on:
   workflow_call:
     inputs:
@@ -11,12 +12,17 @@ on:
         type: string
         required: false
         default: ""
+      target:
+        description: "production or staging"
+        type: string
+        required: false
+        default: production
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     concurrency:
-      group: bis-deploy
+      group: bis-deploy-${{ inputs.target }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
@@ -29,6 +35,9 @@ jobs:
           cache-dependency-path: points_tracker/web/package-lock.json
       - name: Build
         working-directory: points_tracker/web
+        env:
+          VITE_APP_ENV: ${{ inputs.target }}
+          VITE_PROXY_URL: ${{ inputs.target == 'staging' && (vars.STAGING_PROXY_URL || 'https://bis-api-staging.guygitter.workers.dev') || '' }}
         run: |
           npm ci
           npm run build
@@ -51,9 +60,9 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: points_tracker/web
           wranglerVersion: "4.146.0"
-          command: pages deploy dist --project-name=bis-app --branch=main --commit-dirty=true
+          command: pages deploy dist --project-name=bis-app --branch=${{ inputs.target == 'staging' && 'staging' || 'main' }} --commit-dirty=true
       - name: Summary
         env:
           URL: ${{ steps.publish.outputs.deployment-url }}
         run: |
-          echo "Published: $URL (production: https://bis-app.pages.dev)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Published (${{ inputs.target }}): $URL" >> "$GITHUB_STEP_SUMMARY"

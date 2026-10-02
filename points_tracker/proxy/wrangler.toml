@@ -18,3 +18,19 @@ new_sqlite_classes = ["SharedFoods"]
 
 # המפתח, קוד הגישה וקוד המנהל הם סודות, לא כאן:
 #   ANTHROPIC_API_KEY, ACCESS_CODE, ADMIN_CODE  (נקבעים אוטומטית מ-GitHub, ראו .github/workflows/points-proxy.yml)
+
+# ---- סביבת בדיקות: שרת נפרד עם מאגר ומכשירים נפרדים (wrangler deploy --env staging) ----
+[env.staging]
+name = "bis-api-staging"
+workers_dev = true
+
+[env.staging.vars]
+ALLOWED_ORIGINS = "https://staging.bis-app.pages.dev,http://localhost:5173,http://localhost:4173"
+
+[[env.staging.durable_objects.bindings]]
+name = "FOODS"
+class_name = "SharedFoods"
+
+[[env.staging.migrations]]
+tag = "v1"
+new_sqlite_classes = ["SharedFoods"]

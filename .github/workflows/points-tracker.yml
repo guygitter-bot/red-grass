@@ -2,7 +2,7 @@ name: Points tracker app
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
     paths: ["points_tracker/**", ".github/workflows/points-tracker.yml", ".github/workflows/pages-deploy.yml", ".github/workflows/bis-deploy.yml"]
   pull_request:
     paths: ["points_tracker/**", ".github/workflows/points-*.yml", ".github/workflows/pages-deploy.yml", ".github/workflows/bis-deploy.yml"]
@@ -46,11 +46,12 @@ jobs:
     secrets: inherit
     with:
       ref: ${{ github.ref_name }}
+      target: ${{ github.ref_name == 'staging' && 'staging' || 'production' }}
 
   # Keeps the old GitHub Pages address (/points/) forwarding to the new site.
   github-pages:
     needs: test
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && github.ref_name == 'main'
     uses: ./.github/workflows/pages-deploy.yml
     with:
       ref: ${{ github.ref_name }}
