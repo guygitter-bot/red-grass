@@ -26,6 +26,19 @@ const nutritionSchema = {
   additionalProperties: false,
 };
 
+// מידות ביתיות של המאכל הספציפי: כמה גרם בכף / כפית / כוס / יחידה / פרוסה
+const unitsSchema = {
+  type: 'array',
+  description:
+    'Household measures for THIS food with their weight in grams, e.g. [{"name":"כף","grams":5},{"name":"כפית","grams":2}] for grated cheese. Use Hebrew names (כף, כפית, כוס, יחידה, פרוסה, חופן, שקית...). Only measures that make sense for this food.',
+  items: {
+    type: 'object',
+    properties: { name: { type: 'string' }, grams: { type: 'number' } },
+    required: ['name', 'grams'],
+    additionalProperties: false,
+  },
+};
+
 const ANALYZE_TOOL = {
   name: 'submit_analysis',
   description: 'Submit the breakdown of the food into components with amounts and nutrition.',
@@ -81,6 +94,7 @@ export const FOOD_TOOL = {
       serving_desc: { type: 'string', description: 'Short Hebrew serving, e.g. "שקית 60 ג\'", "יחידה", "פרוסה"' },
       serving_grams: { type: 'number' },
       per100: nutritionSchema,
+      units: unitsSchema,
       published_points: {
         type: ['number', 'null'],
         description: 'Points value per serving if an Israeli points-diet source publishes one, else null',
@@ -90,7 +104,7 @@ export const FOOD_TOOL = {
       notes_he: { type: 'string' },
     },
     required: [
-      'found', 'name', 'aliases', 'serving_desc', 'serving_grams', 'per100',
+      'found', 'name', 'aliases', 'serving_desc', 'serving_grams', 'per100', 'units',
       'published_points', 'sources', 'confidence', 'notes_he',
     ],
     additionalProperties: false,
@@ -104,12 +118,13 @@ const LABEL_TOOL = {
   input_schema: {
     type: 'object',
     properties: {
-      product_name: { type: 'string' },
+      product_name: { type: 'string', description: 'Product name in HEBREW with the brand, e.g. "פתיתי פרמזן תנובה"' },
       per100: nutritionSchema,
       serving_grams: { type: ['number', 'null'], description: 'Serving size in grams if printed, else null' },
+      units: unitsSchema,
       readable: { type: 'boolean', description: 'false if the image is not a readable nutrition label' },
     },
-    required: ['product_name', 'per100', 'serving_grams', 'readable'],
+    required: ['product_name', 'per100', 'serving_grams', 'units', 'readable'],
     additionalProperties: false,
   },
 };
@@ -166,6 +181,9 @@ Naming:
 - serving_desc: short Hebrew, at most 3 words, no parentheses. Packaged food: the package as sold \
 ("שקית 60 ג'", "בקבוק 500 מ\"ל", "חטיף 40 ג'"); otherwise the natural unit ("יחידה", "פרוסה", \
 "כוס", "מנה"). serving_grams must match it.
+
+units: household measures for this exact food with their weight in grams (כף, כפית, כוס, יחידה, פרוסה...). \
+A tablespoon of grated cheese is ~5 g, of oil ~13 g, of honey ~21 g; a teaspoon is about a third of a tablespoon.
 
 Call submit_food. Do not answer in plain text.`;
 
@@ -272,6 +290,7 @@ export function researchToFood(result) {
     points: result.points,
     grams: result.serving_grams,
     per100: result.per100,
+    units: result.units,
     aliases: result.aliases,
     sources: result.sources.slice(0, 5),
     published_points: result.published_points,
@@ -284,7 +303,11 @@ export async function readNutritionLabel(settings, imageDataUrl) {
   return callWithSubmit(settings, {
     system:
       'You read nutrition facts labels (Israeli labels: "סימון תזונתי", values per 100 g / 100 ml). ' +
-      'Copy the per-100 values exactly; fiber is "סיבים תזונתיים" (0 if missing). Call submit_label.',
+      'Copy the per-100 values exactly; fiber is "סיבים תזונתיים" (0 if missing). ' +
+      'Write product_name in Hebrew (translate if the label is in another language). ' +
+      'In units, give realistic household measures for this exact product and how many grams each weighs ' +
+      '(a tablespoon of grated cheese is ~5 g, of oil ~13 g, of honey ~21 g; a teaspoon is about a third of a tablespoon; ' +
+      'add "יחידה"/"פרוסה" for countable products). Call submit_label.',
     content: [imageBlock(imageDataUrl), { type: 'text', text: 'Read this label.' }],
     tool: LABEL_TOOL,
   });

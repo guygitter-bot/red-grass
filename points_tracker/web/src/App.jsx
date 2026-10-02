@@ -13,6 +13,10 @@ import { DEFAULT_MODEL } from './lib/ai';
 import { checkOwnerCode, inviteLink, isConnected, isIos, isOwner, isStandalone, loadProxyUrl, redeemInvite, takeInviteToken } from './lib/proxy';
 import IosInviteCard from './components/IosInviteCard';
 
+// סביבת בדיקות (staging.bis-app.pages.dev): פס כתום וכותרת שונה, כדי לא להתבלבל עם האפליקציה האמיתית
+const STAGING = import.meta.env.VITE_APP_ENV === 'staging';
+if (STAGING) document.title = 'ביס · בדיקות';
+
 const DEFAULT_USER = { name: 'אורח', dailyTarget: 26, weeklyTarget: 35, startWeight: 80, currentWeight: 80, goalWeight: 70 };
 
 // גרסה קודמת שמרה את כל המאגר תחת pointsApp_foodDb - שומרים רק מה שהמשתמש הוסיף.
@@ -230,6 +234,11 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-24" dir="rtl">
+      {STAGING && (
+        <div className="sticky top-0 z-50 bg-orange-500 text-white text-center text-xs font-bold py-1">
+          סביבת בדיקות · הנתונים כאן נפרדים מהאפליקציה האמיתית
+        </div>
+      )}
       <div className="max-w-md mx-auto p-4 pt-8">
         {iosInvite && (
           <IosInviteCard

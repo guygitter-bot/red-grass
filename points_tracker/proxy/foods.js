@@ -34,6 +34,13 @@ export function cleanFood(input) {
       food.per100 = Object.fromEntries(keys.map((k) => [k, input.per100[k]]));
     }
   }
+  if (Array.isArray(input.units)) {
+    const units = input.units
+      .filter((u) => u && typeof u.name === 'string' && u.name.trim() && u.name.length <= 20 && num(u.grams, 0.1, 2000))
+      .slice(0, 8)
+      .map((u) => ({ name: u.name.trim(), grams: u.grams }));
+    if (units.length) food.units = units;
+  }
   if (Array.isArray(input.aliases)) {
     const aliases = input.aliases.filter((a) => typeof a === 'string' && a.length <= 100).slice(0, 10);
     if (aliases.length) food.aliases = aliases;

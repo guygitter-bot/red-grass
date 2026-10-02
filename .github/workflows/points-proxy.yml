@@ -6,7 +6,7 @@ name: Points proxy server
 # and republishes the app, so every phone picks it up automatically.
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
     paths: ["points_tracker/proxy/**", ".github/workflows/points-proxy.yml"]
   workflow_dispatch:
 
@@ -16,7 +16,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: points-proxy
+  group: points-proxy-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
@@ -62,12 +62,15 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: points_tracker/proxy
           wranglerVersion: "4.146.0"
+          # branch staging -> worker bis-api-staging (own shared foods and devices)
+          environment: ${{ github.ref_name == 'staging' && 'staging' || '' }}
           secrets: |
             ANTHROPIC_API_KEY
             ACCESS_CODE
             ADMIN_CODE
       - name: Save worker URL for the app
         id: config
+        if: github.ref_name == 'main'
         env:
           URL: ${{ steps.deploy.outputs.deployment-url }}
         run: |
