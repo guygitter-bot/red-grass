@@ -15,13 +15,26 @@ export async function loadProxyUrl() {
 
 // הרשאה מול השרת: בעל האפליקציה עם קוד גישה, או מכשיר שהוזמן עם מפתח מכשיר משלו.
 export const proxyConnected = (s) => Boolean(s.proxyUrl && (s.accessCode || s.deviceKey));
-export const isOwner = (s) => Boolean(s.proxyUrl && s.accessCode);
+// בעל האפליקציה = קוד גישה שהשרת אישר (ownerChecked). קוד ישן או שגוי לא נותן מצב בעלים.
+export const isOwner = (s) => Boolean(s.proxyUrl && s.accessCode && s.ownerChecked === s.accessCode);
 
+// שולחים גם את הקוד וגם את מפתח המכשיר: השרת מקבל את מה שתקף, כך שקוד ישן לא שובר מכשיר מחובר.
 export function authHeaders(s) {
-  if (s.accessCode) return { 'x-access-code': s.accessCode };
-  if (s.deviceKey) return { 'x-device-key': s.deviceKey };
-  return {};
+  const h = {};
+  if (s.accessCode) h['x-access-code'] = s.accessCode;
+  if (s.deviceKey) h['x-device-key'] = s.deviceKey;
+  return h;
 }
+
+// 200 = הקוד נכון, 401 = שגוי. רשימת המכשירים זמינה רק לבעל האפליקציה.
+export const checkOwnerCode = (proxyUrl, accessCode) =>
+  fetch(`${proxyUrl}/devices`, { headers: { 'x-access-code': accessCode } }).then((r) => r.status);
+
+// האם המכשיר כבר מחובר (קוד או מפתח מכשיר תקפים)
+export const isConnected = (proxyUrl, s) =>
+  fetch(`${proxyUrl}/foods`, { headers: authHeaders(s) })
+    .then((r) => r.ok)
+    .catch(() => false);
 
 async function request(s, method, path, body) {
   const res = await fetch(`${s.proxyUrl}${path}`, {

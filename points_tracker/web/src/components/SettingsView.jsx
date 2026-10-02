@@ -28,7 +28,7 @@ function NumberField({ label, value, onChange }) {
 }
 
 export default function SettingsView({
-  user, setUser, settings, setSettings, proxyUrl, onJoin, foodDb, userFoods, saveFood, removeUserFood, remoteFoods, sharedOn, isAdmin,
+  user, setUser, settings, setSettings, proxyUrl, owner, onJoin, foodDb, userFoods, saveFood, removeUserFood, remoteFoods, sharedOn, isAdmin,
   exportData, importData,
 }) {
   const [keyStatus, setKeyStatus] = useState('');
@@ -36,7 +36,6 @@ export default function SettingsView({
 
   const ai = { ...settings, proxyUrl };
   const [showKey, setShowKey] = useState(Boolean(settings.apiKey));
-  const owner = Boolean(settings.accessCode);
   const invited = Boolean(settings.deviceKey) && !owner;
   const [inviteText, setInviteText] = useState('');
   const [joinError, setJoinError] = useState('');
@@ -111,7 +110,7 @@ export default function SettingsView({
             </div>
             <ErrorBox>{joinError}</ErrorBox>
           </div>
-          <details className="text-xs text-slate-500">
+          <details className="text-xs text-slate-500" open={Boolean(settings.accessCode)}>
             <summary className="cursor-pointer text-slate-400 underline">בעל האפליקציה? כניסה עם קוד</summary>
             <Input
               dir="ltr"
@@ -121,6 +120,7 @@ export default function SettingsView({
               value={settings.accessCode || ''}
               onChange={(e) => setSettings({ ...settings, accessCode: e.target.value.trim() })}
             />
+            {settings.accessCode && <p className="mt-1 text-slate-400">בודק את הקוד... אם הוא נכון, הגדרות הבעלים יופיעו כאן.</p>}
           </details>
         </Card>
       )}
