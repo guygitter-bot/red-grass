@@ -91,15 +91,7 @@ def main() -> int:
     ).replace(BILLING_URL, f'<a href="{BILLING_URL}">{BILLING_URL}</a>').replace(
         RUN_URL, f'<a href="{RUN_URL}">{RUN_URL}</a>'
     ) + "</div>"
-    for name, send in (
-        ("WhatsApp", lambda: notify.send_whatsapp(text)),
-        ("email", lambda: notify.send_email(subject, text, html_body)),
-    ):
-        try:
-            if send():
-                log.info("Sent %s reminder", name)
-        except Exception:  # one channel failing must not block the other
-            log.exception("Failed to send %s reminder", name)
+    notify.send_all(subject, text, html_body)
     return 0
 
 

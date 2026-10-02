@@ -33,6 +33,18 @@
 
 אופציונלי, ב-**Variables**: `TOTO_EMAIL_TO` (כתובת יעד אחרת למייל. ברירת המחדל היא `GMAIL_ADDRESS`).
 
+### טלגרם (גיבוי לוואטסאפ, אופציונלי)
+אם שני הסודות של טלגרם מוגדרים, כל הודעה נשלחת גם לטלגרם. ערוץ שלא מוגדר פשוט מדולג.
+1. בטלגרם פותחים את **@BotFather**, שולחים `/newbot`, ובוחרים שם ושם משתמש שמסתיים ב-`bot`. בתשובה מגיע **טוקן** בנוסח `123456789:ABC...`.
+2. פותחים את הבוט החדש (BotFather שולח קישור אליו), לוחצים **Start** ושולחים לו הודעה כלשהי, למשל `שלום`.
+3. בדפדפן פותחים את הכתובת הבאה, אחרי שמחליפים את `<TOKEN>` בטוקן:
+   `https://api.telegram.org/bot<TOKEN>/getUpdates`
+   בתוצאה מחפשים את `"chat":{"id":` ואת המספר שאחריו. זה ה-**Chat ID**.
+4. שומרים ב-GitHub Secrets:
+   - `TELEGRAM_BOT_TOKEN`: הטוקן.
+   - `TELEGRAM_CHAT_ID`: ה-Chat ID.
+5. בודקים: **Actions ← Toto credit reminder ← Run workflow**.
+
 ### 2. GitHub Pages
 **Settings ← Pages ← Build and deployment ← Source: GitHub Actions**
 
