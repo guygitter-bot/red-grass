@@ -7,7 +7,7 @@ import WeightView from './components/WeightView';
 import SettingsView from './components/SettingsView';
 import { usePersistentState, loadJson, newId } from './lib/storage';
 import { addDays, formatDisplayDate, today, weekDates } from './lib/dates';
-import { SHARED_FOODS, extractUserFoods, mergeFoodDb, normalize } from './lib/foodDb';
+import { SHARED_FOODS, extractUserFoods, mergeFoodDb, normalize, upsertUserFood } from './lib/foodDb';
 import { DEFAULT_MODEL } from './lib/ai';
 
 const DEFAULT_USER = { name: 'אורח', dailyTarget: 26, weeklyTarget: 35, startWeight: 80, currentWeight: 80, goalWeight: 70 };
@@ -32,7 +32,7 @@ export default function App() {
     { date: new Date().toISOString(), weight: DEFAULT_USER.currentWeight },
   ]);
   const [userFoods, setUserFoods] = usePersistentState('pointsApp_userFoods', initialUserFoods);
-  const [settings, setSettings] = usePersistentState('pointsApp_settings', { apiKey: '', model: DEFAULT_MODEL });
+  const [settings, setSettings] = usePersistentState('pointsApp_settings', { apiKey: '', model: DEFAULT_MODEL, autoAgent: true });
 
   const foodDb = useMemo(() => mergeFoodDb(SHARED_FOODS, userFoods), [userFoods]);
 
@@ -62,8 +62,8 @@ export default function App() {
     setShowAdd(false);
   };
 
-  const saveFood = (food) =>
-    setUserFoods((prev) => [...prev.filter((f) => normalize(f.name) !== normalize(food.name)), { ...food, added: today() }]);
+  // הוספה ידנית ואוטומטית (הסוכן) עובדות בנפרד: ידני גובר תמיד, והסוכן לעולם לא דורס מאכל שהוזן ידנית.
+  const saveFood = (food, oldName) => setUserFoods((prev) => upsertUserFood(prev, { ...food, added: today() }, oldName));
 
   const water = waterLogs[selectedDate] || 0;
   const setWater = (n) => setWaterLogs((prev) => ({ ...prev, [selectedDate]: Math.max(0, n) }));
@@ -137,8 +137,10 @@ export default function App() {
             setUser={setUser}
             settings={settings}
             setSettings={setSettings}
+            foodDb={foodDb}
             userFoods={userFoods}
-            removeUserFood={(name) => setUserFoods((prev) => prev.filter((f) => f.name !== name))}
+            saveFood={saveFood}
+            removeUserFood={(name) => setUserFoods((prev) => prev.filter((f) => normalize(f.name) !== normalize(name)))}
             exportData={exportData}
             importData={importData}
           />

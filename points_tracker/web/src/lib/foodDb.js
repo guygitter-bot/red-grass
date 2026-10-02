@@ -55,3 +55,12 @@ export function extractUserFoods(savedDb, shared) {
     return !s || Number(s.points) !== Number(f.points);
   });
 }
+
+// שמירת מאכל במאגר האישי. ידני גובר תמיד; מאכל מהסוכן לא דורס מאכל שהוזן ידנית.
+export function upsertUserFood(userFoods, food, oldName) {
+  const key = normalize(food.name);
+  const existing = userFoods.find((f) => normalize(f.name) === key);
+  if (food.source === 'agent' && existing && existing.source !== 'agent') return userFoods;
+  const oldKey = oldName ? normalize(oldName) : key;
+  return [...userFoods.filter((f) => ![key, oldKey].includes(normalize(f.name))), food];
+}

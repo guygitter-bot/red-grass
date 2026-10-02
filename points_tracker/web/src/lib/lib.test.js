@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { formatQty, pointsForGrams, pointsFromNutrition, qtyPrefix, round1 } from './points';
 import { addDays, weekDates } from './dates';
-import { extractUserFoods, mergeFoodDb, searchFoods, SHARED_FOODS } from './foodDb';
+import { extractUserFoods, mergeFoodDb, searchFoods, SHARED_FOODS, upsertUserFood } from './foodDb';
 import { scoreComponents } from './ai';
 
 describe('points', () => {
@@ -44,6 +44,19 @@ describe('food db', () => {
   it('keeps only user-added foods when migrating the old saved db', () => {
     const saved = [...SHARED_FOODS, { name: 'מאכל שלי', points: 3 }];
     expect(extractUserFoods(saved, SHARED_FOODS)).toEqual([{ name: 'מאכל שלי', points: 3 }]);
+  });
+
+  it('manual and agent additions are independent', () => {
+    const manual = { name: 'במבה', points: 4, source: 'user' };
+    let foods = upsertUserFood([], manual);
+    // the agent never overwrites a manual food
+    expect(upsertUserFood(foods, { name: 'במבה', points: 3.6, source: 'agent' })).toBe(foods);
+    // but it adds its own foods next to it
+    foods = upsertUserFood(foods, { name: 'במבה נוגט', points: 8, source: 'agent' });
+    expect(foods.map((f) => f.name)).toEqual(['במבה', 'במבה נוגט']);
+    // a manual edit overrides an agent food, and a rename replaces the old entry
+    foods = upsertUserFood(foods, { name: 'במבה נוגט (שקית)', points: 7.5, source: 'user' }, 'במבה נוגט');
+    expect(foods).toEqual([manual, { name: 'במבה נוגט (שקית)', points: 7.5, source: 'user' }]);
   });
 
   it('user foods override shared ones', () => {

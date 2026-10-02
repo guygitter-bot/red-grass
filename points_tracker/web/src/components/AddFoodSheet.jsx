@@ -1,15 +1,18 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, ExternalLink, Globe, MessageSquareText, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
 import { Button, ErrorBox, Input, MealPicker, Sheet, Spinner, Tabs } from './ui';
 import PortionPicker from './PortionPicker';
 import CameraCapture from './CameraCapture';
 import AnalysisResult from './AnalysisResult';
-import { analyzeFood, describeError, researchFood } from '../lib/ai';
-import { searchFoods } from '../lib/foodDb';
+import { analyzeFood, describeError, researchFood, researchToFood } from '../lib/ai';
+import { findByName, normalize, searchFoods } from '../lib/foodDb';
 import { formatPoints, qtyPrefix, round1 } from '../lib/points';
 import { newId } from '../lib/storage';
 
 const REPO_URL = import.meta.env.VITE_REPO_URL || '';
+const AUTO_DELAY_MS = 1500;
+// חיפושים שהסוכן כבר ביצע בהפעלה הזו, כדי לא לשלם פעמיים על אותו חיפוש.
+const researched = new Set();
 
 function defaultMeal() {
   const h = new Date().getHours();
@@ -50,40 +53,15 @@ function FoodRow({ item, onAdd }) {
   );
 }
 
-function ResearchResult({ result, onAdd }) {
-  const [qty, setQty] = useState(1);
-  if (!result.found) {
-    return <ErrorBox>הסוכן לא מצא מידע אמין על המאכל. {result.notes_he}</ErrorBox>;
-  }
-  const name = `${result.name} (${result.serving_desc})`;
+function Sources({ urls }) {
+  if (!urls?.length) return null;
   return (
-    <div className="bg-violet-50 border border-violet-100 rounded-2xl p-4 space-y-3">
-      <div className="flex justify-between items-start">
-        <div>
-          <div className="font-bold">{name}</div>
-          <div className="text-xs text-slate-500">
-            {result.serving_grams} ג' · {Math.round((result.per100.kcal * result.serving_grams) / 100)} קק"ל
-          </div>
-        </div>
-        <div className="text-3xl font-black text-violet-600">{formatPoints(result.points)}</div>
-      </div>
-      {result.published_points != null && Math.abs(result.published_points - result.points) >= 0.5 && (
-        <p className="text-xs text-slate-500">ערך שפורסם ברשת: {result.published_points} נק'</p>
-      )}
-      {result.notes_he && <p className="text-xs text-slate-500">{result.notes_he}</p>}
-      {result.sources.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {result.sources.slice(0, 4).map((s) => (
-            <a key={s} href={s} target="_blank" rel="noreferrer" className="text-xs text-violet-600 underline truncate max-w-full">
-              {s.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
-            </a>
-          ))}
-        </div>
-      )}
-      <PortionPicker value={qty} onChange={setQty} unitLabel={result.serving_desc} />
-      <Button variant="ai" className="w-full py-2" onClick={() => onAdd({ name, points: result.points, qty }, result)}>
-        <Plus size={18} /> שמור במאגר והוסף לצלחת · {formatPoints(result.points * qty)} נק'
-      </Button>
+    <div className="flex flex-wrap gap-2">
+      {urls.slice(0, 4).map((u) => (
+        <a key={u} href={u} target="_blank" rel="noreferrer" className="text-xs text-violet-600 underline">
+          {u.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
+        </a>
+      ))}
     </div>
   );
 }
@@ -96,6 +74,7 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
   const [search, setSearch] = useState('');
   const [customName, setCustomName] = useState('');
   const [customPoints, setCustomPoints] = useState('');
+  const [savedMsg, setSavedMsg] = useState('');
 
   const [image, setImage] = useState(null);
   const [details, setDetails] = useState('');
@@ -104,7 +83,9 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [analysis, setAnalysis] = useState(null);
-  const [research, setResearch] = useState(null);
+  const [researching, setResearching] = useState('');
+  const [researchError, setResearchError] = useState('');
+  const [agentFood, setAgentFood] = useState(null); // { query, food | null, notes }
 
   const results = useMemo(() => searchFoods(db, search), [db, search]);
   const total = round1(plate.reduce((s, p) => s + p.points * p.qty, 0));
@@ -124,11 +105,35 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
     }
   };
 
-  const runResearch = () =>
-    run('הסוכן מחפש ברשת...', async () => {
-      setResearch(null);
-      setResearch(await researchFood(settings, search));
-    });
+  // הסוכן מחפש ברשת ומוסיף את המאכל למאגר בעצמו, בלי קשר למה שנרשם ביומן.
+  const runResearch = async (query) => {
+    const key = normalize(query);
+    researched.add(key);
+    setResearching(query);
+    setResearchError('');
+    try {
+      const result = await researchFood(settings, query);
+      const food = researchToFood(result);
+      if (food) onSaveFood(food);
+      setAgentFood({ query, food, notes: result.notes_he });
+    } catch (err) {
+      researched.delete(key);
+      setResearchError(describeError(err));
+    } finally {
+      setResearching('');
+    }
+  };
+
+  const autoAgent = hasKey && settings.autoAgent !== false;
+  // מה שבאמת נשמר במאגר: אם כבר היה מאכל ידני באותו שם, הוא נשאר והסוכן לא דורס אותו.
+  const storedAgentFood = agentFood?.food && (findByName(db, agentFood.food.name) || agentFood.food);
+  const keptManual = storedAgentFood && storedAgentFood.source !== 'agent';
+  useEffect(() => {
+    const query = search.trim();
+    if (!autoAgent || researching || results.length > 0 || query.length < 3 || researched.has(normalize(query))) return;
+    const timer = setTimeout(() => runResearch(query), AUTO_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [search, results.length, autoAgent, researching]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const runAnalysis = (input) =>
     run('מנתח את המאכל...', async () => {
@@ -189,7 +194,7 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
               onChange={(e) => {
                 setSearch(e.target.value);
                 setCustomName(e.target.value);
-                setResearch(null);
+                setSavedMsg('');
               }}
             />
           </div>
@@ -210,40 +215,42 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
           {search && (
             <div className="border-t border-slate-100 pt-3 space-y-3">
               <p className="text-xs text-slate-400">{results.length ? 'לא מה שחיפשת?' : 'לא נמצא במאגר.'}</p>
-              {busy ? (
-                <Spinner text={busy} />
-              ) : research ? (
-                <ResearchResult
-                  result={research}
-                  onAdd={(item, r) => {
-                    addToPlate(item);
-                    onSaveFood({
-                      name: item.name,
-                      points: item.points,
-                      grams: r.serving_grams,
-                      per100: r.per100,
-                      sources: r.sources,
-                      source: 'agent',
-                    });
-                    setResearch(null);
-                    setSearch('');
-                  }}
-                />
-              ) : hasKey ? (
-                <Button variant="ai" className="w-full" onClick={runResearch}>
-                  <Globe size={18} /> הסוכן יחפש "{search}" ברשת
+              {researching ? (
+                <Spinner text={`הסוכן מחפש את "${researching}" ברשת ומוסיף למאגר...`} />
+              ) : storedAgentFood ? (
+                <div className="bg-violet-50 border border-violet-100 rounded-2xl p-3 space-y-2">
+                  <p className="text-xs text-violet-700 font-medium flex items-center gap-1">
+                    <Sparkles size={12} /> {keptManual ? 'כבר במאגר (הוספת ידנית, נשמר הערך שלך):' : 'הסוכן הוסיף למאגר:'}
+                  </p>
+                  <FoodRow item={storedAgentFood} onAdd={addToPlate} />
+                  {agentFood.food.published_points != null &&
+                    Math.abs(agentFood.food.published_points - agentFood.food.points) >= 0.5 && (
+                      <p className="text-xs text-slate-500">ערך שפורסם ברשת: {agentFood.food.published_points} נק'</p>
+                    )}
+                  <Sources urls={agentFood.food.sources} />
+                </div>
+              ) : agentFood && normalize(agentFood.query) === normalize(search) ? (
+                <ErrorBox>הסוכן לא מצא מידע אמין על "{agentFood.query}". {agentFood.notes}</ErrorBox>
+              ) : hasKey && !autoAgent ? (
+                <Button variant="ai" className="w-full" onClick={() => runResearch(search.trim())}>
+                  <Globe size={18} /> הסוכן יחפש "{search}" ברשת ויוסיף למאגר
                 </Button>
-              ) : (
-                <p className="text-xs text-slate-500">כדי שהסוכן יחפש ברשת מתוך האפליקציה, הגדר מפתח API בהגדרות.</p>
-              )}
-              {issueUrl && !research && !busy && (
+              ) : hasKey && results.length > 0 ? (
+                <Button variant="ai" className="w-full" onClick={() => runResearch(search.trim())}>
+                  <Globe size={18} /> לא זה? הסוכן יחפש "{search}" ברשת
+                </Button>
+              ) : !hasKey ? (
+                <p className="text-xs text-slate-500">כדי שהסוכן יחפש ויוסיף מאכלים מתוך האפליקציה, הגדר מפתח API בהגדרות.</p>
+              ) : null}
+              <ErrorBox>{researchError}</ErrorBox>
+              {issueUrl && !researching && !agentFood?.food && (
                 <a href={issueUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-violet-600 underline">
-                  <ExternalLink size={12} /> או בקש מהסוכן ב-GitHub להוסיף למאגר המשותף
+                  <ExternalLink size={12} /> בקש מהסוכן ב-GitHub להוסיף למאגר המשותף
                 </a>
               )}
               <ErrorBox>{error}</ErrorBox>
 
-              <p className="text-xs text-slate-400">הוספה ידנית:</p>
+              <p className="text-xs text-slate-400">הוספה ידנית של מאכל וניקוד:</p>
               <div className="flex gap-2">
                 <Input placeholder="שם המאכל" value={customName} onChange={(e) => setCustomName(e.target.value)} />
                 <Input
@@ -255,8 +262,10 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
                   value={customPoints}
                   onChange={(e) => setCustomPoints(e.target.value)}
                 />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
                 <Button
-                  className="px-4 py-2"
+                  className="py-2"
                   disabled={!customName || customPoints === ''}
                   onClick={() => {
                     const item = { name: customName, points: parseFloat(customPoints) };
@@ -266,9 +275,22 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
                     setCustomPoints('');
                   }}
                 >
-                  <Plus size={18} />
+                  <Plus size={18} /> לצלחת ולמאגר
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="py-2"
+                  disabled={!customName || customPoints === ''}
+                  onClick={() => {
+                    onSaveFood({ name: customName, points: parseFloat(customPoints), source: 'user' });
+                    setSavedMsg(`"${customName}" נשמר במאגר`);
+                    setCustomPoints('');
+                  }}
+                >
+                  למאגר בלבד
                 </Button>
               </div>
+              {savedMsg && <p className="text-xs text-center text-emerald-600">{savedMsg}</p>}
             </div>
           )}
         </div>

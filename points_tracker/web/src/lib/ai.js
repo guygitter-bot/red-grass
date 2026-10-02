@@ -231,6 +231,21 @@ export async function researchFood(settings, query) {
   return { ...result, points: round1(pointsForGrams(result.per100, result.serving_grams)) };
 }
 
+// תוצאת חיפוש -> פריט למאגר (null אם הסוכן לא מצא מידע אמין).
+export function researchToFood(result) {
+  if (!result.found || !(result.serving_grams > 0)) return null;
+  return {
+    name: `${result.name} (${result.serving_desc})`,
+    points: result.points,
+    grams: result.serving_grams,
+    per100: result.per100,
+    aliases: result.aliases,
+    sources: result.sources.slice(0, 5),
+    published_points: result.published_points,
+    source: 'agent',
+  };
+}
+
 // קריאת טבלת ערכים תזונתיים מצילום אריזה.
 export async function readNutritionLabel(settings, imageDataUrl) {
   return callWithSubmit(settings, {

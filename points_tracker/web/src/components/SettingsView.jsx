@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Download, KeyRound, Trash2, Upload } from 'lucide-react';
+import { Download, KeyRound, Upload } from 'lucide-react';
 import { Button, Card, ErrorBox, Input, Label } from './ui';
 import { MODELS, describeError, testApiKey } from '../lib/ai';
-import { formatPoints } from '../lib/points';
+import FoodDbManager from './FoodDbManager';
 
 function NumberField({ label, value, onChange }) {
   const [text, setText] = useState(String(value ?? ''));
@@ -25,10 +25,11 @@ function NumberField({ label, value, onChange }) {
   );
 }
 
-export default function SettingsView({ user, setUser, settings, setSettings, userFoods, removeUserFood, exportData, importData }) {
+export default function SettingsView({
+  user, setUser, settings, setSettings, foodDb, userFoods, saveFood, removeUserFood, exportData, importData,
+}) {
   const [keyStatus, setKeyStatus] = useState('');
   const [keyError, setKeyError] = useState('');
-  const [foodFilter, setFoodFilter] = useState('');
 
   const test = async () => {
     setKeyStatus('בודק...');
@@ -57,8 +58,6 @@ export default function SettingsView({ user, setUser, settings, setSettings, use
     };
     reader.readAsText(file);
   };
-
-  const shownFoods = userFoods.filter((f) => f.name.includes(foodFilter));
 
   return (
     <div className="space-y-6 pb-20">
@@ -103,6 +102,18 @@ export default function SettingsView({ user, setUser, settings, setSettings, use
             </option>
           ))}
         </select>
+        <label className="flex items-start gap-2 text-sm text-slate-600">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={settings.autoAgent !== false}
+            onChange={(e) => setSettings({ ...settings, autoAgent: e.target.checked })}
+          />
+          <span>
+            הוספה אוטומטית: כשמחפשים מאכל שלא נמצא במאגר, הסוכן מחפש אותו ברשת ומוסיף אותו למאגר עם ניקוד, בלי ללחוץ על
+            כלום.
+          </span>
+        </label>
         <Button variant="secondary" className="w-full" onClick={test} disabled={!settings.apiKey}>
           בדוק מפתח
         </Button>
@@ -110,22 +121,7 @@ export default function SettingsView({ user, setUser, settings, setSettings, use
         <ErrorBox>{keyError}</ErrorBox>
       </Card>
 
-      <Card className="space-y-3">
-        <h3 className="font-bold">המאכלים שלי ({userFoods.length})</h3>
-        <p className="text-xs text-slate-500">מאכלים שהוספת או שהסוכן מצא עבורך. המאגר המשותף מתעדכן אוטומטית מהסוכן ב-GitHub.</p>
-        {userFoods.length > 5 && <Input placeholder="סינון..." value={foodFilter} onChange={(e) => setFoodFilter(e.target.value)} />}
-        <div className="space-y-1 max-h-64 overflow-y-auto">
-          {shownFoods.map((f) => (
-            <div key={f.name} className="flex items-center justify-between text-sm py-1">
-              <span className="flex-1 truncate">{f.name}</span>
-              <span className="font-bold text-emerald-600 mx-2">{formatPoints(f.points)}</span>
-              <button onClick={() => removeUserFood(f.name)} className="text-red-300 hover:text-red-500 p-1" aria-label="מחק">
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
-        </div>
-      </Card>
+      <FoodDbManager foodDb={foodDb} userFoods={userFoods} saveFood={saveFood} removeUserFood={removeUserFood} />
 
       <Card className="bg-emerald-50 border-emerald-100 space-y-3">
         <h3 className="font-bold text-emerald-800">גיבוי ושחזור נתונים</h3>
