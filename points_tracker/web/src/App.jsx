@@ -87,7 +87,16 @@ export default function App() {
   const sharedOn = sharedAvailable(aiSettings);
   const isAdmin = sharedOn && Boolean(settings.adminCode);
   const refreshShared = () => {
-    if (sharedAvailable(aiSettings)) fetchSharedFoods(aiSettings).then(setRemoteFoods).catch(() => {});
+    if (!sharedAvailable(aiSettings)) return;
+    fetchSharedFoods(aiSettings)
+      .then(setRemoteFoods)
+      .catch((err) => {
+        // מכשיר שבעל האפליקציה ניתק: חוזרים למסך ההצטרפות עם קישור הזמנה
+        if (err.status === 401 && settings.deviceKey && !settings.accessCode) {
+          setSettings((s) => ({ ...s, deviceKey: undefined }));
+          setNotice({ ok: false, text: 'המכשיר נותק מהסוכן החכם. כדי לחבר אותו שוב, בקש/י קישור הזמנה חדש.' });
+        }
+      });
   };
   useEffect(() => {
     refreshShared();

@@ -92,109 +92,125 @@ export default function SettingsView({
         </div>
       </Card>
 
-      <Card className="space-y-3 border-violet-100">
-        <h3 className="font-bold text-violet-700 flex items-center gap-2">
-          <KeyRound size={18} /> הסוכן החכם (צילום, מרכיבים, חיפוש ברשת)
-        </h3>
-        {proxyUrl ? (
-          <>
+      {proxyUrl && !owner && !invited && (
+        <Card className="space-y-3 border-violet-100">
+          <div className="space-y-2">
+            <p className="text-sm font-bold text-violet-700">יש לך קישור הזמנה?</p>
+            <p className="text-xs text-slate-500">הדבק/י כאן את הקישור שקיבלת כדי לחבר את המכשיר הזה.</p>
+            <div className="flex gap-2">
+              <Input
+                dir="ltr"
+                placeholder="https://bis-app.pages.dev/#invite=..."
+                value={inviteText}
+                onChange={(e) => setInviteText(e.target.value)}
+                className="bg-white text-xs"
+              />
+              <Button variant="ai" className="px-4 py-2" onClick={join} disabled={!inviteText.trim()}>
+                התחבר
+              </Button>
+            </div>
+            <ErrorBox>{joinError}</ErrorBox>
+          </div>
+          <details className="text-xs text-slate-500">
+            <summary className="cursor-pointer text-slate-400 underline">בעל האפליקציה? כניסה עם קוד</summary>
+            <Input
+              dir="ltr"
+              type="password"
+              placeholder="קוד גישה"
+              className="mt-2"
+              value={settings.accessCode || ''}
+              onChange={(e) => setSettings({ ...settings, accessCode: e.target.value.trim() })}
+            />
+          </details>
+        </Card>
+      )}
+
+      {/* הגדרות הסוכן: רק לבעל האפליקציה (או כשאין שרת משותף ומשתמשים במפתח אישי). משתמש שהוזמן לא רואה אותן. */}
+      {(owner || !proxyUrl) && (
+        <Card className="space-y-3 border-violet-100">
+          <h3 className="font-bold text-violet-700 flex items-center gap-2">
+            <KeyRound size={18} /> הסוכן החכם (צילום, מרכיבים, חיפוש ברשת)
+          </h3>
+          {proxyUrl ? (
+            <>
+              <p className="text-xs text-slate-500">
+                הסוכן עובד דרך השרת המשותף, עם מפתח ה-API של בעל האפליקציה. מצטרפים דרך קישור הזמנה חד-פעמי. כל מכשיר שומר
+                יומן וניקוד משלו.
+              </p>
+              <details className="text-xs text-slate-500">
+                <summary className="cursor-pointer text-slate-400 underline">קוד גישה (רק לבעל האפליקציה)</summary>
+                <Input
+                  dir="ltr"
+                  type="password"
+                  placeholder="קוד גישה"
+                  className="mt-2"
+                  value={settings.accessCode || ''}
+                  onChange={(e) => setSettings({ ...settings, accessCode: e.target.value.trim() })}
+                />
+              </details>
+              {owner && <InviteManager settings={ai} />}
+              {owner && (
+              <details className="text-xs text-slate-500">
+                <summary className="cursor-pointer text-slate-400 underline">קוד מנהל (רק למנהל האפליקציה)</summary>
+                <p className="my-2">עם קוד המנהל, עריכה ומחיקה של מאכל במאגר המשותף משפיעות על כולם.</p>
+                <Input
+                  dir="ltr"
+                  type="password"
+                  placeholder="קוד מנהל"
+                  value={settings.adminCode || ''}
+                  onChange={(e) => setSettings({ ...settings, adminCode: e.target.value.trim() })}
+                />
+              </details>
+              )}
+              <button className="text-xs text-slate-400 underline" onClick={() => setShowKey(!showKey)}>
+                {showKey ? 'הסתר מפתח אישי' : 'מפתח API אישי (לא חובה)'}
+              </button>
+            </>
+          ) : (
             <p className="text-xs text-slate-500">
-              הסוכן עובד דרך השרת המשותף, עם מפתח ה-API של בעל האפליקציה. מצטרפים דרך קישור הזמנה חד-פעמי. כל מכשיר שומר
-              יומן וניקוד משלו.
+              מפתח API של Anthropic (מ-console.anthropic.com). המפתח נשמר רק במכשיר הזה ולא נכלל בקובץ הגיבוי. כל צילום / חיפוש
+              עולה כמה סנטים.
             </p>
-            {invited && <p className="text-sm text-emerald-700 font-medium">המכשיר הזה מחובר דרך קישור הזמנה ✓</p>}
-            {!invited && !owner && (
-              <div className="space-y-2 bg-violet-50 rounded-xl p-3">
-                <p className="text-sm font-bold text-violet-700">יש לך קישור הזמנה?</p>
-                <p className="text-xs text-slate-500">הדבק/י כאן את הקישור שקיבלת כדי לחבר את המכשיר הזה.</p>
-                <div className="flex gap-2">
-                  <Input
-                    dir="ltr"
-                    placeholder="https://bis-app.pages.dev/#invite=..."
-                    value={inviteText}
-                    onChange={(e) => setInviteText(e.target.value)}
-                    className="bg-white text-xs"
-                  />
-                  <Button variant="ai" className="px-4 py-2" onClick={join} disabled={!inviteText.trim()}>
-                    התחבר
-                  </Button>
-                </div>
-                <ErrorBox>{joinError}</ErrorBox>
-              </div>
-            )}
-            <details className="text-xs text-slate-500" open={!owner && !invited}>
-              <summary className="cursor-pointer text-slate-400 underline">קוד גישה (רק לבעל האפליקציה)</summary>
-              <Input
-                dir="ltr"
-                type="password"
-                placeholder="קוד גישה"
-                className="mt-2"
-                value={settings.accessCode || ''}
-                onChange={(e) => setSettings({ ...settings, accessCode: e.target.value.trim() })}
-              />
-            </details>
-            {owner && <InviteManager settings={ai} />}
-            {owner && (
-            <details className="text-xs text-slate-500">
-              <summary className="cursor-pointer text-slate-400 underline">קוד מנהל (רק למנהל האפליקציה)</summary>
-              <p className="my-2">עם קוד המנהל, עריכה ומחיקה של מאכל במאגר המשותף משפיעות על כולם.</p>
-              <Input
-                dir="ltr"
-                type="password"
-                placeholder="קוד מנהל"
-                value={settings.adminCode || ''}
-                onChange={(e) => setSettings({ ...settings, adminCode: e.target.value.trim() })}
-              />
-            </details>
-            )}
-            <button className="text-xs text-slate-400 underline" onClick={() => setShowKey(!showKey)}>
-              {showKey ? 'הסתר מפתח אישי' : 'מפתח API אישי (לא חובה)'}
-            </button>
-          </>
-        ) : (
-          <p className="text-xs text-slate-500">
-            מפתח API של Anthropic (מ-console.anthropic.com). המפתח נשמר רק במכשיר הזה ולא נכלל בקובץ הגיבוי. כל צילום / חיפוש
-            עולה כמה סנטים.
-          </p>
-        )}
-        {(!proxyUrl || showKey) && (
-          <Input
-            type="password"
-            dir="ltr"
-            placeholder="sk-ant-..."
-            value={settings.apiKey || ''}
-            onChange={(e) => setSettings({ ...settings, apiKey: e.target.value.trim() })}
-          />
-        )}
-        <select
-          value={settings.model}
-          onChange={(e) => setSettings({ ...settings, model: e.target.value })}
-          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3"
-        >
-          {MODELS.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-        <label className="flex items-start gap-2 text-sm text-slate-600">
-          <input
-            type="checkbox"
-            className="mt-1"
-            checked={settings.autoAgent !== false}
-            onChange={(e) => setSettings({ ...settings, autoAgent: e.target.checked })}
-          />
-          <span>
-            הוספה אוטומטית: כשמחפשים מאכל שלא נמצא במאגר, הסוכן מחפש אותו ברשת ומוסיף אותו למאגר עם ניקוד, בלי ללחוץ על
-            כלום.
-          </span>
-        </label>
-        <Button variant="secondary" className="w-full" onClick={test} disabled={!aiReady(ai)}>
-          בדוק חיבור
-        </Button>
-        {keyStatus && <p className="text-sm text-center text-emerald-600">{keyStatus}</p>}
-        <ErrorBox>{keyError}</ErrorBox>
-      </Card>
+          )}
+          {(!proxyUrl || showKey) && (
+            <Input
+              type="password"
+              dir="ltr"
+              placeholder="sk-ant-..."
+              value={settings.apiKey || ''}
+              onChange={(e) => setSettings({ ...settings, apiKey: e.target.value.trim() })}
+            />
+          )}
+          <select
+            value={settings.model}
+            onChange={(e) => setSettings({ ...settings, model: e.target.value })}
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3"
+          >
+            {MODELS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+          <label className="flex items-start gap-2 text-sm text-slate-600">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={settings.autoAgent !== false}
+              onChange={(e) => setSettings({ ...settings, autoAgent: e.target.checked })}
+            />
+            <span>
+              הוספה אוטומטית: כשמחפשים מאכל שלא נמצא במאגר, הסוכן מחפש אותו ברשת ומוסיף אותו למאגר עם ניקוד, בלי ללחוץ על
+              כלום.
+            </span>
+          </label>
+          <Button variant="secondary" className="w-full" onClick={test} disabled={!aiReady(ai)}>
+            בדוק חיבור
+          </Button>
+          {keyStatus && <p className="text-sm text-center text-emerald-600">{keyStatus}</p>}
+          <ErrorBox>{keyError}</ErrorBox>
+        </Card>
+      )}
 
       <FoodDbManager
         foodDb={foodDb}
