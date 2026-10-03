@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
-import { ArrowRight, Check, Loader2, Plus, Share2, Sparkles, Trash2, X } from 'lucide-react';
+import { ArrowRight, Check, Loader2, Plus, Share2, ShoppingBag, Sparkles, Trash2, X } from 'lucide-react';
+import StoresSheet from './StoresSheet';
 import { organizeShopping } from '../lib/api';
 
 const newId = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 
 // רשימת הקניות: מצרכים שנוספו ממתכונים (לפי מספר המנות שנבחר) ופריטים שהוספתם בעצמכם
 export default function ShoppingView({ session, items, onChange, onBack, onToast }) {
+  const [stores, setStores] = useState(false);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -98,6 +100,13 @@ export default function ShoppingView({ session, items, onChange, onBack, onToast
           </div>
         ) : (
           <>
+            <button
+              onClick={() => setStores(true)}
+              disabled={items.length === checkedCount}
+              className="mt-3 w-full rounded-2xl bg-orange-500 text-white font-bold py-3 flex items-center justify-center gap-2 disabled:opacity-40"
+            >
+              <ShoppingBag size={18} /> איפה לקנות הכי זול ({items.length - checkedCount} מוצרים)
+            </button>
             <div className="mt-3 flex flex-wrap gap-2 text-sm">
               <button
                 onClick={organize}
@@ -145,6 +154,7 @@ export default function ShoppingView({ session, items, onChange, onBack, onToast
           </>
         )}
       </div>
+      {stores && <StoresSheet session={session} items={items.filter((i) => !i.checked).map((i) => i.text)} onClose={() => setStores(false)} />}
     </div>
   );
 }
