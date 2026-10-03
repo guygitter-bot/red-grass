@@ -80,12 +80,25 @@ export default function InventoryView({ session, recipes, pantry, onChange, onAd
           <PhotoButton
             icon={ScanLine}
             label={place === 'fridge' ? 'צילום כל המקרר' : 'צילום מדף במזווה'}
-            sub="אפשר עד 4 תמונות"
-            multiple
+            sub="ממפה את כל המוצרים"
+            capture
             onFiles={(f) => photos(f, 'many')}
             disabled={scan?.busy}
           />
         </div>
+        <label className={`mt-1.5 flex items-center justify-center gap-1 text-xs text-stone-500 cursor-pointer ${scan?.busy ? 'opacity-50 pointer-events-none' : ''}`}>
+          <ImagePlus size={14} /> או לבחור תמונות מהגלריה (עד 4)
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              photos(e.target.files, 'many');
+              e.target.value = '';
+            }}
+          />
+        </label>
 
         {scan?.busy && (
           <div className="mt-3 rounded-2xl bg-orange-50 text-orange-800 p-3 text-sm flex items-center gap-2">
