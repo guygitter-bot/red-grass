@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { checkInvite, login, register } from '../lib/api';
+import { checkInvite, getAuthConfig, googleSignIn, login, register } from '../lib/api';
+import GoogleButton from './GoogleButton';
 
 // הרשמה מקישור הזמנה, או כניסה במכשיר נוסף
 export default function Auth({ mode: initialMode, token, onDone }) {
@@ -9,6 +10,22 @@ export default function Auth({ mode: initialMode, token, onDone }) {
   const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [googleId, setGoogleId] = useState('');
+
+  useEffect(() => {
+    getAuthConfig().then((c) => setGoogleId(c.googleClientId || '')).catch(() => {});
+  }, []);
+
+  const withGoogle = async (credential) => {
+    setBusy(true);
+    setError('');
+    try {
+      onDone(await googleSignIn(credential, mode === 'register' ? token : ''));
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (initialMode !== 'register') return;
@@ -17,7 +34,7 @@ export default function Auth({ mode: initialMode, token, onDone }) {
         setInvite(d);
         if (d.used) {
           setMode('login');
-          setError('כבר נרשמו עם הקישור הזה. היכנסו עם האימייל והסיסמה.');
+          setError('כבר נרשמו עם הקישור הזה. היכנסו עם החשבון שנרשמתם בו.');
         } else if (d.name) setForm((f) => ({ ...f, name: d.name }));
       })
       .catch((e) => {
@@ -60,6 +77,16 @@ export default function Auth({ mode: initialMode, token, onDone }) {
           <Loader2 className="animate-spin mx-auto text-orange-500" />
         ) : (
           <div className="space-y-3">
+            {googleId && (
+              <>
+                <GoogleButton clientId={googleId} text={mode === 'register' ? 'signup_with' : 'signin_with'} onCredential={withGoogle} onError={setError} />
+                <div className="flex items-center gap-3 text-xs text-stone-400">
+                  <span className="flex-1 h-px bg-stone-200" />
+                  או עם אימייל וסיסמה
+                  <span className="flex-1 h-px bg-stone-200" />
+                </div>
+              </>
+            )}
             {mode === 'register' && (
               <label className="block">
                 <span className="text-sm font-medium text-stone-700">שם</span>

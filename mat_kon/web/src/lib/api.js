@@ -83,3 +83,7 @@ export const pantryIdeas = (s, items, wish) => api(s, 'POST', '/pantry/ideas', {
 
 // איפה לקנות: חנויות קרובות ומחירים
 export const findStores = (s, lat, lon, items) => api(s, 'POST', '/stores', { lat, lon, items });
+
+// כניסה עם גוגל
+export const getAuthConfig = () => api('', 'GET', '/auth-config');
+export const googleSignIn = (credential, token) => api('', 'POST', '/google', { credential, ...(token ? { token } : {}) });
