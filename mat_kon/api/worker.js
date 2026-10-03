@@ -27,7 +27,7 @@ const MAX_SMALL_BYTES = 4000;
 const MAX_TEXT_BYTES = 30000;
 const MAX_PHOTO_BYTES = 9 * 1024 * 1024; // עד 4 תמונות מוקטנות
 const MAX_IMAGE_FIELD = 160 * 1024; // תמונת מתכון שנשמרת בספר (מוקטנת בדפדפן)
-const MAX_RESTORE_BYTES = 20 * 1024 * 1024; // קובץ גיבוי
+const MAX_RESTORE_BYTES = 8 * 1024 * 1024; // מנה אחת מקובץ גיבוי (האפליקציה שולחת במנות)
 const MAX_CUSTOM_CATEGORIES = 30;
 
 function corsHeaders(request, env) {
@@ -81,10 +81,28 @@ export default {
     };
 
     // ---- הרשמה וכניסה (בלי זיהוי) ----
-    if (request.method === 'POST' && ['invite', 'join', 'register', 'login', 'logout'].includes(parts[0]) && parts.length === 1) {
+    // הגבלת קצב לפי כתובת (ולפי אימייל בכניסה), נבדקת ונספרת באותו צעד
+    const ip = request.headers.get('cf-connecting-ip') || 'local';
+    const rate = async (checks, message) => {
+      const res = await internal(accounts, 'POST', '/rate', { checks, message });
+      return res.ok ? null : pass(res);
+    };
+
+    if (request.method === 'POST' && ['invite', 'join', 'register', 'login', 'logout', 'logout-all'].includes(parts[0]) && parts.length === 1) {
       const { body, error } = await readJson();
       if (error) return error;
-      if (parts[0] === 'logout') body.session = bearer(request);
+      if (parts[0] === 'logout' || parts[0] === 'logout-all') body.session = bearer(request);
+      if (parts[0] === 'login') {
+        const limited = await rate([
+          { key: `login-ip:${ip}`, limit: 30, window: 900 },
+          { key: `login:${String(body.email || '').trim().toLowerCase()}`, limit: 10, window: 900 },
+        ], 'יותר מדי ניסיונות כניסה. נסו שוב בעוד רבע שעה.');
+        if (limited) return limited;
+      }
+      if (['register', 'invite', 'join'].includes(parts[0])) {
+        const limited = await rate([{ key: `signup-ip:${ip}`, limit: 30, window: 3600 }]);
+        if (limited) return limited;
+      }
       const path = { invite: '/invite/check', join: '/join/check' }[parts[0]] || `/${parts[0]}`;
       return pass(await internal(accounts, 'POST', path, body));
     }
@@ -103,12 +121,13 @@ export default {
       if (!ownerPassword) return fail(400, 'כניסת בעלים לא מוגדרת');
       const { body, error } = await readJson();
       if (error) return error;
-      const allowed = await internal(accounts, 'POST', '/owner-attempt', {});
-      if (!allowed.ok) return pass(allowed);
-      if (!(await sameSecret(String(body.password || ''), ownerPassword))) {
-        await internal(accounts, 'POST', '/owner-attempt', { failed: true });
-        return fail(401, 'הסיסמה שגויה');
-      }
+      // כל ניסיון נספר מראש (גם ניסיונות במקביל), לפי כתובת – וגם תקרה כללית נגד ניחוש מפוזר
+      const limited = await rate([
+        { key: `owner-ip:${ip}`, limit: 10, window: 900 },
+        { key: 'owner-all', limit: 60, window: 900 },
+      ], 'יותר מדי ניסיונות. נסו שוב בעוד רבע שעה.');
+      if (limited) return limited;
+      if (!(await sameSecret(String(body.password || ''), ownerPassword))) return fail(401, 'הסיסמה שגויה');
       return pass(await internal(accounts, 'POST', '/owner-session', {}));
     }
 
@@ -117,6 +136,8 @@ export default {
       if (!googleClientId) return fail(400, 'כניסה עם גוגל לא מוגדרת');
       const { body, error } = await readJson();
       if (error) return error;
+      const limited = await rate([{ key: `google-ip:${ip}`, limit: 30, window: 900 }]);
+      if (limited) return limited;
       const profile = await verifyGoogle(String(body.credential || ''), googleClientId);
       if (!profile) return fail(401, 'לא הצלחתי לאמת את חשבון הגוגל. נסו שוב.');
       if (ownerEmail && profile.email.toLowerCase() === ownerEmail) return pass(await internal(accounts, 'POST', '/owner-session', {}));
@@ -133,6 +154,14 @@ export default {
       user = (await res.json()).user;
       signedIn = true;
     }
+
+    // תקציב יומי לפעולות AI (כל ספר בנפרד), כדי שאף משתמש לא יוכל לשרוף את הקרדיט
+    const aiBudget = async (cost = 1) => {
+      const limit = !user ? Number(env.AI_DAILY_OWNER || 300)
+        : user.plan === 'paid' ? Number(env.AI_DAILY_PAID || 100) : Number(env.AI_DAILY_FREE || 25);
+      const res = await internal(bookFor(user), 'POST', '/usage/take', { day: new Date().toISOString().slice(0, 10), limit, cost });
+      return res.ok ? null : fail(429, 'הגעתם למכסה היומית של פעולות חכמות. אפשר להמשיך מחר.');
+    };
 
     // שגיאה מה-AI: הודעה ברורה בעברית במקום השגיאה הגולמית
     const aiFail = (e, message) => {
@@ -190,6 +219,8 @@ export default {
       if (error) return error;
       const q = String(body.q || '').trim().slice(0, 200);
       if (q.length < 2) return fail(400, 'מה לחפש?');
+      const limited = await aiBudget();
+      if (limited) return limited;
       try {
         return reply(200, { results: await searchRecipes(deps.anthropic(env), q) });
       } catch (e) {
@@ -208,6 +239,15 @@ export default {
         return pass(await internal(accounts, 'POST', '/members/cancel', { bookId, token: parts[2] }));
       }
       return fail(405, 'Method not allowed');
+    }
+
+    // ---- מחיקת החשבון שלי (משתמש שנרשם; בעל ספר – גם הספר והחברים בו) ----
+    if (url.pathname === '/account' && request.method === 'DELETE') {
+      if (!user) return fail(400, 'לבעל האפליקציה אין חשבון למחוק');
+      const res = await internal(accounts, 'POST', '/account/delete', { userId: user.id });
+      const data = await res.json();
+      if (res.ok && data.deletedBook) await internal(bookOf(user.id), 'DELETE', '/recipes');
+      return reply(res.status, data);
     }
 
     // ---- ניהול הזמנות: רק בעל האפליקציה ----
@@ -274,6 +314,8 @@ export default {
         if (error) return error;
         const photos = photoSource(body);
         if (typeof photos === 'string') return fail(400, photos);
+        const limited = await aiBudget(photos.images.length > 1 ? 2 : 1);
+        if (limited) return limited;
         try {
           const items = await scanPantry(deps.anthropic(env), photos.images, {
             mode: body.mode === 'single' ? 'single' : 'many',
@@ -293,6 +335,8 @@ export default {
         if (error) return error;
         const items = strList(body.items, 150).map((i) => i.slice(0, 80));
         if (!items.length) return fail(400, 'אין מוצרים במלאי');
+        const limited = await aiBudget();
+        if (limited) return limited;
         try {
           return reply(200, { results: await ideasFromPantry(deps.anthropic(env), items, { wish: String(body.wish || '').trim().slice(0, 200) }) });
         } catch (e) {
@@ -310,6 +354,10 @@ export default {
       const lon = Number(body.lon);
       if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return fail(400, 'מיקום לא תקין');
       const items = [...new Set(strList(body.items, 60).map((i) => i.slice(0, 120)))];
+      if (items.length) {
+        const limited = await aiBudget(2);
+        if (limited) return limited;
+      }
       try {
         return reply(200, await findStores({ lat, lon, items }, { fetch: deps.fetch, client: deps.anthropic(env), cheapersalKey: env.CHEAPERSAL_API_KEY }));
       } catch (e) {
@@ -334,6 +382,8 @@ export default {
         if (error) return error;
         const items = (Array.isArray(body.items) ? body.items : []).map((t) => String(t || '').trim().slice(0, 300)).filter(Boolean).slice(0, 300);
         if (!items.length) return fail(400, 'הרשימה ריקה');
+        const limited = await aiBudget();
+        if (limited) return limited;
         try {
           return reply(200, { groups: await organizeShopping(deps.anthropic(env), items) });
         } catch (e) {
@@ -364,25 +414,31 @@ export default {
     if (request.method === 'POST' && parts.length === 2 && id === 'restore') {
       const { body, error } = await readJson(MAX_RESTORE_BYTES);
       if (error) return error;
-      const list = Array.isArray(body.recipes) ? body.recipes.slice(0, 2000) : null;
+      const list = Array.isArray(body.recipes) ? body.recipes.slice(0, 200) : null;
       if (!list) return fail(400, 'קובץ הגיבוי לא תקין');
-      const categories = [...(await allCategories()), ...(Array.isArray(body.categories) ? body.categories : [])];
       if (Array.isArray(body.categories)) {
         const custom = await customCategories();
         const add = body.categories.map((c) => String(c || '').trim().slice(0, 30)).filter((c) => c && !CATEGORIES.includes(c) && !custom.includes(c));
         if (add.length) await internal(book, 'PUT', '/categories', { custom: [...custom, ...new Set(add)].slice(0, MAX_CUSTOM_CATEGORIES) });
       }
+      // קטגוריה שלא נכנסה (מעבר ל-30) – המתכון עובר ל"אחר" ולא נעלם מהרשימות
+      const categories = await allCategories();
       let restored = 0;
       let skipped = 0;
+      const ids = {}; // מזהה בגיבוי -> מזהה בספר (לתכנון ולרשימת הקניות)
       for (const raw of list) {
         const recipe = restoredRecipe(raw, categories);
         if (!recipe) {
           skipped += 1;
           continue;
         }
-        if ((await internal(book, 'POST', '/recipes?replace=1', recipe)).ok) restored += 1;
+        const res = await internal(book, 'POST', '/recipes?replace=1', { ...recipe, restored: true });
+        if (res.ok) {
+          restored += 1;
+          if (typeof raw.id === 'string') ids[raw.id] = (await res.json()).recipe.id;
+        }
       }
-      return reply(200, { restored, skipped });
+      return reply(200, { restored, skipped, ids });
     }
 
     // הוספת מתכון מקישור או מהודעת ווטסאפ, או רענון מתכון קיים מהמקור שלו
@@ -394,10 +450,8 @@ export default {
       let link;
       let text = null;
       let hint = '';
+      let restoredStub = false;
       if (isAdd) {
-        if (!canAdd(user)) {
-          return fail(402, `נגמרו ${user.freeLimit} המתכונים החינמיים`, { paywall: true, paymentUrl: env.PAYMENT_URL || '' });
-        }
         const { body, error } = await readJson(isAddPhoto ? MAX_PHOTO_BYTES : isAddText ? MAX_TEXT_BYTES : MAX_SMALL_BYTES);
         if (error) return error;
         if (isAddPhoto) {
@@ -414,32 +468,50 @@ export default {
       } else {
         const res = await internal(book, 'GET', `/recipes/${id}`);
         if (!res.ok) return fail(404, 'המתכון לא נמצא');
-        const { source } = (await res.json()).recipe;
+        const { source, restored } = (await res.json()).recipe;
         if (source.kind === 'photo' || source.kind === 'manual') return fail(400, 'למתכון הזה אין מקור לקרוא ממנו שוב');
-        // מתכון מהודעת ווטסאפ או מטקסט שהודבק – נבנה שוב מאותו טקסט
+        // מתכון ששוחזר מגיבוי ועוד לא נקרא מהמקור – קריאה ראשונה שלו נספרת כמו הוספה
+        restoredStub = Boolean(restored);
         if (source.kind === 'whatsapp' || source.text) text = textSource(source);
         else {
           link = source.url;
           hint = source.hint || '';
         }
       }
+      // מכסה: נלקחת לפני העבודה ומוחזרת אם לא נוסף מתכון חדש
+      const counts = Boolean(user) && (isAdd || restoredStub);
+      if (counts) {
+        const taken = await internal(accounts, 'POST', '/quota/take', { userId: user.id });
+        if (!taken.ok) return fail(402, `נגמרו ${user.freeLimit} המתכונים החינמיים`, { paywall: true, paymentUrl: env.PAYMENT_URL || '' });
+      }
+      const giveBack = () => counts && internal(accounts, 'POST', '/quota/give', { userId: user.id });
+      const limited = await aiBudget(isAddPhoto ? 2 : 1);
+      if (limited) {
+        await giveBack();
+        return limited;
+      }
       let recipe;
       try {
         const src = text || (await gatherSource(link, deps.fetch, { hint, igDocId: env.IG_DOC_ID }));
         recipe = await extractRecipe(deps.anthropic(env), src, { categories: await allCategories() });
       } catch (e) {
+        await giveBack();
         if (e instanceof NoRecipeError) return fail(422, e.message);
-        console.error('extract failed', link || text.key, e);
+        console.error('extract failed', text ? text.kind : link, e);
         if (aiMessage(e)) return aiFail(e);
         if (e.status === 400 && isAddPhoto) return fail(400, 'לא הצלחתי לקרוא את התמונות. נסו תמונה ברורה יותר.');
         return fail(502, e.status ? 'לא הצלחתי להוציא מתכון. נסו שוב.' : `לא הצלחתי להוציא מתכון: ${e.message || e}`);
       }
       const res = await internal(book, 'POST', '/recipes', recipe);
       const data = await res.json();
-      // רק מתכון חדש נספר במכסה (לא רענון ולא קישור שכבר נשמר)
-      if (res.ok && user && isAdd && !data.updated) {
-        data.user = (await (await internal(accounts, 'POST', '/count', { userId: user.id })).json()).user;
+      // מתכון שכבר היה בספר (אותו קישור) לא נספר – המכסה חוזרת
+      if (counts) {
+        const result = !res.ok || !data.counted ? await giveBack() : null;
+        const fresh = await internal(accounts, 'POST', '/auth', { session });
+        data.user = fresh.ok ? (await fresh.json()).user : undefined;
+        void result;
       }
+      delete data.counted;
       return reply(res.status, data);
     }
 

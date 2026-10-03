@@ -418,7 +418,7 @@ test('backup restore: valid recipes saved as they were, bad ones skipped, same s
     ],
   };
   const res = await (await call('POST', '/recipes/restore', backup)).json();
-  assert.deepEqual(res, { restored: 3, skipped: 2 });
+  assert.deepEqual(res, { restored: 3, skipped: 2, ids: {} });
   const list = (await (await call('GET', '/recipes')).json()).recipes;
   const meat = list.find((r) => r.title === 'קציצות');
   assert.equal(meat.category, 'מתכוני סבתא');
@@ -781,4 +781,89 @@ test('AI output keeps decimal amounts (1.5 is not list numbering)', async () => 
   reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_recipe', input: { ...recipeInput, ingredients: [{ title: '', items: ['1.5 כוסות קמח', '0.5 כפית מלח', '2. ביצים'] }] } }] });
   const { recipe } = await (await call('POST', '/recipes', { url: 'https://cake.example/dec' })).json();
   assert.deepEqual(recipe.ingredients[0].items, ['1.5 כוסות קמח', '0.5 כפית מלח', 'ביצים']);
+});
+
+test('quota cannot be bypassed: restore + refresh counts, parallel adds stop at the limit, AI routes have a daily budget', async () => {
+  env = fakeEnv({ FREE_RECIPES: '3', AI_DAILY_FREE: '12' });
+  const { session } = await (await register((await invite()).token)).json();
+  // שחזור "מתכונים ריקים" ואז רענון – כל רענון ראשון נספר
+  await call('POST', '/recipes/restore', { recipes: [1, 2, 3, 4].map((n) => ({ title: `stub${n}`, ingredients: [{ title: '', items: ['x'] }], source: { url: `https://cake.example/s${n}` } })) }, session);
+  const ids = (await (await call('GET', '/recipes', undefined, session)).json()).recipes.map((r) => r.id);
+  const statuses = [];
+  for (const rid of ids) statuses.push((await call('POST', `/recipes/${rid}/refresh`, undefined, session)).status);
+  assert.deepEqual(statuses.sort(), [200, 200, 200, 402]);
+  // רענון שני של מתכון שכבר נקרא לא מוסיף מתכון – מותר גם כשהמכסה נגמרה
+  const okId = ids[0];
+  assert.equal((await call('POST', `/recipes/${okId}/refresh`, undefined, session)).status, 200);
+
+  // משתמש חדש: 10 הוספות במקביל במכסה של 3 – רק 3 עוברות
+  const other = await (await register((await invite('יוסי')).token, 'yossi@example.com')).json();
+  const results = await Promise.all(Array.from({ length: 10 }, (_, i) => call('POST', '/recipes', { url: `https://cake.example/p${i}` }, other.session)));
+  assert.equal(results.filter((r) => r.status === 200).length, 3);
+  assert.equal((await (await call('GET', '/me', undefined, other.session)).json()).user.added, 3);
+
+  // תקציב יומי לפעולות AI (12 בתקציב החינמי בבדיקה הזו)
+  reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_list', input: { groups: [{ title: 'א', items: ['חלב'] }] } }] });
+  const third = await (await register((await invite('רות')).token, 'rut@example.com')).json();
+  const codes = [];
+  for (let i = 0; i < 14; i++) codes.push((await call('POST', '/shopping/organize', { items: ['חלב'] }, third.session)).status);
+  assert.equal(codes.filter((c) => c === 200).length, 12);
+  assert.equal(codes.at(-1), 429);
+});
+
+test('rate limits on sign-in, sessions end when the owner password changes, logout everywhere', async () => {
+  const { session } = await (await register((await invite()).token)).json();
+  const codes = [];
+  for (let i = 0; i < 12; i++) codes.push((await call('POST', '/login', { email: 'dana@example.com', password: `wrong${i}` })).status);
+  assert.equal(codes.at(-1), 429);
+
+  env.OWNER_PASSWORD = 'first-pass-1';
+  const owner = await (await call('POST', '/owner-login', { password: 'first-pass-1' })).json();
+  assert.equal((await call('GET', '/recipes', undefined, owner.session)).status, 200);
+  env.OWNER_PASSWORD = 'second-pass-2';
+  const fresh = fakeEnv({ OWNER_PASSWORD: 'second-pass-2' });
+  // אותו אחסון, סיסמה חדשה: ה-DO קורא את הסיסמה מה-env שלו
+  fresh.ACCOUNTS = env.ACCOUNTS;
+  for (const obj of env.ACCOUNTS.objects.values()) obj.env = fresh;
+  env = Object.assign(fresh, { BOOK: env.BOOK });
+  assert.equal((await call('GET', '/recipes', undefined, owner.session)).status, 401);
+
+  void session;
+  const b = (await (await call('POST', '/register', { token: (await invite('ב', (await (await call('POST', '/owner-login', { password: 'second-pass-2' })).json()).session)).token, name: 'b', email: 'b@example.com', password: 'secret12' })).json()).session;
+  const b2 = (await (await call('POST', '/login', { email: 'b@example.com', password: 'secret12' })).json()).session;
+  assert.equal((await call('POST', '/logout-all', {}, b)).status, 200);
+  assert.equal((await call('GET', '/recipes', undefined, b2)).status, 401);
+});
+
+test('Google proves the email: a squatted password account loses its password and sessions', async () => {
+  env.GOOGLE_CLIENT_ID = 'cid';
+  const squatter = await (await register((await invite()).token, 'victim@gmail.com')).json();
+  deps.fetch = async () => Response.json({ aud: 'cid', iss: 'accounts.google.com', email_verified: 'true', exp: Date.now() / 1000 + 60, sub: 'v1', email: 'victim@gmail.com' });
+  const victim = await (await call('POST', '/google', { credential: 'a.b.c' })).json();
+  assert.equal(victim.user.id, squatter.user.id);
+  assert.equal((await call('GET', '/recipes', undefined, squatter.session)).status, 401);
+  assert.equal((await call('POST', '/login', { email: 'victim@gmail.com', password: 'secret12' })).status, 401);
+});
+
+test('a user deletes their own account (and their shared book)', async () => {
+  const inv = await invite();
+  const holder = await (await register(inv.token, 'h@example.com')).json();
+  const { join } = await (await call('POST', '/members', {}, holder.session)).json();
+  const member = await (await call('POST', '/register', { join: join.token, name: 'm', email: 'm@example.com', password: 'secret12' })).json();
+  await call('POST', '/recipes', { url: 'https://cake.example/del' }, holder.session);
+  assert.equal((await call('DELETE', '/account', undefined, holder.session)).status, 200);
+  assert.equal((await call('GET', '/recipes', undefined, member.session)).status, 401);
+  assert.equal((await call('POST', '/login', { email: 'h@example.com', password: 'secret12' })).status, 401);
+  assert.equal((await call('POST', '/invite', { token: inv.token })).status, 404);
+  assert.equal((await call('DELETE', '/account')).status, 400);
+});
+
+test('safe fetch: internal hosts and redirects to them are refused', async () => {
+  const { isPublicUrl, safeFetch } = await import('./net.js');
+  for (const u of ['http://localhost./x', 'http://127.0.0.1.nip.io/', 'http://10.0.0.1/', 'http://intranet/', 'http://a.internal/', 'file:///etc/passwd', 'http://user:pw@site.example/']) {
+    assert.equal(isPublicUrl(u), false, u);
+  }
+  assert.equal(isPublicUrl('https://www.10dakot.co.il/recipe'), true);
+  const hop = async (url) => (url.includes('start') ? new Response('', { status: 302, headers: { location: 'http://169.254.169.254/latest' } }) : new Response('secret'));
+  await assert.rejects(() => safeFetch(hop, 'https://site.example/start'));
 });

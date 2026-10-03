@@ -20,11 +20,8 @@ export function normalizeUrl(input) {
     return null;
   }
   if (!['http:', 'https:'].includes(url.protocol)) return null;
-  const host = url.hostname.toLowerCase();
   // לא פונים לכתובות פנימיות
-  if (host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal') || /^[\d.]+$/.test(host) || host.includes(':')) {
-    return null;
-  }
+  if (!isPublicUrl(url.toString())) return null;
   for (const p of [...url.searchParams.keys()]) {
     if (/^(utm_|fbclid$|gclid$|igsh$|igshid$|si$|feature$)/i.test(p)) url.searchParams.delete(p);
   }
@@ -203,6 +200,7 @@ function pickCaptionTrack(tracks) {
   );
 }
 
+import { isPublicUrl, safeFetch } from './net.js';
 import {
   captionFromOgDescription, facebook, instagram, linksIn, readTiktokPage, tiktokComments, youtubeComments,
 } from './social.js';
@@ -210,18 +208,16 @@ import {
 // ---------- איסוף ----------
 
 async function get(fetchFn, url, accept = 'text/html') {
-  const res = await fetchFn(url, {
+  const { res, finalUrl, text } = await safeFetch(fetchFn, url, {
     headers: {
       'user-agent': UA,
       accept,
       'accept-language': 'he-IL,he;q=0.9,en;q=0.8',
       cookie: 'CONSENT=YES+1; SOCS=CAI',
     },
-    redirect: 'follow',
-  });
+  }, { maxBytes: MAX_HTML });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const text = await res.text();
-  return { text: text.slice(0, MAX_HTML), finalUrl: res.url || url };
+  return { text: await text(), finalUrl };
 }
 
 async function getJson(fetchFn, url) {

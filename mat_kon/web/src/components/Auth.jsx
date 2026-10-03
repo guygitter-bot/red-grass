@@ -117,13 +117,13 @@ export default function Auth({ mode: initialMode, token, onDone }) {
             </label>
             )}
             <label className="block">
-              <span className="text-sm font-medium text-stone-700">{mode === 'owner' ? 'סיסמת הבעלים' : 'סיסמה'}{signup ? ' (לפחות 6 תווים)' : ''}</span>
+              <span className="text-sm font-medium text-stone-700">{mode === 'owner' ? 'סיסמת הבעלים' : 'סיסמה'}{signup ? ' (לפחות 8 תווים)' : ''}</span>
               <input
                 type="password"
                 value={form.password}
                 onChange={set('password')}
                 autoComplete={signup ? 'new-password' : 'current-password'}
-                minLength={signup ? 6 : undefined}
+                minLength={signup ? 8 : undefined}
                 required
                 dir="ltr"
                 className={field}
