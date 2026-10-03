@@ -1,12 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Camera, ImagePlus, Loader2, PenLine, X } from 'lucide-react';
 import { addManualRecipe, addPhotoRecipe } from '../lib/api';
 import { dataUrlToPart, photoForReading, thumbnail } from '../lib/image';
 import { textToSections } from '../lib/recipes';
 
 // מתכון חדש בלי קישור: מצלמים דף מספר / פתק / צילום מסך, או כותבים בעצמכם
-export default function NewRecipeView({ session, categories, onBack, onSaved, onPaywall }) {
-  const [mode, setMode] = useState('photo');
+export default function NewRecipeView({ session, categories, initialMode = 'photo', initialFiles, onFilesTaken, onBack, onSaved, onPaywall }) {
+  const [mode, setMode] = useState(initialMode);
   return (
     <div className="min-h-screen pb-16">
       <div className="sticky top-0 z-10 bg-[#fffbf5]/90 backdrop-blur border-b border-stone-100 pt-[env(safe-area-inset-top)]">
@@ -29,13 +29,13 @@ export default function NewRecipeView({ session, categories, onBack, onSaved, on
             </button>
           ))}
         </div>
-        {mode === 'photo' ? <PhotoForm session={session} onSaved={onSaved} onPaywall={onPaywall} /> : <ManualForm session={session} categories={categories} onSaved={onSaved} />}
+        {mode === 'photo' ? <PhotoForm session={session} initialFiles={initialFiles} onFilesTaken={onFilesTaken} onSaved={onSaved} onPaywall={onPaywall} /> : <ManualForm session={session} categories={categories} onSaved={onSaved} />}
       </div>
     </div>
   );
 }
 
-function PhotoForm({ session, onSaved, onPaywall }) {
+function PhotoForm({ session, initialFiles, onFilesTaken, onSaved, onPaywall }) {
   const [photos, setPhotos] = useState([]); // {url, file}
   const [hint, setHint] = useState('');
   const [busy, setBusy] = useState(false);
@@ -53,6 +53,16 @@ function PhotoForm({ session, onSaved, onPaywall }) {
     }
     setPhotos((p) => [...p, ...added].slice(0, 4));
   };
+
+  // תמונות שצולמו מהמסך הראשי ("צילום מתכון")
+  const took = useRef(false);
+  useEffect(() => {
+    if (initialFiles?.length && !took.current) {
+      took.current = true;
+      pick(initialFiles);
+      onFilesTaken?.();
+    }
+  }, [initialFiles]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async () => {
     setBusy(true);
