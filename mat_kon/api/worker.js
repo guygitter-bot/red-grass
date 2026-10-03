@@ -10,7 +10,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import { RecipeBook } from './store.js';
 import { Accounts, canAdd } from './accounts.js';
 import { gatherSource, normalizeUrl, sourceKind } from './source.js';
-import { NoRecipeError, extractRecipe, organizeShopping, searchRecipes } from './extract.js';
+import { NoRecipeError, extractRecipe, ideasFromPantry, organizeShopping, scanPantry, searchRecipes } from './extract.js';
+import { findStores } from './stores.js';
 import { CATEGORIES } from './categories.js';
 
 export { RecipeBook, Accounts };
@@ -181,6 +182,65 @@ export default {
         return pass(await internal(book, 'PUT', '/plan', { plan }));
       }
       return fail(405, 'Method not allowed');
+    }
+
+    // ---- המלאי בבית: מקרר ומזווה ----
+    if (parts[0] === 'pantry') {
+      const book = bookOf(user?.id);
+      if (parts.length === 1 && request.method === 'GET') return pass(await internal(book, 'GET', '/pantry'));
+      if (parts.length === 1 && request.method === 'PUT') {
+        const { body, error } = await readJson(MAX_EDIT_BYTES);
+        if (error) return error;
+        const items = cleanPantry(body.items);
+        if (!items) return fail(400, 'רשימה לא תקינה');
+        return pass(await internal(book, 'PUT', '/pantry', { items }));
+      }
+      // זיהוי מוצרים מתמונה (מוצר אחד או כל המקרר/המדף). לא נשמר: המשתמש מאשר קודם
+      if (parts[1] === 'scan' && parts.length === 2 && request.method === 'POST') {
+        const { body, error } = await readJson(MAX_PHOTO_BYTES);
+        if (error) return error;
+        const photos = photoSource(body);
+        if (typeof photos === 'string') return fail(400, photos);
+        try {
+          const items = await scanPantry(deps.anthropic(env), photos.images, {
+            mode: body.mode === 'single' ? 'single' : 'many',
+            place: body.place === 'pantry' ? 'pantry' : 'fridge',
+          });
+          return reply(200, { items });
+        } catch (e) {
+          if (e.status === 400) return fail(400, 'לא הצלחתי לקרוא את התמונה. נסו תמונה ברורה יותר.');
+          return fail(502, e.message || 'לא הצלחתי לזהות מוצרים');
+        }
+      }
+      // מתכונים ברשת לפי מה שיש בבית
+      if (parts[1] === 'ideas' && parts.length === 2 && request.method === 'POST') {
+        if (!canAdd(user)) return fail(402, `נגמרו ${user.freeLimit} המתכונים החינמיים`, { paywall: true, paymentUrl: env.PAYMENT_URL || '' });
+        const { body, error } = await readJson(MAX_EDIT_BYTES);
+        if (error) return error;
+        const items = strList(body.items, 150).map((i) => i.slice(0, 80));
+        if (!items.length) return fail(400, 'אין מוצרים במלאי');
+        try {
+          return reply(200, { results: await ideasFromPantry(deps.anthropic(env), items, { wish: String(body.wish || '').trim().slice(0, 200) }) });
+        } catch (e) {
+          return fail(502, e.message || 'החיפוש נכשל');
+        }
+      }
+      return fail(405, 'Method not allowed');
+    }
+
+    // ---- איפה לקנות: סופרים קרובים, מחירים וקישורי הזמנה ----
+    if (parts[0] === 'stores' && parts.length === 1 && request.method === 'POST') {
+      const { body, error } = await readJson(MAX_EDIT_BYTES);
+      if (error) return error;
+      const lat = Number(body.lat);
+      const lon = Number(body.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return fail(400, 'מיקום לא תקין');
+      const items = strList(body.items, 40).map((i) => i.slice(0, 120));
+      try {
+        return reply(200, await findStores({ lat, lon, items }, { fetch: deps.fetch, client: deps.anthropic(env), cheapersalKey: env.CHEAPERSAL_API_KEY }));
+      } catch (e) {
+        return fail(502, e.message || 'לא הצלחתי למצוא חנויות');
+      }
     }
 
     // ---- רשימת קניות ----
@@ -474,6 +534,20 @@ function cleanShopping(items) {
       ...(i?.group ? { group: String(i.group).slice(0, 60) } : {}),
     }))
     .filter((i) => i.text);
+}
+
+// המלאי: [{id, name, qty?, place: fridge|pantry, addedAt}]
+function cleanPantry(items) {
+  if (!Array.isArray(items) || items.length > 400) return null;
+  return items
+    .map((i) => ({
+      id: String(i?.id || crypto.randomUUID()).slice(0, 64),
+      name: String(i?.name || '').trim().slice(0, 80),
+      ...(i?.qty ? { qty: String(i.qty).trim().slice(0, 40) } : {}),
+      place: i?.place === 'pantry' ? 'pantry' : 'fridge',
+      addedAt: typeof i?.addedAt === 'string' && /^\d{4}-\d{2}-\d{2}/.test(i.addedAt) ? i.addedAt.slice(0, 30) : new Date().toISOString(),
+    }))
+    .filter((i) => i.name);
 }
 
 function summarizeSource(src) {

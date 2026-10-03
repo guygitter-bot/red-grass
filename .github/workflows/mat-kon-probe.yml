@@ -106,32 +106,24 @@ jobs:
           KEY: ${{ secrets.CHEAPERSAL_API_KEY }}
         run: |
           B=https://cheapersal.co.il
-          echo "key prefix: ${KEY:0:4}"
-          for P in /developers /developers/playground /developers/keys; do
-            curl -sS -L "$B$P" -o "p.html" || true
-            grep -oE '/_next/static/chunks/app/developers[^"]+\.js' p.html | sort -u >> chunks.txt || true
-            echo "=== page $P hosts"
-            grep -oE 'https?://[A-Za-z0-9.-]*(cheapersal|api)[A-Za-z0-9./_-]*' p.html | sort -u | head -20 || true
-            grep -oE '.{0,200}(X-API-Key|x-api-key|Authorization|Bearer|api_key|apiKey|curl ).{0,300}' p.html | head -8 | cut -c1-600 || true
-          done
-          for C in $(sort -u chunks.txt); do
-            echo "=== chunk $C"
-            curl -sS "$B$C" -o c.js
-            grep -oE 'https?://[A-Za-z0-9.-]+[A-Za-z0-9./_:-]*' c.js | sort -u | head -30 || true
-            grep -oE '.{0,250}(X-API-Key|x-api-key|Authorization|Bearer|api_key|apiKey|headers|fetch\().{0,300}' c.js | head -12 | cut -c1-600 || true
-          done
+          curl -sS -L "$B/developers/playground" -o p.html
+          C=$(grep -oE '/_next/static/chunks/app/developers/playground/page-[^"]+\.js' p.html | head -1)
+          curl -sS "$B$C" -o c.js
+          echo "=== playground endpoint definitions"
+          grep -oE '.{0,40}path:"[^"]+".{0,700}' c.js | head -30 | cut -c1-900 || true
+          grep -oE '.{0,60}/api/v1/[^"]*".{0,500}' c.js | head -30 | cut -c1-600 || true
+          A=https://api.cheapersal.co.il/api/v1
           call() {
-            echo "=== $1 $2"
-            curl -sS --max-time 30 "${@:3}" -o out.json -w 'status=%{http_code} type=%{content_type}\n' "$2" || true
-            head -c 700 out.json; echo
+            echo "=== $1"
+            curl -sS --max-time 30 -H "X-API-Key: $KEY" -o out.json -w 'status=%{http_code}\n' "$A$1" || true
+            jq -c 'if type=="object" and .data then (.data |= (if type=="array" then (.[0:3] | map(del(.logo?))) else (if type=="object" then del(.logo?) else . end) end)) else . end' out.json 2>/dev/null | head -c 2500 || head -c 1200 out.json
+            echo
           }
-          for H in "https://api.cheapersal.co.il/api/v1" "https://api.cheapersal.co.il/v1" "https://cheapersal.co.il/api/v1" "https://www.cheapersal.co.il/api/v1"; do
-            call bearer "$H/chains" -H "Authorization: Bearer $KEY"
-            call xkey "$H/chains" -H "X-API-Key: $KEY"
-          done
-          echo "=== overpass mirrors"
-          Q='[out:json][timeout:25];nwr["shop"="supermarket"](around:2000,32.0853,34.7818);out center tags 3;'
-          for O in https://overpass.private.coffee/api/interpreter https://overpass.kumi.systems/api/interpreter https://maps.mail.ru/osm/tools/overpass/api/interpreter https://overpass-api.de/api/interpreter; do
-            echo "--- $O"
-            curl -sS --max-time 40 -A 'mat-kon/1.0 (recipe app)' --data-urlencode "data=$Q" -w '\nstatus=%{http_code} time=%{time_total}\n' "$O" | head -c 1200; echo
-          done
+          call /chains
+          call "/products/search?q=%D7%97%D7%9C%D7%91"
+          call "/products?search=%D7%97%D7%9C%D7%91"
+          call "/products?q=%D7%97%D7%9C%D7%91"
+          call /products/7290004131074
+          call /products/7290004131074/prices
+          call "/branches?limit=3"
+          call /cities

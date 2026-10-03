@@ -43,3 +43,24 @@ export function matchRecipes(recipes, have, { ignoreStaples = true } = {}) {
     .filter((m) => m.matched.length > 0)
     .sort((a, b) => b.score - a.score || b.matched.length - a.matched.length || a.missing.length - b.missing.length);
 }
+
+// מה חסר בבית למתכון (שורות המצרכים שאין להן פריט מתאים במלאי)
+export function missingLines(lines, have, { ignoreStaples = true } = {}) {
+  const items = have.map((h) => h.trim()).filter(Boolean);
+  const needed = ignoreStaples ? lines.filter((l) => !isStaple(l)) : lines;
+  return needed.filter((l) => !items.some((i) => lineHas(l, i)));
+}
+
+// מיזוג מוצרים חדשים למלאי: אותו שם באותו מקום מתעדכן (כמות) ולא נכפל
+export function mergePantry(list, added) {
+  const out = [...list];
+  for (const a of added) {
+    const name = a.name.trim();
+    if (!name) continue;
+    const i = out.findIndex((x) => x.place === a.place && normalize(x.name) === normalize(name));
+    const item = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name, place: a.place, addedAt: new Date().toISOString(), ...(a.qty ? { qty: a.qty } : {}) };
+    if (i >= 0) out[i] = { ...out[i], ...(a.qty ? { qty: a.qty } : {}), addedAt: item.addedAt };
+    else out.push(item);
+  }
+  return out;
+}

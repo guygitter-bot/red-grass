@@ -74,3 +74,12 @@ export const removeCategory = (s, name) => api(s, 'POST', '/categories/remove', 
 
 // גיבוי ושחזור
 export const restoreBackup = (s, backup) => api(s, 'POST', '/recipes/restore', backup);
+
+// המלאי בבית: מקרר ומזווה
+export const getPantry = (s) => api(s, 'GET', '/pantry').then((d) => d.items);
+export const putPantry = (s, items) => api(s, 'PUT', '/pantry', { items }).then((d) => d.items);
+export const scanPantry = (s, body) => api(s, 'POST', '/pantry/scan', body).then((d) => d.items);
+export const pantryIdeas = (s, items, wish) => api(s, 'POST', '/pantry/ideas', { items, wish }).then((d) => d.results);
+
+// איפה לקנות: חנויות קרובות ומחירים
+export const findStores = (s, lat, lon, items) => api(s, 'POST', '/stores', { lat, lon, items });
