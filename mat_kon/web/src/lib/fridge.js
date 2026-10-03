@@ -5,9 +5,17 @@ import { normalize } from './recipes';
 export const STAPLES = ['מלח', 'פלפל', 'פלפל שחור', 'שמן', 'שמן זית', 'מים', 'סוכר', 'קמח', 'שום', 'בצל', 'פפריקה', 'כמון', 'אבקת אפייה', 'סודה לשתייה', 'תמצית וניל', 'סוכר וניל'];
 
 // שורש פשוט לעברית: ביצה/ביצים, עגבנייה/עגבניות, תפוח/תפוחים
+const FINALS = { 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' };
+// מילים שהסיומת שלהן היא חלק מהמילה ("שמנת" היא לא "שמן")
+const WHOLE = new Set(['שמנת']);
+
 export function stem(word) {
-  let w = normalize(word);
-  for (const suffix of ['יות', 'ים', 'ות', 'יה', 'ה', 'ת']) {
+  // אותיות סופיות כרגילות, כדי שלימון/לימונים ומלפפון/מלפפונים יתאימו
+  let w = normalize(word).replace(/[ךםןףץ]/g, (c) => FINALS[c]);
+  if (WHOLE.has(w)) return w;
+  for (const suffix of ['יות', 'ימ', 'ות', 'יה', 'ה', 'ת']) {
+    // "ית" היא חלק מהמילה (כרובית) – לא סיומת
+    if (suffix === 'ת' && w.endsWith('ית')) break;
     if (w.length - suffix.length >= 3 && w.endsWith(suffix)) {
       w = w.slice(0, -suffix.length);
       break;
@@ -24,7 +32,9 @@ const words = (text) => normalize(text).split(/[^\p{L}\p{N}]+/u).filter(Boolean)
 export function lineHas(line, item) {
   const lineStems = words(line).flatMap((w) => [stem(w), stem(w.replace(/^[והבלמש]/, ''))]);
   const itemWords = words(item).map(stem);
-  return itemWords.length > 0 && itemWords.every((iw) => lineStems.some((lw) => lw === iw || (iw.length >= 4 && lw.startsWith(iw))));
+  // התחלה משותפת רק למילים ארוכות, ולא כשההמשך הוא "ית" (כרוב ≠ כרובית)
+  const near = (lw, iw) => iw.length >= 4 && lw.startsWith(iw) && !/^י?ת$/.test(lw.slice(iw.length));
+  return itemWords.length > 0 && itemWords.every((iw) => lineStems.some((lw) => lw === iw || near(lw, iw)));
 }
 
 // "פלפל" לבד הוא תבלין, אבל פלפל אדום/ירוק/חריף הוא ירק שצריך לקנות

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ArrowRight, Camera, Check, ChefHat, Clock, ExternalLink, Heart, ImagePlus, Info, Loader2, MessageCircle, Minus, PenLine, Pencil, PlayCircle,
   CalendarPlus, Plus, Printer, RotateCw, Share2, ShoppingCart, Star, Trash2, Users, X,
@@ -11,6 +11,9 @@ import { DAY_NAMES, MEALS, dateKey, shortDate } from '../lib/plan';
 import { emojiOf, VIDEO_LABEL, isVideo, recipeAsText, sectionsToText, shortUrl, textToSections } from '../lib/recipes';
 import { usePersistentState } from '../lib/storage';
 
+// רק נגני סרטונים מהאתרים המוכרים
+const SAFE_EMBED = /^https:\/\/(www\.youtube-nocookie\.com\/embed\/|www\.tiktok\.com\/embed\/|www\.instagram\.com\/(p|reel|tv)\/|player\.vimeo\.com\/video\/)/;
+
 export default function RecipeView({ recipe, pantryNames = [], categories, onBack, onUpdate, onRefresh, onDelete, onAddToShopping, onAddToPlan }) {
   const [editing, setEditing] = useState(false);
   const [planning, setPlanning] = useState(false);
@@ -21,6 +24,8 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
   const ingredients = scaleSections(recipe.ingredients, factor);
   const canRefresh = Boolean(recipe.source.url) || recipe.source.kind === 'whatsapp';
   const [busy, setBusy] = useState('');
+  // עדכון קטן (מועדף, דירוג...): השגיאה כבר מוצגת כהודעה
+  const quiet = (patch) => Promise.resolve(onUpdate(patch)).catch(() => {});
   const [error, setError] = useState('');
   // סימון מצרכים ושלבים בזמן הבישול - נשמר רק במכשיר הזה
   const [checked, setChecked] = usePersistentState(`matkon_checked_${recipe.id}`, {});
@@ -86,7 +91,7 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
           <button onClick={() => setPlanning(true)} className="p-2 rounded-full hover:bg-stone-100" aria-label="הוספה לתכנון השבועי" title="הוספה לתכנון השבועי">
             <CalendarPlus size={21} />
           </button>
-          <button onClick={() => onUpdate({ favorite: !recipe.favorite })} className="p-2 rounded-full hover:bg-stone-100" aria-label="מועדף" title="מועדף">
+          <button onClick={() => quiet({ favorite: !recipe.favorite })} className="p-2 rounded-full hover:bg-stone-100" aria-label="מועדף" title="מועדף">
             <Heart size={21} className={recipe.favorite ? 'text-rose-500' : ''} fill={recipe.favorite ? 'currentColor' : 'none'} />
           </button>
           <button onClick={share} className="p-2 rounded-full hover:bg-stone-100" aria-label="שיתוף" title="שיתוף">
@@ -155,7 +160,7 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
           </div>
         )}
 
-        {recipe.source.embed ? (
+        {SAFE_EMBED.test(recipe.source.embed || '') ? (
           <div className={`mt-3 rounded-2xl overflow-hidden bg-black print:hidden ${recipe.source.kind === 'tiktok' ? 'aspect-[9/16] max-w-xs mx-auto' : 'aspect-video'}`}>
             <iframe
               src={recipe.source.embed}
@@ -163,6 +168,8 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
               className="w-full h-full"
               allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
               allowFullScreen
+              sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
+              referrerPolicy="no-referrer"
               loading="lazy"
             />
           </div>
@@ -181,7 +188,7 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
             {emojiOf(recipe.category)}
             <select
               value={recipe.category}
-              onChange={(e) => onUpdate({ category: e.target.value })}
+              onChange={(e) => quiet({ category: e.target.value })}
               className="bg-transparent font-medium outline-none py-1 cursor-pointer"
               aria-label="קטגוריה"
             >
@@ -190,10 +197,10 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
               ))}
             </select>
           </label>
-          <Tags tags={recipe.tags || []} onChange={(tags) => onUpdate({ tags })} />
+          <Tags tags={recipe.tags || []} onChange={(tags) => quiet({ tags })} />
         </div>
 
-        <Rating value={recipe.rating || 0} onChange={(rating) => onUpdate({ rating })} />
+        <Rating value={recipe.rating || 0} onChange={(rating) => quiet({ rating })} />
 
         {(recipe.servings || times.length > 0) && (
           <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-stone-700">
@@ -214,7 +221,7 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
         )}
 
         {editing ? (
-          <Editor recipe={recipe} onCancel={() => setEditing(false)} onSave={async (patch) => { await onUpdate(patch); setEditing(false); }} />
+          <Editor recipe={recipe} onCancel={() => setEditing(false)} onSave={async (patch) => { if (Object.keys(patch).length) await onUpdate(patch); setEditing(false); }} />
         ) : (
           <>
             <Section
@@ -295,7 +302,7 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
               </Section>
             )}
 
-            <div className="print:hidden"><MyNotes value={recipe.myNotes || ''} onSave={(myNotes) => onUpdate({ myNotes })} /></div>
+            <div className="print:hidden"><MyNotes value={recipe.myNotes || ''} onSave={(myNotes) => quiet({ myNotes })} /></div>
             {recipe.myNotes && <p className="hidden print:block mt-6 text-sm"><b>ההערות שלי:</b> {recipe.myNotes}</p>}
 
             {Object.values(checked).some(Boolean) && (
@@ -392,7 +399,19 @@ function ActionButton({ onClick, icon, children, className = '', disabled }) {
 
 function MyNotes({ value, onSave }) {
   const [text, setText] = useState(value);
+  const pending = useRef({ text: value, value, onSave });
+  pending.current = { text, value, onSave };
   useEffect(() => setText(value), [value]);
+  // שמירה אחרי הפסקה קצרה בהקלדה, וגם ביציאה מהמסך (חזרה אחורה בלי לצאת מהשדה)
+  useEffect(() => {
+    if (text === value) return undefined;
+    const t = setTimeout(() => onSave(text), 1200);
+    return () => clearTimeout(t);
+  }, [text]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => {
+    const p = pending.current;
+    if (p.text !== p.value) p.onSave(p.text);
+  }, []);
   return (
     <Section title="ההערות שלי">
       <textarea
@@ -454,13 +473,19 @@ function Editor({ recipe, onCancel, onSave }) {
           onClick={async () => {
             setSaving(true);
             try {
-              await onSave({
+              // נשלח רק מה שבאמת השתנה (כך רענון מהמקור עדיין יכול לעדכן את השאר)
+              const next = {
                 title: title.trim() || recipe.title,
                 ingredients: textToSections(ingredients),
                 steps: textToSections(steps),
                 tips: tips.split('\n').map((t) => t.trim()).filter(Boolean),
-                ...(image !== (recipe.image || null) ? { image } : {}),
-              });
+                image,
+              };
+              const before = { ...recipe, tips: recipe.tips || [], image: recipe.image || null };
+              const patch = Object.fromEntries(Object.entries(next).filter(([k, v]) => JSON.stringify(v) !== JSON.stringify(before[k])));
+              await onSave(patch);
+            } catch {
+              // ההודעה כבר הוצגה; העורך נשאר פתוח עם הטקסט
             } finally {
               setSaving(false);
             }

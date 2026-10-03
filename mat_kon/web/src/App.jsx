@@ -14,6 +14,8 @@ import { prunePlan } from './lib/plan';
 import { scaleSections } from './lib/scale';
 import { loadJson, saveJson } from './lib/storage';
 import { mergePantry } from './lib/fridge';
+import { itemsToPlan, planToItems } from './lib/sync';
+import useSyncedList from './hooks/useSyncedList';
 import InvitesView from './components/InvitesView';
 import ShareView from './components/ShareView';
 import Paywall from './components/Paywall';
@@ -22,8 +24,8 @@ import RecipeCard from './components/RecipeCard';
 import RecipeView from './components/RecipeView';
 import { CATEGORIES } from './lib/categories';
 import {
-  addCategory, addRecipe, addTextRecipe, deleteRecipe, removeCategory, getMe, getPlan, getShopping, listRecipes, logout as apiLogout, putPlan, putShopping, refreshRecipe,
-  updateRecipe, getPantry, putPantry,
+  addCategory, addRecipe, addTextRecipe, deleteRecipe, removeCategory, getMe, getPlan, getShopping, listRecipes, logout as apiLogout, refreshRecipe,
+  updateRecipe, getPantry, shoppingOps, pantryOps, planOps,
 } from './lib/api';
 import { SORTS, countByCategory, emojiOf, filterRecipes, freeLeft, linkFromShare, parseAuthHash, sortRecipes, topTags } from './lib/recipes';
 import { usePersistentState } from './lib/storage';
@@ -69,18 +71,17 @@ export default function App() {
   const [recipes, setRecipes] = usePersistentState('matkon_recipes', []);
   // רשימת הקניות: נשמרת בשרת (משותפת לכל המכשירים של אותו ספר) ומקומית לתצוגה מהירה
   const [shopping, setShopping] = usePersistentState('matkon_shopping', []);
-  const shoppingTimer = useRef(null);
   // תכנון ארוחות שבועי (נשמר בשרת, כמו רשימת הקניות)
   const [plan, setPlan] = usePersistentState('matkon_plan', {});
   const [pantry, setPantry] = usePersistentState('matkon_pantry', []);
-  const pantryTimer = useRef(null);
-  const planTimer = useRef(null);
   // מכשיר שנרשם פעם מקישור הזמנה נשאר מכשיר של משתמש מוזמן, גם אחרי יציאה
   const [guestDevice, setGuestDevice] = usePersistentState('matkon_guest', false);
   // מכשיר של בעל האפליקציה שנכנס עם סיסמת הבעלים / חשבון הגוגל שלו (כשהספר נעול)
   const [ownerDevice, setOwnerDevice] = usePersistentState('matkon_owner_device', false);
   const [auth, setAuth] = useState(() => {
-    if (AUTH_LINK && !(['register', 'join'].includes(AUTH_LINK.mode) && session)) return AUTH_LINK;
+    // קישור הזמנה/הצטרפות במכשיר שכבר מחובר: שואלים אם לצאת ולהמשך (ולא מתעלמים בשקט)
+    if (AUTH_LINK && ['register', 'join'].includes(AUTH_LINK.mode) && session) return { mode: 'switch', link: AUTH_LINK };
+    if (AUTH_LINK) return AUTH_LINK;
     return guestDevice && !session ? { mode: 'login' } : null;
   });
   const [paywall, setPaywall] = useState(null);
@@ -105,14 +106,47 @@ export default function App() {
 
   const isOwner = !session || ownerDevice;
 
+  // רשימות משותפות: נשמרות בשרת פריט-פריט
+  const same = useCallback((x) => x, []);
+  const syncError = useCallback((what) => (e) => setToast(`${what} לא נשמר${what === 'רשימת הקניות' ? 'ה' : ''}: ${e.message}`), []);
+  const shoppingSync = useSyncedList({
+    value: shopping, setValue: setShopping, toItems: same, fromItems: same,
+    send: useCallback((ops) => shoppingOps(session, ops), [session]), onError: useMemo(() => syncError('רשימת הקניות'), [syncError]),
+  });
+  const pantrySync = useSyncedList({
+    value: pantry, setValue: setPantry, toItems: same, fromItems: same,
+    send: useCallback((ops) => pantryOps(session, ops), [session]), onError: useMemo(() => syncError('המלאי'), [syncError]),
+  });
+  const planSync = useSyncedList({
+    value: plan, setValue: setPlan, toItems: planToItems, fromItems: itemsToPlan,
+    send: useCallback((ops) => planOps(session, ops), [session]), onError: useMemo(() => syncError('התכנון'), [syncError]),
+  });
+
+  // נתונים ששייכים לספר מסוים – נמחקים מהמכשיר ביציאה ובכניסה לחשבון אחר
+  const clearBookCache = useCallback(() => {
+    for (const sync of [shoppingSync, pantrySync, planSync]) sync.reset();
+    setRecipes([]);
+    setShopping([]);
+    setPlan({});
+    setPantry([]);
+    setCustom([]);
+    try {
+      for (const k of Object.keys(localStorage)) {
+        if (/^matkon_(factor|checked)_/.test(k) || k === 'matkon_fridge') localStorage.removeItem(k);
+      }
+    } catch {
+      // אחסון חסום – אין מה לנקות
+    }
+  }, [shoppingSync, pantrySync, planSync, setRecipes, setShopping, setPlan, setPantry, setCustom]);
+
   const signOut = useCallback(() => {
     apiLogout(session);
     setSession('');
     setUser(null);
     setOwnerDevice(false);
-    setRecipes([]);
+    clearBookCache();
     setAuth({ mode: 'login' });
-  }, [session, setSession, setUser, setOwnerDevice, setRecipes]);
+  }, [session, setSession, setUser, setOwnerDevice, clearBookCache]);
 
   useEffect(() => {
     const onHash = () => setNav(route());
@@ -136,17 +170,17 @@ export default function App() {
       }
       setCustom((me.categories || []).filter((c) => !CATEGORIES.includes(c)));
       setRecipes(await listRecipes(session));
-      getShopping(session).then(setShopping).catch(() => {});
-      getPlan(session).then(setPlan).catch(() => {});
+      getShopping(session).then(shoppingSync.loaded).catch(() => {});
+      getPlan(session).then(planSync.loaded).catch(() => {});
       getPantry(session)
         .then((items) => {
-          // מעבר חד פעמי: מה שנכתב פעם ב"מה יש במקרר" (רק במכשיר) עובר למלאי בשרת
+          pantrySync.loaded(items);
+          // מעבר חד פעמי: מה שנכתב פעם ב"מה יש במקרר" (רק במכשיר הזה) עובר למלאי בשרת
           const old = loadJson('matkon_fridge', []);
           if (!items.length && old.length) {
-            const moved = mergePantry([], old.map((name) => ({ name, place: 'fridge' })));
-            setPantry(moved);
-            putPantry(session, moved).then(() => saveJson('matkon_fridge', [])).catch(() => {});
-          } else setPantry(items);
+            pantrySync.change(mergePantry([], old.map((name) => ({ name, place: 'fridge' }))));
+            saveJson('matkon_fridge', []);
+          }
         })
         .catch(() => {});
       setLoadError('');
@@ -154,45 +188,25 @@ export default function App() {
       if (e.status === 401) signOut();
       else setLoadError(e.message);
     }
-  }, [auth, session, ownerDevice, setUser, setRecipes, setCustom, signOut]);
+  }, [auth, session, ownerDevice, setUser, setRecipes, setCustom, signOut, shoppingSync.loaded, planSync.loaded, pantrySync]);
 
   useEffect(() => {
     reload();
   }, [reload]);
 
-  const saveShopping = useCallback(
-    (items) => {
-      setShopping(items);
-      clearTimeout(shoppingTimer.current);
-      shoppingTimer.current = setTimeout(() => {
-        putShopping(session, items).catch((e) => setToast(`רשימת הקניות לא נשמרה: ${e.message}`));
-      }, 600);
-    },
-    [session, setShopping],
-  );
-
-  const savePantry = useCallback(
-    (items) => {
-      setPantry(items);
-      clearTimeout(pantryTimer.current);
-      pantryTimer.current = setTimeout(() => {
-        putPantry(session, items).catch((e) => setToast(`המלאי לא נשמר: ${e.message}`));
-      }, 600);
-    },
-    [session, setPantry],
-  );
-
+  const saveShopping = shoppingSync.change;
+  const savePantry = pantrySync.change;
   const savePlan = useCallback(
-    (next) => {
-      const pruned = prunePlan(next);
-      setPlan(pruned);
-      clearTimeout(planTimer.current);
-      planTimer.current = setTimeout(() => {
-        putPlan(session, pruned).catch((e) => setToast(`התכנון לא נשמר: ${e.message}`));
-      }, 600);
-    },
-    [session, setPlan],
+    (next) => planSync.change((current) => prunePlan(typeof next === 'function' ? next(current) : next)),
+    [planSync],
   );
+
+  // חזרה לאפליקציה: טוענים מחדש, כדי לראות מה בני המשפחה שינו בינתיים
+  useEffect(() => {
+    const onVisible = () => document.visibilityState === 'visible' && reload();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [reload]);
 
   // מצרכים של מתכון לרשימת הקניות, לפי מספר המנות שנבחר לו (בלי כפילויות של פריטים פתוחים)
   const shoppingWith = (list, recipe, lines) => {
@@ -257,13 +271,31 @@ export default function App() {
   const current = nav.view === 'recipe' && recipes.find((r) => r.id === nav.id);
   const left = freeLeft(user);
 
+  if (auth?.mode === 'switch') {
+    return (
+      <SwitchAccount
+        name={ownerDevice ? 'בעל האפליקציה' : user?.name || user?.email || ''}
+        join={auth.link.mode === 'join'}
+        onContinue={() => {
+          apiLogout(session);
+          setSession('');
+          setUser(null);
+          setOwnerDevice(false);
+          clearBookCache();
+          setAuth(auth.link);
+        }}
+        onCancel={() => setAuth(null)}
+      />
+    );
+  }
+
   if (auth) {
     return (
       <Auth
         mode={auth.mode}
         token={auth.token}
         onDone={({ session: s, user: u, owner }) => {
-          setRecipes([]);
+          clearBookCache();
           setUser(u);
           setSession(s);
           setOwnerDevice(Boolean(owner));
@@ -446,6 +478,7 @@ export default function App() {
           } catch (e) {
             setToast(e.message);
             reload();
+            throw e; // העורך נשאר פתוח עם הטקסט, כדי שלא יאבד
           }
         }}
         onRefresh={async () => {
@@ -749,4 +782,22 @@ function savedUrlSet(recipes) {
       return '';
     }
   }));
+}
+
+// פתחו קישור הזמנה/הצטרפות במכשיר שכבר מחובר לחשבון אחר
+function SwitchAccount({ name, join, onContinue, onCancel }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-b from-orange-50 to-amber-50">
+      <div className="w-full max-w-sm bg-white rounded-3xl shadow-sm p-6 text-center">
+        <img src="icon.svg" alt="" className="w-14 h-14 mx-auto mb-3" />
+        <h1 className="text-xl font-bold mb-2">{join ? 'הצטרפות לספר משותף' : 'הרשמה עם קישור הזמנה'}</h1>
+        <p className="text-stone-600 leading-relaxed mb-5">
+          המכשיר הזה מחובר כרגע{name ? ` כ-${name}` : ''}. כדי {join ? 'להצטרף לספר' : 'להירשם'} צריך קודם לצאת מהחשבון הנוכחי.
+          הספר הנוכחי לא נמחק, ואפשר לחזור אליו בכניסה.
+        </p>
+        <button onClick={onContinue} className="w-full rounded-2xl bg-orange-500 text-white font-bold py-3">יציאה והמשך</button>
+        <button onClick={onCancel} className="w-full mt-2 rounded-2xl bg-stone-100 font-medium py-3">ביטול</button>
+      </div>
+    </div>
+  );
 }

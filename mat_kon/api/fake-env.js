@@ -33,7 +33,7 @@ function namespace(Cls, env) {
 }
 
 export function fakeEnv(extra = {}) {
-  const env = { ANTHROPIC_API_KEY: 'sk-ant-secret', ALLOWED_ORIGINS: 'https://mat-kon.pages.dev', FREE_RECIPES: '10', PAYMENT_URL: '', ...extra };
+  const env = { ANTHROPIC_API_KEY: 'sk-ant-secret', ALLOWED_ORIGINS: 'https://mat-kon.pages.dev', FREE_RECIPES: '10', PAYMENT_URL: '', OWNER_OPEN: 'true', ...extra };
   env.BOOK = namespace(RecipeBook, env);
   env.ACCOUNTS = namespace(Accounts, env);
   return env;

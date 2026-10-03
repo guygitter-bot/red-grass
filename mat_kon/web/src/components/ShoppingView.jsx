@@ -38,7 +38,10 @@ export default function ShoppingView({ session, items, onChange, onBack, onToast
     try {
       const open = items.filter((i) => !i.checked);
       const result = await organizeShopping(session, open.map((i) => i.text));
-      onChange(result.flatMap((g) => g.items.map((t) => ({ id: newId(), text: t, checked: false, group: g.title }))));
+      // רק הפריטים שנשלחו לסידור מוחלפים; מה שסומן או נוסף בינתיים (גם ע"י בן משפחה) נשאר
+      const sentIds = new Set(open.map((i) => i.id));
+      const organized = result.flatMap((g) => g.items.map((t) => ({ id: newId(), text: t, checked: false, group: g.title })));
+      onChange((current) => [...current.filter((i) => !sentIds.has(i.id)), ...organized]);
       onToast('הרשימה סודרה לפי מחלקות');
     } catch (err) {
       setError(err.message);
@@ -63,7 +66,7 @@ export default function ShoppingView({ session, items, onChange, onBack, onToast
   };
 
   return (
-    <div className="min-h-screen pb-16">
+    <div className="min-h-screen pb-28">
       <div className="sticky top-0 z-10 bg-[#fffbf5]/90 backdrop-blur border-b border-stone-100 pt-[env(safe-area-inset-top)]">
         <div className="max-w-2xl mx-auto px-2 h-14 flex items-center gap-1">
           <button onClick={onBack} className="p-2 rounded-full hover:bg-stone-100" aria-label="חזרה">

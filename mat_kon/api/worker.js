@@ -94,7 +94,8 @@ export default {
     const googleClientId = setting(env.GOOGLE_CLIENT_ID);
     const ownerPassword = setting(env.OWNER_PASSWORD);
     const ownerEmail = setting(env.OWNER_EMAIL).trim().toLowerCase();
-    const ownerLocked = Boolean(ownerPassword || (ownerEmail && googleClientId));
+    // בלי סיסמת בעלים ובלי חשבון גוגל של בעלים הספר נשאר סגור (כשל סגור), אלא אם הוגדר במפורש OWNER_OPEN=true
+    const ownerLocked = Boolean(ownerPassword || (ownerEmail && googleClientId)) || env.OWNER_OPEN !== 'true';
     if (url.pathname === '/auth-config' && request.method === 'GET') {
       return reply(200, { googleClientId, ownerLocked, ownerPassword: Boolean(ownerPassword) });
     }
@@ -140,15 +141,17 @@ export default {
       return fail(502, message);
     };
 
-    // בדיקה: מה השרת מצליח לקרוא מקישור (בלי AI). משמש את .github/workflows/mat-kon-probe.yml
+    // ספר נעול: בלי כניסה אין גישה לספר של בעל האפליקציה
+    if (ownerLocked && !signedIn) return fail(401, 'צריך להיכנס', { login: true });
+
+    // בדיקה (רק לבעל האפליקציה): מה השרת מצליח לקרוא מקישור (בלי AI). משמש את .github/workflows/mat-kon-probe.yml
     if (url.pathname === '/debug/source' && request.method === 'GET') {
+      if (user) return fail(403, 'רק לבעל האפליקציה');
       const link = normalizeUrl(url.searchParams.get('url'));
       if (!link) return fail(400, 'זה לא נראה כמו קישור תקין');
       return reply(200, summarizeSource(await gatherSource(link, deps.fetch, { igDocId: env.IG_DOC_ID })));
     }
 
-    // ספר נעול: בלי כניסה אין גישה לספר של בעל האפליקציה
-    if (ownerLocked && !signedIn) return fail(401, 'צריך להיכנס', { login: true });
 
     // הקטגוריות של הספר: הקבועות ואלה שהמשתמש הוסיף
     const bookStub = () => bookFor(user);
@@ -243,6 +246,15 @@ export default {
         return pass(await internal(book, 'PUT', '/plan', { plan }));
       }
       return fail(405, 'Method not allowed');
+    }
+
+    // ---- שינויים ברמת פריט ברשימות המשותפות ----
+    if (['shopping', 'pantry', 'plan'].includes(parts[0]) && parts[1] === 'ops' && parts.length === 2 && request.method === 'POST') {
+      const { body, error } = await readJson(MAX_EDIT_BYTES);
+      if (error) return error;
+      const ops = cleanOps(parts[0], body.ops);
+      if (!ops) return fail(400, 'שינוי לא תקין');
+      return pass(await internal(bookFor(user), 'POST', `/ops/${parts[0]}`, { ops }));
     }
 
     // ---- המלאי בבית: מקרר ומזווה ----
@@ -368,7 +380,7 @@ export default {
           skipped += 1;
           continue;
         }
-        if ((await internal(book, 'POST', '/recipes', recipe)).ok) restored += 1;
+        if ((await internal(book, 'POST', '/recipes?replace=1', recipe)).ok) restored += 1;
       }
       return reply(200, { restored, skipped });
     }
@@ -444,11 +456,39 @@ export default {
         patch.tags = [...new Set(patch.tags.map((t) => String(t || '').trim().slice(0, 30)).filter(Boolean))].slice(0, 15);
       }
       if ('image' in patch && !validImage(patch.image)) return fail(400, 'תמונה לא תקינה');
+      const bad = cleanPatch(patch);
+      if (bad) return fail(400, bad);
       return pass(await internal(book, 'PUT', `/recipes/${id}`, patch));
     }
     return fail(405, 'Method not allowed');
   },
 };
+
+// עריכת מתכון: כל שדה בצורה הנכונה, כדי שעריכה פגומה לא תפיל את הספר (גם לבני המשפחה שחולקים אותו).
+// מתקן את patch במקום ומחזיר הודעת שגיאה אם משהו לא תקין
+function cleanPatch(patch) {
+  const lengths = { description: 500, servings: 100, prepTime: 100, cookTime: 100, totalTime: 100, notes: 1000, myNotes: 5000 };
+  if ('title' in patch) {
+    if (typeof patch.title !== 'string' || !patch.title.trim()) return 'נא לכתוב שם למתכון';
+    patch.title = patch.title.trim().slice(0, 150);
+  }
+  for (const [k, n] of Object.entries(lengths)) {
+    if (!(k in patch)) continue;
+    if (typeof patch[k] !== 'string') return 'עריכה לא תקינה';
+    patch[k] = patch[k].slice(0, n);
+  }
+  for (const k of ['ingredients', 'steps']) {
+    if (!(k in patch)) continue;
+    if (!Array.isArray(patch[k])) return 'עריכה לא תקינה';
+    patch[k] = sections(patch[k]);
+  }
+  if ('tips' in patch) {
+    if (!Array.isArray(patch.tips)) return 'עריכה לא תקינה';
+    patch.tips = strList(patch.tips, 30);
+  }
+  if ('favorite' in patch) patch.favorite = patch.favorite === true;
+  return null;
+}
 
 // תמונת מתכון: קישור, או תמונה מוקטנת (data URL) קטנה מספיק כדי להישמר בספר
 function validImage(v) {
@@ -535,6 +575,9 @@ function cleanPlan(plan) {
   return out;
 }
 
+// סרטון מוטמע רק מהאתרים שהאפליקציה עצמה יוצרת (לא כל אתר, כדי שגיבוי לא יוכל להטמיע דף מתחזה)
+const EMBED_ORIGIN = /^https:\/\/(www\.youtube-nocookie\.com\/embed\/|www\.tiktok\.com\/embed\/|www\.instagram\.com\/(p|reel|tv)\/|player\.vimeo\.com\/video\/)/;
+
 function textHash(text) {
   let h = 5381;
   for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
@@ -559,7 +602,7 @@ function restoredRecipe(r, categories) {
     kind: /^[a-z]{2,20}$/.test(src.kind) ? src.kind : url ? sourceKind(url) : 'manual',
     ...['title', 'author', 'site', 'chat', 'date', 'hint'].reduce((o, k) => (src[k] ? { ...o, [k]: str(src[k]) } : o), {}),
     ...(typeof src.text === 'string' ? { text: src.text.slice(0, 20000) } : {}),
-    ...(typeof src.embed === 'string' && /^https:\/\//.test(src.embed) ? { embed: src.embed.slice(0, 500) } : {}),
+    ...(typeof src.embed === 'string' && EMBED_ORIGIN.test(src.embed) ? { embed: src.embed.slice(0, 500) } : {}),
   };
   return {
     title,
@@ -597,6 +640,31 @@ function cleanShopping(items) {
       ...(i?.group ? { group: String(i.group).slice(0, 60) } : {}),
     }))
     .filter((i) => i.text);
+}
+
+// שינויים ברמת פריט: כל פריט עובר את אותו ניקוי כמו ברשימה שלמה
+function cleanOps(kind, ops) {
+  if (!Array.isArray(ops) || ops.length > 500) return null;
+  const out = [];
+  for (const o of ops) {
+    const id = String(o?.id || '').slice(0, 64);
+    if (!id || !['add', 'update', 'remove'].includes(o?.op)) return null;
+    if (o.op === 'remove') {
+      out.push({ op: 'remove', id });
+      continue;
+    }
+    let item;
+    if (kind === 'shopping') item = cleanShopping([{ ...o.item, id }])?.[0];
+    else if (kind === 'pantry') item = cleanPantry([{ ...o.item, id }])?.[0];
+    else {
+      const day = String(o.item?.day || '');
+      const plan = /^\d{4}-\d{2}-\d{2}$/.test(day) ? cleanPlan({ [day]: [{ ...o.item, id }] }) : null;
+      item = plan?.[day]?.[0] && { ...plan[day][0], day };
+    }
+    if (!item) return null;
+    out.push({ op: o.op, id, item });
+  }
+  return out;
 }
 
 // המלאי: [{id, name, qty?, place: fridge|pantry, addedAt}]

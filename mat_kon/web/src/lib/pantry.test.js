@@ -22,3 +22,9 @@ describe('staples', () => {
     expect(missingLines(['מלח ופלפל', '1 פלפל אדום', 'פלפל שחור גרוס'], [])).toEqual(['1 פלפל אדום']);
   });
 });
+
+describe('hebrew matching details', () => {
+  it('final letters and -ית words', () => {
+    expect(missingLines(['3 לימונים', 'חצי כרובית', '2 מלפפונים'], ['לימון', 'כרוב', 'מלפפון'])).toEqual(['חצי כרובית']);
+  });
+});

@@ -13,10 +13,13 @@ const NOT_AMOUNT = /^\s*(%|אחוז|ס["״]?מ|סנטימטר|cm|מעלות|°|�
 // לפני המספר: לא כמות ("מעל 16%", "גודל 3")
 const NOT_AMOUNT_BEFORE = /(מעל|עד|גודל|מספר|תבנית|קוטר|מס['׳])\s*$/;
 
-const NUMBER = /(\d+(?:[.,]\d+)?\s*[½⅓⅔¼¾⅛]|\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:[.,]\d+)?|[½⅓⅔¼¾⅛])(?:\s*[-–]\s*(\d+(?:[.,]\d+)?|\d+\/\d+))?/g;
+const NUMBER = /(\d{1,3}(?:,\d{3})+(?![\d,])|\d+(?:[.,]\d+)?\s*[½⅓⅔¼¾⅛]|\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:[.,]\d+)?|[½⅓⅔¼¾⅛])(?:\s*[-–]\s*(\d+(?:[.,]\d+)?|\d+\/\d+))?/g;
 
 export function parseNumber(s) {
-  const t = String(s).trim().replace(',', '.');
+  const raw = String(s).trim();
+  // פסיק של אלפים ("1,000 גרם") – לא נקודה עשרונית
+  if (/^\d{1,3}(,\d{3})+$/.test(raw)) return Number(raw.replace(/,/g, ''));
+  const t = raw.replace(',', '.');
   if (t in FRACTIONS) return FRACTIONS[t];
   const mixedSymbol = t.match(/^(\d+(?:\.\d+)?)\s*([½⅓⅔¼¾⅛])$/);
   if (mixedSymbol) return Number(mixedSymbol[1]) + FRACTIONS[mixedSymbol[2]];

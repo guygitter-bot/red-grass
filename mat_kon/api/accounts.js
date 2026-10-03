@@ -67,6 +67,7 @@ export class Accounts {
 
   // המשתמש כמו שהשרת עובד איתו: חבר בספר משותף מקבל את המנוי והמכסה של בעל הספר
   async effectiveUser(user) {
+    if (user.removed) return null;
     const base = publicUser(user, this.freeLimit);
     if (!user.bookId) return { ...base, role: 'holder' };
     if (user.bookId === OWNER_BOOK) return { ...base, role: 'member', plan: 'paid', ownerBook: true, bookName: 'בעל האפליקציה' };
@@ -77,7 +78,7 @@ export class Accounts {
 
   async membersOf(bookId) {
     const users = [...(await this.storage.list({ prefix: 'user:' })).values()];
-    return users.filter((u) => u.bookId === bookId);
+    return users.filter((u) => u.bookId === bookId && !u.removed);
   }
 
   async newSession(userId) {
@@ -139,7 +140,15 @@ export class Accounts {
       if (!name) return err(400, 'נא למלא שם');
       if (!validEmail(email)) return err(400, 'כתובת האימייל לא תקינה');
       if (password.length < 6 || password.length > 200) return err(400, 'הסיסמה צריכה להיות לפחות 6 תווים');
-      if (await this.storage.get(`email:${email}`)) return err(409, 'האימייל הזה כבר רשום. אפשר להיכנס איתו.');
+      const existingId = await this.storage.get(`email:${email}`);
+      if (existingId) {
+        const existing = await this.storage.get(`user:${existingId}`);
+        if (existing?.removed && body.join) {
+          const salt = randomToken(16);
+          return this.rejoin(existing, body.join, { name, salt, hash: await hashPassword(password, salt) });
+        }
+        return err(409, 'האימייל הזה כבר רשום. אפשר להיכנס איתו.');
+      }
       const salt = randomToken(16);
       return this.createUser({ name, email, salt, hash: await hashPassword(password, salt) }, claim);
     }
@@ -186,8 +195,12 @@ export class Accounts {
     }
     if (path === '/members/remove' && request.method === 'POST') {
       const member = await this.storage.get(`user:${body.userId}`);
-      if (!member || member.bookId !== String(body.bookId || '')) return err(404, 'החבר לא נמצא בספר');
-      await this.deleteUser(member.id);
+      if (!member || member.removed || member.bookId !== String(body.bookId || '')) return err(404, 'החבר לא נמצא בספר');
+      // החבר מנותק מהספר (וממכשיריו) אבל החשבון נשאר: בכניסה הוא יקבל הסבר, ויוכל להצטרף שוב בקישור חדש
+      const sessions = await this.storage.list({ prefix: 'session:' });
+      const keys = [...sessions].filter(([, x]) => x.userId === member.id).map(([k]) => k);
+      for (let i = 0; i < keys.length; i += 128) await this.storage.delete(keys.slice(i, i + 128));
+      await this.storage.put(`user:${member.id}`, { ...member, removed: true });
       return json({ ok: true });
     }
     if (path === '/members/cancel' && request.method === 'POST') {
@@ -204,6 +217,7 @@ export class Accounts {
       const id = await this.storage.get(`email:${email}`);
       let user = id && (await this.storage.get(`user:${id}`));
       if (user && body.join) {
+        if (user.removed) return this.rejoin(user, body.join, { google: user.google || String(body.sub) });
         const join = await this.storage.get(`join:${body.join}`);
         if (join && user.bookId !== join.bookId) return err(409, 'כבר יש חשבון עם האימייל הזה. כדי להצטרף לספר צריך להירשם עם אימייל אחר.');
       }
@@ -309,7 +323,18 @@ export class Accounts {
     return this.signedIn(user);
   }
 
+  // מי שהוסר מספר משותף מצטרף שוב (לאותו ספר או לספר אחר) עם קישור הצטרפות חדש
+  async rejoin(user, token, fields) {
+    const join = await this.validJoin(token);
+    if (join.error) return err(join.status, join.error);
+    const { removed, ...rest } = user;
+    const next = { ...rest, ...fields, bookId: join.join.bookId };
+    await this.storage.put({ [`user:${user.id}`]: next, [`join:${join.join.token}`]: { ...join.join, usedBy: user.id } });
+    return this.signedIn(next);
+  }
+
   async signedIn(user) {
+    if (user.removed) return err(403, 'הוסרתם מהספר המשותף. כדי לחזור, בקשו מבעל הספר קישור הצטרפות חדש.');
     const view = await this.effectiveUser(user);
     if (!view) return err(401, 'הספר שלכם לא קיים יותר');
     return json({ session: await this.newSession(user.id), user: view });
@@ -328,7 +353,7 @@ export class Accounts {
       ...(user.bookId ? [] : [...joins].filter(([, j]) => j.bookId === userId).map(([k]) => k)),
       ...[user, ...members].flatMap((u) => [`user:${u.id}`, `email:${u.email}`]),
     ];
-    await this.storage.delete(keys);
+    for (let i = 0; i < keys.length; i += 128) await this.storage.delete(keys.slice(i, i + 128)); // מגבלת Cloudflare: 128 מפתחות בפעם
   }
 }
 
