@@ -81,7 +81,8 @@ jobs:
       - name: Summary
         env:
           URL: ${{ steps.deploy.outputs.deployment-url }}
-        run: echo "Worker: $URL" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo "Worker: $URL" >> "$GITHUB_STEP_SUMMARY"
 
   web:
     needs: api
@@ -119,4 +120,5 @@ jobs:
       - name: Summary
         env:
           URL: ${{ steps.publish.outputs.deployment-url }}
-        run: echo "Published: https://mat-kon.pages.dev ($URL)" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo "Published: https://mat-kon.pages.dev ($URL)" >> "$GITHUB_STEP_SUMMARY"
