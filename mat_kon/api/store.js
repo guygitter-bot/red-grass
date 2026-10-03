@@ -51,6 +51,17 @@ export class RecipeBook {
       return json({ custom, moved });
     }
 
+    // המלאי בבית: מה יש במקרר ובמזווה
+    if (url.pathname === '/pantry') {
+      if (request.method === 'GET') return json({ items: (await this.storage.get('pantry')) || [] });
+      if (request.method === 'PUT') {
+        const { items } = await request.json();
+        await this.storage.put('pantry', items);
+        return json({ items });
+      }
+      return json({ error: 'method not allowed' }, 405);
+    }
+
     // רשימת הקניות של הספר
     if (url.pathname === '/shopping') {
       if (request.method === 'GET') return json({ items: (await this.storage.get('shopping')) || [] });

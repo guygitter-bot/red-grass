@@ -106,30 +106,32 @@ jobs:
           KEY: ${{ secrets.CHEAPERSAL_API_KEY }}
         run: |
           B=https://cheapersal.co.il
-          echo "key length: ${#KEY}"
-          for P in /developers /developers/playground; do
-            echo "=== page $P"
-            curl -sS -L "$B$P" -o page.html || true
-            sed -e 's/<script[^>]*>.*<\/script>//g' -e 's/<[^>]*>/ /g' page.html | tr -s ' \n' | grep -oiE '.{0,200}(header|x-api-key|authorization|bearer|api_key|apikey|search|\?q=|query).{0,300}' | head -20 || true
-            grep -oE '/api/v1/[A-Za-z0-9_/:?=&.-]+' page.html | sort -u | head -60 || true
+          echo "key prefix: ${KEY:0:4}"
+          for P in /developers /developers/playground /developers/keys; do
+            curl -sS -L "$B$P" -o "p.html" || true
+            grep -oE '/_next/static/chunks/app/developers[^"]+\.js' p.html | sort -u >> chunks.txt || true
+            echo "=== page $P hosts"
+            grep -oE 'https?://[A-Za-z0-9.-]*(cheapersal|api)[A-Za-z0-9./_-]*' p.html | sort -u | head -20 || true
+            grep -oE '.{0,200}(X-API-Key|x-api-key|Authorization|Bearer|api_key|apiKey|curl ).{0,300}' p.html | head -8 | cut -c1-600 || true
+          done
+          for C in $(sort -u chunks.txt); do
+            echo "=== chunk $C"
+            curl -sS "$B$C" -o c.js
+            grep -oE 'https?://[A-Za-z0-9.-]+[A-Za-z0-9./_:-]*' c.js | sort -u | head -30 || true
+            grep -oE '.{0,250}(X-API-Key|x-api-key|Authorization|Bearer|api_key|apiKey|headers|fetch\().{0,300}' c.js | head -12 | cut -c1-600 || true
           done
           call() {
             echo "=== $1 $2"
-            curl -sS --max-time 30 "${@:3}" -o out.json -w 'status=%{http_code}\n' "$B$2" || true
-            head -c 900 out.json; echo
+            curl -sS --max-time 30 "${@:3}" -o out.json -w 'status=%{http_code} type=%{content_type}\n' "$2" || true
+            head -c 700 out.json; echo
           }
-          call bearer /api/v1/chains -H "Authorization: Bearer $KEY"
-          call x-api-key /api/v1/chains -H "x-api-key: $KEY"
-          call query /api/v1/chains?api_key=$KEY
-          for H in "Authorization: Bearer $KEY" "x-api-key: $KEY"; do
-            call cities /api/v1/cities -H "$H"
-            call search1 "/api/v1/products/search?q=%D7%97%D7%9C%D7%91" -H "$H"
-            call search2 "/api/v1/products?q=%D7%97%D7%9C%D7%91" -H "$H"
-            call search3 "/api/v1/search?q=%D7%97%D7%9C%D7%91" -H "$H"
-            call product /api/v1/products/7290004131074 -H "$H"
-            call prices /api/v1/products/7290004131074/prices -H "$H"
-            call branches "/api/v1/branches?city=%D7%AA%D7%9C%20%D7%90%D7%91%D7%99%D7%91&limit=3" -H "$H"
-            call promos "/api/v1/promos?limit=2" -H "$H"
+          for H in "https://api.cheapersal.co.il/api/v1" "https://api.cheapersal.co.il/v1" "https://cheapersal.co.il/api/v1" "https://www.cheapersal.co.il/api/v1"; do
+            call bearer "$H/chains" -H "Authorization: Bearer $KEY"
+            call xkey "$H/chains" -H "X-API-Key: $KEY"
           done
-          echo "=== overpass"
-          curl -sS --max-time 60 -A 'mat-kon/1.0' --data-urlencode 'data=[out:json][timeout:25];nwr["shop"="supermarket"](around:2000,32.0853,34.7818);out center tags 5;' https://overpass-api.de/api/interpreter | head -c 1500; echo
+          echo "=== overpass mirrors"
+          Q='[out:json][timeout:25];nwr["shop"="supermarket"](around:2000,32.0853,34.7818);out center tags 3;'
+          for O in https://overpass.private.coffee/api/interpreter https://overpass.kumi.systems/api/interpreter https://maps.mail.ru/osm/tools/overpass/api/interpreter https://overpass-api.de/api/interpreter; do
+            echo "--- $O"
+            curl -sS --max-time 40 -A 'mat-kon/1.0 (recipe app)' --data-urlencode "data=$Q" -w '\nstatus=%{http_code} time=%{time_total}\n' "$O" | head -c 1200; echo
+          done

@@ -332,3 +332,107 @@ export async function searchRecipes(client, query) {
   }
   throw new Error('החיפוש לא החזיר תוצאות. נסו שוב.');
 }
+
+// ---------- המלאי בבית: זיהוי מוצרים מתמונה ----------
+
+export const PANTRY_TOOL = {
+  name: 'submit_items',
+  description: 'Submit the food products seen in the photos.',
+  strict: true,
+  input_schema: {
+    type: 'object',
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: 'Short generic Hebrew name a cook would use in a recipe, e.g. "חלב", "גבינה צהובה", "עגבניות", "רסק עגבניות", "אורז בסמטי". Add the brand only if it matters.' },
+            qty: { type: 'string', description: 'Rough Hebrew amount if visible, e.g. "6 יחידות", "חצי בקבוק", "2 קופסאות", or empty' },
+            place: { type: 'string', enum: ['fridge', 'pantry'], description: 'fridge = refrigerated or frozen; pantry = dry goods, cans, spices, oils, bread, produce kept outside' },
+          },
+          required: ['name', 'qty', 'place'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['items'],
+    additionalProperties: false,
+  },
+};
+
+const PANTRY_SYSTEM = `You keep a home cook's kitchen inventory in Hebrew. Look at the photos and list the food products you can \
+identify. Rules:
+- One line per product, merged when the same product appears several times (add up the amount).
+- Use the short generic Hebrew name that would appear in a recipe ingredient list, not marketing text.
+- Skip things that are not food or that you cannot identify with reasonable confidence; never guess hidden items.
+- Read Hebrew labels carefully (e.g. "שמנת מתוקה" vs "שמנת חמוצה", "קמח לבן" vs "קמח מלא").
+Call submit_items.`;
+
+export async function scanPantry(client, images, { mode = 'many', place = 'fridge' } = {}) {
+  const ask = mode === 'single'
+    ? 'This is a photo of ONE product (sometimes two or three of the same kind). Return just that product.'
+    : `This is a photo of a whole ${place === 'pantry' ? 'pantry shelf / cupboard' : 'fridge (or freezer)'}. Return every food product you can identify.`;
+  const response = await client.beta.messages.create({
+    model: MODEL,
+    max_tokens: 8000,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: { effort: 'low' },
+    system: PANTRY_SYSTEM,
+    tools: [PANTRY_TOOL],
+    messages: [{
+      role: 'user',
+      content: [
+        ...images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.type, data: i.data } })),
+        { type: 'text', text: `${ask} The user is adding to their ${place === 'pantry' ? 'pantry (מזווה)' : 'fridge (מקרר)'}. Call submit_items.` },
+      ],
+    }],
+  });
+  if (response.stop_reason === 'refusal') throw new Error('הבקשה נדחתה על ידי המודל.');
+  const submit = response.content.find((b) => b.type === 'tool_use' && b.name === PANTRY_TOOL.name);
+  if (!submit) throw new Error('לא הצלחתי לזהות מוצרים בתמונה. נסו שוב.');
+  return submit.input.items
+    .map((i) => ({ name: clean(i.name).slice(0, 80), qty: clean(i.qty).slice(0, 40), place: i.place === 'pantry' ? 'pantry' : 'fridge' }))
+    .filter((i) => i.name)
+    .slice(0, 80);
+}
+
+// ---------- מתכונים ברשת לפי מה שיש בבית ----------
+
+const IDEAS_SYSTEM = `You suggest recipes for an Israeli home cook based on what they have at home. Search the web and return \
+up to 6 different recipe pages (direct links to a single recipe each, not list or search pages) that use mainly the \
+products they have, so they need to buy as little as possible. Assume they have basics (salt, pepper, oil, sugar, \
+flour, onion, garlic, common spices). Prefer Hebrew and Israeli sites and creators. In each description write in Hebrew \
+which of their products the recipe uses and what, if anything, is missing. Call submit_results.`;
+
+export async function ideasFromPantry(client, items, { wish = '' } = {}) {
+  const messages = [{
+    role: 'user',
+    content: `What I have at home:\n${items.map((i) => `- ${i}`).join('\n')}${wish ? `\n\nI feel like: ${wish}` : ''}`,
+  }];
+  for (let step = 0; step < 6; step++) {
+    const response = await client.beta.messages.create({
+      model: MODEL,
+      max_tokens: 8000,
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      output_config: { effort: 'low' },
+      system: IDEAS_SYSTEM,
+      tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 4 }, SEARCH_TOOL],
+      messages,
+    });
+    if (response.stop_reason === 'refusal') throw new Error('הבקשה נדחתה על ידי המודל.');
+    const submit = response.content.find((b) => b.type === 'tool_use' && b.name === SEARCH_TOOL.name);
+    if (submit) {
+      return submit.input.results
+        .filter((r) => /^https?:\/\//.test(r.url))
+        .slice(0, 8)
+        .map((r) => ({ title: clean(r.title), url: r.url.trim(), site: clean(r.site), description: clean(r.description) }));
+    }
+    messages.push({ role: 'assistant', content: response.content });
+    if (response.stop_reason === 'pause_turn') continue;
+    messages.push({ role: 'user', content: `Call ${SEARCH_TOOL.name} now with what you found.` });
+  }
+  throw new Error('החיפוש לא החזיר תוצאות. נסו שוב.');
+}
