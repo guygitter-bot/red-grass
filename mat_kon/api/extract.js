@@ -4,7 +4,7 @@ import { CATEGORIES, DEFAULT_CATEGORY } from './categories.js';
 import { isVideoKind, looksComplete } from './source.js';
 
 export const MODEL = 'claude-opus-5-5';
-const MAX_STEPS = 6;
+const MAX_STEPS = 10;
 
 const sectionList = (what) => ({
   type: 'array',
@@ -55,8 +55,8 @@ export const RECIPE_TOOL = {
 };
 
 const WEB_TOOLS = [
-  { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 4 },
-  { type: 'web_search_20260209', name: 'web_search', max_uses: 6 },
+  { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 6 },
+  { type: 'web_search_20260209', name: 'web_search', max_uses: 8 },
 ];
 
 export const SYSTEM = `You turn a link that a user saved (a recipe website or a cooking video) into a clean recipe \
@@ -67,16 +67,23 @@ Rules:
 cook uses (grams, כוסות, כפות, °C) and keep the original amount in parentheses when converting.
 - Be faithful to the source. Every ingredient with its amount, every step in order. Do not invent \
 ingredients or amounts that the source does not support. Keep the author's tips.
-- A video: the recipe is usually in the description, the captions, or a linked blog post. If what you were \
-given is not enough, use web_fetch on the original link and on links from the description, and web_search \
-for the creator's written recipe (title + author). Only if the exact recipe cannot be found, reconstruct it \
-from what the video shows/says, set confidence to "low" and say so in notes.
+- A video or social post (Instagram, TikTok, YouTube, Facebook): creators often put the recipe in the \
+caption, in their own comment (often pinned, "the recipe in the comments"), in a reply, or on their blog. Read \
+ALL of it: the title, the caption, every comment below (the creator's comments are marked and listed first), \
+the captions/transcript and any linked page. Combine the pieces (e.g. ingredients in one comment and steps in \
+another). If it is still not enough, use web_fetch on the original link and on links from the caption/comments, \
+and web_search for the creator's written recipe (dish + creator name, in Hebrew and in English).
+- If the dish is clear but the creator's exact amounts or steps cannot be found anywhere, do NOT give up: write \
+the most faithful recipe you can from what the caption, comments, hint and video title say, filling the gaps \
+from a reliable recipe for the same dish that you found with web_search. Set confidence to "low" and explain in \
+notes exactly what came from the creator and what was completed from elsewhere.
 - A website: if the page text below is missing or blocked, web_fetch the link.
 - A WhatsApp message: use only the message text. If it is chatter and not a recipe, set found=false.
 - Choose the single best category. Desserts that are cakes → "עוגות"; cookies, rugelach, pastries → \
 "עוגיות ומאפים מתוקים"; bread, pita, savory pies/bourekas → "לחמים ומאפים"; shakshuka/pancakes → "ארוחת בוקר"; \
 a vegetarian main dish → "צמחוני וטבעוני" unless it is clearly a salad/soup/pasta.
-- If the link has no recipe at all, call submit_recipe with found=false and explain in notes.
+- Set found=false ONLY when the link is clearly not about food or cooking, or nothing at all identifies a \
+dish (not even the title or caption). Explain why in notes.
 - When done, call submit_recipe. Do not write anything else.`;
 
 function material(src) {
@@ -88,13 +95,25 @@ function material(src) {
       `Message:\n${src.text}`,
     ].filter(Boolean).join('\n\n');
   }
-  const parts = [`Link: ${src.url}`, `Type: ${isVideoKind(src.kind) ? `video (${src.kind})` : 'website'}`];
+  const video = isVideoKind(src.kind);
+  const parts = [`Link: ${src.url}`, `Type: ${video ? `video / social post (${src.kind})` : 'website'}`];
+  if (src.hint) parts.push(`The person who shared this link wrote: ${src.hint}`);
   if (src.title) parts.push(`Title: ${src.title}`);
   if (src.author) parts.push(`Author/channel: ${src.author}`);
   if (src.siteName) parts.push(`Site: ${src.siteName}`);
   if (src.recipes.length) parts.push(`Structured recipe data from the page (schema.org):\n${JSON.stringify(src.recipes, null, 1)}`);
-  if (src.description) parts.push(`${isVideoKind(src.kind) ? 'Video description / caption' : 'Page description'}:\n${src.description}`);
+  if (src.description) parts.push(`${video ? 'Post caption / video description' : 'Page description'}:\n${src.description}`);
+  if (src.comments?.length) {
+    const lines = src.comments.map((c) => `- ${c.byCreator ? '[CREATOR] ' : ''}@${c.author || '?'}: ${c.text}`);
+    parts.push(`Comments (${src.comments.length}, the creator's first):\n${lines.join('\n').slice(0, 20000)}`);
+  } else if (video) {
+    parts.push('Comments: could not be read.');
+  }
   if (src.transcript) parts.push(`Video captions:\n${src.transcript}`);
+  for (const l of src.linked || []) {
+    if (l.recipes.length) parts.push(`Linked page ${l.url} - structured recipe data:\n${JSON.stringify(l.recipes, null, 1)}`);
+    else if (l.text) parts.push(`Linked page ${l.url} - text:\n${l.text}`);
+  }
   if (src.text) parts.push(`Page text:\n${src.text}`);
   if (src.warnings.length) parts.push(`Could not read everything: ${src.warnings.join('; ')}`);
   return parts.join('\n\n');
@@ -138,6 +157,7 @@ export function toRecipe(input, src) {
       title: clean(src.title),
       author: clean(src.author),
       site: clean(src.siteName),
+      ...(src.hint ? { hint: src.hint } : {}),
       embed: src.embed || null,
     },
     image: src.image || null,

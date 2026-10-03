@@ -31,7 +31,7 @@ export async function api(session, method, path, body) {
 
 export const getMe = (s) => api(s, 'GET', '/me');
 export const listRecipes = (s) => api(s, 'GET', '/recipes').then((d) => d.recipes);
-export const addRecipe = (s, url) => api(s, 'POST', '/recipes', { url });
+export const addRecipe = (s, url, hint) => api(s, 'POST', '/recipes', hint ? { url, hint } : { url });
 export const refreshRecipe = (s, id) => api(s, 'POST', `/recipes/${id}/refresh`);
 export const updateRecipe = (s, id, patch) => api(s, 'PUT', `/recipes/${id}`, patch).then((d) => d.recipe);
 export const deleteRecipe = (s, id) => api(s, 'DELETE', `/recipes/${id}`);
