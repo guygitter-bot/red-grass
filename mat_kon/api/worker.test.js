@@ -106,8 +106,8 @@ test('bad input', async () => {
 
 // ---------- הזמנות ומשתמשים ----------
 
-async function invite(name = 'דנה') {
-  return (await (await call('POST', '/invites', { name })).json()).invite;
+async function invite(name = 'דנה', session = '') {
+  return (await (await call('POST', '/invites', { name }, session)).json()).invite;
 }
 
 async function register(token, email = 'dana@example.com') {
@@ -551,7 +551,7 @@ test('errors from the AI service reach the user in Hebrew, never as raw JSON', a
 });
 
 test('Google sign-in: registers only with an invite, then logs in; the token is verified', async () => {
-  assert.deepEqual(await (await call('GET', '/auth-config')).json(), { googleClientId: '' });
+  assert.equal((await (await call('GET', '/auth-config')).json()).googleClientId, '');
   assert.equal((await call('POST', '/google', { credential: 'a.b.c' })).status, 400);
 
   env.GOOGLE_CLIENT_ID = 'cid.apps.googleusercontent.com';
@@ -594,4 +594,50 @@ test('Google sign-in links to an existing password user with the same email', as
   deps.fetch = async () => Response.json({ aud: 'cid', iss: 'accounts.google.com', email_verified: true, exp: Date.now() / 1000 + 60, sub: 's1', email: 'same@example.com' });
   const res = await (await call('POST', '/google', { credential: 'x.y.z' })).json();
   assert.equal(res.user.id, user.id);
+});
+
+test('locked owner book: only devices signed in with the owner password or Google account get in', async () => {
+  // לא מוגדר: פתוח כמו קודם
+  assert.equal((await call('GET', '/recipes')).status, 200);
+
+  env.OWNER_PASSWORD = 'owner-secret-1';
+  assert.equal((await (await call('GET', '/auth-config')).json()).ownerLocked, true);
+  const locked = await call('GET', '/recipes');
+  assert.equal(locked.status, 401);
+  assert.equal((await locked.json()).login, true);
+  assert.equal((await call('GET', '/me')).status, 401);
+  assert.equal((await call('POST', '/recipes', { url: 'https://cake.example/x' })).status, 401);
+
+  assert.equal((await call('POST', '/owner-login', { password: 'wrong' })).status, 401);
+  const ok = await (await call('POST', '/owner-login', { password: 'owner-secret-1' })).json();
+  assert.equal(ok.owner, true);
+  assert.equal((await call('POST', '/recipes', { url: 'https://cake.example/owner' }, ok.session)).status, 200);
+  const me = await (await call('GET', '/me', undefined, ok.session)).json();
+  assert.deepEqual([me.owner, me.user], [true, null]);
+  assert.equal((await (await call('GET', '/recipes', undefined, ok.session)).json()).recipes.length, 1);
+  // ניהול הזמנות עובד במכשיר של הבעלים
+  assert.equal((await call('GET', '/invites', undefined, ok.session)).status, 200);
+
+  // משתמש מוזמן עדיין נרשם ורואה רק את הספר שלו
+  const { session } = await (await register((await invite('דנה', ok.session)).token)).json();
+  assert.equal((await (await call('GET', '/recipes', undefined, session)).json()).recipes.length, 0);
+  assert.equal((await call('GET', '/invites', undefined, session)).status, 403);
+
+  // יציאה מבטלת את המכשיר
+  await call('POST', '/logout', {}, ok.session);
+  assert.equal((await call('GET', '/recipes', undefined, ok.session)).status, 401);
+
+  // הגבלת ניסיונות
+  for (let i = 0; i < 10; i++) await call('POST', '/owner-login', { password: `bad${i}` });
+  assert.equal((await call('POST', '/owner-login', { password: 'owner-secret-1' })).status, 429);
+});
+
+test('the owner can sign in with their Google account', async () => {
+  env.GOOGLE_CLIENT_ID = 'cid';
+  env.OWNER_EMAIL = 'Owner@Gmail.com';
+  deps.fetch = async () => Response.json({ aud: 'cid', iss: 'accounts.google.com', email_verified: 'true', exp: Date.now() / 1000 + 60, sub: 'o1', email: 'owner@gmail.com' });
+  assert.equal((await call('GET', '/recipes')).status, 401);
+  const res = await (await call('POST', '/google', { credential: 'x.y.z' })).json();
+  assert.equal(res.owner, true);
+  assert.equal((await call('GET', '/recipes', undefined, res.session)).status, 200);
 });

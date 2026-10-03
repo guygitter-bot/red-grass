@@ -1,3 +1,4 @@
+import { loadJson } from './storage';
 // השרת של mat-kon (mat_kon/api). הכתובת נקבעת בזמן הבנייה (.github/workflows/mat-kon.yml).
 // בלי session = בעל האפליקציה (פתוח). עם session = משתמש שהוזמן, עם ספר מתכונים משלו.
 export const API_URL = (import.meta.env.VITE_API_URL || 'https://mat-kon-api.guygitter.workers.dev').replace(/\/+$/, '');
@@ -36,11 +37,12 @@ export const refreshRecipe = (s, id) => api(s, 'POST', `/recipes/${id}/refresh`)
 export const updateRecipe = (s, id, patch) => api(s, 'PUT', `/recipes/${id}`, patch).then((d) => d.recipe);
 export const deleteRecipe = (s, id) => api(s, 'DELETE', `/recipes/${id}`);
 
-// הזמנות (בעל האפליקציה)
-export const listInvites = () => api('', 'GET', '/invites');
-export const createInvite = (name) => api('', 'POST', '/invites', { name }).then((d) => d.invite);
-export const deleteInvite = (token) => api('', 'DELETE', `/invites/${encodeURIComponent(token)}`);
-export const setPlan = (userId, plan) => api('', 'PUT', `/users/${userId}/plan`, { plan }).then((d) => d.user);
+// הזמנות (בעל האפליקציה). כשהספר נעול, המכשיר של הבעלים שולח את ה-session שלו
+const own = () => loadJson('matkon_session', '');
+export const listInvites = () => api(own(), 'GET', '/invites');
+export const createInvite = (name) => api(own(), 'POST', '/invites', { name }).then((d) => d.invite);
+export const deleteInvite = (token) => api(own(), 'DELETE', `/invites/${encodeURIComponent(token)}`);
+export const setPlan = (userId, plan) => api(own(), 'PUT', `/users/${userId}/plan`, { plan }).then((d) => d.user);
 
 // משתמש שהוזמן
 export const checkInvite = (token) => api('', 'POST', '/invite', { token });
@@ -87,3 +89,4 @@ export const findStores = (s, lat, lon, items) => api(s, 'POST', '/stores', { la
 // כניסה עם גוגל
 export const getAuthConfig = () => api('', 'GET', '/auth-config');
 export const googleSignIn = (credential, token) => api('', 'POST', '/google', { credential, ...(token ? { token } : {}) });
+export const ownerLogin = (password) => api('', 'POST', '/owner-login', { password });

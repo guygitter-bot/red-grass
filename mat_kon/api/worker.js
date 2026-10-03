@@ -86,25 +86,48 @@ export default {
       return pass(await internal(accounts, 'POST', parts[0] === 'invite' ? '/invite/check' : `/${parts[0]}`, body));
     }
 
+    // ---- הספר של בעל האפליקציה: פתוח, או נעול (רק במכשירים שנכנסו עם סיסמת הבעלים / חשבון הגוגל שלו) ----
+    const setting = (v) => (v && v !== 'none' ? String(v) : '');
+    const googleClientId = setting(env.GOOGLE_CLIENT_ID);
+    const ownerPassword = setting(env.OWNER_PASSWORD);
+    const ownerEmail = setting(env.OWNER_EMAIL).trim().toLowerCase();
+    const ownerLocked = Boolean(ownerPassword || (ownerEmail && googleClientId));
+    if (url.pathname === '/auth-config' && request.method === 'GET') {
+      return reply(200, { googleClientId, ownerLocked, ownerPassword: Boolean(ownerPassword) });
+    }
+    if (url.pathname === '/owner-login' && request.method === 'POST') {
+      if (!ownerPassword) return fail(400, 'כניסת בעלים לא מוגדרת');
+      const { body, error } = await readJson();
+      if (error) return error;
+      const allowed = await internal(accounts, 'POST', '/owner-attempt', {});
+      if (!allowed.ok) return pass(allowed);
+      if (!(await sameSecret(String(body.password || ''), ownerPassword))) {
+        await internal(accounts, 'POST', '/owner-attempt', { failed: true });
+        return fail(401, 'הסיסמה שגויה');
+      }
+      return pass(await internal(accounts, 'POST', '/owner-session', {}));
+    }
+
     // ---- כניסה והרשמה עם חשבון גוגל ----
-    const googleClientId = env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_ID !== 'none' ? env.GOOGLE_CLIENT_ID : '';
-    if (url.pathname === '/auth-config' && request.method === 'GET') return reply(200, { googleClientId });
     if (url.pathname === '/google' && request.method === 'POST') {
       if (!googleClientId) return fail(400, 'כניסה עם גוגל לא מוגדרת');
       const { body, error } = await readJson();
       if (error) return error;
       const profile = await verifyGoogle(String(body.credential || ''), googleClientId);
       if (!profile) return fail(401, 'לא הצלחתי לאמת את חשבון הגוגל. נסו שוב.');
+      if (ownerEmail && profile.email.toLowerCase() === ownerEmail) return pass(await internal(accounts, 'POST', '/owner-session', {}));
       return pass(await internal(accounts, 'POST', '/google', { ...profile, token: body.token || '' }));
     }
 
-    // ---- מי שולח: בעל האפליקציה (בלי טוקן) או משתמש שהוזמן ----
+    // ---- מי שולח: בעל האפליקציה (בלי טוקן, או טוקן של בעלים) או משתמש שהוזמן ----
     let user = null;
+    let signedIn = false;
     const session = bearer(request);
     if (session) {
       const res = await internal(accounts, 'POST', '/auth', { session });
       if (!res.ok) return pass(res);
       user = (await res.json()).user;
+      signedIn = true;
     }
 
     // שגיאה מה-AI: הודעה ברורה בעברית במקום השגיאה הגולמית
@@ -120,6 +143,9 @@ export default {
       if (!link) return fail(400, 'זה לא נראה כמו קישור תקין');
       return reply(200, summarizeSource(await gatherSource(link, deps.fetch, { igDocId: env.IG_DOC_ID })));
     }
+
+    // ספר נעול: בלי כניסה אין גישה לספר של בעל האפליקציה
+    if (ownerLocked && !signedIn) return fail(401, 'צריך להיכנס', { login: true });
 
     // הקטגוריות של הספר: הקבועות ואלה שהמשתמש הוסיף
     const bookStub = () => bookOf(user?.id);
@@ -621,6 +647,15 @@ async function verifyGoogle(credential, clientId) {
   } catch {
     return null;
   }
+}
+
+// השוואת סיסמה בלי לחשוף את האורך או את התווים לפי זמן התגובה
+async function sameSecret(a, b) {
+  const enc = new TextEncoder();
+  const [x, y] = await Promise.all([a, b].map(async (t) => new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(t)))));
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
+  return diff === 0;
 }
 
 function bearer(request) {

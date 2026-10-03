@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { checkInvite, getAuthConfig, googleSignIn, login, register } from '../lib/api';
+import { checkInvite, getAuthConfig, googleSignIn, login, ownerLogin, register } from '../lib/api';
 import GoogleButton from './GoogleButton';
 
 // הרשמה מקישור הזמנה, או כניסה במכשיר נוסף
@@ -10,10 +10,11 @@ export default function Auth({ mode: initialMode, token, onDone }) {
   const [form, setForm] = useState({ name: '', email: '', password: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [googleId, setGoogleId] = useState('');
+  const [config, setConfig] = useState({});
+  const googleId = config.googleClientId || '';
 
   useEffect(() => {
-    getAuthConfig().then((c) => setGoogleId(c.googleClientId || '')).catch(() => {});
+    getAuthConfig().then(setConfig).catch(() => {});
   }, []);
 
   const withGoogle = async (credential) => {
@@ -50,7 +51,9 @@ export default function Auth({ mode: initialMode, token, onDone }) {
     setBusy(true);
     setError('');
     try {
-      const res = mode === 'register' ? await register({ token, ...form }) : await login(form.email, form.password);
+      const res = mode === 'register'
+        ? await register({ token, ...form })
+        : mode === 'owner' ? await ownerLogin(form.password) : await login(form.email, form.password);
       onDone(res);
     } catch (err) {
       setError(err.message);
@@ -69,7 +72,7 @@ export default function Auth({ mode: initialMode, token, onDone }) {
           <img src="icon.svg" alt="" className="w-16 h-16 mx-auto mb-3" />
           <h1 className="text-3xl font-black text-stone-900" dir="ltr">mat-kon</h1>
           <p className="text-stone-500 mb-5">
-            {mode === 'register' ? 'הוזמנתם לספר מתכונים משלכם. נרשמים פעם אחת ומתחילים.' : 'כניסה לספר המתכונים שלכם'}
+            {mode === 'register' ? 'הוזמנתם לספר מתכונים משלכם. נרשמים פעם אחת ומתחילים.' : mode === 'owner' ? 'כניסה של בעל האפליקציה' : 'כניסה לספר המתכונים שלכם'}
           </p>
         </div>
 
@@ -93,12 +96,14 @@ export default function Auth({ mode: initialMode, token, onDone }) {
                 <input value={form.name} onChange={set('name')} autoComplete="name" required className={field} />
               </label>
             )}
+            {mode !== 'owner' && (
             <label className="block">
               <span className="text-sm font-medium text-stone-700">אימייל</span>
               <input type="email" value={form.email} onChange={set('email')} autoComplete="email" required dir="ltr" className={field} />
             </label>
+            )}
             <label className="block">
-              <span className="text-sm font-medium text-stone-700">סיסמה{mode === 'register' ? ' (לפחות 6 תווים)' : ''}</span>
+              <span className="text-sm font-medium text-stone-700">{mode === 'owner' ? 'סיסמת הבעלים' : 'סיסמה'}{mode === 'register' ? ' (לפחות 6 תווים)' : ''}</span>
               <input
                 type="password"
                 value={form.password}
@@ -117,6 +122,16 @@ export default function Auth({ mode: initialMode, token, onDone }) {
             </button>
             {mode === 'register' && (
               <p className="text-xs text-stone-500 text-center">{invite?.freeLimit ?? 10} המתכונים הראשונים בחינם.</p>
+            )}
+            {mode === 'login' && config.ownerPassword && (
+              <button type="button" onClick={() => { setMode('owner'); setError(''); }} className="w-full text-xs text-stone-500 underline">
+                בעל האפליקציה? כניסה עם סיסמת הבעלים
+              </button>
+            )}
+            {mode === 'owner' && (
+              <button type="button" onClick={() => { setMode('login'); setError(''); }} className="w-full text-xs text-stone-500 underline">
+                חזרה לכניסה של משתמשים
+              </button>
             )}
           </div>
         )}

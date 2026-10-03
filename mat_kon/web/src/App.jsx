@@ -57,8 +57,9 @@ const route = () => {
   return id ? { view: 'recipe', id } : { view: 'home' };
 };
 
-// בלי session = בעל האפליקציה: פתוח, בלי הרשמה ובלי הגבלה.
-// עם session = משתמש שנרשם מקישור הזמנה, עם ספר מתכונים משלו.
+// בלי session = בעל האפליקציה כשהספר פתוח. כשהספר נעול, בעל האפליקציה נכנס פעם אחת בכל מכשיר
+// (סיסמת בעלים או חשבון הגוגל שלו) ומקבל session של בעלים.
+// session של משתמש = מי שנרשם מקישור הזמנה, עם ספר מתכונים משלו.
 export default function App() {
   const [session, setSession] = usePersistentState('matkon_session', '');
   const [user, setUser] = usePersistentState('matkon_user', null);
@@ -73,6 +74,8 @@ export default function App() {
   const planTimer = useRef(null);
   // מכשיר שנרשם פעם מקישור הזמנה נשאר מכשיר של משתמש מוזמן, גם אחרי יציאה
   const [guestDevice, setGuestDevice] = usePersistentState('matkon_guest', false);
+  // מכשיר של בעל האפליקציה שנכנס עם סיסמת הבעלים / חשבון הגוגל שלו (כשהספר נעול)
+  const [ownerDevice, setOwnerDevice] = usePersistentState('matkon_owner_device', false);
   const [auth, setAuth] = useState(() => {
     if (AUTH_LINK && !(AUTH_LINK.mode === 'register' && session)) return AUTH_LINK;
     return guestDevice && !session ? { mode: 'login' } : null;
@@ -97,15 +100,16 @@ export default function App() {
   const [loadError, setLoadError] = useState('');
   const [toast, setToast] = useState('');
 
-  const isOwner = !session;
+  const isOwner = !session || ownerDevice;
 
   const signOut = useCallback(() => {
     apiLogout(session);
     setSession('');
     setUser(null);
+    setOwnerDevice(false);
     setRecipes([]);
     setAuth({ mode: 'login' });
-  }, [session, setSession, setUser, setRecipes]);
+  }, [session, setSession, setUser, setOwnerDevice, setRecipes]);
 
   useEffect(() => {
     const onHash = () => setNav(route());
@@ -123,7 +127,7 @@ export default function App() {
     if (auth) return;
     try {
       const me = await getMe(session);
-      if (session) {
+      if (session && !ownerDevice) {
         setUser(me.user);
         setPaymentUrl(me.paymentUrl);
       }
@@ -147,7 +151,7 @@ export default function App() {
       if (e.status === 401) signOut();
       else setLoadError(e.message);
     }
-  }, [auth, session, setUser, setRecipes, setCustom, signOut]);
+  }, [auth, session, ownerDevice, setUser, setRecipes, setCustom, signOut]);
 
   useEffect(() => {
     reload();
@@ -255,11 +259,12 @@ export default function App() {
       <Auth
         mode={auth.mode}
         token={auth.token}
-        onDone={({ session: s, user: u }) => {
+        onDone={({ session: s, user: u, owner }) => {
           setRecipes([]);
           setUser(u);
           setSession(s);
-          setGuestDevice(true);
+          setOwnerDevice(Boolean(owner));
+          setGuestDevice(!owner);
           setAuth(null);
         }}
       />
@@ -476,7 +481,7 @@ export default function App() {
               <a href="#/settings" className="p-2 rounded-full bg-white/15 hover:bg-white/25" aria-label="הגדרות" title="הגדרות">
                 <Settings size={20} />
               </a>
-              {!isOwner && (
+              {session && (
                 <button onClick={signOut} className="p-2 rounded-full hover:bg-white/15" aria-label="יציאה" title="יציאה">
                   <LogOut size={20} />
                 </button>

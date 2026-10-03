@@ -5,7 +5,8 @@
 //   invite:<token>   {token, name, createdAt, userId|null}
 //   user:<id>        {id, name, email, salt, hash, google?, plan, added, createdAt, invite}  (בגוגל: בלי סיסמה)
 //   email:<email>    <id>
-//   session:<sha256> {userId, createdAt}
+//   session:<sha256> {userId, createdAt}  או  {owner: true, createdAt} – מכשיר של בעל האפליקציה (כשהספר נעול)
+//   owner-attempts   {count, since} – הגבלת ניסיונות לסיסמת הבעלים
 
 export const PBKDF2_ITERATIONS = 20000;
 
@@ -161,9 +162,26 @@ export class Accounts {
       return json({ ok: true });
     }
 
+    // ---- בעל האפליקציה: מכשיר שנכנס, והגבלת ניסיונות סיסמה (10 ברבע שעה) ----
+    if (path === '/owner-session' && request.method === 'POST') {
+      const token = randomToken(32);
+      await this.storage.put(`session:${await sha256(token)}`, { owner: true, createdAt: now });
+      await this.storage.delete('owner-attempts');
+      return json({ session: token, user: null, owner: true });
+    }
+    if (path === '/owner-attempt' && request.method === 'POST') {
+      const windowMs = 15 * 60 * 1000;
+      let a = (await this.storage.get('owner-attempts')) || { count: 0, since: now };
+      if (Date.now() - Date.parse(a.since) > windowMs) a = { count: 0, since: now };
+      if (a.count >= 10) return err(429, 'יותר מדי ניסיונות. נסו שוב בעוד רבע שעה.');
+      if (body.failed) await this.storage.put('owner-attempts', { ...a, count: a.count + 1 });
+      return json({ ok: true });
+    }
+
     // ---- פנימי: זיהוי משתמש ומכסה ----
     if (path === '/auth' && request.method === 'POST') {
       const session = await this.storage.get(`session:${await sha256(String(body.session || ''))}`);
+      if (session?.owner) return json({ user: null, owner: true });
       const user = session && (await this.storage.get(`user:${session.userId}`));
       if (!user) return err(401, 'צריך להיכנס מחדש');
       return json({ user: publicUser(user, this.freeLimit) });

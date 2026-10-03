@@ -75,6 +75,9 @@ jobs:
           CHEAPERSAL_API_KEY: ${{ secrets.CHEAPERSAL_API_KEY || 'none' }}
           # כניסה עם גוגל (לא חובה): Client ID מ-Google Cloud Console, כמשתנה או סוד במאגר
           GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID || secrets.GOOGLE_CLIENT_ID || 'none' }}
+          # נעילת הספר של בעל האפליקציה (לא חובה): סיסמת בעלים, ו/או האימייל של חשבון הגוגל שלו
+          OWNER_PASSWORD: ${{ secrets.OWNER_PASSWORD || 'none' }}
+          OWNER_EMAIL: ${{ vars.OWNER_EMAIL || secrets.OWNER_EMAIL || 'none' }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -84,6 +87,8 @@ jobs:
             ANTHROPIC_API_KEY
             CHEAPERSAL_API_KEY
             GOOGLE_CLIENT_ID
+            OWNER_PASSWORD
+            OWNER_EMAIL
       - name: Summary
         env:
           URL: ${{ steps.deploy.outputs.deployment-url }}
