@@ -1,16 +1,13 @@
 import { useRef, useState } from 'react';
-import { ArrowRight, Download, Loader2, Plus, Trash2, Upload, UserPlus } from 'lucide-react';
-import { CATEGORIES } from '../lib/categories';
-import { addCategory, removeCategory, restoreBackup } from '../lib/api';
-import { backupFile, countByCategory, emojiOf } from '../lib/recipes';
+import { ArrowRight, Download, Loader2, Upload, UserPlus } from 'lucide-react';
+import { restoreBackup } from '../lib/api';
+import { backupFile } from '../lib/recipes';
 
-// הגדרות: קטגוריות משלי, גיבוי ושחזור
-export default function SettingsView({ session, isOwner, recipes, custom, shopping, plan, onCustomChange, onRestored, onBack, onToast }) {
-  const [name, setName] = useState('');
+// הגדרות: גיבוי ושחזור, הזמנות
+export default function SettingsView({ session, isOwner, recipes, custom, shopping, plan, onRestored, onBack, onToast }) {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const fileRef = useRef(null);
-  const counts = countByCategory(recipes);
 
   const run = async (key, fn) => {
     setBusy(key);
@@ -22,15 +19,6 @@ export default function SettingsView({ session, isOwner, recipes, custom, shoppi
     } finally {
       setBusy('');
     }
-  };
-
-  const add = (e) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-    run('add', async () => {
-      onCustomChange(await addCategory(session, name.trim()));
-      setName('');
-    });
   };
 
   const download = () => {
@@ -75,42 +63,9 @@ export default function SettingsView({ session, isOwner, recipes, custom, shoppi
           </a>
         )}
 
-        <section className="rounded-2xl bg-white shadow-sm p-4">
-          <h2 className="font-bold text-lg">הקטגוריות שלי</h2>
-          <p className="text-sm text-stone-500 mt-1">
-            קטגוריות שתוסיפו (למשל "מתכוני סבתא", "לשבת", "לילדים") יופיעו בספר, והסוכן ישבץ בהן מתכונים חדשים כשהן מתאימות.
-          </p>
-          <form onSubmit={add} className="mt-3 flex gap-2">
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={30}
-              placeholder="שם הקטגוריה"
-              className="flex-1 min-w-0 rounded-xl border border-stone-200 px-3 py-2.5 outline-none focus:border-orange-400"
-            />
-            <button disabled={busy === 'add'} className="rounded-xl bg-orange-500 text-white px-3 font-bold flex items-center gap-1 shrink-0 disabled:opacity-40">
-              {busy === 'add' ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} הוספה
-            </button>
-          </form>
-          <ul className="mt-3 divide-y divide-stone-100">
-            {custom.map((c) => (
-              <li key={c} className="flex items-center gap-2 py-2">
-                <span>{emojiOf(c)}</span>
-                <span className="flex-1">{c}</span>
-                <span className="text-xs text-stone-400">{counts[c] || 0} מתכונים</span>
-                <button
-                  onClick={() => window.confirm(`למחוק את הקטגוריה "${c}"? המתכונים שבה יעברו ל"אחר".`) &&
-                    run(`rm:${c}`, async () => onCustomChange((await removeCategory(session, c)).custom, c))}
-                  className="p-1.5 text-stone-400 hover:text-red-600"
-                  aria-label={`מחיקת ${c}`}
-                >
-                  {busy === `rm:${c}` ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                </button>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-3 text-xs text-stone-400">קבועות: {CATEGORIES.join(' · ')}</p>
-        </section>
+        <p className="text-sm text-stone-500 px-1">
+          קטגוריות משלכם מוסיפים בספר המתכונים, בכפתור "+ קטגוריה" שבשורת הקטגוריות.
+        </p>
 
         <section className="rounded-2xl bg-white shadow-sm p-4">
           <h2 className="font-bold text-lg">גיבוי ושחזור</h2>

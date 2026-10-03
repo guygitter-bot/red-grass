@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Globe, Heart, LogOut, MessageCircle, PlusCircle, Search, Settings, X } from 'lucide-react';
+import { Camera, Globe, Heart, Loader2, LogOut, MessageCircle, PenLine, Plus, Search, Settings, Trash2, X } from 'lucide-react';
 import SearchView from './components/SearchView';
 import SettingsView from './components/SettingsView';
 import Auth from './components/Auth';
@@ -20,7 +20,7 @@ import RecipeCard from './components/RecipeCard';
 import RecipeView from './components/RecipeView';
 import { CATEGORIES } from './lib/categories';
 import {
-  addRecipe, addTextRecipe, deleteRecipe, getMe, getPlan, getShopping, listRecipes, logout as apiLogout, putPlan, putShopping, refreshRecipe,
+  addCategory, addRecipe, addTextRecipe, deleteRecipe, removeCategory, getMe, getPlan, getShopping, listRecipes, logout as apiLogout, putPlan, putShopping, refreshRecipe,
   updateRecipe,
 } from './lib/api';
 import { SORTS, countByCategory, emojiOf, filterRecipes, freeLeft, linkFromShare, parseAuthHash, sortRecipes, topTags } from './lib/recipes';
@@ -46,7 +46,7 @@ const route = () => {
   const h = window.location.hash;
   if (h === '#/invites') return { view: 'invites' };
   if (h === '#/shopping') return { view: 'shopping' };
-  if (h === '#/new') return { view: 'new' };
+  if (h.startsWith('#/new')) return { view: 'new', mode: h.includes('manual') ? 'manual' : 'photo' };
   if (h === '#/plan') return { view: 'plan' };
   if (h === '#/fridge') return { view: 'fridge' };
   if (h === '#/settings') return { view: 'settings' };
@@ -82,6 +82,8 @@ export default function App() {
   const [category, setCategory] = useState(null);
   const [favorites, setFavorites] = useState(false);
   const [tag, setTag] = useState(null);
+  // תמונות שצולמו מהמסך הראשי ("צילום מתכון"), עוברות למסך בניית המתכון
+  const [photoFiles, setPhotoFiles] = useState(null);
   const [sort, setSort] = usePersistentState('matkon_sort', 'new');
   // קטגוריות שהמשתמש הוסיף (הקבועות ב-lib/categories)
   const [custom, setCustom] = usePersistentState('matkon_custom_categories', []);
@@ -285,10 +287,6 @@ export default function App() {
           custom={custom}
           shopping={shopping}
           plan={plan}
-          onCustomChange={(next, removed) => {
-            setCustom(next);
-            if (removed) setRecipes((list) => list.map((r) => (r.category === removed ? { ...r, category: 'אחר' } : r)));
-          }}
           onRestored={reload}
           onBack={() => open(null)}
           onToast={setToast}
@@ -341,6 +339,10 @@ export default function App() {
       <>
         {paywall && <Paywall user={user} paymentUrl={paywall.paymentUrl} onClose={() => setPaywall(null)} />}
         <NewRecipeView
+          key={nav.mode}
+          initialMode={nav.mode}
+          initialFiles={photoFiles}
+          onFilesTaken={() => setPhotoFiles(null)}
           session={session}
           categories={allCategories}
           onBack={() => open(null)}
@@ -440,15 +442,32 @@ export default function App() {
             </div>
           </div>
           <AddLink onAdd={add} onSearch={(q) => { window.location.hash = `#/search?q=${encodeURIComponent(q)}`; }} />
-          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
-            <a href="#/search" className="inline-flex items-center gap-1.5 text-sm font-medium text-white/95 hover:text-white">
-              <Globe size={16} /> חיפוש מתכון ברשת
+          {/* עוד דרכים להוסיף מתכון */}
+          <div className="mt-3 grid grid-cols-4 gap-2 text-center text-xs font-medium">
+            <label className="rounded-2xl bg-white/15 hover:bg-white/25 py-2.5 flex flex-col items-center gap-1 cursor-pointer">
+              <Camera size={20} /> צילום מתכון
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  if (!e.target.files?.length) return;
+                  setPhotoFiles([...e.target.files]);
+                  e.target.value = '';
+                  window.location.hash = '#/new';
+                }}
+              />
+            </label>
+            <a href="#/new?manual" className="rounded-2xl bg-white/15 hover:bg-white/25 py-2.5 flex flex-col items-center gap-1">
+              <PenLine size={20} /> כתיבה ידנית
             </a>
-            <a href="#/new" className="inline-flex items-center gap-1.5 text-sm font-medium text-white/95 hover:text-white">
-              <PlusCircle size={16} /> מתכון מתמונה או כתיבה ידנית
+            <a href="#/search" className="rounded-2xl bg-white/15 hover:bg-white/25 py-2.5 flex flex-col items-center gap-1">
+              <Globe size={20} /> חיפוש ברשת
             </a>
-            <a href="#/import" className="inline-flex items-center gap-1.5 text-sm font-medium text-white/95 hover:text-white">
-              <MessageCircle size={16} /> ייבוא מצ'אט או מקבוצה בווטסאפ
+            <a href="#/import" className="rounded-2xl bg-white/15 hover:bg-white/25 py-2.5 flex flex-col items-center gap-1">
+              <MessageCircle size={20} /> ייבוא מווטסאפ
             </a>
           </div>
           {left !== null && (
@@ -518,12 +537,41 @@ export default function App() {
               <Chip active={favorites} onClick={() => setFavorites((f) => !f)}>
                 <Heart size={14} className="inline -mt-0.5" fill={favorites ? 'currentColor' : 'none'} /> מועדפים
               </Chip>
-              {allCategories.filter((c) => counts[c]).map((c) => (
+              {allCategories.filter((c) => counts[c] || custom.includes(c)).map((c) => (
                 <Chip key={c} active={category === c} onClick={() => setCategory(category === c ? null : c)}>
-                  {emojiOf(c)} {c} <span className="opacity-60">{counts[c]}</span>
+                  {emojiOf(c)} {c} <span className="opacity-60">{counts[c] || 0}</span>
                 </Chip>
               ))}
+              <NewCategory
+                onAdd={async (name) => {
+                  setCustom(await addCategory(session, name));
+                  setCategory(name);
+                  setToast(`הקטגוריה "${name}" נוספה. בדף מתכון אפשר להעביר אליה מתכונים.`);
+                }}
+              />
             </div>
+
+            {category && custom.includes(category) && (
+              <div className="mt-2 flex items-center gap-2 text-sm text-stone-500">
+                <span>"{category}" היא קטגוריה שלכם · הסוכן ישבץ בה מתכונים חדשים כשהיא מתאימה</span>
+                <button
+                  onClick={async () => {
+                    if (!window.confirm(`למחוק את הקטגוריה "${category}"? המתכונים שבה יעברו ל"אחר".`)) return;
+                    try {
+                      const res = await removeCategory(session, category);
+                      setCustom(res.custom);
+                      setRecipes((list) => list.map((r) => (r.category === category ? { ...r, category: 'אחר' } : r)));
+                      setCategory(null);
+                    } catch (e) {
+                      setToast(e.message);
+                    }
+                  }}
+                  className="shrink-0 inline-flex items-center gap-1 text-red-600"
+                >
+                  <Trash2 size={14} /> מחיקה
+                </button>
+              </div>
+            )}
 
             {tags.length > 0 && (
               <div className="mt-2 -mx-4 px-4 flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
@@ -572,6 +620,54 @@ function Toast({ text }) {
     <div className="fixed bottom-6 inset-x-4 z-50 flex justify-center pointer-events-none">
       <div className="bg-stone-900 text-white text-sm rounded-full px-4 py-2.5 shadow-lg">{text}</div>
     </div>
+  );
+}
+
+// "+ קטגוריה": יצירת קטגוריה חדשה ישר מהספר
+function NewCategory({ onAdd }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="shrink-0 rounded-full px-3.5 py-1.5 text-sm border border-dashed border-orange-300 text-orange-700 bg-orange-50/50">
+        <Plus size={14} className="inline -mt-0.5" /> קטגוריה
+      </button>
+    );
+  }
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) return setOpen(false);
+    setBusy(true);
+    setError('');
+    try {
+      await onAdd(name.trim());
+      setName('');
+      setOpen(false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <form onSubmit={submit} className="shrink-0 flex items-center gap-1">
+      <input
+        autoFocus
+        value={name}
+        onChange={(e) => { setName(e.target.value); setError(''); }}
+        maxLength={30}
+        placeholder="שם הקטגוריה"
+        title={error}
+        className={`w-36 rounded-full border px-3 py-1.5 text-sm outline-none ${error ? 'border-red-400' : 'border-orange-300'}`}
+      />
+      <button disabled={busy} className="rounded-full bg-orange-500 text-white px-3 py-1.5 text-sm font-bold disabled:opacity-50">
+        {busy ? <Loader2 size={14} className="animate-spin" /> : 'הוספה'}
+      </button>
+      <button type="button" onClick={() => { setOpen(false); setError(''); }} className="p-1 text-stone-400" aria-label="ביטול"><X size={16} /></button>
+      {error && <span className="text-xs text-red-600 whitespace-nowrap">{error}</span>}
+    </form>
   );
 }
 
