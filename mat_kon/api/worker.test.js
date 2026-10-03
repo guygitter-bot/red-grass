@@ -641,3 +641,82 @@ test('the owner can sign in with their Google account', async () => {
   assert.equal(res.owner, true);
   assert.equal((await call('GET', '/recipes', undefined, res.session)).status, 200);
 });
+
+test('shared book: the holder invites a family member, both work on one book with one quota', async () => {
+  const holder = await (await register((await invite()).token, 'yossi@example.com')).json();
+  const link = await (await call('POST', '/members', {}, holder.session)).json();
+  assert.ok(link.join.token);
+  assert.deepEqual(await (await call('POST', '/join', { join: link.join.token })).json(), { bookName: 'דנה', freeLimit: 10 });
+
+  const wife = await (await call('POST', '/register', { join: link.join.token, name: 'רונית', email: 'ronit@example.com', password: 'secret12' })).json();
+  assert.equal(wife.user.role, 'member');
+  assert.equal(wife.user.bookName, 'דנה');
+  // הקישור חד-פעמי
+  assert.equal((await call('POST', '/register', { join: link.join.token, name: 'x', email: 'x@example.com', password: 'secret12' })).status, 409);
+
+  // אותו ספר: מה שאחד מוסיף השני רואה, והמכסה משותפת
+  await call('POST', '/recipes', { url: 'https://cake.example/a' }, wife.session);
+  await call('POST', '/recipes', { url: 'https://cake.example/b' }, holder.session);
+  const seen = await (await call('GET', '/recipes', undefined, holder.session)).json();
+  assert.equal(seen.recipes.length, 2);
+  const me = await (await call('GET', '/me', undefined, wife.session)).json();
+  assert.equal(me.user.added, 2);
+  await call('PUT', '/shopping', { items: [{ text: 'חלב' }] }, wife.session);
+  assert.equal((await (await call('GET', '/shopping', undefined, holder.session)).json()).items[0].text, 'חלב');
+
+  // רק בעל הספר מנהל את השיתוף
+  assert.equal((await call('POST', '/members', {}, wife.session)).status, 403);
+  const list = await (await call('GET', '/members', undefined, holder.session)).json();
+  assert.deepEqual(list.members.map((m) => m.name), ['רונית']);
+  // בעל האפליקציה רואה כמה חברים יש בספר
+  const inv = (await (await call('GET', '/invites')).json()).invites.find((i) => i.user?.email === 'yossi@example.com');
+  assert.equal(inv.user.members, 1);
+
+  // מנוי של בעל הספר חל על כולם
+  for (let i = 0; i < 8; i++) await call('POST', '/recipes', { url: `https://cake.example/n${i}` }, holder.session);
+  assert.equal((await call('POST', '/recipes', { url: 'https://cake.example/over' }, wife.session)).status, 402);
+  await call('PUT', `/users/${holder.user.id}/plan`, { plan: 'paid' });
+  assert.equal((await call('POST', '/recipes', { url: 'https://cake.example/over' }, wife.session)).status, 200);
+
+  // הסרת חבר מנתקת אותו
+  assert.equal((await call('DELETE', `/members/${wife.user.id}`, undefined, holder.session)).status, 200);
+  assert.equal((await call('GET', '/recipes', undefined, wife.session)).status, 401);
+  assert.equal((await (await call('GET', '/recipes', undefined, holder.session)).json()).recipes.length, 11);
+});
+
+test('shared book: deleting the holder removes the members; expired and pending links', async () => {
+  const inv = await invite();
+  const holder = await (await register(inv.token, 'h@example.com')).json();
+  const { join } = await (await call('POST', '/members', {}, holder.session)).json();
+  const pending = await (await call('POST', '/members', {}, holder.session)).json();
+  assert.equal((await (await call('GET', '/members', undefined, holder.session)).json()).pending.length, 2);
+  assert.equal((await call('DELETE', `/members/links/${pending.join.token}`, undefined, holder.session)).status, 200);
+  assert.equal((await call('POST', '/join', { join: pending.join.token })).status, 404);
+  const member = await (await call('POST', '/register', { join: join.token, name: 'm', email: 'm@example.com', password: 'secret12' })).json();
+  await call('DELETE', `/invites/${inv.token}`);
+  assert.equal((await call('GET', '/recipes', undefined, member.session)).status, 401);
+  assert.equal((await call('POST', '/login', { email: 'm@example.com', password: 'secret12' })).status, 401);
+});
+
+test('shared book: the owner shares their own book, a member joins with Google', async () => {
+  env.GOOGLE_CLIENT_ID = 'cid';
+  env.OWNER_PASSWORD = 'owner-secret-1';
+  const owner = await (await call('POST', '/owner-login', { password: 'owner-secret-1' })).json();
+  await call('POST', '/recipes', { url: 'https://cake.example/owner' }, owner.session);
+  const { join } = await (await call('POST', '/members', {}, owner.session)).json();
+  assert.equal((await (await call('POST', '/join', { join: join.token })).json()).bookName, 'בעל האפליקציה');
+  deps.fetch = async (url) => (String(url).includes('oauth2')
+    ? Response.json({ aud: 'cid', iss: 'accounts.google.com', email_verified: 'true', exp: Date.now() / 1000 + 60, sub: 'w1', email: 'wife@gmail.com', name: 'אשתי' })
+    : new Response('<title>Cake</title>'));
+  const wife = await (await call('POST', '/google', { credential: 'a.b.c', join: join.token })).json();
+  assert.equal(wife.user.ownerBook, true);
+  assert.equal((await (await call('GET', '/recipes', undefined, wife.session)).json()).recipes.length, 1);
+  // בלי מכסה בספר של בעל האפליקציה, ובלי ניהול הזמנות
+  assert.equal((await call('POST', '/recipes', { url: 'https://cake.example/w' }, wife.session)).status, 200);
+  assert.equal((await call('GET', '/invites', undefined, wife.session)).status, 403);
+  assert.equal((await call('GET', '/members', undefined, wife.session)).status, 403);
+  // כניסה חוזרת עם גוגל במכשיר אחר
+  const again = await (await call('POST', '/google', { credential: 'a.b.c' })).json();
+  assert.equal(again.user.ownerBook, true);
+  assert.deepEqual((await (await call('GET', '/members', undefined, owner.session)).json()).members.map((m) => m.email), ['wife@gmail.com']);
+});

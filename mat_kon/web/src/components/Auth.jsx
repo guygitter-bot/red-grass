@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { checkInvite, getAuthConfig, googleSignIn, login, ownerLogin, register } from '../lib/api';
+import { checkInvite, checkJoin, getAuthConfig, googleSignIn, login, ownerLogin, register } from '../lib/api';
 import GoogleButton from './GoogleButton';
 
 // הרשמה מקישור הזמנה, או כניסה במכשיר נוסף
@@ -21,12 +21,23 @@ export default function Auth({ mode: initialMode, token, onDone }) {
     setBusy(true);
     setError('');
     try {
-      onDone(await googleSignIn(credential, mode === 'register' ? token : ''));
+      onDone(await googleSignIn(credential, mode === 'register' ? token : '', mode === 'join' ? token : ''));
     } catch (err) {
       setError(err.message);
       setBusy(false);
     }
   };
+
+  // קישור הצטרפות לספר משותף
+  useEffect(() => {
+    if (initialMode !== 'join') return;
+    checkJoin(token)
+      .then((d) => setInvite(d))
+      .catch((e) => {
+        setMode('login');
+        setError(e.status === 409 ? e.message : `${e.message} אם כבר הצטרפתם, היכנסו כאן.`);
+      });
+  }, [initialMode, token]);
 
   useEffect(() => {
     if (initialMode !== 'register') return;
@@ -51,8 +62,8 @@ export default function Auth({ mode: initialMode, token, onDone }) {
     setBusy(true);
     setError('');
     try {
-      const res = mode === 'register'
-        ? await register({ token, ...form })
+      const res = mode === 'register' || mode === 'join'
+        ? await register(mode === 'join' ? { join: token, ...form } : { token, ...form })
         : mode === 'owner' ? await ownerLogin(form.password) : await login(form.email, form.password);
       onDone(res);
     } catch (err) {
@@ -63,7 +74,8 @@ export default function Auth({ mode: initialMode, token, onDone }) {
   };
 
   const field = 'w-full rounded-2xl border border-stone-200 py-3 px-3 outline-none focus:border-orange-400';
-  const loadingInvite = mode === 'register' && !invite;
+  const signup = mode === 'register' || mode === 'join';
+  const loadingInvite = signup && !invite;
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-b from-orange-50 to-amber-50">
@@ -72,7 +84,9 @@ export default function Auth({ mode: initialMode, token, onDone }) {
           <img src="icon.svg" alt="" className="w-16 h-16 mx-auto mb-3" />
           <h1 className="text-3xl font-black text-stone-900" dir="ltr">mat-kon</h1>
           <p className="text-stone-500 mb-5">
-            {mode === 'register' ? 'הוזמנתם לספר מתכונים משלכם. נרשמים פעם אחת ומתחילים.' : mode === 'owner' ? 'כניסה של בעל האפליקציה' : 'כניסה לספר המתכונים שלכם'}
+            {mode === 'join'
+              ? `הוזמנתם להצטרף לספר המתכונים של ${invite?.bookName || ''}. נרשמים פעם אחת, ועובדים יחד על אותו ספר.`
+              : mode === 'register' ? 'הוזמנתם לספר מתכונים משלכם. נרשמים פעם אחת ומתחילים.' : mode === 'owner' ? 'כניסה של בעל האפליקציה' : 'כניסה לספר המתכונים שלכם'}
           </p>
         </div>
 
@@ -82,7 +96,7 @@ export default function Auth({ mode: initialMode, token, onDone }) {
           <div className="space-y-3">
             {googleId && (
               <>
-                <GoogleButton clientId={googleId} text={mode === 'register' ? 'signup_with' : 'signin_with'} onCredential={withGoogle} onError={setError} />
+                <GoogleButton clientId={googleId} text={signup ? 'signup_with' : 'signin_with'} onCredential={withGoogle} onError={setError} />
                 <div className="flex items-center gap-3 text-xs text-stone-400">
                   <span className="flex-1 h-px bg-stone-200" />
                   או עם אימייל וסיסמה
@@ -90,7 +104,7 @@ export default function Auth({ mode: initialMode, token, onDone }) {
                 </div>
               </>
             )}
-            {mode === 'register' && (
+            {signup && (
               <label className="block">
                 <span className="text-sm font-medium text-stone-700">שם</span>
                 <input value={form.name} onChange={set('name')} autoComplete="name" required className={field} />
@@ -103,13 +117,13 @@ export default function Auth({ mode: initialMode, token, onDone }) {
             </label>
             )}
             <label className="block">
-              <span className="text-sm font-medium text-stone-700">{mode === 'owner' ? 'סיסמת הבעלים' : 'סיסמה'}{mode === 'register' ? ' (לפחות 6 תווים)' : ''}</span>
+              <span className="text-sm font-medium text-stone-700">{mode === 'owner' ? 'סיסמת הבעלים' : 'סיסמה'}{signup ? ' (לפחות 6 תווים)' : ''}</span>
               <input
                 type="password"
                 value={form.password}
                 onChange={set('password')}
-                autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-                minLength={mode === 'register' ? 6 : undefined}
+                autoComplete={signup ? 'new-password' : 'current-password'}
+                minLength={signup ? 6 : undefined}
                 required
                 dir="ltr"
                 className={field}
@@ -118,7 +132,7 @@ export default function Auth({ mode: initialMode, token, onDone }) {
             {error && <p className="text-red-600 text-sm">{error}</p>}
             <button disabled={busy} className="w-full rounded-2xl bg-orange-500 text-white font-bold py-3 disabled:opacity-50 flex items-center justify-center gap-2">
               {busy && <Loader2 size={18} className="animate-spin" />}
-              {mode === 'register' ? 'הרשמה' : 'כניסה'}
+              {mode === 'join' ? 'הצטרפות לספר' : mode === 'register' ? 'הרשמה' : 'כניסה'}
             </button>
             {mode === 'register' && (
               <p className="text-xs text-stone-500 text-center">{invite?.freeLimit ?? 10} המתכונים הראשונים בחינם.</p>

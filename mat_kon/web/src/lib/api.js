@@ -88,5 +88,13 @@ export const findStores = (s, lat, lon, items) => api(s, 'POST', '/stores', { la
 
 // כניסה עם גוגל
 export const getAuthConfig = () => api('', 'GET', '/auth-config');
-export const googleSignIn = (credential, token) => api('', 'POST', '/google', { credential, ...(token ? { token } : {}) });
+export const googleSignIn = (credential, token, join) => api('', 'POST', '/google', { credential, ...(token ? { token } : {}), ...(join ? { join } : {}) });
+
+// ספר משותף: בעל הספר מצרף בני משפחה עם קישור הצטרפות
+export const checkJoin = (join) => api('', 'POST', '/join', { join });
+export const getMembers = (s) => api(s, 'GET', '/members');
+export const createMemberLink = (s) => api(s, 'POST', '/members', {}).then((d) => d.join);
+export const removeMember = (s, id) => api(s, 'DELETE', `/members/${encodeURIComponent(id)}`);
+export const cancelMemberLink = (s, token) => api(s, 'DELETE', `/members/links/${encodeURIComponent(token)}`);
+export const joinLink = (token) => `${window.location.origin}${window.location.pathname}#join=${token}`;
 export const ownerLogin = (password) => api('', 'POST', '/owner-login', { password });

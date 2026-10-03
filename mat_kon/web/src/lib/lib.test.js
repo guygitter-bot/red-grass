@@ -100,3 +100,9 @@ describe('sorting, tags and backup', () => {
     expect(emojiOf('מתכוני סבתא')).toBe('🏷️');
   });
 });
+
+describe('join links', () => {
+  it('reads a family join link', () => {
+    expect(parseAuthHash('#join=abcDEF123_-x')).toEqual({ mode: 'join', token: 'abcDEF123_-x' });
+  });
+});
