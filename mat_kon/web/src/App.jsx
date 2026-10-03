@@ -24,6 +24,7 @@ import InvitesView from './components/InvitesView';
 import ShareView from './components/ShareView';
 import PrivacyView from './components/PrivacyView';
 import AdminView from './components/AdminView';
+import HelpView from './components/HelpView';
 import Paywall from './components/Paywall';
 import PendingList from './components/PendingList';
 import RecipeCard from './components/RecipeCard';
@@ -73,6 +74,7 @@ const route = () => {
   if (h === '#/share') return { view: 'share' };
   if (h === '#/privacy') return { view: 'privacy' };
   if (h === '#/admin') return { view: 'admin' };
+  if (h === '#/help' || h.startsWith('#/help/')) return { view: 'help', play: h.slice(7) };
   if (h === '#/shopping') return { view: 'shopping' };
   if (h.startsWith('#/new')) return { view: 'new', mode: h.includes('manual') ? 'manual' : 'photo' };
   if (h === '#/plan') return { view: 'plan' };
@@ -409,6 +411,15 @@ export default function App() {
 
   if (nav.view === 'invites' && isOwner) return <InvitesView onBack={back} />;
   if (nav.view === 'privacy') return <PrivacyView onBack={back} />;
+  if (nav.view === 'help') {
+    return (
+      <HelpView
+        playing={nav.play}
+        onBack={() => open(null)}
+        onClose={() => (navigatedInApp.current ? window.history.back() : window.location.replace('#/help'))}
+      />
+    );
+  }
   if (nav.view === 'admin' && isOwner) return <AdminView onBack={back} />;
   if (nav.view === 'share') return <ShareView session={session} user={ownerDevice ? null : user} onBack={back} />;
 
@@ -732,6 +743,9 @@ export default function App() {
               <Chip active={favorites} onClick={() => setFavorites((f) => !f)}>
                 <Heart size={14} className="inline -mt-0.5" fill={favorites ? 'currentColor' : 'none'} /> מועדפים
               </Chip>
+              <a href="#/help" className="shrink-0 rounded-full px-3.5 py-1.5 text-sm border border-orange-200 bg-orange-50 text-orange-800">
+                🎬 סרטוני הדרכה
+              </a>
               {allCategories.filter((c) => counts[c] || custom.includes(c)).map((c) => (
                 <Chip key={c} active={category === c} onClick={() => setCategory(category === c ? null : c)}>
                   {emojiOf(c)} {c} <span className="opacity-60">{counts[c] || 0}</span>
@@ -892,6 +906,9 @@ function Empty() {
       <p className="text-sm mt-4 text-stone-500">
         בטלפון: אחרי "הוסף למסך הבית" אפשר גם לשתף קישור ישירות ל-mat-kon.
       </p>
+      <a href="#/help" className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-orange-100 text-orange-800 font-bold px-5 py-3">
+        🎬 סרטוני הדרכה
+      </a>
     </div>
   );
 }

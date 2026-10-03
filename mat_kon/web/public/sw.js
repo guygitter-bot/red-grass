@@ -48,6 +48,8 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(networkFirst(request, './'));
     return;
   }
+  // סרטוני הדרכה: ישר מהרשת (הדפדפן מבקש אותם בחלקים, ולא שומרים אותם במטמון)
+  if (sameOrigin && url.pathname.endsWith('.mp4')) return;
   // קבצי האפליקציה (עם שם שמשתנה בכל גרסה) ואייקונים: מהמטמון, ומתעדכנים ברקע
   if (sameOrigin && !url.pathname.endsWith('sw.js')) {
     event.respondWith(staleWhileRevalidate(SHELL, request));

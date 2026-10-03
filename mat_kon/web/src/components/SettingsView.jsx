@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, BarChart3, Download, Loader2, LogOut, ShieldCheck, Trash2, Upload, UserPlus, Users } from 'lucide-react';
+import { ArrowRight, BarChart3, Download, Loader2, LogOut, PlayCircle, ShieldCheck, Trash2, Upload, UserPlus, Users } from 'lucide-react';
 import { deleteAccount, getAuthConfig, linkGoogle, logoutAll, restoreBackup } from '../lib/api';
 import GoogleButton from './GoogleButton';
 import { backupFile } from '../lib/recipes';
@@ -81,6 +81,11 @@ export default function SettingsView({ session, isOwner, user, recipes, custom, 
         </div>
       </div>
       <div className="max-w-2xl mx-auto px-4 space-y-6 mt-4">
+        <a href="#/help" className="flex items-center gap-3 rounded-2xl bg-white shadow-sm p-4">
+          <PlayCircle className="text-orange-500" size={22} />
+          <span className="flex-1 font-bold">סרטוני הדרכה</span>
+          <span className="text-sm text-stone-500">איך משתמשים בכל דבר</span>
+        </a>
         {isOwner && (
           <a href="#/invites" className="flex items-center gap-3 rounded-2xl bg-white shadow-sm p-4">
             <UserPlus className="text-orange-500" size={22} />

@@ -197,3 +197,18 @@
 cd mat_kon/api && npm install && npm test
 cd mat_kon/web && npm install && npm test && npm run dev
 ```
+
+## סרטוני הדרכה
+
+באפליקציה יש מסך "🎬 סרטוני הדרכה" (בשורת הקטגוריות, בספר ריק ובהגדרות) עם סרטון קצר לכל יכולת.
+הסרטונים מוקלטים אוטומטית מתוך האפליקציה עצמה (Playwright), עם שרת מדומה ונתוני דמו – בלי לגעת בשרת האמיתי ובלי עלות AI.
+
+```bash
+cd mat_kon/web && npm run build          # הסרטונים מוקלטים מתוך dist
+cd ../tutorials && node videos/link.mjs  # סרטון אחד → web/public/tutorials/link.mp4 + link.jpg
+for f in videos/*.mjs; do node "$f"; done   # כולם
+```
+
+- `tutorials/kit.mjs` – ההקלטה: טלפון 390×844, כתוביות, "אצבע" שמראה איפה לוחצים, המרה ל-MP4 (H.264) ותמונת שער.
+- `tutorials/demo.mjs` – נתוני הדמו. `tutorials/videos/*.mjs` – תסריט לכל סרטון.
+- רשימת הסרטונים באפליקציה: `web/src/lib/tutorials.js`. כשמשנים מסך – מקליטים מחדש את הסרטון שלו.
