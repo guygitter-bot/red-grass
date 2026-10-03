@@ -87,6 +87,14 @@ dish (not even the title or caption). Explain why in notes.
 - When done, call submit_recipe. Do not write anything else.`;
 
 function material(src) {
+  if (src.images) {
+    return [
+      'Source: photos of a recipe (a cookbook page, a handwritten note, a screenshot or a printed page). Read all of them \
+- they may be several pages of the same recipe - and build the recipe from what is written. Keep the original \
+amounts. If a word is hard to read, use the most likely reading and mention it in notes.',
+      src.hint ? `The user wrote: ${src.hint}` : '',
+    ].filter(Boolean).join('\n\n');
+  }
   if (src.fromText) {
     return [
       src.url
@@ -145,7 +153,7 @@ export function toRecipe(input, src) {
     tips: cleanList(input.tips),
     confidence: ['high', 'medium', 'low'].includes(input.confidence) ? input.confidence : 'medium',
     notes: clean(input.notes),
-    source: src.fromText ? {
+    source: src.images ? { url: null, key: src.key, kind: 'photo' } : src.fromText ? {
       url: src.url || null,
       ...(src.url ? {} : { key: src.key }),
       kind: src.kind,
@@ -166,12 +174,66 @@ export function toRecipe(input, src) {
   };
 }
 
+// ---------- רשימת קניות: איחוד כפילויות וסידור לפי מחלקות בסופר ----------
+
+export const SHOPPING_TOOL = {
+  name: 'submit_list',
+  description: 'Submit the organized shopping list.',
+  strict: true,
+  input_schema: {
+    type: 'object',
+    properties: {
+      groups: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            title: { type: 'string', description: 'Hebrew supermarket department, e.g. "ירקות ופירות", "מוצרי חלב", "בשר ועוף", "מזווה", "תבלינים", "קפואים", "אחר"' },
+            items: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['title', 'items'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['groups'],
+    additionalProperties: false,
+  },
+};
+
+const SHOPPING_SYSTEM = `You organize a Hebrew shopping list. Merge items that are the same product into one line and add \
+up their amounts when the units allow it (2 כוסות קמח + 1 כוס קמח = 3 כוסות קמח; 3 ביצים + 2 ביצים = 5 ביצים); if the \
+units differ, write both (קמח: 2 כוסות + 100 גרם). Drop pure instructions that are not things to buy (e.g. "מים \
+רותחים"), but keep water only if it is something to buy. Group by supermarket department in the order of a typical \
+Israeli supermarket walk. Keep the user's wording, in Hebrew. Call submit_list.`;
+
+export async function organizeShopping(client, items) {
+  const response = await client.beta.messages.create({
+    model: MODEL,
+    max_tokens: 8000,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: { effort: 'low' },
+    system: SHOPPING_SYSTEM,
+    tools: [SHOPPING_TOOL],
+    messages: [{ role: 'user', content: `Shopping list:\n${items.map((i) => `- ${i}`).join('\n')}\n\nCall submit_list.` }],
+  });
+  const submit = response.content.find((b) => b.type === 'tool_use' && b.name === SHOPPING_TOOL.name);
+  if (!submit) throw new Error('לא הצלחתי לסדר את הרשימה. נסו שוב.');
+  return submit.input.groups
+    .map((g) => ({ title: clean(g.title), items: cleanList(g.items) }))
+    .filter((g) => g.items.length);
+}
+
 export class NoRecipeError extends Error {}
 
 export async function extractRecipe(client, src) {
   // מתכון מובנה מלא מהדף, או הודעת ווטסאפ: אין צורך ברשת, זה מהיר וזול יותר
-  const complete = src.fromText || looksComplete(src);
-  const messages = [{ role: 'user', content: material(src) }];
+  const complete = src.fromText || src.images || looksComplete(src);
+  const content = src.images
+    ? [...src.images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.type, data: i.data } })), { type: 'text', text: material(src) }]
+    : material(src);
+  const messages = [{ role: 'user', content }];
   for (let step = 0; step < MAX_STEPS; step++) {
     const response = await client.beta.messages.create({
       model: MODEL,

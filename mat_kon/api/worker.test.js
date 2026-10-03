@@ -282,3 +282,70 @@ test('text pasted for a link that could not be read keeps the link on top and re
   assert.match(apiCalls.at(-1).messages[0].content, /מתכון מעודכן/);
   assert.equal((await (await call('GET', '/recipes')).json()).recipes.length, 1);
 });
+
+// ---------- מתכון מתמונה, מתכון ידני, רשימת קניות ----------
+
+const PIXEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+
+test('a recipe from photos: images go to the agent, no web tools, counted, no refresh', async () => {
+  const res = await call('POST', '/recipes/photo', {
+    images: [{ type: 'image/png', data: PIXEL }, { type: 'image/jpeg', data: PIXEL }],
+    hint: 'העוגה של סבתא',
+    thumb: `data:image/png;base64,${PIXEL}`,
+  });
+  assert.equal(res.status, 200);
+  const { recipe } = await res.json();
+  assert.equal(recipe.source.kind, 'photo');
+  assert.match(recipe.source.key, /^photo:/);
+  assert.equal(recipe.image, `data:image/png;base64,${PIXEL}`);
+  const content = apiCalls[0].messages[0].content;
+  assert.equal(content.filter((b) => b.type === 'image').length, 2);
+  assert.match(content.at(-1).text, /photos of a recipe/);
+  assert.match(content.at(-1).text, /העוגה של סבתא/);
+  assert.equal(apiCalls[0].tools.length, 1);
+  assert.equal((await call('POST', `/recipes/${recipe.id}/refresh`)).status, 400);
+
+  assert.equal((await call('POST', '/recipes/photo', { images: [] })).status, 400);
+  assert.equal((await call('POST', '/recipes/photo', { images: [{ type: 'text/html', data: 'x' }] })).status, 400);
+});
+
+test('a manual recipe is saved as written, without the agent and without the quota', async () => {
+  env = fakeEnv({ FREE_RECIPES: '0' });
+  const inv = await invite();
+  const { session } = await (await register(inv.token)).json();
+  const res = await call('POST', '/recipes/manual', {
+    title: 'קציצות של אמא', category: 'בשר', servings: '4 מנות',
+    ingredients: [{ title: '', items: ['500 גרם בשר טחון', 'בצל'] }], steps: [{ title: '', items: ['מערבבים', 'מטגנים'] }],
+  }, session);
+  assert.equal(res.status, 200);
+  const { recipe } = await res.json();
+  assert.equal(recipe.title, 'קציצות של אמא');
+  assert.equal(recipe.source.kind, 'manual');
+  assert.equal(apiCalls.length, 0);
+  assert.equal((await call('POST', '/recipes/manual', { title: '' }, session)).status, 400);
+  assert.equal((await call('POST', '/recipes/manual', { title: 'x', ingredients: [] }, session)).status, 400);
+  // החלפת תמונה בעריכה
+  assert.equal((await call('PUT', `/recipes/${recipe.id}`, { image: `data:image/png;base64,${PIXEL}` }, session)).status, 200);
+  assert.equal((await call('PUT', `/recipes/${recipe.id}`, { image: 'javascript:alert(1)' }, session)).status, 400);
+});
+
+test('shopping list: saved per book, cleaned, and organized by the agent', async () => {
+  assert.deepEqual((await (await call('GET', '/shopping')).json()).items, []);
+  const put = await call('PUT', '/shopping', { items: [{ id: 'a', text: ' 2 כוסות קמח ', recipeId: 'r1', recipeTitle: 'עוגה' }, { text: '' }, { text: 'חלב', checked: 1 }] });
+  const { items } = await put.json();
+  assert.equal(items.length, 2);
+  assert.deepEqual(items[0], { id: 'a', text: '2 כוסות קמח', checked: false, recipeId: 'r1', recipeTitle: 'עוגה' });
+  assert.equal(items[1].checked, true);
+  assert.equal((await (await call('GET', '/shopping')).json()).items.length, 2);
+
+  // הספר של משתמש מוזמן נפרד
+  const inv = await invite();
+  const { session } = await (await register(inv.token)).json();
+  assert.deepEqual((await (await call('GET', '/shopping', undefined, session)).json()).items, []);
+
+  reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_list', input: { groups: [{ title: 'מזווה', items: ['קמח: 3 כוסות'] }, { title: 'ריק', items: [] }] } }] });
+  const org = await (await call('POST', '/shopping/organize', { items: ['2 כוסות קמח', '1 כוס קמח'] })).json();
+  assert.deepEqual(org.groups, [{ title: 'מזווה', items: ['קמח: 3 כוסות'] }]);
+  assert.match(apiCalls.at(-1).messages[0].content, /- 2 כוסות קמח\n- 1 כוס קמח/);
+  assert.equal((await call('POST', '/shopping/organize', { items: [] })).status, 400);
+});

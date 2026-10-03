@@ -1,13 +1,23 @@
 import { useEffect, useState } from 'react';
 import {
-  ArrowRight, Check, Clock, ExternalLink, Heart, Info, Loader2, MessageCircle, Pencil, PlayCircle, RotateCw, Share2, Trash2, Users,
+  ArrowRight, Camera, Check, ChefHat, Clock, ExternalLink, Heart, ImagePlus, Info, Loader2, MessageCircle, Minus, PenLine, Pencil, PlayCircle,
+  Plus, RotateCw, Share2, ShoppingCart, Trash2, Users,
 } from 'lucide-react';
+import CookMode from './CookMode';
+import { baseServings, formatAmount, scaleSections } from '../lib/scale';
+import { thumbnail } from '../lib/image';
 import { CATEGORIES } from '../lib/categories';
 import { CATEGORY_EMOJI, VIDEO_LABEL, isVideo, recipeAsText, sectionsToText, shortUrl, textToSections } from '../lib/recipes';
 import { usePersistentState } from '../lib/storage';
 
-export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDelete }) {
+export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDelete, onAddToShopping }) {
   const [editing, setEditing] = useState(false);
+  const [cooking, setCooking] = useState(false);
+  // מספר מנות: מכפיל לכמויות, נשמר לכל מתכון במכשיר
+  const [factor, setFactor] = usePersistentState(`matkon_factor_${recipe.id}`, 1);
+  const base = baseServings(recipe.servings);
+  const ingredients = scaleSections(recipe.ingredients, factor);
+  const canRefresh = Boolean(recipe.source.url) || recipe.source.kind === 'whatsapp';
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   // סימון מצרכים ושלבים בזמן הבישול - נשמר רק במכשיר הזה
@@ -55,6 +65,7 @@ export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDele
 
   return (
     <div className="min-h-screen pb-16">
+      {cooking && <CookMode recipe={recipe} ingredients={ingredients} onClose={() => setCooking(false)} />}
       <div className="sticky top-0 z-10 bg-[#fffbf5]/90 backdrop-blur border-b border-stone-100 pt-[env(safe-area-inset-top)]">
         <div className="max-w-2xl mx-auto px-2 h-14 flex items-center gap-1">
           <button onClick={onBack} className="p-2 rounded-full hover:bg-stone-100" aria-label="חזרה">
@@ -72,7 +83,14 @@ export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDele
 
       <article className="max-w-2xl mx-auto px-4">
         {/* המקור בראש הדף: הקישור המקורי, או ההודעה מווטסאפ */}
-        {fromChat ? (
+        {!fromChat && !recipe.source.url ? (
+          <div className="mt-4 rounded-2xl bg-stone-100 p-3 flex items-center gap-3 text-sm text-stone-700">
+            <span className="w-10 h-10 rounded-xl bg-stone-500 text-white flex items-center justify-center shrink-0">
+              {recipe.source.kind === 'photo' ? <Camera size={20} /> : <PenLine size={20} />}
+            </span>
+            {recipe.source.kind === 'photo' ? 'מתכון שנבנה מתמונה' : 'מתכון שכתבתם בעצמכם'}
+          </div>
+        ) : fromChat ? (
           <div className="mt-4 rounded-2xl bg-emerald-50 border border-emerald-200 p-3">
             <button onClick={() => setShowMessage((v) => !v)} className="w-full flex items-center gap-3 text-right">
               <span className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0">
@@ -166,7 +184,7 @@ export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDele
         {(recipe.servings || times.length > 0) && (
           <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-stone-700">
             {recipe.servings && (
-              <span className="flex items-center gap-1.5"><Users size={16} className="text-orange-500" /> {recipe.servings}</span>
+              <span className="flex items-center gap-1.5"><Users size={16} className="text-orange-500" /> {recipe.servings}{factor !== 1 ? ` (במקור)` : ''}</span>
             )}
             {times.map(([label, value]) => (
               <span key={label} className="flex items-center gap-1.5"><Clock size={16} className="text-orange-500" /> {label}: {value}</span>
@@ -185,8 +203,19 @@ export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDele
           <Editor recipe={recipe} onCancel={() => setEditing(false)} onSave={async (patch) => { await onUpdate(patch); setEditing(false); }} />
         ) : (
           <>
-            <Section title="מצרכים">
-              {recipe.ingredients.map((s, si) => (
+            <Section
+              title="מצרכים"
+              action={(
+                <button
+                  onClick={() => onAddToShopping(ingredients.flatMap((s) => s.items))}
+                  className="rounded-full bg-orange-50 text-orange-800 px-3 py-1.5 text-sm font-medium flex items-center gap-1.5"
+                >
+                  <ShoppingCart size={15} /> לרשימת קניות
+                </button>
+              )}
+            >
+              <Servings base={base} factor={factor} onChange={setFactor} />
+              {ingredients.map((s, si) => (
                 <div key={si} className="mb-3">
                   {s.title && <h3 className="font-bold text-stone-800 mb-1.5">{s.title}</h3>}
                   <ul className="space-y-1">
@@ -208,7 +237,14 @@ export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDele
               ))}
             </Section>
 
-            <Section title="אופן ההכנה">
+            <Section
+              title="אופן ההכנה"
+              action={recipe.steps.length > 0 && (
+                <button onClick={() => setCooking(true)} className="rounded-full bg-stone-900 text-white px-3 py-1.5 text-sm font-medium flex items-center gap-1.5">
+                  <ChefHat size={15} /> מצב בישול
+                </button>
+              )}
+            >
               {recipe.steps.map((s, si) => (
                 <div key={si} className="mb-4">
                   {s.title && <h3 className="font-bold text-stone-800 mb-2">{s.title}</h3>}
@@ -253,9 +289,11 @@ export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDele
         {!editing && (
           <div className="mt-8 pt-5 border-t border-stone-200 flex flex-wrap gap-2 justify-center text-sm">
             <ActionButton onClick={() => setEditing(true)} icon={<Pencil size={16} />}>עריכה</ActionButton>
-            <ActionButton onClick={() => run('refresh', onRefresh)} icon={busy === 'refresh' ? <Loader2 size={16} className="animate-spin" /> : <RotateCw size={16} />} disabled={Boolean(busy)}>
-              {busy === 'refresh' ? 'מסדר שוב מהמקור…' : 'רענון מהמקור'}
-            </ActionButton>
+            {canRefresh && (
+              <ActionButton onClick={() => run('refresh', onRefresh)} icon={busy === 'refresh' ? <Loader2 size={16} className="animate-spin" /> : <RotateCw size={16} />} disabled={Boolean(busy)}>
+                {busy === 'refresh' ? 'מסדר שוב מהמקור…' : 'רענון מהמקור'}
+              </ActionButton>
+            )}
             <ActionButton
               onClick={() => window.confirm(`למחוק את "${recipe.title}"?`) && run('delete', onDelete)}
               icon={<Trash2 size={16} />}
@@ -271,15 +309,50 @@ export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDele
   );
 }
 
-function Section({ title, children }) {
+function Section({ title, action, children }) {
   return (
     <section className="mt-7">
-      <h2 className="text-xl font-black text-stone-900 mb-3 flex items-center gap-2">
-        <span className="w-1.5 h-6 rounded-full bg-orange-500" />
-        {title}
-      </h2>
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <h2 className="text-xl font-black text-stone-900 flex items-center gap-2">
+          <span className="w-1.5 h-6 rounded-full bg-orange-500" />
+          {title}
+        </h2>
+        {action}
+      </div>
       {children}
     </section>
+  );
+}
+
+// שינוי כמות: לפי מספר מנות כשהוא ידוע ("6 מנות"), אחרת מכפיל (½, ×2...)
+function Servings({ base, factor, onChange }) {
+  const btn = 'w-9 h-9 rounded-full bg-white border border-stone-200 flex items-center justify-center disabled:opacity-30';
+  if (base) {
+    const count = Math.round(base * factor * 2) / 2;
+    const step = (d) => onChange(Math.max(0.5, count + d) / base);
+    return (
+      <div className="mb-4 flex items-center gap-3 rounded-2xl bg-stone-50 px-3 py-2">
+        <span className="text-sm text-stone-600 flex-1">כמות</span>
+        <button onClick={() => step(-1)} disabled={count <= 1} className={btn} aria-label="פחות"><Minus size={16} /></button>
+        <span className="font-bold min-w-[4.5rem] text-center">{formatAmount(count)} מנות</span>
+        <button onClick={() => step(1)} className={btn} aria-label="יותר"><Plus size={16} /></button>
+        {factor !== 1 && <button onClick={() => onChange(1)} className="text-xs text-orange-700">איפוס</button>}
+      </div>
+    );
+  }
+  return (
+    <div className="mb-4 flex items-center gap-2 rounded-2xl bg-stone-50 px-3 py-2 overflow-x-auto no-scrollbar">
+      <span className="text-sm text-stone-600 shrink-0 ml-1">כמות</span>
+      {[0.5, 1, 1.5, 2, 3].map((f) => (
+        <button
+          key={f}
+          onClick={() => onChange(f)}
+          className={`shrink-0 rounded-full px-3 py-1 text-sm border ${factor === f ? 'bg-orange-500 border-orange-500 text-white' : 'bg-white border-stone-200'}`}
+        >
+          {f === 1 ? 'רגיל' : `×${formatAmount(f)}`}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -318,6 +391,7 @@ function Editor({ recipe, onCancel, onSave }) {
   const [ingredients, setIngredients] = useState(sectionsToText(recipe.ingredients));
   const [steps, setSteps] = useState(sectionsToText(recipe.steps));
   const [tips, setTips] = useState((recipe.tips || []).join('\n'));
+  const [image, setImage] = useState(recipe.image || null);
   const [saving, setSaving] = useState(false);
   const field = 'w-full rounded-2xl border border-stone-200 bg-white p-3 outline-none focus:border-orange-400 leading-relaxed';
 
@@ -340,6 +414,19 @@ function Editor({ recipe, onCancel, onSave }) {
         <span className="font-bold">טיפים</span>
         <textarea value={tips} onChange={(e) => setTips(e.target.value)} rows={3} className={`${field} mt-1`} />
       </label>
+      <div className="flex items-center gap-3">
+        {image && <img src={image} alt="" referrerPolicy="no-referrer" className="w-16 h-16 rounded-xl object-cover" />}
+        <label className="rounded-full bg-stone-100 px-4 py-2 text-sm font-medium flex items-center gap-1.5 cursor-pointer">
+          <ImagePlus size={16} /> {image ? 'החלפת תמונה' : 'הוספת תמונה'}
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={async (e) => e.target.files[0] && setImage(await thumbnail(e.target.files[0]).catch(() => image))}
+          />
+        </label>
+        {image && <button type="button" onClick={() => setImage(null)} className="text-sm text-stone-500">הסרת תמונה</button>}
+      </div>
       <div className="flex gap-2">
         <button
           disabled={saving}
@@ -351,6 +438,7 @@ function Editor({ recipe, onCancel, onSave }) {
                 ingredients: textToSections(ingredients),
                 steps: textToSections(steps),
                 tips: tips.split('\n').map((t) => t.trim()).filter(Boolean),
+                ...(image !== (recipe.image || null) ? { image } : {}),
               });
             } finally {
               setSaving(false);
