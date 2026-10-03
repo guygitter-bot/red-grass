@@ -25,7 +25,13 @@ function namespace(Cls, env) {
     objects,
     idFromName: (n) => n,
     get: (n) => {
-      if (!objects.has(n)) objects.set(n, new Cls({ storage: fakeStorage() }, env));
+      if (!objects.has(n)) {
+        const storage = fakeStorage();
+        const obj = new Cls({ storage }, env);
+        // אזעקה (alarm) של Durable Object: רצה מיד אחרי הבקשה
+        storage.setAlarm = async () => { setTimeout(() => obj.alarm?.(), 0); };
+        objects.set(n, obj);
+      }
       const obj = objects.get(n);
       return { fetch: (req) => obj.fetch(req) };
     },

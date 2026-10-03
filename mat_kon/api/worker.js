@@ -6,7 +6,8 @@
 //   - בעל האפליקציה: פתוח, בלי הרשמה ובלי הגבלה. ספר המתכונים "book" וניהול ההזמנות.
 //   - משתמש שהוזמן (Authorization: Bearer <session>): נרשם מקישור הזמנה, מקבל ספר ריק משלו
 //     (user:<id>), ו-FREE_RECIPES מתכונים בחינם. אחר כך צריך מנוי (plan=paid).
-import Anthropic from '@anthropic-ai/sdk';
+import { deps, trackedClient } from './deps.js';
+import { buildRecipe, failure } from './jobs.js';
 import { RecipeBook } from './store.js';
 import { Accounts, canAdd } from './accounts.js';
 import { gatherSource, normalizeUrl, sourceKind } from './source.js';
@@ -17,10 +18,7 @@ import { CATEGORIES } from './categories.js';
 export { RecipeBook, Accounts };
 
 // נקודות הזרקה לבדיקות
-export const deps = {
-  anthropic: (env) => new Anthropic({ apiKey: env.ANTHROPIC_API_KEY }),
-  fetch: (...args) => fetch(...args),
-};
+export { deps };
 
 const MAX_EDIT_BYTES = 200 * 1024;
 const MAX_SMALL_BYTES = 4000;
@@ -66,6 +64,8 @@ export default {
     const accounts = env.ACCOUNTS.get(env.ACCOUNTS.idFromName('accounts'));
     const bookOf = (userId) => env.BOOK.get(env.BOOK.idFromName(userId ? `user:${userId}` : 'book'));
     // הספר שהמשתמש עובד עליו: שלו, ספר משותף של בעל ספר אחר, או הספר של בעל האפליקציה
+    // המזהה של הספר בכתובות תמונות: 'book' לספר של בעל האפליקציה, או מזהה בעל הספר
+    const bookKeyOf = (u) => (!u || u.bookId === 'owner' ? 'book' : u.bookId || u.id);
     const bookFor = (u) => (!u || u.bookId === 'owner' ? bookOf(null) : bookOf(u.bookId || u.id));
 
     const readJson = async (limit = MAX_SMALL_BYTES) => {
@@ -105,6 +105,16 @@ export default {
       }
       const path = { invite: '/invite/check', join: '/join/check' }[parts[0]] || `/${parts[0]}`;
       return pass(await internal(accounts, 'POST', path, body));
+    }
+
+    // ---- תמונות מתכונים: קישור עם מזהה אקראי שאי אפשר לנחש (תגית img לא שולחת כניסה) ----
+    if (parts[0] === 'img' && parts.length === 3 && request.method === 'GET') {
+      if (!/^(book|[0-9a-f-]{36})$/.test(parts[1]) || !/^[0-9a-f-]{36}$/.test(parts[2])) return fail(404, 'Not found');
+      const res = await internal(bookOf(parts[1] === 'book' ? null : parts[1]), 'GET', `/img/${parts[2]}`);
+      if (!res.ok) return fail(404, 'Not found');
+      return new Response(res.body, {
+        headers: { 'content-type': res.headers.get('content-type'), 'cache-control': 'public, max-age=31536000, immutable', 'x-content-type-options': 'nosniff' },
+      });
     }
 
     // ---- הספר של בעל האפליקציה: פתוח, או נעול (רק במכשירים שנכנסו עם סיסמת הבעלים / חשבון הגוגל שלו) ----
@@ -163,8 +173,29 @@ export default {
       return res.ok ? null : fail(429, 'הגעתם למכסה היומית של פעולות חכמות. אפשר להמשיך מחר.');
     };
 
+    // לקוח AI שסופר טוקנים לספר (מעקב עלויות לבעל האפליקציה)
+    const month = () => new Date().toISOString().slice(0, 7);
+    const ai = () => trackedClient(env, (u) => internal(bookFor(user), 'POST', '/costs/add', { month: month(), ...u }).catch(() => {}));
+    // תקלות נשמרות (50 אחרונות) כדי שבעל האפליקציה יראה אותן במסך הניהול
+    const recordError = (where, e) => {
+      console.error(where, e);
+      return internal(accounts, 'POST', '/errors/add', {
+        where, message: String(e?.message || e).slice(0, 300), status: e?.status || null, user: user?.email || (user ? user.id : 'owner'),
+      }).catch(() => {});
+    };
+
     // שגיאה מה-AI: הודעה ברורה בעברית במקום השגיאה הגולמית
-    const aiFail = (e, message) => {
+    // תקלה באפליקציה (מסך "משהו השתבש") – נשמרת לבעל האפליקציה
+    if (url.pathname === '/client-error' && request.method === 'POST') {
+      const limited = await rate([{ key: `client-error:${ip}`, limit: 20, window: 3600 }]);
+      if (limited) return limited;
+      const { body } = await readJson();
+      await recordError(`app: ${String(body?.where || '').slice(0, 60)}`, { message: String(body?.message || '').slice(0, 300) });
+      return reply(200, { ok: true });
+    }
+
+    const aiFail = async (e, message) => {
+      await recordError('ai', e);
       const friendly = aiMessage(e, { owner: !user });
       if (friendly) return fail(503, friendly);
       return fail(502, message);
@@ -222,7 +253,7 @@ export default {
       const limited = await aiBudget();
       if (limited) return limited;
       try {
-        return reply(200, { results: await searchRecipes(deps.anthropic(env), q) });
+        return reply(200, { results: await searchRecipes(ai(), q) });
       } catch (e) {
         return aiFail(e, (!e.status && e.message) || 'החיפוש נכשל');
       }
@@ -317,7 +348,7 @@ export default {
         const limited = await aiBudget(photos.images.length > 1 ? 2 : 1);
         if (limited) return limited;
         try {
-          const items = await scanPantry(deps.anthropic(env), photos.images, {
+          const items = await scanPantry(ai(), photos.images, {
             mode: body.mode === 'single' ? 'single' : 'many',
             place: body.place === 'pantry' ? 'pantry' : 'fridge',
           });
@@ -338,7 +369,7 @@ export default {
         const limited = await aiBudget();
         if (limited) return limited;
         try {
-          return reply(200, { results: await ideasFromPantry(deps.anthropic(env), items, { wish: String(body.wish || '').trim().slice(0, 200) }) });
+          return reply(200, { results: await ideasFromPantry(ai(), items, { wish: String(body.wish || '').trim().slice(0, 200) }) });
         } catch (e) {
           return aiFail(e, (!e.status && e.message) || 'החיפוש נכשל');
         }
@@ -359,7 +390,7 @@ export default {
         if (limited) return limited;
       }
       try {
-        return reply(200, await findStores({ lat, lon, items }, { fetch: deps.fetch, client: deps.anthropic(env), cheapersalKey: env.CHEAPERSAL_API_KEY }));
+        return reply(200, await findStores({ lat, lon, items }, { fetch: deps.fetch, client: ai(), cheapersalKey: env.CHEAPERSAL_API_KEY }));
       } catch (e) {
         return aiFail(e, (!e.status && e.message) || 'לא הצלחתי למצוא חנויות');
       }
@@ -385,7 +416,7 @@ export default {
         const limited = await aiBudget();
         if (limited) return limited;
         try {
-          return reply(200, { groups: await organizeShopping(deps.anthropic(env), items) });
+          return reply(200, { groups: await organizeShopping(ai(), items) });
         } catch (e) {
           return aiFail(e, (!e.status && e.message) || 'לא הצלחתי לסדר את הרשימה');
         }
@@ -393,11 +424,48 @@ export default {
       return fail(405, 'Method not allowed');
     }
 
+    // ---- עבודה ברקע (הוספת מתכון מקישור) ----
+    if (parts[0] === 'jobs' && parts.length === 2 && request.method === 'GET' && /^[\w-]{1,64}$/.test(parts[1])) {
+      return pass(await internal(bookFor(user), 'GET', `/jobs/${parts[1]}`));
+    }
+
+    // ---- ניהול: עלויות ותקלות (רק בעל האפליקציה) ----
+    if (parts[0] === 'admin') {
+      if (user) return fail(403, 'רק לבעל האפליקציה');
+      if (url.pathname === '/admin/usage' && request.method === 'GET') {
+        const m = /^\d{4}-\d{2}$/.test(url.searchParams.get('month') || '') ? url.searchParams.get('month') : month();
+        const { books, ownerMembers } = await (await internal(accounts, 'GET', '/books')).json();
+        const price = { in: Number(env.AI_PRICE_IN || 5), out: Number(env.AI_PRICE_OUT || 25), search: Number(env.AI_PRICE_SEARCH || 0.01) };
+        const withCost = async (row, stub) => {
+          const c = await (await internal(stub, 'GET', `/costs/${m}`)).json();
+          const usd = (c.input * price.in + c.output * price.out) / 1e6 + c.searches * price.search;
+          return { ...row, ...c, usd: Math.round(usd * 100) / 100 };
+        };
+        const rows = await Promise.all([
+          withCost({ id: 'owner', name: 'הספר שלי', plan: 'owner', members: ownerMembers }, bookOf(null)),
+          ...books.map((b) => withCost({ id: b.id, name: b.name, email: b.email, plan: b.plan, added: b.added, members: b.members }, bookOf(b.id))),
+        ]);
+        return reply(200, { month: m, price, rows });
+      }
+      if (url.pathname === '/admin/errors' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/errors'));
+      return fail(404, 'Not found');
+    }
+
     // ---- ספר המתכונים ----
     if (parts[0] !== 'recipes' || parts.length > 3) return fail(404, 'Not found');
     const id = parts[1];
     if (id && !/^[\w-]{1,64}$/.test(id)) return fail(404, 'Not found');
     const book = bookFor(user);
+    // תמונה שהועלתה (data URL) נשמרת בנפרד מהמתכון, ובמתכון נשאר רק קישור קצר אליה
+    const storeImage = async (image) => {
+      if (typeof image !== 'string' || !image.startsWith('data:image/')) return image ?? null;
+      const m = image.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/);
+      if (!m) return null;
+      const res = await internal(book, 'POST', '/img', { type: m[1], data: m[2] });
+      if (!res.ok) return null;
+      const { id: imageId } = await res.json();
+      return `${url.origin}/img/${bookKeyOf(user)}/${imageId}`;
+    };
 
     // מתכון שנכתב ידנית: בלי AI ובלי מכסה
     if (request.method === 'POST' && parts.length === 2 && id === 'manual') {
@@ -407,6 +475,7 @@ export default {
       if (typeof recipe === 'string') return fail(400, recipe);
       if (!(await allCategories()).includes(body.category)) recipe.category = 'אחר';
       else recipe.category = body.category;
+      recipe.image = await storeImage(recipe.image);
       return pass(await internal(book, 'POST', '/recipes', recipe));
     }
 
@@ -432,6 +501,7 @@ export default {
           skipped += 1;
           continue;
         }
+        recipe.image = await storeImage(recipe.image);
         const res = await internal(book, 'POST', '/recipes?replace=1', { ...recipe, restored: true });
         if (res.ok) {
           restored += 1;
@@ -490,18 +560,24 @@ export default {
         await giveBack();
         return limited;
       }
+      const categories = await allCategories();
+      // ברקע: מחזירים מיד מספר עבודה, וה-Durable Object ממשיך גם אם האפליקציה נסגרה (קישור מסרטון לוקח עד 2 דקות)
+      if (isAdd && !isAddPhoto && !isAddText && url.searchParams.get('async') === '1') {
+        const job = await internal(book, 'POST', '/jobs', {
+          input: { link, hint }, categories, quota: counts ? { userId: user.id } : null, owner: !user,
+        });
+        return pass(job);
+      }
       let recipe;
       try {
-        const src = text || (await gatherSource(link, deps.fetch, { hint, igDocId: env.IG_DOC_ID }));
-        recipe = await extractRecipe(deps.anthropic(env), src, { categories: await allCategories() });
+        recipe = await buildRecipe(env, ai(), { link, text, hint }, categories);
       } catch (e) {
         await giveBack();
-        if (e instanceof NoRecipeError) return fail(422, e.message);
-        console.error('extract failed', text ? text.kind : link, e);
-        if (aiMessage(e)) return aiFail(e);
-        if (e.status === 400 && isAddPhoto) return fail(400, 'לא הצלחתי לקרוא את התמונות. נסו תמונה ברורה יותר.');
-        return fail(502, e.status ? 'לא הצלחתי להוציא מתכון. נסו שוב.' : `לא הצלחתי להוציא מתכון: ${e.message || e}`);
+        await recordError('extract', e);
+        const f = failure(e, { isPhoto: isAddPhoto, owner: !user });
+        return fail(f.status, f.error);
       }
+      recipe.image = await storeImage(recipe.image);
       const res = await internal(book, 'POST', '/recipes', recipe);
       const data = await res.json();
       // מתכון שכבר היה בספר (אותו קישור) לא נספר – המכסה חוזרת
@@ -530,6 +606,7 @@ export default {
       if ('image' in patch && !validImage(patch.image)) return fail(400, 'תמונה לא תקינה');
       const bad = cleanPatch(patch);
       if (bad) return fail(400, bad);
+      if ('image' in patch) patch.image = await storeImage(patch.image);
       return pass(await internal(book, 'PUT', `/recipes/${id}`, patch));
     }
     return fail(405, 'Method not allowed');

@@ -51,6 +51,10 @@ export function safeRecipe(r) {
   };
 }
 export const addRecipe = (s, url, hint) => api(s, 'POST', '/recipes', hint ? { url, hint } : { url });
+// הוספה ברקע: השרת מחזיר מספר עבודה מיד, וממשיך גם אם האפליקציה נסגרת
+export const addRecipeAsync = (s, url) => api(s, 'POST', '/recipes?async=1', { url }).then((d) => d.job);
+export const getJob = (s, id) => api(s, 'GET', `/jobs/${id}`).then((d) => d.job);
+export const getRecipe = (s, id) => api(s, 'GET', `/recipes/${id}`).then((d) => safeRecipe(d.recipe));
 export const refreshRecipe = (s, id) => api(s, 'POST', `/recipes/${id}/refresh`);
 export const updateRecipe = (s, id, patch) => api(s, 'PUT', `/recipes/${id}`, patch).then((d) => d.recipe);
 export const deleteRecipe = (s, id) => api(s, 'DELETE', `/recipes/${id}`);
@@ -150,3 +154,8 @@ export const removeMember = (s, id) => api(s, 'DELETE', `/members/${encodeURICom
 export const cancelMemberLink = (s, token) => api(s, 'DELETE', `/members/links/${encodeURIComponent(token)}`);
 export const joinLink = (token) => `${window.location.origin}${window.location.pathname}#join=${token}`;
 export const ownerLogin = (password) => api('', 'POST', '/owner-login', { password });
+
+// ניהול (בעל האפליקציה): עלויות AI לפי ספר ותקלות אחרונות
+export const getAdminUsage = (month) => api(own(), 'GET', `/admin/usage${month ? `?month=${month}` : ''}`);
+export const getAdminErrors = () => api(own(), 'GET', '/admin/errors').then((d) => d.errors);
+export const reportClientError = (where, message) => api(loadJson('matkon_session', ''), 'POST', '/client-error', { where, message }).catch(() => {});

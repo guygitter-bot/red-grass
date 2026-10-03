@@ -297,7 +297,7 @@ test('a recipe from photos: images go to the agent, no web tools, counted, no re
   const { recipe } = await res.json();
   assert.equal(recipe.source.kind, 'photo');
   assert.match(recipe.source.key, /^photo:/);
-  assert.equal(recipe.image, `data:image/png;base64,${PIXEL}`);
+  assert.match(recipe.image, /^https:\/\/api\.example\/img\/book\//);
   const content = apiCalls[0].messages[0].content;
   assert.equal(content.filter((b) => b.type === 'image').length, 2);
   assert.match(content.at(-1).text, /photos of a recipe/);
@@ -866,4 +866,67 @@ test('safe fetch: internal hosts and redirects to them are refused', async () =>
   assert.equal(isPublicUrl('https://www.10dakot.co.il/recipe'), true);
   const hop = async (url) => (url.includes('start') ? new Response('', { status: 302, headers: { location: 'http://169.254.169.254/latest' } }) : new Response('secret'));
   await assert.rejects(() => safeFetch(hop, 'https://site.example/start'));
+});
+
+const waitJob = async (id, session) => {
+  for (let i = 0; i < 50; i++) {
+    const { job } = await (await call('GET', `/jobs/${id}`, undefined, session)).json();
+    if (job.status === 'done' || job.status === 'error') return job;
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  throw new Error('job did not finish');
+};
+
+test('background add: returns a job at once, the book finishes it, quota counted once', async () => {
+  const { session } = await (await register((await invite()).token)).json();
+  const res = await call('POST', '/recipes?async=1', { url: 'https://cake.example/bg' }, session);
+  assert.equal(res.status, 202);
+  const { job } = await res.json();
+  const done = await waitJob(job.id, session);
+  assert.equal(done.status, 'done');
+  assert.equal(done.title, 'עוגת שוקולד');
+  assert.equal(done.input, undefined);
+  const recipes = (await (await call('GET', '/recipes', undefined, session)).json()).recipes;
+  assert.equal(recipes.length, 1);
+  assert.equal((await (await call('GET', '/me', undefined, session)).json()).user.added, 1);
+  // אותו קישור שוב ברקע – לא נכפל ולא נספר
+  const again = await (await call('POST', '/recipes?async=1', { url: 'https://cake.example/bg' }, session)).json();
+  assert.equal((await waitJob(again.job.id, session)).updated, true);
+  assert.equal((await (await call('GET', '/me', undefined, session)).json()).user.added, 1);
+  // כשלון: המכסה חוזרת והשגיאה בעברית
+  reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_recipe', input: { ...recipeInput, found: false, notes: 'זה לא מתכון' } }] });
+  const bad = await (await call('POST', '/recipes?async=1', { url: 'https://cake.example/no' }, session)).json();
+  const failed = await waitJob(bad.job.id, session);
+  assert.deepEqual([failed.status, failed.error], ['error', 'זה לא מתכון']);
+  assert.equal((await (await call('GET', '/me', undefined, session)).json()).user.added, 1);
+  // אי אפשר לראות עבודה של ספר אחר
+  assert.equal((await call('GET', `/jobs/${job.id}`)).status, 404);
+});
+
+test('admin: AI costs per book and recent errors, owner only', async () => {
+  reply = () => ({ stop_reason: 'tool_use', usage: { input_tokens: 1000, output_tokens: 200, server_tool_use: { web_search_requests: 2 } }, content: [{ type: 'tool_use', name: 'submit_recipe', input: recipeInput }] });
+  const { session } = await (await register((await invite()).token)).json();
+  await call('POST', '/recipes', { url: 'https://cake.example/cost' }, session);
+  await call('POST', '/client-error', { where: 'home', message: 'boom' });
+  const usage = await (await call('GET', '/admin/usage')).json();
+  const dana = usage.rows.find((r) => r.name === 'דנה');
+  assert.deepEqual([dana.ops, dana.calls, dana.input, dana.output, dana.searches], [1, 1, 1000, 200, 2]);
+  assert.ok(dana.usd > 0);
+  const { errors } = await (await call('GET', '/admin/errors')).json();
+  assert.equal(errors[0].message, 'boom');
+  assert.equal((await call('GET', '/admin/usage', undefined, session)).status, 403);
+});
+
+test('uploaded images are stored apart from the recipe and served by an unguessable link', async () => {
+  const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  const { recipe } = await (await call('POST', '/recipes/manual', { title: 'עם תמונה', ingredients: [{ title: '', items: ['x'] }], image: png })).json();
+  assert.match(recipe.image, /^https:\/\/api\.example\/img\/book\/[0-9a-f-]{36}$/);
+  const img = await worker.fetch(new Request(recipe.image), env);
+  assert.equal(img.status, 200);
+  assert.equal(img.headers.get('content-type'), 'image/png');
+  assert.equal(new Uint8Array(await img.arrayBuffer())[1], 0x50); // "PNG"
+  assert.equal((await worker.fetch(new Request('https://api.example/img/book/00000000-0000-0000-0000-000000000000'), env)).status, 404);
+  // החלפה ומחיקה מוחקות את הקובץ הישן
+  await call('PUT', `/recipes/${recipe.id}`, { image: null });
+  assert.equal((await worker.fetch(new Request(recipe.image), env)).status, 404);
 });

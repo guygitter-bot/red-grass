@@ -1,4 +1,5 @@
 import { Component } from 'react';
+import { reportClientError } from '../lib/api';
 
 // רשת ביטחון: תקלה במסך אחד (למשל נתון פגום) לא משאירה מסך לבן
 export default class ErrorBoundary extends Component {
@@ -13,6 +14,7 @@ export default class ErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     console.error('mat-kon crashed', error, info?.componentStack);
+    reportClientError(window.location.hash || 'home', `${error?.message || error}`.slice(0, 300));
   }
 
   reset = () => {

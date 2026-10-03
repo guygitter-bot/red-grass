@@ -16,16 +16,18 @@ import { loadJson, saveJson } from './lib/storage';
 import { mergePantry } from './lib/fridge';
 import { itemsToPlan, planToItems } from './lib/sync';
 import useSyncedList from './hooks/useSyncedList';
+import useIdbState from './hooks/useIdbState';
 import InvitesView from './components/InvitesView';
 import ShareView from './components/ShareView';
 import PrivacyView from './components/PrivacyView';
+import AdminView from './components/AdminView';
 import Paywall from './components/Paywall';
 import PendingList from './components/PendingList';
 import RecipeCard from './components/RecipeCard';
 import RecipeView from './components/RecipeView';
 import { CATEGORIES } from './lib/categories';
 import {
-  addCategory, addRecipe, addTextRecipe, deleteRecipe, removeCategory, getMe, getPlan, getShopping, listRecipes, logout as apiLogout, refreshRecipe,
+  addCategory, addRecipeAsync, addTextRecipe, getJob, getRecipe, deleteRecipe, removeCategory, getMe, getPlan, getShopping, listRecipes, logout as apiLogout, refreshRecipe,
   updateRecipe, getPantry, shoppingOps, pantryOps, planOps,
 } from './lib/api';
 import { SORTS, countByCategory, emojiOf, filterRecipes, freeLeft, linkFromShare, parseAuthHash, sortRecipes, topTags } from './lib/recipes';
@@ -52,6 +54,7 @@ const route = () => {
   if (h === '#/invites') return { view: 'invites' };
   if (h === '#/share') return { view: 'share' };
   if (h === '#/privacy') return { view: 'privacy' };
+  if (h === '#/admin') return { view: 'admin' };
   if (h === '#/shopping') return { view: 'shopping' };
   if (h.startsWith('#/new')) return { view: 'new', mode: h.includes('manual') ? 'manual' : 'photo' };
   if (h === '#/plan') return { view: 'plan' };
@@ -70,7 +73,7 @@ const route = () => {
 export default function App() {
   const [session, setSession] = usePersistentState('matkon_session', '');
   const [user, setUser] = usePersistentState('matkon_user', null);
-  const [recipes, setRecipes] = usePersistentState('matkon_recipes', []);
+  const [recipes, setRecipes] = useIdbState('matkon_recipes', []);
   // רשימת הקניות: נשמרת בשרת (משותפת לכל המכשירים של אותו ספר) ומקומית לתצוגה מהירה
   const [shopping, setShopping] = usePersistentState('matkon_shopping', []);
   // תכנון ארוחות שבועי (נשמר בשרת, כמו רשימת הקניות)
@@ -88,7 +91,8 @@ export default function App() {
   });
   const [paywall, setPaywall] = useState(null);
   const [paymentUrl, setPaymentUrl] = useState('');
-  const [pending, setPending] = useState([]);
+  // קישורים שמתווספים ברקע (נשמר במכשיר – ממשיכים לעקוב גם אחרי שהאפליקציה נסגרה ונפתחה)
+  const [pending, setPending] = usePersistentState('matkon_pending', []);
   const [nav, setNav] = useState(route);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState(null);
@@ -132,6 +136,7 @@ export default function App() {
     setPlan({});
     setPantry([]);
     setCustom([]);
+    setPending([]);
     try {
       for (const k of Object.keys(localStorage)) {
         if (/^matkon_(factor|checked)_/.test(k) || k === 'matkon_fridge') localStorage.removeItem(k);
@@ -139,7 +144,7 @@ export default function App() {
     } catch {
       // אחסון חסום – אין מה לנקות
     }
-  }, [shoppingSync, pantrySync, planSync, setRecipes, setShopping, setPlan, setPantry, setCustom]);
+  }, [shoppingSync, pantrySync, planSync, setRecipes, setShopping, setPlan, setPantry, setCustom, setPending]);
 
   const signOut = useCallback(() => {
     apiLogout(session);
@@ -235,11 +240,8 @@ export default function App() {
       const key = `${Date.now()}-${Math.random()}`;
       setPending((p) => [...p, { key, url, error: '' }]);
       try {
-        const { recipe, updated, user: updatedUser } = await addRecipe(session, url);
-        upsert(recipe);
-        if (updatedUser) setUser(updatedUser);
-        setPending((p) => p.filter((x) => x.key !== key));
-        setToast(updated ? `"${recipe.title}" עודכן` : `"${recipe.title}" נוסף ל${recipe.category}`);
+        const job = await addRecipeAsync(session, url);
+        setPending((p) => p.map((x) => (x.key === key ? { ...x, jobId: job.id } : x)));
       } catch (e) {
         setPending((p) => p.filter((x) => x.key !== key || e.status !== 402));
         if (e.status === 401) return signOut();
@@ -247,8 +249,46 @@ export default function App() {
         setPending((p) => p.map((x) => (x.key === key ? { ...x, error: e.message } : x)));
       }
     },
-    [session, user, paymentUrl, upsert, setUser, signOut],
+    [session, user, paymentUrl, setPending, signOut],
   );
+
+  // מעקב אחרי הוספות ברקע: כל 3 שניות בודקים מה הסתיים
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
+  useEffect(() => {
+    // בפתיחת האפליקציה: קישור שנשלח אבל לא קיבל מספר עבודה (נסגרה באמצע) – אפשר לנסות שוב
+    setPending((p) => p.map((x) => (!x.jobId && !x.error ? { ...x, error: 'החיבור נקטע לפני שהקישור נשלח. נסו שוב.' } : x)));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (auth) return undefined;
+    const tick = async () => {
+      for (const item of pendingRef.current.filter((x) => x.jobId && !x.error)) {
+        let job;
+        try {
+          job = await getJob(session, item.jobId);
+        } catch (e) {
+          if (e.status === 404) setPending((p) => p.map((x) => (x.key === item.key ? { ...x, error: 'העבודה לא נמצאה. נסו שוב.' } : x)));
+          continue;
+        }
+        if (job.status === 'done') {
+          try {
+            upsert(await getRecipe(session, job.recipeId));
+          } catch {
+            // יופיע בטעינה הבאה
+          }
+          setPending((p) => p.filter((x) => x.key !== item.key));
+          setToast(job.updated ? `"${job.title}" עודכן` : `"${job.title}" נוסף ל${job.category}`);
+          if (session && !ownerDevice) getMe(session).then((me) => me.user && setUser(me.user)).catch(() => {});
+        } else if (job.status === 'error') {
+          if (job.code === 402) setPaywall({ paymentUrl });
+          setPending((p) => p.map((x) => (x.key === item.key ? { ...x, error: job.error } : x)));
+        }
+      }
+    };
+    tick();
+    const t = setInterval(tick, 3000);
+    return () => clearInterval(t);
+  }, [auth, session, ownerDevice, paymentUrl, upsert, setUser, setPending]);
 
   // קישור ששותף לאפליקציה מתווסף מיד
   useEffect(() => {
@@ -310,6 +350,7 @@ export default function App() {
 
   if (nav.view === 'invites' && isOwner) return <InvitesView onBack={back} />;
   if (nav.view === 'privacy') return <PrivacyView onBack={back} />;
+  if (nav.view === 'admin' && isOwner) return <AdminView onBack={back} />;
   if (nav.view === 'share') return <ShareView session={session} user={ownerDevice ? null : user} onBack={back} />;
 
   const openShopping = shopping.filter((i) => !i.checked).length;

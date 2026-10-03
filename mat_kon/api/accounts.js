@@ -303,6 +303,24 @@ export class Accounts {
       return json({ ok: true, deletedBook: !user.bookId });
     }
 
+    // ---- תקלות אחרונות (למסך הניהול) ----
+    if (path === '/errors/add' && request.method === 'POST') {
+      const list = (await this.storage.get('errors')) || [];
+      list.unshift({ at: now, where: String(body.where || '').slice(0, 80), message: String(body.message || '').slice(0, 300), status: body.status ?? null, user: String(body.user || '').slice(0, 120) });
+      await this.storage.put('errors', list.slice(0, 50));
+      return json({ ok: true });
+    }
+    if (path === '/errors' && request.method === 'GET') return json({ errors: (await this.storage.get('errors')) || [] });
+    // ספרים (בעלי ספר שנרשמו מהזמנה) – למסך הניהול
+    if (path === '/books' && request.method === 'GET') {
+      const users = [...(await this.storage.list({ prefix: 'user:' })).values()];
+      const holders = users.filter((u) => !u.bookId && !u.removed);
+      return json({
+        books: holders.map((u) => ({ ...publicUser(u, this.freeLimit), members: users.filter((m) => m.bookId === u.id && !m.removed).length })),
+        ownerMembers: users.filter((m) => m.bookId === OWNER_BOOK && !m.removed).length,
+      });
+    }
+
     // ---- פנימי: זיהוי משתמש ומכסה ----
     if (path === '/auth' && request.method === 'POST') {
       const key = `session:${await sha256(String(body.session || ''))}`;

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { ArrowRight, Download, Loader2, LogOut, ShieldCheck, Trash2, Upload, UserPlus, Users } from 'lucide-react';
+import { ArrowRight, BarChart3, Download, Loader2, LogOut, ShieldCheck, Trash2, Upload, UserPlus, Users } from 'lucide-react';
 import { deleteAccount, logoutAll, restoreBackup } from '../lib/api';
 import { backupFile } from '../lib/recipes';
 
@@ -62,6 +62,13 @@ export default function SettingsView({ session, isOwner, user, recipes, custom, 
             <UserPlus className="text-orange-500" size={22} />
             <span className="flex-1 font-bold">הזמנות</span>
             <span className="text-sm text-stone-500">קישורים לספר מתכונים נפרד</span>
+          </a>
+        )}
+        {isOwner && (
+          <a href="#/admin" className="flex items-center gap-3 rounded-2xl bg-white shadow-sm p-4">
+            <BarChart3 className="text-orange-500" size={22} />
+            <span className="flex-1 font-bold">עלויות ותקלות</span>
+            <span className="text-sm text-stone-500">שימוש ב-AI לפי ספר</span>
           </a>
         )}
 
