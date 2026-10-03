@@ -3,7 +3,7 @@
 //
 // מפתחות באחסון:
 //   invite:<token>   {token, name, createdAt, userId|null}
-//   user:<id>        {id, name, email, salt, hash, plan, added, createdAt, invite}
+//   user:<id>        {id, name, email, salt, hash, google?, plan, added, createdAt, invite}  (בגוגל: בלי סיסמה)
 //   email:<email>    <id>
 //   session:<sha256> {userId, createdAt}
 
@@ -128,7 +128,32 @@ export class Accounts {
       const id = await this.storage.get(`email:${normalizeEmail(body.email)}`);
       const user = id && (await this.storage.get(`user:${id}`));
       const hash = await hashPassword(String(body.password || ''), user?.salt || 'none');
+      if (user && !user.hash) return err(401, 'נרשמתם עם גוגל. היכנסו עם הכפתור "המשך עם Google".');
       if (!user || !sameText(hash, user.hash)) return err(401, 'האימייל או הסיסמה שגויים');
+      return json({ session: await this.newSession(user.id), user: publicUser(user, this.freeLimit) });
+    }
+    // כניסה עם גוגל (הטוקן כבר אומת בשרת): משתמש קיים לפי האימייל נכנס; חדש נרשם רק עם קישור הזמנה
+    if (path === '/google' && request.method === 'POST') {
+      const email = normalizeEmail(body.email);
+      if (!validEmail(email) || !body.sub) return err(400, 'חשבון הגוגל לא תקין');
+      const id = await this.storage.get(`email:${email}`);
+      let user = id && (await this.storage.get(`user:${id}`));
+      if (user) {
+        if (!user.google) {
+          user.google = String(body.sub);
+          await this.storage.put(`user:${user.id}`, user);
+        } else if (user.google !== String(body.sub)) return err(401, 'חשבון הגוגל לא תואם למשתמש');
+        return json({ session: await this.newSession(user.id), user: publicUser(user, this.freeLimit) });
+      }
+      const invite = body.token && (await this.storage.get(`invite:${body.token}`));
+      if (!invite) return err(404, 'אין עדיין משתמש עם החשבון הזה. כדי להירשם צריך קישור הזמנה.');
+      if (invite.userId) return err(409, 'כבר נרשמו עם הקישור הזה. אפשר להיכנס עם החשבון שנרשם.');
+      user = {
+        id: crypto.randomUUID(), name: String(body.name || '').trim().slice(0, 80) || email.split('@')[0], email,
+        salt: null, hash: null, google: String(body.sub), plan: 'free', added: 0, createdAt: now, invite: invite.token,
+      };
+      invite.userId = user.id;
+      await this.storage.put({ [`user:${user.id}`]: user, [`email:${email}`]: user.id, [`invite:${invite.token}`]: invite });
       return json({ session: await this.newSession(user.id), user: publicUser(user, this.freeLimit) });
     }
     if (path === '/logout' && request.method === 'POST') {

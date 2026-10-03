@@ -86,6 +86,18 @@ export default {
       return pass(await internal(accounts, 'POST', parts[0] === 'invite' ? '/invite/check' : `/${parts[0]}`, body));
     }
 
+    // ---- כניסה והרשמה עם חשבון גוגל ----
+    const googleClientId = env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_ID !== 'none' ? env.GOOGLE_CLIENT_ID : '';
+    if (url.pathname === '/auth-config' && request.method === 'GET') return reply(200, { googleClientId });
+    if (url.pathname === '/google' && request.method === 'POST') {
+      if (!googleClientId) return fail(400, 'כניסה עם גוגל לא מוגדרת');
+      const { body, error } = await readJson();
+      if (error) return error;
+      const profile = await verifyGoogle(String(body.credential || ''), googleClientId);
+      if (!profile) return fail(401, 'לא הצלחתי לאמת את חשבון הגוגל. נסו שוב.');
+      return pass(await internal(accounts, 'POST', '/google', { ...profile, token: body.token || '' }));
+    }
+
     // ---- מי שולח: בעל האפליקציה (בלי טוקן) או משתמש שהוזמן ----
     let user = null;
     const session = bearer(request);
@@ -591,6 +603,24 @@ function textSource(body) {
     fromText: true, kind: url ? sourceKind(url) : 'whatsapp', url, key, text,
     chat: str(body.chat), author: str(body.author), date: str(body.date),
   };
+}
+
+// אימות טוקן הכניסה של גוגל (Google Identity Services): חתום ע"י גוגל, לאפליקציה שלנו, עם אימייל מאומת
+async function verifyGoogle(credential, clientId) {
+  if (!/^[\w-]+\.[\w-]+\.[\w-]+$/.test(credential)) return null;
+  try {
+    const res = await deps.fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
+    if (!res.ok) return null;
+    const t = await res.json();
+    const valid = t.aud === clientId
+      && ['accounts.google.com', 'https://accounts.google.com'].includes(t.iss)
+      && String(t.email_verified) === 'true'
+      && Number(t.exp) * 1000 > Date.now()
+      && t.sub && t.email;
+    return valid ? { sub: String(t.sub), email: String(t.email), name: String(t.name || t.given_name || '') } : null;
+  } catch {
+    return null;
+  }
 }
 
 function bearer(request) {

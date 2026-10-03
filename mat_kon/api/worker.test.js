@@ -549,3 +549,49 @@ test('errors from the AI service reach the user in Hebrew, never as raw JSON', a
   deps.anthropic = () => ({ beta: { messages: { create: async () => { throw Object.assign(new Error('529 overloaded'), { status: 529 }); } } } });
   assert.equal((await (await call('POST', '/shopping/organize', { items: ['חלב'] })).json()).error, 'יש עומס כרגע. נסו שוב בעוד דקה.');
 });
+
+test('Google sign-in: registers only with an invite, then logs in; the token is verified', async () => {
+  assert.deepEqual(await (await call('GET', '/auth-config')).json(), { googleClientId: '' });
+  assert.equal((await call('POST', '/google', { credential: 'a.b.c' })).status, 400);
+
+  env.GOOGLE_CLIENT_ID = 'cid.apps.googleusercontent.com';
+  const claims = { aud: env.GOOGLE_CLIENT_ID, iss: 'https://accounts.google.com', email_verified: 'true', exp: String(Date.now() / 1000 + 600), sub: 'g-123', email: 'Dana@Gmail.com', name: 'דנה כהן' };
+  deps.fetch = async (url) => {
+    const u = new URL(url);
+    if (u.hostname !== 'oauth2.googleapis.com') return new Response('', { status: 404 });
+    const t = u.searchParams.get('id_token');
+    if (t === 'good.jwt.token') return Response.json(claims);
+    if (t === 'other.aud.token') return Response.json({ ...claims, aud: 'someone-else' });
+    return Response.json({ error: 'invalid_token' }, { status: 400 });
+  };
+  assert.equal((await (await call('GET', '/auth-config')).json()).googleClientId, env.GOOGLE_CLIENT_ID);
+  assert.equal((await call('POST', '/google', { credential: 'bad.jwt.token' })).status, 401);
+  assert.equal((await call('POST', '/google', { credential: 'other.aud.token' })).status, 401);
+  // בלי הזמנה אי אפשר להירשם
+  assert.equal((await call('POST', '/google', { credential: 'good.jwt.token' })).status, 404);
+
+  const inv = await invite();
+  const reg = await call('POST', '/google', { credential: 'good.jwt.token', token: inv.token });
+  assert.equal(reg.status, 200);
+  const { session, user } = await reg.json();
+  assert.deepEqual([user.name, user.email, user.plan], ['דנה כהן', 'dana@gmail.com', 'free']);
+  assert.equal((await call('GET', '/me', undefined, session)).status, 200);
+  // ההזמנה נוצלה
+  assert.equal((await call('POST', '/google', { credential: 'good.jwt.token', token: inv.token })).status, 200);
+  assert.equal((await (await call('POST', '/invite', { token: inv.token })).json()).used, true);
+  // כניסה במכשיר אחר בלי הזמנה
+  const again = await (await call('POST', '/google', { credential: 'good.jwt.token' })).json();
+  assert.equal(again.user.id, user.id);
+  // אין סיסמה למשתמש של גוגל
+  const pw = await call('POST', '/login', { email: 'dana@gmail.com', password: 'whatever1' });
+  assert.equal(pw.status, 401);
+  assert.match((await pw.json()).error, /גוגל/);
+});
+
+test('Google sign-in links to an existing password user with the same email', async () => {
+  env.GOOGLE_CLIENT_ID = 'cid';
+  const { user } = await (await register((await invite()).token, 'same@example.com')).json();
+  deps.fetch = async () => Response.json({ aud: 'cid', iss: 'accounts.google.com', email_verified: true, exp: Date.now() / 1000 + 60, sub: 's1', email: 'same@example.com' });
+  const res = await (await call('POST', '/google', { credential: 'x.y.z' })).json();
+  assert.equal(res.user.id, user.id);
+});
