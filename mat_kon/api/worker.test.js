@@ -530,3 +530,22 @@ test('stores: with a Cheapersal key, real prices by barcode in the city, cheapes
   assert.ok(seen.every(([, key]) => key === 'csal_test'));
   assert.ok(seen.some(([u]) => u.includes('prices?city=%D7%99%D7%A8%D7%95%D7%A9%D7%9C%D7%99%D7%9D')));
 });
+
+test('errors from the AI service reach the user in Hebrew, never as raw JSON', async () => {
+  const credit = Object.assign(new Error('400 {"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits."}}'), { status: 400 });
+  deps.anthropic = () => ({ beta: { messages: { create: async () => { throw credit; } } } });
+  const { session } = await (await register((await invite()).token)).json();
+
+  const guest = await call('POST', '/search', { q: 'עוף' }, session);
+  assert.equal(guest.status, 503);
+  assert.equal((await guest.json()).error, 'השירות לא זמין כרגע. נסו שוב מאוחר יותר.');
+
+  const owner = await (await call('POST', '/recipes', { url: 'https://cake.example/x' })).json();
+  assert.match(owner.error, /נגמר הקרדיט.*console\.anthropic\.com/);
+
+  const photo = await call('POST', '/recipes/photo', { images: [{ type: 'image/jpeg', data: 'AAAA' }] }, session);
+  assert.equal(photo.status, 503);
+
+  deps.anthropic = () => ({ beta: { messages: { create: async () => { throw Object.assign(new Error('529 overloaded'), { status: 529 }); } } } });
+  assert.equal((await (await call('POST', '/shopping/organize', { items: ['חלב'] })).json()).error, 'יש עומס כרגע. נסו שוב בעוד דקה.');
+});

@@ -436,3 +436,22 @@ export async function ideasFromPantry(client, items, { wish = '' } = {}) {
   }
   throw new Error('החיפוש לא החזיר תוצאות. נסו שוב.');
 }
+
+// ---------- שגיאות מה-API של Anthropic בעברית ----------
+// השגיאה הגולמית (באנגלית, עם JSON) לא מגיעה למשתמש. בעל האפליקציה מקבל גם מה לעשות.
+export function aiMessage(e, { owner = false } = {}) {
+  const status = Number(e?.status) || 0;
+  if (!status) return null; // שגיאה שלנו (כבר בעברית) או תקלת רשת
+  const text = `${e?.message || ''} ${JSON.stringify(e?.error || {})}`.toLowerCase();
+  if (/credit balance|billing|purchase credits/.test(text)) {
+    return owner
+      ? 'נגמר הקרדיט בחשבון Anthropic. אפשר לטעון ב-console.anthropic.com ← Settings ← Billing, ואז הכל חוזר לעבוד.'
+      : 'השירות לא זמין כרגע. נסו שוב מאוחר יותר.';
+  }
+  if (status === 401 || status === 403) {
+    return owner ? 'מפתח ה-API של Anthropic לא תקין או בוטל. צריך לעדכן אותו בסודות של GitHub.' : 'השירות לא זמין כרגע. נסו שוב מאוחר יותר.';
+  }
+  if (status === 429 || status === 529 || status >= 500 || /overloaded|rate.?limit/.test(text)) return 'יש עומס כרגע. נסו שוב בעוד דקה.';
+  if (status === 413 || /too large|too long/.test(text)) return 'הבקשה גדולה מדי. נסו עם פחות טקסט או תמונות.';
+  return null;
+}
