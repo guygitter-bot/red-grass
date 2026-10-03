@@ -33,6 +33,12 @@ export class RecipeBook {
       return json({ recipe: saved, updated: Boolean(existing) });
     }
 
+    // מחיקת כל הספר (כשמוחקים משתמש שהוזמן)
+    if (request.method === 'DELETE' && !id) {
+      await this.storage.deleteAll();
+      return json({ ok: true });
+    }
+
     const current = id && (await this.storage.get(PREFIX + id));
     if (!current) return json({ error: 'not found' }, 404);
 

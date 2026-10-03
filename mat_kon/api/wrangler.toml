@@ -6,15 +6,27 @@ workers_dev = true
 [vars]
 # האתרים שמותר להם לפנות לשרת (האפליקציה ב-Cloudflare Pages ופיתוח מקומי)
 ALLOWED_ORIGINS = "https://mat-kon.pages.dev,http://localhost:5173,http://localhost:4173"
+# כמה מתכונים משתמש שהוזמן מקבל בחינם לפני שצריך מנוי
+FREE_RECIPES = "10"
+# קישור לדף התשלום (למשל דף מוצר בסליקה). ריק = "פנו לבעל האפליקציה"
+PAYMENT_URL = ""
 
-# ספר המתכונים המשותף (Durable Object עם SQLite, כלול בתוכנית החינמית)
+# ספרי המתכונים: "book" של בעל האפליקציה, ו-"user:<id>" לכל משתמש שהוזמן
 [[durable_objects.bindings]]
 name = "BOOK"
 class_name = "RecipeBook"
+
+# משתמשים שהוזמנו: הזמנות, הרשמה, כניסה ומכסה
+[[durable_objects.bindings]]
+name = "ACCOUNTS"
+class_name = "Accounts"
 
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["RecipeBook"]
 
-# המפתח וקוד הגישה הם סודות, לא כאן:
-#   ANTHROPIC_API_KEY, ACCESS_CODE  (נקבעים אוטומטית מ-GitHub, ראו .github/workflows/mat-kon.yml)
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Accounts"]
+
+# מפתח ה-API הוא סוד, לא כאן: ANTHROPIC_API_KEY (נקבע אוטומטית מ-GitHub, ראו .github/workflows/mat-kon.yml)

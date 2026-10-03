@@ -1,13 +1,19 @@
-// השרת של mat-kon (Cloudflare Worker): מחזיק את מפתח ה-API של Anthropic ואת ספר המתכונים.
+// השרת של mat-kon (Cloudflare Worker): מחזיק את מפתח ה-API של Anthropic ואת ספרי המתכונים.
 // האפליקציה שולחת קישור, השרת קורא אותו (גם סרטונים), הסוכן מסדר מתכון בעברית עם קטגוריה,
-// והמתכון נשמר בספר המשותף. הגישה בקוד גישה, כך שהמפתח לא נמצא באף טלפון.
+// והמתכון נשמר בספר.
+//
+// שני סוגי שימוש:
+//   - בעל האפליקציה: פתוח, בלי הרשמה ובלי הגבלה. ספר המתכונים "book" וניהול ההזמנות.
+//   - משתמש שהוזמן (Authorization: Bearer <session>): נרשם מקישור הזמנה, מקבל ספר ריק משלו
+//     (user:<id>), ו-FREE_RECIPES מתכונים בחינם. אחר כך צריך מנוי (plan=paid).
 import Anthropic from '@anthropic-ai/sdk';
 import { RecipeBook } from './store.js';
+import { Accounts, canAdd } from './accounts.js';
 import { gatherSource, normalizeUrl } from './source.js';
 import { NoRecipeError, extractRecipe } from './extract.js';
 import { CATEGORIES } from './categories.js';
 
-export { RecipeBook };
+export { RecipeBook, Accounts };
 
 // נקודות הזרקה לבדיקות
 export const deps = {
@@ -16,13 +22,14 @@ export const deps = {
 };
 
 const MAX_EDIT_BYTES = 200 * 1024;
+const MAX_SMALL_BYTES = 4000;
 
 function corsHeaders(request, env) {
   const origin = request.headers.get('origin') || '';
   const allowed = (env.ALLOWED_ORIGINS || '').split(',').map((o) => o.trim()).filter(Boolean);
   const headers = {
     'access-control-allow-methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'access-control-allow-headers': 'content-type, x-access-code',
+    'access-control-allow-headers': 'content-type, authorization',
     'access-control-max-age': '86400',
     vary: 'origin',
   };
@@ -30,94 +37,142 @@ function corsHeaders(request, env) {
   return headers;
 }
 
-// השוואה בזמן קבוע, כדי שלא יהיה אפשר לנחש את הקוד לפי זמני תגובה.
-function sameCode(a, b) {
-  const enc = new TextEncoder();
-  const x = enc.encode(a);
-  const y = enc.encode(b);
-  let diff = x.length ^ y.length;
-  for (let i = 0; i < Math.max(x.length, y.length); i++) diff |= (x[i] || 0) ^ (y[i] || 0);
-  return diff === 0;
-}
+const internal = (stub, method, path, body) =>
+  stub.fetch(new Request(`https://do${path}`, {
+    method,
+    headers: { 'content-type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  }));
 
 export default {
   async fetch(request, env) {
     const cors = corsHeaders(request, env);
     const reply = (status, data) =>
       new Response(JSON.stringify(data), { status, headers: { ...cors, 'content-type': 'application/json' } });
-    const fail = (status, message) => reply(status, { error: message });
+    const fail = (status, message, extra = {}) => reply(status, { error: message, ...extra });
+    const pass = async (res) => reply(res.status, await res.json());
 
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-    if (!env.ANTHROPIC_API_KEY || !env.ACCESS_CODE || !env.BOOK) return fail(500, 'השרת לא מוגדר');
-    if (!sameCode(request.headers.get('x-access-code') || '', env.ACCESS_CODE)) return fail(401, 'קוד גישה שגוי');
+    if (!env.ANTHROPIC_API_KEY || !env.BOOK || !env.ACCOUNTS) return fail(500, 'השרת לא מוגדר');
 
     const url = new URL(request.url);
     const parts = url.pathname.split('/').filter(Boolean);
-    const book = env.BOOK.get(env.BOOK.idFromName('book'));
-    const toBook = async (method, path, body) => {
-      const res = await book.fetch(new Request(`https://book${path}`, {
-        method,
-        headers: { 'content-type': 'application/json' },
-        body: body === undefined ? undefined : JSON.stringify(body),
-      }));
-      return reply(res.status, await res.json());
+    const accounts = env.ACCOUNTS.get(env.ACCOUNTS.idFromName('accounts'));
+    const bookOf = (userId) => env.BOOK.get(env.BOOK.idFromName(userId ? `user:${userId}` : 'book'));
+
+    const readJson = async (limit = MAX_SMALL_BYTES) => {
+      const text = await request.text();
+      if (text.length > limit) return { error: fail(413, 'הבקשה גדולה מדי') };
+      try {
+        const body = text ? JSON.parse(text) : {};
+        if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error();
+        return { body };
+      } catch {
+        return { error: fail(400, 'בקשה לא תקינה') };
+      }
     };
 
-    // בדיקת קוד הגישה מהאפליקציה
-    if (url.pathname === '/check') return reply(200, { ok: true, categories: CATEGORIES });
+    // ---- הרשמה וכניסה (בלי זיהוי) ----
+    if (request.method === 'POST' && ['invite', 'register', 'login', 'logout'].includes(parts[0]) && parts.length === 1) {
+      const { body, error } = await readJson();
+      if (error) return error;
+      if (parts[0] === 'logout') body.session = bearer(request);
+      return pass(await internal(accounts, 'POST', parts[0] === 'invite' ? '/invite/check' : `/${parts[0]}`, body));
+    }
 
+    // ---- מי שולח: בעל האפליקציה (בלי טוקן) או משתמש שהוזמן ----
+    let user = null;
+    const session = bearer(request);
+    if (session) {
+      const res = await internal(accounts, 'POST', '/auth', { session });
+      if (!res.ok) return pass(res);
+      user = (await res.json()).user;
+    }
+
+    if (url.pathname === '/me') {
+      return reply(200, { owner: !user, user, categories: CATEGORIES, paymentUrl: env.PAYMENT_URL || '' });
+    }
+
+    // ---- ניהול הזמנות: רק בעל האפליקציה ----
+    if (parts[0] === 'invites' || parts[0] === 'users') {
+      if (user) return fail(403, 'רק לבעל האפליקציה');
+      if (parts[0] === 'invites' && parts.length === 1 && request.method === 'GET') return pass(await internal(accounts, 'GET', '/invites'));
+      if (parts[0] === 'invites' && parts.length === 1 && request.method === 'POST') {
+        const { body, error } = await readJson();
+        if (error) return error;
+        return pass(await internal(accounts, 'POST', '/invites', { name: body.name }));
+      }
+      if (parts[0] === 'invites' && parts.length === 2 && request.method === 'DELETE') {
+        const res = await internal(accounts, 'DELETE', '/invites', { token: parts[1] });
+        const data = await res.json();
+        // מחיקת הזמנה שנוצלה מוחקת גם את המשתמש ואת ספר המתכונים שלו
+        if (res.ok && data.deletedUserId) await internal(bookOf(data.deletedUserId), 'DELETE', '/recipes');
+        return reply(res.status, data);
+      }
+      if (parts[0] === 'users' && parts.length === 3 && parts[2] === 'plan' && request.method === 'PUT') {
+        const { body, error } = await readJson();
+        if (error) return error;
+        return pass(await internal(accounts, 'POST', '/users/plan', { userId: parts[1], plan: body.plan }));
+      }
+      return fail(405, 'Method not allowed');
+    }
+
+    // ---- ספר המתכונים ----
     if (parts[0] !== 'recipes' || parts.length > 3) return fail(404, 'Not found');
     const id = parts[1];
     if (id && !/^[\w-]{1,64}$/.test(id)) return fail(404, 'Not found');
+    const book = bookOf(user?.id);
 
     // הוספת מתכון מקישור, או רענון מתכון קיים מהמקור שלו
     const isAdd = request.method === 'POST' && parts.length === 1;
-    const isRefresh = request.method === 'POST' && parts[2] === 'refresh';
+    const isRefresh = request.method === 'POST' && parts.length === 3 && parts[2] === 'refresh';
     if (isAdd || isRefresh) {
       let link;
       if (isAdd) {
-        const text = await request.text();
-        if (text.length > 4000) return fail(413, 'הבקשה גדולה מדי');
-        let body;
-        try {
-          body = JSON.parse(text);
-        } catch {
-          return fail(400, 'בקשה לא תקינה');
+        if (!canAdd(user)) {
+          return fail(402, `נגמרו ${user.freeLimit} המתכונים החינמיים`, { paywall: true, paymentUrl: env.PAYMENT_URL || '' });
         }
-        link = normalizeUrl(body?.url);
+        const { body, error } = await readJson();
+        if (error) return error;
+        link = normalizeUrl(body.url);
         if (!link) return fail(400, 'זה לא נראה כמו קישור תקין');
       } else {
-        const res = await book.fetch(new Request(`https://book/recipes/${id}`));
+        const res = await internal(book, 'GET', `/recipes/${id}`);
         if (!res.ok) return fail(404, 'המתכון לא נמצא');
         link = (await res.json()).recipe.source.url;
       }
+      let recipe;
       try {
         const src = await gatherSource(link, deps.fetch);
-        const recipe = await extractRecipe(deps.anthropic(env), src);
-        return toBook('POST', '/recipes', recipe);
+        recipe = await extractRecipe(deps.anthropic(env), src);
       } catch (e) {
         if (e instanceof NoRecipeError) return fail(422, e.message);
         console.error('extract failed', link, e);
         return fail(502, `לא הצלחתי להוציא מתכון: ${e.message || e}`);
       }
+      const res = await internal(book, 'POST', '/recipes', recipe);
+      const data = await res.json();
+      // רק מתכון חדש נספר במכסה (לא רענון ולא קישור שכבר נשמר)
+      if (res.ok && user && isAdd && !data.updated) {
+        data.user = (await (await internal(accounts, 'POST', '/count', { userId: user.id })).json()).user;
+      }
+      return reply(res.status, data);
     }
 
-    if (parts.length === 1 && request.method === 'GET') return toBook('GET', '/recipes');
-    if (parts.length === 2 && request.method === 'GET') return toBook('GET', `/recipes/${id}`);
-    if (parts.length === 2 && request.method === 'DELETE') return toBook('DELETE', `/recipes/${id}`);
+    if (parts.length === 1 && request.method === 'GET') return pass(await internal(book, 'GET', '/recipes'));
+    if (parts.length === 2 && request.method === 'GET') return pass(await internal(book, 'GET', `/recipes/${id}`));
+    if (parts.length === 2 && request.method === 'DELETE') return pass(await internal(book, 'DELETE', `/recipes/${id}`));
     if (parts.length === 2 && request.method === 'PUT') {
-      const text = await request.text();
-      if (text.length > MAX_EDIT_BYTES) return fail(413, 'הבקשה גדולה מדי');
-      let patch;
-      try {
-        patch = JSON.parse(text);
-      } catch {
-        return fail(400, 'בקשה לא תקינה');
-      }
-      if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return fail(400, 'בקשה לא תקינה');
+      const { body: patch, error } = await readJson(MAX_EDIT_BYTES);
+      if (error) return error;
       if ('category' in patch && !CATEGORIES.includes(patch.category)) return fail(400, 'קטגוריה לא מוכרת');
-      return toBook('PUT', `/recipes/${id}`, patch);
+      return pass(await internal(book, 'PUT', `/recipes/${id}`, patch));
     }
     return fail(405, 'Method not allowed');
   },
 };
+
+function bearer(request) {
+  const m = (request.headers.get('authorization') || '').match(/^Bearer\s+(\S{10,200})$/i);
+  return m ? m[1] : '';
+}

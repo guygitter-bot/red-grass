@@ -113,3 +113,17 @@ export const CATEGORY_EMOJI = {
   'משקאות': '🥤',
   'אחר': '🍴',
 };
+
+// קישור הזמנה: ...#invite=TOKEN ; כניסה: ...#login
+export function parseAuthHash(hash) {
+  const invite = String(hash || '').match(/[#&]invite=([\w-]{10,})/);
+  if (invite) return { mode: 'register', token: invite[1] };
+  if (/^#login\b/.test(String(hash || ''))) return { mode: 'login' };
+  return null;
+}
+
+// כמה מתכונים חינמיים נשארו למשתמש שהוזמן (null = בלי הגבלה)
+export function freeLeft(user) {
+  if (!user || user.plan === 'paid') return null;
+  return Math.max(0, user.freeLimit - user.added);
+}

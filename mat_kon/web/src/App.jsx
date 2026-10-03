@@ -1,21 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Heart, LogOut, Search, X } from 'lucide-react';
-import Login from './components/Login';
+import { Heart, LogOut, Search, UserPlus, X } from 'lucide-react';
+import Auth from './components/Auth';
 import AddLink from './components/AddLink';
+import InvitesView from './components/InvitesView';
+import Paywall from './components/Paywall';
 import PendingList from './components/PendingList';
 import RecipeCard from './components/RecipeCard';
 import RecipeView from './components/RecipeView';
 import { CATEGORIES } from './lib/categories';
-import { addRecipe, deleteRecipe, listRecipes, refreshRecipe, updateRecipe } from './lib/api';
-import { CATEGORY_EMOJI, countByCategory, filterRecipes, linkFromShare } from './lib/recipes';
+import { addRecipe, deleteRecipe, getMe, listRecipes, logout as apiLogout, refreshRecipe, updateRecipe } from './lib/api';
+import { CATEGORY_EMOJI, countByCategory, filterRecipes, freeLeft, linkFromShare, parseAuthHash } from './lib/recipes';
 import { usePersistentState } from './lib/storage';
 
-// קוד גישה מקישור: https://mat-kon.pages.dev/#code=XXXX (נמחק מהכתובת מיד)
-function takeCodeFromHash() {
-  const m = window.location.hash.match(/[#&]code=([^&]+)/);
-  if (!m) return null;
-  window.history.replaceState(null, '', window.location.pathname + window.location.search);
-  return decodeURIComponent(m[1]);
+// קישור הזמנה (#invite=...) או כניסה (#login). נלקח מהכתובת ונמחק ממנה מיד.
+function takeAuthLink() {
+  const auth = parseAuthHash(window.location.hash);
+  if (auth) window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  return auth;
 }
 
 // קישור ששותף לאפליקציה (share target): ?url=... / ?text=...
@@ -25,32 +26,49 @@ function takeSharedLink() {
   return link;
 }
 
-const HASH_CODE = takeCodeFromHash();
+const AUTH_LINK = takeAuthLink();
 
-const routeId = () => (window.location.hash.match(/^#\/r\/([\w-]+)/) || [])[1] || null;
+const route = () => {
+  const h = window.location.hash;
+  if (h === '#/invites') return { view: 'invites' };
+  const id = (h.match(/^#\/r\/([\w-]+)/) || [])[1];
+  return id ? { view: 'recipe', id } : { view: 'home' };
+};
 
+// בלי session = בעל האפליקציה: פתוח, בלי הרשמה ובלי הגבלה.
+// עם session = משתמש שנרשם מקישור הזמנה, עם ספר מתכונים משלו.
 export default function App() {
-  const [code, setCode] = usePersistentState('matkon_code', () => HASH_CODE || '');
+  const [session, setSession] = usePersistentState('matkon_session', '');
+  const [user, setUser] = usePersistentState('matkon_user', null);
   const [recipes, setRecipes] = usePersistentState('matkon_recipes', []);
+  // מכשיר שנרשם פעם מקישור הזמנה נשאר מכשיר של משתמש מוזמן, גם אחרי יציאה
+  const [guestDevice, setGuestDevice] = usePersistentState('matkon_guest', false);
+  const [auth, setAuth] = useState(() => {
+    if (AUTH_LINK && !(AUTH_LINK.mode === 'register' && session)) return AUTH_LINK;
+    return guestDevice && !session ? { mode: 'login' } : null;
+  });
+  const [paywall, setPaywall] = useState(null);
+  const [paymentUrl, setPaymentUrl] = useState('');
   const [pending, setPending] = useState([]);
-  const [openId, setOpenId] = useState(routeId);
+  const [nav, setNav] = useState(route);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState(null);
   const [favorites, setFavorites] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [toast, setToast] = useState('');
 
-  const logout = useCallback(() => {
-    setCode('');
+  const isOwner = !session;
+
+  const signOut = useCallback(() => {
+    apiLogout(session);
+    setSession('');
+    setUser(null);
     setRecipes([]);
-  }, [setCode, setRecipes]);
+    setAuth({ mode: 'login' });
+  }, [session, setSession, setUser, setRecipes]);
 
   useEffect(() => {
-    if (HASH_CODE) setCode(HASH_CODE);
-  }, [setCode]);
-
-  useEffect(() => {
-    const onHash = () => setOpenId(routeId());
+    const onHash = () => setNav(route());
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
@@ -62,15 +80,20 @@ export default function App() {
   }, [toast]);
 
   const reload = useCallback(async () => {
-    if (!code) return;
+    if (auth) return;
     try {
-      setRecipes(await listRecipes(code));
+      if (session) {
+        const me = await getMe(session);
+        setUser(me.user);
+        setPaymentUrl(me.paymentUrl);
+      }
+      setRecipes(await listRecipes(session));
       setLoadError('');
     } catch (e) {
-      if (e.status === 401) logout();
+      if (e.status === 401) signOut();
       else setLoadError(e.message);
     }
-  }, [code, setRecipes, logout]);
+  }, [auth, session, setUser, setRecipes, signOut]);
 
   useEffect(() => {
     reload();
@@ -83,60 +106,85 @@ export default function App() {
 
   const add = useCallback(
     async (url) => {
+      if (freeLeft(user) === 0) {
+        setPaywall({ paymentUrl });
+        return;
+      }
       const key = `${Date.now()}-${Math.random()}`;
       setPending((p) => [...p, { key, url, error: '' }]);
       try {
-        const { recipe, updated } = await addRecipe(code, url);
+        const { recipe, updated, user: updatedUser } = await addRecipe(session, url);
         upsert(recipe);
+        if (updatedUser) setUser(updatedUser);
         setPending((p) => p.filter((x) => x.key !== key));
         setToast(updated ? `"${recipe.title}" עודכן` : `"${recipe.title}" נוסף ל${recipe.category}`);
       } catch (e) {
-        if (e.status === 401) return logout();
+        setPending((p) => p.filter((x) => x.key !== key || e.status !== 402));
+        if (e.status === 401) return signOut();
+        if (e.status === 402) return setPaywall({ paymentUrl: e.data.paymentUrl || '' });
         setPending((p) => p.map((x) => (x.key === key ? { ...x, error: e.message } : x)));
       }
     },
-    [code, upsert, logout],
+    [session, user, paymentUrl, upsert, setUser, signOut],
   );
 
   // קישור ששותף לאפליקציה מתווסף מיד
   useEffect(() => {
-    if (!code) return;
+    if (auth) return;
     const shared = takeSharedLink();
     if (shared) add(shared);
-  }, [code]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [auth]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const open = (id) => {
     window.location.hash = id ? `#/r/${id}` : '';
   };
+  const back = () => (window.history.length > 1 ? window.history.back() : open(null));
 
   const counts = useMemo(() => countByCategory(recipes), [recipes]);
   const visible = useMemo(() => filterRecipes(recipes, { query, category, favorites }), [recipes, query, category, favorites]);
-  const current = openId && recipes.find((r) => r.id === openId);
+  const current = nav.view === 'recipe' && recipes.find((r) => r.id === nav.id);
+  const left = freeLeft(user);
 
-  if (!code) return <Login onLogin={setCode} />;
+  if (auth) {
+    return (
+      <Auth
+        mode={auth.mode}
+        token={auth.token}
+        onDone={({ session: s, user: u }) => {
+          setRecipes([]);
+          setUser(u);
+          setSession(s);
+          setGuestDevice(true);
+          setAuth(null);
+        }}
+      />
+    );
+  }
+
+  if (nav.view === 'invites' && isOwner) return <InvitesView onBack={back} />;
 
   if (current) {
     return (
       <RecipeView
         key={current.id}
         recipe={current}
-        onBack={() => (window.history.length > 1 ? window.history.back() : open(null))}
+        onBack={back}
         onUpdate={async (patch) => {
           upsert({ ...current, ...patch });
           try {
-            upsert(await updateRecipe(code, current.id, patch));
+            upsert(await updateRecipe(session, current.id, patch));
           } catch (e) {
             setToast(e.message);
             reload();
           }
         }}
         onRefresh={async () => {
-          const { recipe } = await refreshRecipe(code, current.id);
+          const { recipe } = await refreshRecipe(session, current.id);
           upsert(recipe);
           setToast('המתכון עודכן מהמקור');
         }}
         onDelete={async () => {
-          await deleteRecipe(code, current.id);
+          await deleteRecipe(session, current.id);
           setRecipes((list) => list.filter((r) => r.id !== current.id));
           open(null);
         }}
@@ -146,18 +194,38 @@ export default function App() {
 
   return (
     <div className="min-h-screen pb-16">
+      {paywall && <Paywall user={user} paymentUrl={paywall.paymentUrl} onClose={() => setPaywall(null)} />}
       <header className="bg-gradient-to-bl from-orange-500 to-amber-500 text-white px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-5 rounded-b-3xl shadow-sm">
         <div className="max-w-3xl mx-auto">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-3xl font-black tracking-tight" dir="ltr">mat-kon</h1>
-              <p className="text-orange-50 text-sm">כל קישור או סרטון הופך למתכון מסודר</p>
+              <p className="text-orange-50 text-sm">
+                {user ? `ספר המתכונים של ${user.name}` : 'כל קישור או סרטון הופך למתכון מסודר'}
+              </p>
             </div>
-            <button onClick={logout} className="p-2 rounded-full hover:bg-white/15" aria-label="התנתקות" title="התנתקות">
-              <LogOut size={20} />
-            </button>
+            {isOwner ? (
+              <a href="#/invites" className="flex items-center gap-1.5 rounded-full bg-white/15 hover:bg-white/25 px-3 py-2 text-sm font-medium">
+                <UserPlus size={18} /> הזמנות
+              </a>
+            ) : (
+              <button onClick={signOut} className="p-2 rounded-full hover:bg-white/15" aria-label="יציאה" title="יציאה">
+                <LogOut size={20} />
+              </button>
+            )}
           </div>
           <AddLink onAdd={add} />
+          {left !== null && (
+            <button onClick={() => left === 0 && setPaywall({ paymentUrl })} className="mt-3 w-full text-right text-sm text-orange-50">
+              <div className="flex justify-between mb-1">
+                <span>{left === 0 ? 'נגמרו המתכונים החינמיים' : `נשארו ${left} מתכונים חינמיים`}</span>
+                <span dir="ltr">{user.added}/{user.freeLimit}</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-white/25 overflow-hidden">
+                <div className="h-full bg-white rounded-full" style={{ width: `${Math.min(100, (user.added / user.freeLimit) * 100)}%` }} />
+              </div>
+            </button>
+          )}
         </div>
       </header>
 

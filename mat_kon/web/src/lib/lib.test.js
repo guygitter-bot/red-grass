@@ -48,3 +48,21 @@ describe('editing as text', () => {
     expect(textToSections('1. מערבבים\n- אופים\n\n')).toEqual([{ title: '', items: ['מערבבים', 'אופים'] }]);
   });
 });
+
+import { freeLeft, parseAuthHash } from './recipes';
+
+describe('invites', () => {
+  it('reads invite and login links', () => {
+    expect(parseAuthHash('#invite=abcDEF123_-x')).toEqual({ mode: 'register', token: 'abcDEF123_-x' });
+    expect(parseAuthHash('#login')).toEqual({ mode: 'login' });
+    expect(parseAuthHash('#/r/123')).toBe(null);
+    expect(parseAuthHash('')).toBe(null);
+  });
+
+  it('counts the free recipes left', () => {
+    expect(freeLeft(null)).toBe(null);
+    expect(freeLeft({ plan: 'paid', added: 50, freeLimit: 10 })).toBe(null);
+    expect(freeLeft({ plan: 'free', added: 3, freeLimit: 10 })).toBe(7);
+    expect(freeLeft({ plan: 'free', added: 12, freeLimit: 10 })).toBe(0);
+  });
+});
