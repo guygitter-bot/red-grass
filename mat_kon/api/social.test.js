@@ -157,3 +157,31 @@ test('falls back to the og:description of the post page', async () => {
   assert.equal(ig.caption, 'לא סתם עוגה');
   assert.equal(ig.author, 'michi_blog');
 });
+
+import { FACEBOOK_BOT, readFacebookPage } from './social.js';
+
+test('Facebook group post through the preview bot', async () => {
+  const html = `<meta property="og:title" content="&#x5e8;&#x5e2;&#x5d1;&#x5d9;&#x5dd; &#x5d1;&#x5e8;&#x5e2;&#x5d1;&#x5da; | 3 &#x5e7;&#x5d9;&#x5dc;&#x5d5; &#x5d1;&#x5e9;&#x5e8; &#x5de;&#x5e4;&#x5d5;&#x5e8;&#x5e7;.. | Facebook" />
+    <meta property="og:image" content="https://cdn.example/fb.jpg" />
+    <script>{"message":{"text":"3 \\u05e7\\u05d9\\u05dc\\u05d5 \\u05d1\\u05e9\\u05e8 \\u05de\\u05e4\\u05d5\\u05e8\\u05e7\\n\\u05de\\u05e6\\u05e8\\u05db\\u05d9\\u05dd: \\u05db\\u05ea\\u05e3 \\u05d1\\u05e7\\u05e8"}}</script>`;
+  const fb = readFacebookPage(html);
+  assert.equal(fb.group, 'רעבים ברעבך');
+  assert.equal(fb.title, '3 קילו בשר מפורק..');
+  assert.equal(fb.caption, '3 קילו בשר מפורק\nמצרכים: כתף בקר');
+  assert.equal(fb.image, 'https://cdn.example/fb.jpg');
+
+  const uas = [];
+  const fakeFetch = async (url, init) => {
+    uas.push(init.headers['user-agent']);
+    return init.headers['user-agent'] === FACEBOOK_BOT ? new Response(html) : new Response('error', { status: 400 });
+  };
+  const src = await gatherSource('https://www.facebook.com/groups/hungryinyourhunger/permalink/2154404724737365/', fakeFetch);
+  assert.equal(src.kind, 'facebook');
+  assert.match(src.description, /מצרכים: כתף בקר/);
+  assert.equal(src.author, 'רעבים ברעבך');
+  assert.deepEqual(src.warnings, [], 'no second fetch with a normal browser');
+  assert.equal(uas[0], FACEBOOK_BOT);
+
+  // רק הכותרת (בלי JSON): לפחות תחילת הפוסט
+  assert.equal(readFacebookPage(html.split('<script>')[0]).caption, '3 קילו בשר מפורק');
+});

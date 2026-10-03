@@ -78,7 +78,7 @@ the most faithful recipe you can from what the caption, comments, hint and video
 from a reliable recipe for the same dish that you found with web_search. Set confidence to "low" and explain in \
 notes exactly what came from the creator and what was completed from elsewhere.
 - A website: if the page text below is missing or blocked, web_fetch the link.
-- A WhatsApp message: use only the message text. If it is chatter and not a recipe, set found=false.
+- A WhatsApp message or text the user pasted: use only that text. If it is chatter and not a recipe, set found=false.
 - Choose the single best category. Desserts that are cakes → "עוגות"; cookies, rugelach, pastries → \
 "עוגיות ומאפים מתוקים"; bread, pita, savory pies/bourekas → "לחמים ומאפים"; shakshuka/pancakes → "ארוחת בוקר"; \
 a vegetarian main dish → "צמחוני וטבעוני" unless it is clearly a salad/soup/pasta.
@@ -87,12 +87,14 @@ dish (not even the title or caption). Explain why in notes.
 - When done, call submit_recipe. Do not write anything else.`;
 
 function material(src) {
-  if (src.kind === 'whatsapp') {
+  if (src.fromText) {
     return [
-      'Source: a message from a WhatsApp chat (no link). Build the recipe from this text only.',
+      src.url
+        ? `Source: text the user copied from the post at ${src.url} (the link itself could not be read). Build the recipe from this text only.`
+        : 'Source: a message from a WhatsApp chat (no link). Build the recipe from this text only.',
       src.chat ? `Chat: ${src.chat}` : '',
       src.author ? `Sent by: ${src.author}` : '',
-      `Message:\n${src.text}`,
+      `${src.url ? 'Copied text' : 'Message'}:\n${src.text}`,
     ].filter(Boolean).join('\n\n');
   }
   const video = isVideoKind(src.kind);
@@ -143,10 +145,10 @@ export function toRecipe(input, src) {
     tips: cleanList(input.tips),
     confidence: ['high', 'medium', 'low'].includes(input.confidence) ? input.confidence : 'medium',
     notes: clean(input.notes),
-    source: src.kind === 'whatsapp' ? {
-      url: null,
-      key: src.key,
-      kind: 'whatsapp',
+    source: src.fromText ? {
+      url: src.url || null,
+      ...(src.url ? {} : { key: src.key }),
+      kind: src.kind,
       chat: clean(src.chat),
       author: clean(src.author),
       date: clean(src.date),
@@ -168,7 +170,7 @@ export class NoRecipeError extends Error {}
 
 export async function extractRecipe(client, src) {
   // מתכון מובנה מלא מהדף, או הודעת ווטסאפ: אין צורך ברשת, זה מהיר וזול יותר
-  const complete = src.kind === 'whatsapp' || looksComplete(src);
+  const complete = src.fromText || looksComplete(src);
   const messages = [{ role: 'user', content: material(src) }];
   for (let step = 0; step < MAX_STEPS; step++) {
     const response = await client.beta.messages.create({

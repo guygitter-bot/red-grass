@@ -104,13 +104,23 @@ export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDele
             </span>
             <span className="flex-1 min-w-0">
               <span className="block text-xs text-orange-700 font-medium">
-                {video ? `הסרטון המקורי ב-${VIDEO_LABEL[recipe.source.kind]}` : 'המתכון המקורי'}
+                {recipe.source.kind === 'facebook' ? 'הפוסט המקורי ב-Facebook' : video ? `הסרטון המקורי ב-${VIDEO_LABEL[recipe.source.kind]}` : 'המתכון המקורי'}
                 {recipe.source.author ? ` · ${recipe.source.author}` : ''}
               </span>
               <span className="block text-sm text-stone-800 truncate" dir="ltr">{shortUrl(recipe.source.url)}</span>
             </span>
             <ExternalLink size={16} className="text-orange-400 shrink-0" />
           </a>
+        )}
+        {!fromChat && recipe.source.text && (
+          <div className="mt-2 text-sm">
+            <button onClick={() => setShowMessage((v) => !v)} className="text-orange-700 font-medium">
+              {showMessage ? 'הסתרת הטקסט שהודבק' : 'הטקסט שהודבק מהפוסט'}
+            </button>
+            {showMessage && (
+              <p className="mt-2 text-stone-700 whitespace-pre-line bg-white rounded-xl p-3 border border-stone-100" dir="auto">{recipe.source.text}</p>
+            )}
+          </div>
         )}
 
         {recipe.source.embed ? (

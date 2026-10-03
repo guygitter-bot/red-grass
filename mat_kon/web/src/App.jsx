@@ -9,7 +9,7 @@ import PendingList from './components/PendingList';
 import RecipeCard from './components/RecipeCard';
 import RecipeView from './components/RecipeView';
 import { CATEGORIES } from './lib/categories';
-import { addRecipe, deleteRecipe, getMe, listRecipes, logout as apiLogout, refreshRecipe, updateRecipe } from './lib/api';
+import { addRecipe, addTextRecipe, deleteRecipe, getMe, listRecipes, logout as apiLogout, refreshRecipe, updateRecipe } from './lib/api';
 import { CATEGORY_EMOJI, countByCategory, filterRecipes, freeLeft, linkFromShare, parseAuthHash } from './lib/recipes';
 import { usePersistentState } from './lib/storage';
 
@@ -261,6 +261,18 @@ export default function App() {
             add(item.url);
           }}
           onDismiss={(item) => setPending((p) => p.filter((x) => x.key !== item.key))}
+          onPaste={async (item, text) => {
+            try {
+              const { recipe, user: updatedUser } = await addTextRecipe(session, { url: item.url, text });
+              upsert(recipe);
+              if (updatedUser) setUser(updatedUser);
+              setPending((p) => p.filter((x) => x.key !== item.key));
+              setToast(`"${recipe.title}" נוסף ל${recipe.category}`);
+            } catch (e) {
+              if (e.status === 402) setPaywall({ paymentUrl: e.data.paymentUrl || paymentUrl });
+              throw e;
+            }
+          }}
         />
 
         {loadError && (

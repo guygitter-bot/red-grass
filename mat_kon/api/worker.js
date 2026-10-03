@@ -9,7 +9,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { RecipeBook } from './store.js';
 import { Accounts, canAdd } from './accounts.js';
-import { gatherSource, normalizeUrl } from './source.js';
+import { gatherSource, normalizeUrl, sourceKind } from './source.js';
 import { NoRecipeError, extractRecipe } from './extract.js';
 import { CATEGORIES } from './categories.js';
 
@@ -157,7 +157,8 @@ export default {
         const res = await internal(book, 'GET', `/recipes/${id}`);
         if (!res.ok) return fail(404, 'המתכון לא נמצא');
         const { source } = (await res.json()).recipe;
-        if (source.kind === 'whatsapp') text = textSource(source);
+        // מתכון מהודעת ווטסאפ או מטקסט שהודבק – נבנה שוב מאותו טקסט
+        if (source.kind === 'whatsapp' || source.text) text = textSource(source);
         else {
           link = source.url;
           hint = source.hint || '';
@@ -215,13 +216,17 @@ function summarizeSource(src) {
   };
 }
 
-// מתכון שנכתב כהודעה בווטסאפ (בלי קישור)
+// מתכון מטקסט: הודעה בווטסאפ (בלי קישור), או טקסט שהמשתמש העתיק מפוסט שלא הצלחנו לקרוא (עם הקישור)
 function textSource(body) {
   const text = String(body.text || '').trim().slice(0, 20000);
   if (text.length < 20) return null;
   const str = (v) => String(v || '').trim().slice(0, 120);
-  const key = /^wa:[\w-]{1,40}$/.test(body.key) ? body.key : `wa:${text.length}:${text.slice(0, 40)}`;
-  return { kind: 'whatsapp', key, text, chat: str(body.chat), author: str(body.author), date: str(body.date) };
+  const url = body.url ? normalizeUrl(body.url) : null;
+  const key = url ? null : /^wa:[\w-]{1,40}$/.test(body.key) ? body.key : `wa:${text.length}:${text.slice(0, 40)}`;
+  return {
+    fromText: true, kind: url ? sourceKind(url) : 'whatsapp', url, key, text,
+    chat: str(body.chat), author: str(body.author), date: str(body.date),
+  };
 }
 
 function bearer(request) {
