@@ -10,7 +10,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { RecipeBook } from './store.js';
 import { Accounts, canAdd } from './accounts.js';
 import { gatherSource, normalizeUrl, sourceKind } from './source.js';
-import { NoRecipeError, extractRecipe } from './extract.js';
+import { NoRecipeError, extractRecipe, organizeShopping } from './extract.js';
 import { CATEGORIES } from './categories.js';
 
 export { RecipeBook, Accounts };
@@ -24,6 +24,8 @@ export const deps = {
 const MAX_EDIT_BYTES = 200 * 1024;
 const MAX_SMALL_BYTES = 4000;
 const MAX_TEXT_BYTES = 30000;
+const MAX_PHOTO_BYTES = 9 * 1024 * 1024; // עד 4 תמונות מוקטנות
+const MAX_IMAGE_FIELD = 160 * 1024; // תמונת מתכון שנשמרת בספר (מוקטנת בדפדפן)
 
 function corsHeaders(request, env) {
   const origin = request.headers.get('origin') || '';
@@ -125,15 +127,51 @@ export default {
       return fail(405, 'Method not allowed');
     }
 
+    // ---- רשימת קניות ----
+    if (parts[0] === 'shopping') {
+      const book = bookOf(user?.id);
+      if (parts.length === 1 && request.method === 'GET') return pass(await internal(book, 'GET', '/shopping'));
+      if (parts.length === 1 && request.method === 'PUT') {
+        const { body, error } = await readJson(MAX_EDIT_BYTES);
+        if (error) return error;
+        const items = cleanShopping(body.items);
+        if (!items) return fail(400, 'רשימה לא תקינה');
+        return pass(await internal(book, 'PUT', '/shopping', { items }));
+      }
+      // איחוד כפילויות וסידור לפי מחלקות (AI)
+      if (parts[1] === 'organize' && request.method === 'POST') {
+        const { body, error } = await readJson(MAX_EDIT_BYTES);
+        if (error) return error;
+        const items = (Array.isArray(body.items) ? body.items : []).map((t) => String(t || '').trim().slice(0, 300)).filter(Boolean).slice(0, 300);
+        if (!items.length) return fail(400, 'הרשימה ריקה');
+        try {
+          return reply(200, { groups: await organizeShopping(deps.anthropic(env), items) });
+        } catch (e) {
+          return fail(502, e.message || 'לא הצלחתי לסדר את הרשימה');
+        }
+      }
+      return fail(405, 'Method not allowed');
+    }
+
     // ---- ספר המתכונים ----
     if (parts[0] !== 'recipes' || parts.length > 3) return fail(404, 'Not found');
     const id = parts[1];
     if (id && !/^[\w-]{1,64}$/.test(id)) return fail(404, 'Not found');
     const book = bookOf(user?.id);
 
+    // מתכון שנכתב ידנית: בלי AI ובלי מכסה
+    if (request.method === 'POST' && parts.length === 2 && id === 'manual') {
+      const { body, error } = await readJson(MAX_EDIT_BYTES);
+      if (error) return error;
+      const recipe = manualRecipe(body);
+      if (typeof recipe === 'string') return fail(400, recipe);
+      return pass(await internal(book, 'POST', '/recipes', recipe));
+    }
+
     // הוספת מתכון מקישור או מהודעת ווטסאפ, או רענון מתכון קיים מהמקור שלו
     const isAddText = request.method === 'POST' && parts.length === 2 && id === 'text';
-    const isAdd = (request.method === 'POST' && parts.length === 1) || isAddText;
+    const isAddPhoto = request.method === 'POST' && parts.length === 2 && id === 'photo';
+    const isAdd = (request.method === 'POST' && parts.length === 1) || isAddText || isAddPhoto;
     const isRefresh = request.method === 'POST' && parts.length === 3 && parts[2] === 'refresh';
     if (isAdd || isRefresh) {
       let link;
@@ -143,9 +181,12 @@ export default {
         if (!canAdd(user)) {
           return fail(402, `נגמרו ${user.freeLimit} המתכונים החינמיים`, { paywall: true, paymentUrl: env.PAYMENT_URL || '' });
         }
-        const { body, error } = await readJson(isAddText ? MAX_TEXT_BYTES : MAX_SMALL_BYTES);
+        const { body, error } = await readJson(isAddPhoto ? MAX_PHOTO_BYTES : isAddText ? MAX_TEXT_BYTES : MAX_SMALL_BYTES);
         if (error) return error;
-        if (isAddText) {
+        if (isAddPhoto) {
+          text = photoSource(body);
+          if (typeof text === 'string') return fail(400, text);
+        } else if (isAddText) {
           text = textSource(body);
           if (!text) return fail(400, 'אין כאן טקסט של מתכון');
         } else {
@@ -157,6 +198,7 @@ export default {
         const res = await internal(book, 'GET', `/recipes/${id}`);
         if (!res.ok) return fail(404, 'המתכון לא נמצא');
         const { source } = (await res.json()).recipe;
+        if (source.kind === 'photo' || source.kind === 'manual') return fail(400, 'למתכון הזה אין מקור לקרוא ממנו שוב');
         // מתכון מהודעת ווטסאפ או מטקסט שהודבק – נבנה שוב מאותו טקסט
         if (source.kind === 'whatsapp' || source.text) text = textSource(source);
         else {
@@ -171,6 +213,7 @@ export default {
       } catch (e) {
         if (e instanceof NoRecipeError) return fail(422, e.message);
         console.error('extract failed', link || text.key, e);
+        if (e.status === 400 && isAddPhoto) return fail(400, 'לא הצלחתי לקרוא את התמונות. נסו תמונה ברורה יותר.');
         return fail(502, `לא הצלחתי להוציא מתכון: ${e.message || e}`);
       }
       const res = await internal(book, 'POST', '/recipes', recipe);
@@ -189,11 +232,90 @@ export default {
       const { body: patch, error } = await readJson(MAX_EDIT_BYTES);
       if (error) return error;
       if ('category' in patch && !CATEGORIES.includes(patch.category)) return fail(400, 'קטגוריה לא מוכרת');
+      if ('image' in patch && !validImage(patch.image)) return fail(400, 'תמונה לא תקינה');
       return pass(await internal(book, 'PUT', `/recipes/${id}`, patch));
     }
     return fail(405, 'Method not allowed');
   },
 };
+
+// תמונת מתכון: קישור, או תמונה מוקטנת (data URL) קטנה מספיק כדי להישמר בספר
+function validImage(v) {
+  if (v === null) return true;
+  if (typeof v !== 'string') return false;
+  if (/^https:\/\//.test(v)) return v.length < 2000;
+  return /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v) && v.length <= MAX_IMAGE_FIELD;
+}
+
+// תמונות של מתכון (דף מספר, פתק, צילום מסך): עד 4, base64
+function photoSource(body) {
+  const images = Array.isArray(body.images) ? body.images : [];
+  if (!images.length || images.length > 4) return 'צריך בין תמונה אחת ל-4 תמונות';
+  const clean = [];
+  for (const img of images) {
+    const type = String(img?.type || '');
+    const data = String(img?.data || '');
+    if (!/^image\/(jpeg|png|webp)$/.test(type) || !/^[A-Za-z0-9+/=]+$/.test(data)) return 'תמונה לא תקינה';
+    clean.push({ type, data });
+  }
+  return {
+    images: clean,
+    kind: 'photo',
+    key: `photo:${crypto.randomUUID()}`,
+    hint: String(body.hint || '').trim().slice(0, 500),
+    image: validImage(body.thumb) ? body.thumb : null,
+  };
+}
+
+const strList = (a, max = 200) => (Array.isArray(a) ? a.map((x) => String(x || '').trim().slice(0, 500)).filter(Boolean).slice(0, max) : []);
+const sections = (a) =>
+  (Array.isArray(a) ? a : [])
+    .map((x) => ({ title: String(x?.title || '').trim().slice(0, 100), items: strList(x?.items) }))
+    .filter((x) => x.items.length)
+    .slice(0, 20);
+
+// מתכון שהמשתמש כתב בעצמו
+function manualRecipe(body) {
+  const title = String(body.title || '').trim().slice(0, 150);
+  if (!title) return 'נא לכתוב שם למתכון';
+  const ingredients = sections(body.ingredients);
+  const steps = sections(body.steps);
+  if (!ingredients.length && !steps.length) return 'נא לכתוב מצרכים או אופן הכנה';
+  if (body.image != null && !validImage(body.image)) return 'תמונה לא תקינה';
+  const str = (v, n = 100) => String(v || '').trim().slice(0, n);
+  return {
+    title,
+    originalTitle: title,
+    description: str(body.description, 500),
+    category: CATEGORIES.includes(body.category) ? body.category : 'אחר',
+    tags: strList(body.tags, 5),
+    servings: str(body.servings),
+    prepTime: str(body.prepTime),
+    cookTime: str(body.cookTime),
+    totalTime: str(body.totalTime),
+    ingredients,
+    steps,
+    tips: strList(body.tips, 30),
+    confidence: 'high',
+    notes: '',
+    source: { url: null, key: `manual:${crypto.randomUUID()}`, kind: 'manual' },
+    image: body.image || null,
+  };
+}
+
+// רשימת קניות: [{id, text, checked, recipeId?, recipeTitle?, group?}]
+function cleanShopping(items) {
+  if (!Array.isArray(items) || items.length > 500) return null;
+  return items
+    .map((i) => ({
+      id: String(i?.id || crypto.randomUUID()).slice(0, 64),
+      text: String(i?.text || '').trim().slice(0, 300),
+      checked: Boolean(i?.checked),
+      ...(i?.recipeId ? { recipeId: String(i.recipeId).slice(0, 64), recipeTitle: String(i.recipeTitle || '').slice(0, 150) } : {}),
+      ...(i?.group ? { group: String(i.group).slice(0, 60) } : {}),
+    }))
+    .filter((i) => i.text);
+}
 
 function summarizeSource(src) {
   const cut = (t, n = 300) => String(t || '').slice(0, n);

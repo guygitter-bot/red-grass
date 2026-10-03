@@ -1,15 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Heart, LogOut, MessageCircle, Search, UserPlus, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Heart, LogOut, MessageCircle, PlusCircle, Search, ShoppingCart, UserPlus, X } from 'lucide-react';
 import Auth from './components/Auth';
 import AddLink from './components/AddLink';
 import ImportView from './components/ImportView';
+import NewRecipeView from './components/NewRecipeView';
+import ShoppingView from './components/ShoppingView';
 import InvitesView from './components/InvitesView';
 import Paywall from './components/Paywall';
 import PendingList from './components/PendingList';
 import RecipeCard from './components/RecipeCard';
 import RecipeView from './components/RecipeView';
 import { CATEGORIES } from './lib/categories';
-import { addRecipe, addTextRecipe, deleteRecipe, getMe, listRecipes, logout as apiLogout, refreshRecipe, updateRecipe } from './lib/api';
+import {
+  addRecipe, addTextRecipe, deleteRecipe, getMe, getShopping, listRecipes, logout as apiLogout, putShopping, refreshRecipe, updateRecipe,
+} from './lib/api';
 import { CATEGORY_EMOJI, countByCategory, filterRecipes, freeLeft, linkFromShare, parseAuthHash } from './lib/recipes';
 import { usePersistentState } from './lib/storage';
 
@@ -32,6 +36,8 @@ const AUTH_LINK = takeAuthLink();
 const route = () => {
   const h = window.location.hash;
   if (h === '#/invites') return { view: 'invites' };
+  if (h === '#/shopping') return { view: 'shopping' };
+  if (h === '#/new') return { view: 'new' };
   if (h.startsWith('#/import')) return { view: 'import' };
   const id = (h.match(/^#\/r\/([\w-]+)/) || [])[1];
   return id ? { view: 'recipe', id } : { view: 'home' };
@@ -43,6 +49,9 @@ export default function App() {
   const [session, setSession] = usePersistentState('matkon_session', '');
   const [user, setUser] = usePersistentState('matkon_user', null);
   const [recipes, setRecipes] = usePersistentState('matkon_recipes', []);
+  // רשימת הקניות: נשמרת בשרת (משותפת לכל המכשירים של אותו ספר) ומקומית לתצוגה מהירה
+  const [shopping, setShopping] = usePersistentState('matkon_shopping', []);
+  const shoppingTimer = useRef(null);
   // מכשיר שנרשם פעם מקישור הזמנה נשאר מכשיר של משתמש מוזמן, גם אחרי יציאה
   const [guestDevice, setGuestDevice] = usePersistentState('matkon_guest', false);
   const [auth, setAuth] = useState(() => {
@@ -90,6 +99,7 @@ export default function App() {
         setPaymentUrl(me.paymentUrl);
       }
       setRecipes(await listRecipes(session));
+      getShopping(session).then(setShopping).catch(() => {});
       setLoadError('');
     } catch (e) {
       if (e.status === 401) signOut();
@@ -100,6 +110,17 @@ export default function App() {
   useEffect(() => {
     reload();
   }, [reload]);
+
+  const saveShopping = useCallback(
+    (items) => {
+      setShopping(items);
+      clearTimeout(shoppingTimer.current);
+      shoppingTimer.current = setTimeout(() => {
+        putShopping(session, items).catch((e) => setToast(`רשימת הקניות לא נשמרה: ${e.message}`));
+      }, 600);
+    },
+    [session, setShopping],
+  );
 
   const upsert = useCallback(
     (recipe) => setRecipes((list) => [recipe, ...list.filter((r) => r.id !== recipe.id)]),
@@ -165,6 +186,33 @@ export default function App() {
 
   if (nav.view === 'invites' && isOwner) return <InvitesView onBack={back} />;
 
+  if (nav.view === 'shopping') {
+    return (
+      <>
+        <ShoppingView session={session} items={shopping} onChange={saveShopping} onBack={() => open(null)} onToast={setToast} />
+        {toast && <Toast text={toast} />}
+      </>
+    );
+  }
+
+  if (nav.view === 'new') {
+    return (
+      <>
+        {paywall && <Paywall user={user} paymentUrl={paywall.paymentUrl} onClose={() => setPaywall(null)} />}
+        <NewRecipeView
+          session={session}
+          onBack={() => open(null)}
+          onSaved={(recipe, updatedUser) => {
+            upsert(recipe);
+            if (updatedUser) setUser(updatedUser);
+            window.location.replace(`#/r/${recipe.id}`);
+          }}
+          onPaywall={(url) => setPaywall({ paymentUrl: url || paymentUrl })}
+        />
+      </>
+    );
+  }
+
   if (nav.view === 'import') {
     return (
       <>
@@ -186,6 +234,8 @@ export default function App() {
 
   if (current) {
     return (
+      <>
+      {toast && <Toast text={toast} />}
       <RecipeView
         key={current.id}
         recipe={current}
@@ -204,12 +254,22 @@ export default function App() {
           upsert(recipe);
           setToast('המתכון עודכן מהמקור');
         }}
+        onAddToShopping={(lines) => {
+          const have = new Set(shopping.filter((i) => i.recipeId === current.id && !i.checked).map((i) => i.text));
+          const fresh = lines.filter((l) => !have.has(l));
+          saveShopping([
+            ...shopping,
+            ...fresh.map((text) => ({ id: `${Date.now()}-${Math.random()}`, text, checked: false, recipeId: current.id, recipeTitle: current.title })),
+          ]);
+          setToast(fresh.length ? `נוספו ${fresh.length} מצרכים לרשימת הקניות` : 'המצרכים כבר ברשימה');
+        }}
         onDelete={async () => {
           await deleteRecipe(session, current.id);
           setRecipes((list) => list.filter((r) => r.id !== current.id));
           open(null);
         }}
       />
+      </>
     );
   }
 
@@ -225,20 +285,35 @@ export default function App() {
                 {user ? `ספר המתכונים של ${user.name}` : 'כל קישור או סרטון הופך למתכון מסודר'}
               </p>
             </div>
+            <div className="flex items-center gap-2">
+            <a href="#/shopping" className="relative p-2 rounded-full bg-white/15 hover:bg-white/25" aria-label="רשימת קניות" title="רשימת קניות">
+              <ShoppingCart size={20} />
+              {shopping.some((i) => !i.checked) && (
+                <span className="absolute -top-1 -left-1 min-w-5 h-5 px-1 rounded-full bg-white text-orange-600 text-xs font-bold flex items-center justify-center">
+                  {shopping.filter((i) => !i.checked).length}
+                </span>
+              )}
+            </a>
             {isOwner ? (
               <a href="#/invites" className="flex items-center gap-1.5 rounded-full bg-white/15 hover:bg-white/25 px-3 py-2 text-sm font-medium">
-                <UserPlus size={18} /> הזמנות
+                <UserPlus size={18} /> <span className="hidden sm:inline">הזמנות</span>
               </a>
             ) : (
               <button onClick={signOut} className="p-2 rounded-full hover:bg-white/15" aria-label="יציאה" title="יציאה">
                 <LogOut size={20} />
               </button>
             )}
+            </div>
           </div>
           <AddLink onAdd={add} />
-          <a href="#/import" className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-white/95 hover:text-white">
-            <MessageCircle size={16} /> ייבוא מתכונים מצ'אט או מקבוצה בווטסאפ
-          </a>
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
+            <a href="#/new" className="inline-flex items-center gap-1.5 text-sm font-medium text-white/95 hover:text-white">
+              <PlusCircle size={16} /> מתכון מתמונה או כתיבה ידנית
+            </a>
+            <a href="#/import" className="inline-flex items-center gap-1.5 text-sm font-medium text-white/95 hover:text-white">
+              <MessageCircle size={16} /> ייבוא מצ'אט או מקבוצה בווטסאפ
+            </a>
+          </div>
           {left !== null && (
             <button onClick={() => left === 0 && setPaywall({ paymentUrl })} className="mt-3 w-full text-right text-sm text-orange-50">
               <div className="flex justify-between mb-1">
@@ -328,11 +403,15 @@ export default function App() {
         </div>
       </main>
 
-      {toast && (
-        <div className="fixed bottom-6 inset-x-4 flex justify-center pointer-events-none">
-          <div className="bg-stone-900 text-white text-sm rounded-full px-4 py-2.5 shadow-lg">{toast}</div>
-        </div>
-      )}
+      {toast && <Toast text={toast} />}
+    </div>
+  );
+}
+
+function Toast({ text }) {
+  return (
+    <div className="fixed bottom-6 inset-x-4 z-50 flex justify-center pointer-events-none">
+      <div className="bg-stone-900 text-white text-sm rounded-full px-4 py-2.5 shadow-lg">{text}</div>
     </div>
   );
 }

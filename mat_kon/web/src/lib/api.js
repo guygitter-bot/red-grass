@@ -51,3 +51,12 @@ export const logout = (s) => api(s, 'POST', '/logout', {}).catch(() => {});
 export const inviteLink = (token) => `${window.location.origin}${window.location.pathname}#invite=${token}`;
 export const loginLink = () => `${window.location.origin}${window.location.pathname}#login`;
 export const addTextRecipe = (s, item) => api(s, 'POST', '/recipes/text', item);
+
+// מתכון מתמונות / שנכתב ידנית
+export const addPhotoRecipe = (s, body) => api(s, 'POST', '/recipes/photo', body);
+export const addManualRecipe = (s, recipe) => api(s, 'POST', '/recipes/manual', recipe);
+
+// רשימת קניות
+export const getShopping = (s) => api(s, 'GET', '/shopping').then((d) => d.items);
+export const putShopping = (s, items) => api(s, 'PUT', '/shopping', { items }).then((d) => d.items);
+export const organizeShopping = (s, items) => api(s, 'POST', '/shopping/organize', { items }).then((d) => d.groups);

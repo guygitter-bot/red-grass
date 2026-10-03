@@ -1,7 +1,7 @@
 // ספר המתכונים: Durable Object אחד שמחזיק את כל המתכונים (כל מתכון במפתח r:<id>).
 
 const PREFIX = 'r:';
-const EDITABLE = ['title', 'description', 'category', 'tags', 'servings', 'prepTime', 'cookTime', 'totalTime', 'ingredients', 'steps', 'tips', 'notes', 'favorite', 'myNotes'];
+const EDITABLE = ['title', 'description', 'category', 'tags', 'servings', 'prepTime', 'cookTime', 'totalTime', 'ingredients', 'steps', 'tips', 'notes', 'favorite', 'myNotes', 'image'];
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
 
@@ -13,6 +13,17 @@ export class RecipeBook {
   async fetch(request) {
     const url = new URL(request.url);
     const id = url.pathname.split('/')[2] || '';
+
+    // רשימת הקניות של הספר
+    if (url.pathname === '/shopping') {
+      if (request.method === 'GET') return json({ items: (await this.storage.get('shopping')) || [] });
+      if (request.method === 'PUT') {
+        const { items } = await request.json();
+        await this.storage.put('shopping', items);
+        return json({ items });
+      }
+      return json({ error: 'method not allowed' }, 405);
+    }
 
     if (request.method === 'GET' && !id) {
       const all = await this.storage.list({ prefix: PREFIX });
