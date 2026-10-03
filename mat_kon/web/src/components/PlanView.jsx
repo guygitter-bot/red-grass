@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Plus, Search, ShoppingCart, X } from 'lucide-react';
 import { addMeal, dateKey, MEALS, plannedRecipes, removeMeal, shiftWeek, shortDate, weekDays, weekStart } from '../lib/plan';
 import { filterRecipes, emojiOf } from '../lib/recipes';
@@ -8,6 +8,23 @@ const newId = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${
 // תכנון ארוחות שבועי: מתכונים מהספר או הערה חופשית לכל יום, ורשימת קניות לכל השבוע
 export default function PlanView({ plan, recipes, onChange, onShopWeek }) {
   const [start, setStart] = useState(() => weekStart());
+  // מסך שנשאר פתוח ממוצאי שבת לראשון: "השבוע" עובר לשבוע החדש כשחוזרים אליו
+  const thisWeek = useRef(dateKey(weekStart()));
+  useEffect(() => {
+    const check = () => {
+      const now = dateKey(weekStart());
+      if (now === thisWeek.current) return;
+      setStart((s) => (dateKey(s) === thisWeek.current ? weekStart() : s));
+      thisWeek.current = now;
+    };
+    const onVisible = () => document.visibilityState === 'visible' && check();
+    document.addEventListener('visibilitychange', onVisible);
+    const t = setInterval(check, 60000);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      clearInterval(t);
+    };
+  }, []);
   const [adding, setAdding] = useState(null); // day key
   const days = useMemo(() => weekDays(start), [start]);
   const today = dateKey(new Date());

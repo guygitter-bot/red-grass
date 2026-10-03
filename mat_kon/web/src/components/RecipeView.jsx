@@ -169,7 +169,6 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
               allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
               allowFullScreen
               sandbox="allow-scripts allow-same-origin allow-presentation allow-popups"
-              referrerPolicy="no-referrer"
               loading="lazy"
             />
           </div>
@@ -408,9 +407,23 @@ function MyNotes({ value, onSave }) {
     const t = setTimeout(() => onSave(text), 1200);
     return () => clearTimeout(t);
   }, [text]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => () => {
-    const p = pending.current;
-    if (p.text !== p.value) p.onSave(p.text);
+  useEffect(() => {
+    // שמירה ביציאה מהמסך וגם כשהאפליקציה נסגרת / עוברת לרקע
+    const save = () => {
+      const p = pending.current;
+      if (p.text !== p.value) {
+        p.onSave(p.text);
+        pending.current = { ...p, value: p.text };
+      }
+    };
+    const onHide = () => document.visibilityState === 'hidden' && save();
+    window.addEventListener('pagehide', save);
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      window.removeEventListener('pagehide', save);
+      document.removeEventListener('visibilitychange', onHide);
+      save();
+    };
   }, []);
   return (
     <Section title="ההערות שלי">
@@ -462,7 +475,11 @@ function Editor({ recipe, onCancel, onSave }) {
             type="file"
             accept="image/*"
             className="hidden"
-            onChange={async (e) => e.target.files[0] && setImage(await thumbnail(e.target.files[0]).catch(() => image))}
+            onChange={async (e) => {
+              const file = e.target.files[0];
+              e.target.value = '';
+              if (file) setImage(await thumbnail(file).catch(() => image));
+            }}
           />
         </label>
         {image && <button type="button" onClick={() => setImage(null)} className="text-sm text-stone-500">הסרת תמונה</button>}

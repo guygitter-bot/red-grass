@@ -1,17 +1,27 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { applyOps, diffItems } from '../lib/sync';
+import { loadJson, saveJson } from '../lib/storage';
 
 // רשימה משותפת שנשמרת בשרת פריט-פריט.
 //   value / setValue – המצב המקומי (נשמר גם במכשיר להצגה מהירה)
 //   toItems / fromItems – המרה לרשימה שטוחה עם id (לתכנון: לפי ימים)
 //   send(ops) -> Promise<value מהשרת>
-// לפני שהרשימה נטענה מהשרת לא נשלח כלום, כדי שנתונים ישנים במכשיר לא ייכנסו לספר.
-export default function useSyncedList({ value, setValue, toItems, fromItems, send, onError }) {
+// לפני שהרשימה נטענה מהשרת לא נשלח כלום. שינויים שנעשו בינתיים (גם בלי רשת, גם אם האפליקציה נסגרה)
+// נשמרים: "מה השרת הכיר" נשמר במכשיר (syncKey), וההפרש ממנו נשלח כשהרשימה נטענת.
+export default function useSyncedList({ value, setValue, toItems, fromItems, send, onError, syncKey }) {
   const synced = useRef(null); // הרשימה כפי שהשרת מכיר אותה (רשימה שטוחה)
+  const known = useRef(null); // מה שהשרת הכיר בפעם האחרונה (נשמר במכשיר)
+  if (known.current === null) known.current = syncKey ? loadJson(syncKey, null) ?? toItems(value) : toItems(value);
+  const lastFlush = useRef(0);
   const latest = useRef(value);
   const timer = useRef(null);
   const inflight = useRef(false);
   latest.current = value;
+
+  const remember = useCallback((items) => {
+    known.current = items;
+    if (syncKey) saveJson(syncKey, items);
+  }, [syncKey]);
 
   const flush = useCallback(async () => {
     clearTimeout(timer.current);
@@ -20,9 +30,11 @@ export default function useSyncedList({ value, setValue, toItems, fromItems, sen
     const ops = diffItems(synced.current, sent);
     if (!ops.length) return;
     inflight.current = true;
+    lastFlush.current = Date.now();
     try {
       const server = toItems(await send(ops));
       synced.current = server;
+      remember(server);
       // שינויים שנעשו בזמן השליחה נשמרים מעל מה שהשרת החזיר, ויישלחו בסבב הבא
       const since = diffItems(sent, toItems(latest.current));
       latest.current = fromItems(applyOps(server, since));
@@ -33,7 +45,7 @@ export default function useSyncedList({ value, setValue, toItems, fromItems, sen
     } finally {
       inflight.current = false;
     }
-  }, [toItems, fromItems, send, setValue, onError]);
+  }, [toItems, fromItems, send, setValue, onError, remember]);
 
   // שינוי מקומי: מיד על המסך, ונשלח לשרת אחרי רגע
   const change = useCallback(
@@ -48,23 +60,28 @@ export default function useSyncedList({ value, setValue, toItems, fromItems, sen
   );
 
   // הרשימה מהשרת (בטעינה, ובכל חזרה לאפליקציה): שינויים מקומיים שעוד לא נשלחו נשמרים מעליה
+  // startedAt: מתי התחילה הבקשה – תשובה שיצאה לפני השמירה האחרונה כבר לא עדכנית ולא דורסת
   const loaded = useCallback(
-    (serverValue) => {
+    (serverValue, startedAt = Infinity) => {
+      if (startedAt < lastFlush.current || inflight.current) return;
       const server = toItems(serverValue);
-      const local = synced.current ? diffItems(synced.current, toItems(latest.current)) : [];
+      const local = diffItems(synced.current || known.current || [], toItems(latest.current));
       synced.current = server;
+      remember(server);
       const merged = applyOps(server, local);
       latest.current = fromItems(merged);
       setValue(latest.current);
       if (local.length) timer.current = setTimeout(flush, 300);
     },
-    [toItems, fromItems, setValue, flush],
+    [toItems, fromItems, setValue, flush, remember],
   );
 
   const reset = useCallback(() => {
     clearTimeout(timer.current);
+    known.current = [];
+    remember([]);
     synced.current = null;
-  }, []);
+  }, [remember]);
 
   // שמירה כשהאפליקציה נסגרת או עוברת לרקע
   useEffect(() => {

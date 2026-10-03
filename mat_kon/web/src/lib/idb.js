@@ -2,13 +2,19 @@
 const DB = 'matkon';
 const STORE = 'kv';
 
+let db;
 function open() {
-  return new Promise((resolve, reject) => {
+  if (db) return db;
+  db = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB, 1);
     req.onupgradeneeded = () => req.result.createObjectStore(STORE);
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onerror = () => {
+      db = null;
+      reject(req.error);
+    };
   });
+  return db;
 }
 
 async function run(mode, fn) {

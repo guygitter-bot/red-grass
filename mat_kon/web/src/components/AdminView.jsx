@@ -10,6 +10,7 @@ export default function AdminView({ onBack }) {
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [usage, setUsage] = useState(null);
   const [errors, setErrors] = useState(null);
+  const [clientErrors, setClientErrors] = useState([]);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -17,7 +18,12 @@ export default function AdminView({ onBack }) {
     getAdminUsage(month).then(setUsage).catch((e) => setError(e.message));
   }, [month]);
   useEffect(() => {
-    getAdminErrors().then(setErrors).catch(() => setErrors([]));
+    getAdminErrors()
+      .then((d) => {
+        setErrors(d.errors || []);
+        setClientErrors(d.clientErrors || []);
+      })
+      .catch(() => setErrors([]));
   }, []);
 
   const total = usage?.rows.reduce((t, r) => t + r.usd, 0) || 0;
@@ -37,7 +43,7 @@ export default function AdminView({ onBack }) {
           <p className="text-xs text-stone-500 mb-2">
             הערכה לפי מחיר לטוקנים{usage ? ` ($${usage.price.in}/$${usage.price.out} למיליון, $${usage.price.search} לחיפוש)` : ''} – החשבון בפועל ב-console.anthropic.com.
           </p>
-          {!usage ? <Loader2 className="animate-spin text-orange-500" /> : (
+          {!usage ? (error ? null : <Loader2 className="animate-spin text-orange-500" />) : (
             <>
               <div className="rounded-2xl bg-orange-50 p-3 mb-2 flex justify-between font-bold">
                 <span>סה"כ החודש</span><span>${total.toFixed(2)} · {nis(total)}</span>
@@ -59,8 +65,17 @@ export default function AdminView({ onBack }) {
             </>
           )}
         </section>
+        <ErrorList title="תקלות בשרת" list={errors} />
+        <ErrorList title="תקלות שדווחו מהאפליקציה" list={clientErrors} />
+      </div>
+    </div>
+  );
+}
+
+function ErrorList({ title, list: errors }) {
+  return (
         <section>
-          <h2 className="font-bold text-lg mb-2 flex items-center gap-2"><AlertTriangle size={18} className="text-amber-500" /> תקלות אחרונות</h2>
+          <h2 className="font-bold text-lg mb-2 flex items-center gap-2"><AlertTriangle size={18} className="text-amber-500" /> {title}</h2>
           {!errors ? <Loader2 className="animate-spin text-orange-500" /> : !errors.length ? (
             <p className="text-sm text-stone-500">אין תקלות 🎉</p>
           ) : (
@@ -77,7 +92,5 @@ export default function AdminView({ onBack }) {
             </ul>
           )}
         </section>
-      </div>
-    </div>
   );
 }

@@ -15,6 +15,9 @@
 export const PBKDF2_ITERATIONS = 20000;
 export const MAX_MEMBERS = 5; // כולל בעל הספר
 const SESSION_DAYS = 180;
+const INVITE_DAYS = 30;
+// הזמנה שלא נוצלה תוך 30 יום פגה (הזמנות ישנות בלי תאריך – בלי תפוגה)
+const inviteExpired = (invite) => !invite.userId && invite.expiresAt && Date.parse(invite.expiresAt) < Date.now();
 const JOIN_DAYS = 7;
 export const OWNER_BOOK = 'owner';
 
@@ -58,6 +61,8 @@ export const publicUser = (u, freeLimit) => ({
   freeLimit,
   createdAt: u.createdAt,
   ...(u.bookId ? { bookId: u.bookId } : {}),
+  google: Boolean(u.google),
+  password: Boolean(u.hash),
 });
 
 export class Accounts {
@@ -65,6 +70,23 @@ export class Accounts {
     this.storage = state.storage;
     this.env = env || {};
     this.freeLimit = Number(env?.FREE_RECIPES ?? 10);
+  }
+
+  // ניקוי יומי: מוני הגבלת קצב ישנים, חיבורים שפגו וקישורי הצטרפות שפגו
+  async alarm() {
+    const now = Date.now();
+    const drop = [];
+    for (const [k, v] of await this.storage.list({ prefix: 'rate:' })) if (now - v.since > 86400000) drop.push(k);
+    for (const [k, v] of await this.storage.list({ prefix: 'session:' })) if (now - Date.parse(v.createdAt) > SESSION_DAYS * 86400000) drop.push(k);
+    for (const [k, v] of await this.storage.list({ prefix: 'join:' })) if (!v.usedBy && Date.parse(v.expiresAt) < now) drop.push(k);
+    for (let i = 0; i < drop.length; i += 128) await this.storage.delete(drop.slice(i, i + 128));
+    await this.storage.setAlarm?.(now + 86400000);
+  }
+
+  async ensureCleanup() {
+    if (this.cleanupChecked || !this.storage.getAlarm) return;
+    this.cleanupChecked = true;
+    if (!(await this.storage.getAlarm())) await this.storage.setAlarm(Date.now() + 3600000);
   }
 
   // גרסת הסוד של בעל האפליקציה: החלפת הסיסמה מנתקת את כל מכשירי הבעלים
@@ -109,10 +131,14 @@ export class Accounts {
     const body = ['POST', 'PUT', 'DELETE'].includes(request.method) ? await request.json().catch(() => ({})) : {};
     const path = url.pathname;
     const now = new Date().toISOString();
+    await this.ensureCleanup();
 
     // ---- בעל האפליקציה: הזמנות ומשתמשים ----
     if (path === '/invites' && request.method === 'POST') {
-      const invite = { token: randomToken(18), name: String(body.name || '').trim().slice(0, 80), createdAt: now, userId: null };
+      const invite = {
+        token: randomToken(18), name: String(body.name || '').trim().slice(0, 80), createdAt: now, userId: null,
+        expiresAt: new Date(Date.now() + INVITE_DAYS * 86400000).toISOString(),
+      };
       await this.storage.put(`invite:${invite.token}`, invite);
       return json({ invite });
     }
@@ -145,7 +171,7 @@ export class Accounts {
     // ---- הזמנה, הרשמה וכניסה ----
     if (path === '/invite/check' && request.method === 'POST') {
       const invite = await this.storage.get(`invite:${body.token}`);
-      if (!invite) return err(404, 'קישור ההזמנה לא תקף');
+      if (!invite || (inviteExpired(invite) && !invite.userId)) return err(404, 'קישור ההזמנה לא תקף');
       return json({ name: invite.name, used: Boolean(invite.userId), freeLimit: this.freeLimit });
     }
     if (path === '/register' && request.method === 'POST') {
@@ -155,12 +181,15 @@ export class Accounts {
       if (!name) return err(400, 'נא למלא שם');
       if (!validEmail(email)) return err(400, 'כתובת האימייל לא תקינה');
       if (password.length < 8 || password.length > 200) return err(400, 'הסיסמה צריכה להיות לפחות 8 תווים');
+      // קודם בודקים שהקישור תקף (בלי קישור תקף לא מגלים אם אימייל רשום)
+      const peek = await this.peekClaim(body);
+      if (peek) return err(peek.status, peek.error);
       const existingId = await this.storage.get(`email:${email}`);
       if (existingId) {
         const existing = await this.storage.get(`user:${existingId}`);
-        if (existing?.removed && body.join) {
-          const salt = randomToken(16);
-          return this.rejoin(existing, body.join, { name, salt, hash: await hashPassword(password, salt) });
+        // מי שהוסר מספר משותף מצטרף שוב רק אם הוכיח שזה הוא (הסיסמה הקיימת) – בלי לשנות את פרטי הכניסה
+        if (existing?.removed && body.join && existing.hash && sameText(await hashPassword(password, existing.salt), existing.hash)) {
+          return this.rejoin(existing, body.join, {});
         }
         return err(409, 'האימייל הזה כבר רשום. אפשר להיכנס איתו.');
       }
@@ -174,7 +203,7 @@ export class Accounts {
       const id = await this.storage.get(`email:${normalizeEmail(body.email)}`);
       const user = id && (await this.storage.get(`user:${id}`));
       const hash = await hashPassword(String(body.password || ''), user?.salt || 'none');
-      if (user && !user.hash) return err(401, 'נרשמתם עם גוגל. היכנסו עם הכפתור "המשך עם Google".');
+      if (user && !user.hash) return err(401, 'האימייל או הסיסמה שגויים. אם נרשמתם עם גוגל – היכנסו עם הכפתור "המשך עם Google".');
       if (!user || !sameText(hash, user.hash)) return err(401, 'האימייל או הסיסמה שגויים');
       return this.signedIn(user);
     }
@@ -235,24 +264,22 @@ export class Accounts {
       const id = await this.storage.get(`email:${email}`);
       let user = id && (await this.storage.get(`user:${id}`));
       if (user && body.join) {
-        if (user.removed) return this.rejoin(user, body.join, { google: user.google || String(body.sub) });
+        // הצטרפות חוזרת עם גוגל – רק לחשבון שכבר מחובר לאותו חשבון גוגל
+        if (user.removed) {
+          if (user.google !== String(body.sub)) return err(409, 'האימייל הזה כבר רשום. היכנסו עם הדרך שנרשמתם בה.');
+          return this.rejoin(user, body.join, {});
+        }
         const join = await this.storage.get(`join:${body.join}`);
         if (join && user.bookId !== join.bookId) return err(409, 'כבר יש חשבון עם האימייל הזה. כדי להצטרף לספר צריך להירשם עם אימייל אחר.');
       }
       if (user) {
+        // חשבון שנרשם עם סיסמה לא מתחבר לגוגל אוטומטית: אולי מישהו אחר רשם את האימייל הזה (בלי אימות),
+        // ואז כניסה עם גוגל הייתה מכניסה את בעל האימייל האמיתי לחשבון (ולספר) של מי שרשם אותו.
+        // מחברים את גוגל רק מתוך החשבון, אחרי כניסה עם הסיסמה (הגדרות ← חיבור גוגל).
         if (!user.google) {
-          // גוגל מוכיח שהאימייל שייך למי שנכנס. אם מישהו אחר רשם את האימייל הזה עם סיסמה (בלי אימות),
-          // הסיסמה מבוטלת וכל החיבורים הקיימים מנותקים – כך אי אפשר "לתפוס" חשבון של מישהו לפני שנרשם
-          user.google = String(body.sub);
-          if (user.hash) {
-            user.hash = null;
-            user.salt = null;
-            const sessions = await this.storage.list({ prefix: 'session:' });
-            const keys = [...sessions].filter(([, x]) => x.userId === user.id).map(([k]) => k);
-            for (let i = 0; i < keys.length; i += 128) await this.storage.delete(keys.slice(i, i + 128));
-          }
-          await this.storage.put(`user:${user.id}`, user);
-        } else if (user.google !== String(body.sub)) return err(401, 'חשבון הגוגל לא תואם למשתמש');
+          return err(409, 'יש כבר חשבון עם האימייל הזה שנרשם עם סיסמה. היכנסו עם האימייל והסיסמה, ובהגדרות אפשר לחבר את גוגל.');
+        }
+        if (user.google !== String(body.sub)) return err(401, 'חשבון הגוגל לא תואם למשתמש');
         return this.signedIn(user);
       }
       const newId = crypto.randomUUID();
@@ -263,6 +290,17 @@ export class Accounts {
       return this.createUser(newId, {
         name: String(body.name || '').trim().slice(0, 80) || email.split('@')[0], email, salt: null, hash: null, google: String(body.sub),
       }, claim);
+    }
+
+    // חיבור גוגל לחשבון קיים (מתוך החשבון, אחרי כניסה): האימייל בגוגל חייב להיות זהה
+    if (path === '/google/link' && request.method === 'POST') {
+      const user = await this.storage.get(`user:${body.userId}`);
+      if (!user) return err(404, 'המשתמש לא נמצא');
+      if (normalizeEmail(body.email) !== user.email) return err(400, 'חשבון הגוגל הוא עם אימייל אחר');
+      if (user.google && user.google !== String(body.sub)) return err(409, 'החשבון כבר מחובר לחשבון גוגל אחר');
+      user.google = String(body.sub);
+      await this.storage.put(`user:${user.id}`, user);
+      return json({ user: await this.effectiveUser(user) });
     }
 
     if (path === '/logout' && request.method === 'POST') {
@@ -304,13 +342,17 @@ export class Accounts {
     }
 
     // ---- תקלות אחרונות (למסך הניהול) ----
+    // תקלות שרת ותקלות מהאפליקציה נשמרות ברשימות נפרדות (כך שדיווחים מבחוץ לא דוחקים תקלות שרת)
     if (path === '/errors/add' && request.method === 'POST') {
-      const list = (await this.storage.get('errors')) || [];
+      const key = body.list === 'client' ? 'client-errors' : 'errors';
+      const list = (await this.storage.get(key)) || [];
       list.unshift({ at: now, where: String(body.where || '').slice(0, 80), message: String(body.message || '').slice(0, 300), status: body.status ?? null, user: String(body.user || '').slice(0, 120) });
-      await this.storage.put('errors', list.slice(0, 50));
+      await this.storage.put(key, list.slice(0, 50));
       return json({ ok: true });
     }
-    if (path === '/errors' && request.method === 'GET') return json({ errors: (await this.storage.get('errors')) || [] });
+    if (path === '/errors' && request.method === 'GET') {
+      return json({ errors: (await this.storage.get('errors')) || [], clientErrors: (await this.storage.get('client-errors')) || [] });
+    }
     // ספרים (בעלי ספר שנרשמו מהזמנה) – למסך הניהול
     if (path === '/books' && request.method === 'GET') {
       const users = [...(await this.storage.list({ prefix: 'user:' })).values()];
@@ -360,6 +402,18 @@ export class Accounts {
   }
 
   // הרשמה מקישור הזמנה (ספר חדש) או מקישור הצטרפות (ספר משותף)
+  // בדיקה בלבד (בלי לתפוס): האם הקישור בבקשה תקף. מחזיר שגיאה או null
+  async peekClaim(body) {
+    if (body.join) {
+      const join = await this.validJoin(body.join);
+      return join.error ? join : null;
+    }
+    const invite = body.token && (await this.storage.get(`invite:${body.token}`));
+    if (!invite || inviteExpired(invite)) return { status: 404, error: 'קישור ההזמנה לא תקף' };
+    if (invite.userId) return { status: 409, error: 'כבר נרשמו עם הקישור הזה. אפשר להיכנס עם החשבון שנרשמתם בו.' };
+    return null;
+  }
+
   // הרשמה מקישור הזמנה (ספר חדש) או מקישור הצטרפות (ספר משותף).
   // הקישור "נתפס" מיד (באותו צעד של הבדיקה), כדי ששתי הרשמות במקביל לא ינצלו אותו פעמיים
   async claim(body, userId) {
@@ -370,7 +424,7 @@ export class Accounts {
       return { join: join.join };
     }
     const invite = body.token && (await this.storage.get(`invite:${body.token}`));
-    if (!invite) return { status: 404, error: 'קישור ההזמנה לא תקף', missing: !body.token };
+    if (!invite || inviteExpired(invite)) return { status: 404, error: 'קישור ההזמנה לא תקף', missing: !body.token };
     if (invite.userId) return { status: 409, error: 'כבר נרשמו עם הקישור הזה. אפשר להיכנס עם החשבון שנרשמתם בו.' };
     await this.storage.put(`invite:${invite.token}`, { ...invite, userId });
     return { invite };

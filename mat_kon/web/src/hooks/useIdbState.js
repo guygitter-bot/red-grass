@@ -3,8 +3,8 @@ import { idbGet, idbSet } from '../lib/idb';
 import { loadJson } from '../lib/storage';
 
 // כמו usePersistentState, אבל נשמר ב-IndexedDB (מקום גדול). ערך ישן מ-localStorage עובר אוטומטית.
-export default function useIdbState(key, initial) {
-  const [value, setValue] = useState(() => loadJson(key, initial));
+export default function useIdbState(key, initial, clean = (v) => v) {
+  const [value, setValue] = useState(() => clean(loadJson(key, initial)));
   const touched = useRef(false);
   const timer = useRef(null);
 
@@ -13,7 +13,7 @@ export default function useIdbState(key, initial) {
     idbGet(key)
       .then((stored) => {
         // אם כבר הגיעו נתונים מהשרת בינתיים – לא דורסים אותם בעותק הישן
-        if (alive && stored !== undefined && !touched.current) setValue(stored);
+        if (alive && stored !== undefined && !touched.current) setValue(clean(stored));
       })
       .catch(() => {});
     return () => {

@@ -133,3 +133,17 @@ describe('list sync', () => {
     expect(itemsToPlan(planToItems(plan))).toEqual(plan);
   });
 });
+
+describe('round 4 fixes', () => {
+  it('timers find "שעה" after a word', async () => {
+    const { findDurations } = await import('./timers');
+    expect(findDurations('אופים שעה').map((d) => d.seconds)).toEqual([3600]);
+    expect(findDurations('חצי שעה בתנור').map((d) => d.seconds)).toEqual([1800]);
+  });
+  it('חלב is not חלבה', async () => {
+    const { lineHas } = await import('./fridge');
+    expect(lineHas('כוס חלב', 'חלבה')).toBe(false);
+    expect(lineHas('100 גרם חלבה', 'חלב')).toBe(false);
+    expect(lineHas('100 גרם חלבה', 'חלבה')).toBe(true);
+  });
+});

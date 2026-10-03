@@ -17,6 +17,9 @@ import { mergePantry } from './lib/fridge';
 import { itemsToPlan, planToItems } from './lib/sync';
 import useSyncedList from './hooks/useSyncedList';
 import useIdbState from './hooks/useIdbState';
+
+// מתכונים מהמכשיר עוברים את אותה בדיקה כמו מהשרת (נתון פגום לא יפיל את האפליקציה)
+const cleanRecipes = (list) => (Array.isArray(list) ? list.filter((r) => r && typeof r === 'object' && r.id).map(safeRecipe) : []);
 import InvitesView from './components/InvitesView';
 import ShareView from './components/ShareView';
 import PrivacyView from './components/PrivacyView';
@@ -28,7 +31,7 @@ import RecipeView from './components/RecipeView';
 import { CATEGORIES } from './lib/categories';
 import {
   addCategory, addRecipeAsync, addTextRecipe, getJob, getRecipe, deleteRecipe, removeCategory, getMe, getPlan, getShopping, listRecipes, logout as apiLogout, refreshRecipe,
-  updateRecipe, getPantry, shoppingOps, pantryOps, planOps,
+  updateRecipe, safeRecipe, getPantry, shoppingOps, pantryOps, planOps,
 } from './lib/api';
 import { SORTS, countByCategory, emojiOf, filterRecipes, freeLeft, linkFromShare, parseAuthHash, sortRecipes, topTags } from './lib/recipes';
 import { usePersistentState } from './lib/storage';
@@ -40,11 +43,26 @@ function takeAuthLink() {
   return auth;
 }
 
-// קישור ששותף לאפליקציה (share target): ?url=... / ?text=...
-function takeSharedLink() {
-  const link = linkFromShare(window.location.search);
+// מה ששותף לאפליקציה (share target). שיתוף אמיתי מגיע דרך ה-service worker (?shared=link + מטמון) ומתווסף מיד;
+// ?url=... / ?text=... ישירות בכתובת (קישור שמישהו שלח) רק מוצע, באישור.
+async function takeShared() {
+  const params = new URLSearchParams(window.location.search);
   if (window.location.search) window.history.replaceState(null, '', window.location.pathname + window.location.hash);
-  return link;
+  if (params.get('shared') === 'link') {
+    try {
+      const cache = await caches.open('matkon-share');
+      const res = await cache.match('shared-link');
+      if (!res) return null;
+      await cache.delete('shared-link');
+      const data = await res.json();
+      return { trusted: true, link: linkFromShare(`?${new URLSearchParams(data)}`), text: data.text || '' };
+    } catch {
+      return null;
+    }
+  }
+  const link = linkFromShare(params.toString() ? `?${params}` : '');
+  const text = params.get('text') || '';
+  return link || text ? { trusted: false, link, text } : null;
 }
 
 const AUTH_LINK = takeAuthLink();
@@ -73,7 +91,7 @@ const route = () => {
 export default function App() {
   const [session, setSession] = usePersistentState('matkon_session', '');
   const [user, setUser] = usePersistentState('matkon_user', null);
-  const [recipes, setRecipes] = useIdbState('matkon_recipes', []);
+  const [recipes, setRecipes] = useIdbState('matkon_recipes', [], cleanRecipes);
   // רשימת הקניות: נשמרת בשרת (משותפת לכל המכשירים של אותו ספר) ומקומית לתצוגה מהירה
   const [shopping, setShopping] = usePersistentState('matkon_shopping', []);
   // תכנון ארוחות שבועי (נשמר בשרת, כמו רשימת הקניות)
@@ -116,15 +134,15 @@ export default function App() {
   const same = useCallback((x) => x, []);
   const syncError = useCallback((what) => (e) => setToast(`${what} לא נשמר${what === 'רשימת הקניות' ? 'ה' : ''}: ${e.message}`), []);
   const shoppingSync = useSyncedList({
-    value: shopping, setValue: setShopping, toItems: same, fromItems: same,
+    value: shopping, setValue: setShopping, toItems: same, fromItems: same, syncKey: 'matkon_shopping_synced',
     send: useCallback((ops) => shoppingOps(session, ops), [session]), onError: useMemo(() => syncError('רשימת הקניות'), [syncError]),
   });
   const pantrySync = useSyncedList({
-    value: pantry, setValue: setPantry, toItems: same, fromItems: same,
+    value: pantry, setValue: setPantry, toItems: same, fromItems: same, syncKey: 'matkon_pantry_synced',
     send: useCallback((ops) => pantryOps(session, ops), [session]), onError: useMemo(() => syncError('המלאי'), [syncError]),
   });
   const planSync = useSyncedList({
-    value: plan, setValue: setPlan, toItems: planToItems, fromItems: itemsToPlan,
+    value: plan, setValue: setPlan, toItems: planToItems, fromItems: itemsToPlan, syncKey: 'matkon_plan_synced',
     send: useCallback((ops) => planOps(session, ops), [session]), onError: useMemo(() => syncError('התכנון'), [syncError]),
   });
 
@@ -137,6 +155,7 @@ export default function App() {
     setPantry([]);
     setCustom([]);
     setPending([]);
+    navigator.serviceWorker?.controller?.postMessage('clear-user-caches');
     try {
       for (const k of Object.keys(localStorage)) {
         if (/^matkon_(factor|checked)_/.test(k) || k === 'matkon_fridge') localStorage.removeItem(k);
@@ -155,8 +174,12 @@ export default function App() {
     setAuth({ mode: 'login' });
   }, [session, setSession, setUser, setOwnerDevice, clearBookCache]);
 
+  const navigatedInApp = useRef(false);
   useEffect(() => {
-    const onHash = () => setNav(route());
+    const onHash = () => {
+      navigatedInApp.current = true;
+      setNav(route());
+    };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
@@ -177,11 +200,12 @@ export default function App() {
       }
       setCustom((me.categories || []).filter((c) => !CATEGORIES.includes(c)));
       setRecipes(await listRecipes(session));
-      getShopping(session).then(shoppingSync.loaded).catch(() => {});
-      getPlan(session).then(planSync.loaded).catch(() => {});
+      const started = Date.now();
+      getShopping(session).then((v) => shoppingSync.loaded(v, started)).catch(() => {});
+      getPlan(session).then((v) => planSync.loaded(v, started)).catch(() => {});
       getPantry(session)
         .then((items) => {
-          pantrySync.loaded(items);
+          pantrySync.loaded(items, started);
           // מעבר חד פעמי: מה שנכתב פעם ב"מה יש במקרר" (רק במכשיר הזה) עובר למלאי בשרת
           const old = loadJson('matkon_fridge', []);
           if (!items.length && old.length) {
@@ -261,8 +285,23 @@ export default function App() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (auth) return undefined;
+    let busy = false;
     const tick = async () => {
+      if (busy) return; // בדיקה קודמת עוד רצה – לא מטפלים באותה עבודה פעמיים
+      busy = true;
+      try {
+        await poll();
+      } finally {
+        busy = false;
+      }
+    };
+    const poll = async () => {
       for (const item of pendingRef.current.filter((x) => x.jobId && !x.error)) {
+        // מעל 10 דקות בלי תשובה – מציגים שגיאה (אפשר לנסות שוב או לסגור)
+        if (Date.now() - Number(String(item.key).split('-')[0]) > 10 * 60 * 1000) {
+          setPending((p) => p.map((x) => (x.key === item.key ? { ...x, error: 'זה לוקח יותר מדי זמן. נסו שוב.' } : x)));
+          continue;
+        }
         let job;
         try {
           job = await getJob(session, item.jobId);
@@ -290,17 +329,37 @@ export default function App() {
     return () => clearInterval(t);
   }, [auth, session, ownerDevice, paymentUrl, upsert, setUser, setPending]);
 
-  // קישור ששותף לאפליקציה מתווסף מיד
+  // מתכון כטקסט (שיתוף בלי קישור)
+  const addSharedText = useCallback(async (text) => {
+    setToast('מסדר מתכון מהטקסט ששותף…');
+    try {
+      const { recipe, user: updatedUser } = await addTextRecipe(session, { text });
+      upsert(safeRecipe(recipe));
+      if (updatedUser) setUser(updatedUser);
+      setToast(`"${recipe.title}" נוסף ל${recipe.category}`);
+    } catch (e) {
+      if (e.status === 402) setPaywall({ paymentUrl: e.data.paymentUrl || '' });
+      else setToast(e.message);
+    }
+  }, [session, upsert, setUser]);
+
+  // שיתוף לאפליקציה: מהאפליקציה עצמה – מתווסף מיד; מקישור בכתובת – רק באישור
+  const [sharedOffer, setSharedOffer] = useState(null);
   useEffect(() => {
     if (auth) return;
-    const shared = takeSharedLink();
-    if (shared) add(shared);
+    takeShared().then((shared) => {
+      if (!shared) return;
+      if (!shared.trusted) setSharedOffer(shared);
+      else if (shared.link) add(shared.link);
+      else if (shared.text.trim().length >= 20) addSharedText(shared.text);
+    });
   }, [auth]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const open = (id) => {
     window.location.hash = id ? `#/r/${id}` : '';
   };
-  const back = () => (window.history.length > 1 ? window.history.back() : open(null));
+  // חזרה: אחורה בהיסטוריה רק אם עברנו בין מסכים בתוך האפליקציה; אחרת למסך הבית (ולא החוצה מהאפליקציה)
+  const back = () => (navigatedInApp.current ? window.history.back() : open(null));
 
   const counts = useMemo(() => countByCategory(recipes), [recipes]);
   const visible = useMemo(
@@ -602,6 +661,25 @@ export default function App() {
       </header>
 
       <main className="max-w-3xl mx-auto px-4">
+        {sharedOffer && (
+          <div className="mt-4 rounded-2xl bg-white shadow-sm p-3 border border-orange-200">
+            <div className="font-bold">להוסיף לספר את מה ששותף?</div>
+            <div className="text-sm text-stone-600 mt-1 line-clamp-2 break-all" dir="auto">{sharedOffer.link || sharedOffer.text}</div>
+            <div className="mt-2 flex gap-2">
+              <button
+                onClick={() => {
+                  if (sharedOffer.link) add(sharedOffer.link);
+                  else addSharedText(sharedOffer.text);
+                  setSharedOffer(null);
+                }}
+                className="rounded-xl bg-orange-500 text-white font-bold px-4 py-2"
+              >
+                הוספה
+              </button>
+              <button onClick={() => setSharedOffer(null)} className="rounded-xl bg-stone-100 px-4 py-2">לא, תודה</button>
+            </div>
+          </div>
+        )}
         <PendingList
           items={pending}
           onRetry={(item) => {
