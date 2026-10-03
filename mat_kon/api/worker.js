@@ -127,6 +127,20 @@ export default {
       return fail(405, 'Method not allowed');
     }
 
+    // ---- תכנון ארוחות שבועי ----
+    if (parts[0] === 'plan' && parts.length === 1) {
+      const book = bookOf(user?.id);
+      if (request.method === 'GET') return pass(await internal(book, 'GET', '/plan'));
+      if (request.method === 'PUT') {
+        const { body, error } = await readJson(MAX_EDIT_BYTES);
+        if (error) return error;
+        const plan = cleanPlan(body.plan);
+        if (!plan) return fail(400, 'תכנון לא תקין');
+        return pass(await internal(book, 'PUT', '/plan', { plan }));
+      }
+      return fail(405, 'Method not allowed');
+    }
+
     // ---- רשימת קניות ----
     if (parts[0] === 'shopping') {
       const book = bookOf(user?.id);
@@ -301,6 +315,27 @@ function manualRecipe(body) {
     source: { url: null, key: `manual:${crypto.randomUUID()}`, kind: 'manual' },
     image: body.image || null,
   };
+}
+
+// תכנון: מפתח לכל יום (YYYY-MM-DD), בכל יום עד 12 ארוחות (מתכון מהספר או הערה חופשית)
+function cleanPlan(plan) {
+  if (!plan || typeof plan !== 'object' || Array.isArray(plan)) return null;
+  const days = Object.keys(plan).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().slice(-120);
+  const out = {};
+  for (const day of days) {
+    if (!Array.isArray(plan[day])) return null;
+    const meals = plan[day]
+      .slice(0, 12)
+      .map((m) => ({
+        id: String(m?.id || crypto.randomUUID()).slice(0, 64),
+        title: String(m?.title || '').trim().slice(0, 150),
+        ...(m?.recipeId ? { recipeId: String(m.recipeId).slice(0, 64) } : {}),
+        ...(m?.meal ? { meal: String(m.meal).slice(0, 30) } : {}),
+      }))
+      .filter((m) => m.title);
+    if (meals.length) out[day] = meals;
+  }
+  return out;
 }
 
 // רשימת קניות: [{id, text, checked, recipeId?, recipeTitle?, group?}]

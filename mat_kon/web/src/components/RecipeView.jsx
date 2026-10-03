@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react';
 import {
   ArrowRight, Camera, Check, ChefHat, Clock, ExternalLink, Heart, ImagePlus, Info, Loader2, MessageCircle, Minus, PenLine, Pencil, PlayCircle,
-  Plus, RotateCw, Share2, ShoppingCart, Trash2, Users,
+  CalendarPlus, Plus, RotateCw, Share2, ShoppingCart, Trash2, Users, X,
 } from 'lucide-react';
 import CookMode from './CookMode';
 import { baseServings, formatAmount, scaleSections } from '../lib/scale';
 import { thumbnail } from '../lib/image';
+import { DAY_NAMES, MEALS, dateKey, shortDate } from '../lib/plan';
 import { CATEGORIES } from '../lib/categories';
 import { CATEGORY_EMOJI, VIDEO_LABEL, isVideo, recipeAsText, sectionsToText, shortUrl, textToSections } from '../lib/recipes';
 import { usePersistentState } from '../lib/storage';
 
-export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDelete, onAddToShopping }) {
+export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDelete, onAddToShopping, onAddToPlan }) {
   const [editing, setEditing] = useState(false);
+  const [planning, setPlanning] = useState(false);
   const [cooking, setCooking] = useState(false);
   // מספר מנות: מכפיל לכמויות, נשמר לכל מתכון במכשיר
   const [factor, setFactor] = usePersistentState(`matkon_factor_${recipe.id}`, 1);
@@ -66,12 +68,24 @@ export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDele
   return (
     <div className="min-h-screen pb-16">
       {cooking && <CookMode recipe={recipe} ingredients={ingredients} onClose={() => setCooking(false)} />}
+      {planning && (
+        <DayPicker
+          onClose={() => setPlanning(false)}
+          onPick={(day, label, meal) => {
+            onAddToPlan(day, label, meal);
+            setPlanning(false);
+          }}
+        />
+      )}
       <div className="sticky top-0 z-10 bg-[#fffbf5]/90 backdrop-blur border-b border-stone-100 pt-[env(safe-area-inset-top)]">
         <div className="max-w-2xl mx-auto px-2 h-14 flex items-center gap-1">
           <button onClick={onBack} className="p-2 rounded-full hover:bg-stone-100" aria-label="חזרה">
             <ArrowRight size={22} />
           </button>
           <div className="flex-1 truncate font-bold">{recipe.title}</div>
+          <button onClick={() => setPlanning(true)} className="p-2 rounded-full hover:bg-stone-100" aria-label="הוספה לתכנון השבועי" title="הוספה לתכנון השבועי">
+            <CalendarPlus size={21} />
+          </button>
           <button onClick={() => onUpdate({ favorite: !recipe.favorite })} className="p-2 rounded-full hover:bg-stone-100" aria-label="מועדף" title="מועדף">
             <Heart size={21} className={recipe.favorite ? 'text-rose-500' : ''} fill={recipe.favorite ? 'currentColor' : 'none'} />
           </button>
@@ -449,6 +463,41 @@ function Editor({ recipe, onCancel, onSave }) {
           שמירה
         </button>
         <button onClick={onCancel} className="rounded-2xl bg-stone-100 px-5 font-medium">ביטול</button>
+      </div>
+    </div>
+  );
+}
+
+// לאיזה יום לשבץ את המתכון (השבועיים הקרובים)
+function DayPicker({ onClose, onPick }) {
+  const [meal, setMeal] = useState('ארוחת ערב');
+  const days = Array.from({ length: 14 }, (_, i) => {
+    const now = new Date();
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+    const label = i === 0 ? 'היום' : i === 1 ? 'מחר' : `יום ${DAY_NAMES[d.getDay()]}`;
+    return { key: dateKey(d), label, date: shortDate(d) };
+  });
+  return (
+    <div className="fixed inset-0 z-30 bg-black/40 flex items-end sm:items-center justify-center" onClick={onClose}>
+      <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-lg p-4 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-bold text-lg">מתי מבשלים?</h2>
+          <button onClick={onClose} className="p-1 text-stone-400" aria-label="סגירה"><X size={20} /></button>
+        </div>
+        <div className="flex gap-2 mb-3 overflow-x-auto no-scrollbar">
+          {MEALS.map((m) => (
+            <button key={m} onClick={() => setMeal(m)} className={`shrink-0 rounded-full px-3 py-1 text-sm border ${meal === m ? 'bg-orange-500 border-orange-500 text-white' : 'border-stone-200'}`}>
+              {m}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {days.map((d) => (
+            <button key={d.key} onClick={() => onPick(d.key, d.label, meal)} className="rounded-xl border border-stone-200 py-2.5 hover:bg-orange-50">
+              <span className="font-medium">{d.label}</span> <span className="text-xs text-stone-400">{d.date}</span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -349,3 +349,19 @@ test('shopping list: saved per book, cleaned, and organized by the agent', async
   assert.match(apiCalls.at(-1).messages[0].content, /- 2 כוסות קמח\n- 1 כוס קמח/);
   assert.equal((await call('POST', '/shopping/organize', { items: [] })).status, 400);
 });
+
+test('weekly plan: saved per book and cleaned', async () => {
+  assert.deepEqual((await (await call('GET', '/plan')).json()).plan, {});
+  const plan = {
+    '2026-10-04': [{ id: 'm1', recipeId: 'r1', title: 'שקשוקה', meal: 'ארוחת ערב' }, { title: '' }, { title: 'ארוחה בחוץ' }],
+    '2026-10-05': [],
+    'not-a-date': [{ title: 'x' }],
+  };
+  const saved = (await (await call('PUT', '/plan', { plan })).json()).plan;
+  assert.deepEqual(Object.keys(saved), ['2026-10-04']);
+  assert.equal(saved['2026-10-04'].length, 2);
+  assert.deepEqual(saved['2026-10-04'][0], { id: 'm1', title: 'שקשוקה', recipeId: 'r1', meal: 'ארוחת ערב' });
+  assert.equal((await (await call('GET', '/plan')).json()).plan['2026-10-04'][1].title, 'ארוחה בחוץ');
+  assert.equal((await call('PUT', '/plan', { plan: [] })).status, 400);
+  assert.equal((await call('PUT', '/plan', { plan: { '2026-10-04': 'x' } })).status, 400);
+});

@@ -14,6 +14,17 @@ export class RecipeBook {
     const url = new URL(request.url);
     const id = url.pathname.split('/')[2] || '';
 
+    // תכנון הארוחות של הספר: { "2026-10-04": [{ id, recipeId?, title, note? }] }
+    if (url.pathname === '/plan') {
+      if (request.method === 'GET') return json({ plan: (await this.storage.get('plan')) || {} });
+      if (request.method === 'PUT') {
+        const { plan } = await request.json();
+        await this.storage.put('plan', plan);
+        return json({ plan });
+      }
+      return json({ error: 'method not allowed' }, 405);
+    }
+
     // רשימת הקניות של הספר
     if (url.pathname === '/shopping') {
       if (request.method === 'GET') return json({ items: (await this.storage.get('shopping')) || [] });

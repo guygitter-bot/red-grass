@@ -60,3 +60,7 @@ export const addManualRecipe = (s, recipe) => api(s, 'POST', '/recipes/manual', 
 export const getShopping = (s) => api(s, 'GET', '/shopping').then((d) => d.items);
 export const putShopping = (s, items) => api(s, 'PUT', '/shopping', { items }).then((d) => d.items);
 export const organizeShopping = (s, items) => api(s, 'POST', '/shopping/organize', { items }).then((d) => d.groups);
+
+// תכנון ארוחות שבועי
+export const getPlan = (s) => api(s, 'GET', '/plan').then((d) => d.plan);
+export const putPlan = (s, plan) => api(s, 'PUT', '/plan', { plan }).then((d) => d.plan);

@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Heart, LogOut, MessageCircle, PlusCircle, Search, ShoppingCart, UserPlus, X } from 'lucide-react';
+import { Heart, LogOut, MessageCircle, PlusCircle, Search, UserPlus, X } from 'lucide-react';
 import Auth from './components/Auth';
 import AddLink from './components/AddLink';
 import ImportView from './components/ImportView';
 import NewRecipeView from './components/NewRecipeView';
 import ShoppingView from './components/ShoppingView';
+import PlanView from './components/PlanView';
+import FridgeView from './components/FridgeView';
+import BottomNav from './components/BottomNav';
+import { prunePlan } from './lib/plan';
+import { scaleSections } from './lib/scale';
+import { loadJson } from './lib/storage';
 import InvitesView from './components/InvitesView';
 import Paywall from './components/Paywall';
 import PendingList from './components/PendingList';
@@ -12,7 +18,8 @@ import RecipeCard from './components/RecipeCard';
 import RecipeView from './components/RecipeView';
 import { CATEGORIES } from './lib/categories';
 import {
-  addRecipe, addTextRecipe, deleteRecipe, getMe, getShopping, listRecipes, logout as apiLogout, putShopping, refreshRecipe, updateRecipe,
+  addRecipe, addTextRecipe, deleteRecipe, getMe, getPlan, getShopping, listRecipes, logout as apiLogout, putPlan, putShopping, refreshRecipe,
+  updateRecipe,
 } from './lib/api';
 import { CATEGORY_EMOJI, countByCategory, filterRecipes, freeLeft, linkFromShare, parseAuthHash } from './lib/recipes';
 import { usePersistentState } from './lib/storage';
@@ -38,6 +45,8 @@ const route = () => {
   if (h === '#/invites') return { view: 'invites' };
   if (h === '#/shopping') return { view: 'shopping' };
   if (h === '#/new') return { view: 'new' };
+  if (h === '#/plan') return { view: 'plan' };
+  if (h === '#/fridge') return { view: 'fridge' };
   if (h.startsWith('#/import')) return { view: 'import' };
   const id = (h.match(/^#\/r\/([\w-]+)/) || [])[1];
   return id ? { view: 'recipe', id } : { view: 'home' };
@@ -52,6 +61,9 @@ export default function App() {
   // רשימת הקניות: נשמרת בשרת (משותפת לכל המכשירים של אותו ספר) ומקומית לתצוגה מהירה
   const [shopping, setShopping] = usePersistentState('matkon_shopping', []);
   const shoppingTimer = useRef(null);
+  // תכנון ארוחות שבועי (נשמר בשרת, כמו רשימת הקניות)
+  const [plan, setPlan] = usePersistentState('matkon_plan', {});
+  const planTimer = useRef(null);
   // מכשיר שנרשם פעם מקישור הזמנה נשאר מכשיר של משתמש מוזמן, גם אחרי יציאה
   const [guestDevice, setGuestDevice] = usePersistentState('matkon_guest', false);
   const [auth, setAuth] = useState(() => {
@@ -100,6 +112,7 @@ export default function App() {
       }
       setRecipes(await listRecipes(session));
       getShopping(session).then(setShopping).catch(() => {});
+      getPlan(session).then(setPlan).catch(() => {});
       setLoadError('');
     } catch (e) {
       if (e.status === 401) signOut();
@@ -121,6 +134,29 @@ export default function App() {
     },
     [session, setShopping],
   );
+
+  const savePlan = useCallback(
+    (next) => {
+      const pruned = prunePlan(next);
+      setPlan(pruned);
+      clearTimeout(planTimer.current);
+      planTimer.current = setTimeout(() => {
+        putPlan(session, pruned).catch((e) => setToast(`התכנון לא נשמר: ${e.message}`));
+      }, 600);
+    },
+    [session, setPlan],
+  );
+
+  // מצרכים של מתכון לרשימת הקניות, לפי מספר המנות שנבחר לו (בלי כפילויות של פריטים פתוחים)
+  const shoppingWith = (list, recipe, lines) => {
+    const have = new Set(list.filter((i) => i.recipeId === recipe.id && !i.checked).map((i) => i.text));
+    const fresh = lines.filter((l) => !have.has(l));
+    return {
+      list: [...list, ...fresh.map((text) => ({ id: `${Date.now()}-${Math.random()}`, text, checked: false, recipeId: recipe.id, recipeTitle: recipe.title }))],
+      added: fresh.length,
+    };
+  };
+  const scaledLines = (recipe) => scaleSections(recipe.ingredients, loadJson(`matkon_factor_${recipe.id}`, 1)).flatMap((s) => s.items);
 
   const upsert = useCallback(
     (recipe) => setRecipes((list) => [recipe, ...list.filter((r) => r.id !== recipe.id)]),
@@ -186,11 +222,49 @@ export default function App() {
 
   if (nav.view === 'invites' && isOwner) return <InvitesView onBack={back} />;
 
+  const openShopping = shopping.filter((i) => !i.checked).length;
+
   if (nav.view === 'shopping') {
     return (
       <>
         <ShoppingView session={session} items={shopping} onChange={saveShopping} onBack={() => open(null)} onToast={setToast} />
         {toast && <Toast text={toast} />}
+        <BottomNav view="shopping" shoppingCount={openShopping} />
+      </>
+    );
+  }
+
+  if (nav.view === 'plan') {
+    return (
+      <>
+        <PlanView
+          plan={plan}
+          recipes={recipes}
+          onChange={savePlan}
+          onShopWeek={(weekRecipes) => {
+            let list = shopping;
+            let added = 0;
+            for (const r of weekRecipes) {
+              const res = shoppingWith(list, r, scaledLines(r));
+              list = res.list;
+              added += res.added;
+            }
+            saveShopping(list);
+            setToast(added ? `נוספו ${added} מצרכים לרשימת הקניות` : 'המצרכים כבר ברשימה');
+            window.location.hash = '#/shopping';
+          }}
+        />
+        {toast && <Toast text={toast} />}
+        <BottomNav view="plan" shoppingCount={openShopping} />
+      </>
+    );
+  }
+
+  if (nav.view === 'fridge') {
+    return (
+      <>
+        <FridgeView recipes={recipes} />
+        <BottomNav view="fridge" shoppingCount={openShopping} />
       </>
     );
   }
@@ -255,13 +329,13 @@ export default function App() {
           setToast('המתכון עודכן מהמקור');
         }}
         onAddToShopping={(lines) => {
-          const have = new Set(shopping.filter((i) => i.recipeId === current.id && !i.checked).map((i) => i.text));
-          const fresh = lines.filter((l) => !have.has(l));
-          saveShopping([
-            ...shopping,
-            ...fresh.map((text) => ({ id: `${Date.now()}-${Math.random()}`, text, checked: false, recipeId: current.id, recipeTitle: current.title })),
-          ]);
-          setToast(fresh.length ? `נוספו ${fresh.length} מצרכים לרשימת הקניות` : 'המצרכים כבר ברשימה');
+          const { list, added } = shoppingWith(shopping, current, lines);
+          saveShopping(list);
+          setToast(added ? `נוספו ${added} מצרכים לרשימת הקניות` : 'המצרכים כבר ברשימה');
+        }}
+        onAddToPlan={(day, dayLabel, meal) => {
+          savePlan({ ...plan, [day]: [...(plan[day] || []), { id: `${Date.now()}`, recipeId: current.id, title: current.title, meal }] });
+          setToast(`נוסף לתכנון של ${dayLabel}`);
         }}
         onDelete={async () => {
           await deleteRecipe(session, current.id);
@@ -274,7 +348,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen pb-16">
+    <div className="min-h-screen pb-24">
       {paywall && <Paywall user={user} paymentUrl={paywall.paymentUrl} onClose={() => setPaywall(null)} />}
       <header className="bg-gradient-to-bl from-orange-500 to-amber-500 text-white px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-5 rounded-b-3xl shadow-sm">
         <div className="max-w-3xl mx-auto">
@@ -286,14 +360,6 @@ export default function App() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-            <a href="#/shopping" className="relative p-2 rounded-full bg-white/15 hover:bg-white/25" aria-label="רשימת קניות" title="רשימת קניות">
-              <ShoppingCart size={20} />
-              {shopping.some((i) => !i.checked) && (
-                <span className="absolute -top-1 -left-1 min-w-5 h-5 px-1 rounded-full bg-white text-orange-600 text-xs font-bold flex items-center justify-center">
-                  {shopping.filter((i) => !i.checked).length}
-                </span>
-              )}
-            </a>
             {isOwner ? (
               <a href="#/invites" className="flex items-center gap-1.5 rounded-full bg-white/15 hover:bg-white/25 px-3 py-2 text-sm font-medium">
                 <UserPlus size={18} /> <span className="hidden sm:inline">הזמנות</span>
@@ -404,6 +470,7 @@ export default function App() {
       </main>
 
       {toast && <Toast text={toast} />}
+      <BottomNav view="home" shoppingCount={openShopping} />
     </div>
   );
 }
