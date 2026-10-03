@@ -129,6 +129,7 @@ export default function InvitesView({ onBack }) {
                   <span className="text-stone-600">
                     {inv.user.added} מתכונים
                     {inv.user.plan === 'paid' ? '' : ` מתוך ${inv.user.freeLimit} חינמיים`}
+                    {inv.user.members > 0 && ` · ספר משותף עם ${inv.user.members + 1} אנשים`}
                   </span>
                   <button
                     onClick={() => togglePlan(inv.user)}

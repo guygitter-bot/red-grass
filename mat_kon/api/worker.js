@@ -65,6 +65,8 @@ export default {
     const parts = url.pathname.split('/').filter(Boolean);
     const accounts = env.ACCOUNTS.get(env.ACCOUNTS.idFromName('accounts'));
     const bookOf = (userId) => env.BOOK.get(env.BOOK.idFromName(userId ? `user:${userId}` : 'book'));
+    // הספר שהמשתמש עובד עליו: שלו, ספר משותף של בעל ספר אחר, או הספר של בעל האפליקציה
+    const bookFor = (u) => (!u || u.bookId === 'owner' ? bookOf(null) : bookOf(u.bookId || u.id));
 
     const readJson = async (limit = MAX_SMALL_BYTES) => {
       const text = await request.text();
@@ -79,11 +81,12 @@ export default {
     };
 
     // ---- הרשמה וכניסה (בלי זיהוי) ----
-    if (request.method === 'POST' && ['invite', 'register', 'login', 'logout'].includes(parts[0]) && parts.length === 1) {
+    if (request.method === 'POST' && ['invite', 'join', 'register', 'login', 'logout'].includes(parts[0]) && parts.length === 1) {
       const { body, error } = await readJson();
       if (error) return error;
       if (parts[0] === 'logout') body.session = bearer(request);
-      return pass(await internal(accounts, 'POST', parts[0] === 'invite' ? '/invite/check' : `/${parts[0]}`, body));
+      const path = { invite: '/invite/check', join: '/join/check' }[parts[0]] || `/${parts[0]}`;
+      return pass(await internal(accounts, 'POST', path, body));
     }
 
     // ---- הספר של בעל האפליקציה: פתוח, או נעול (רק במכשירים שנכנסו עם סיסמת הבעלים / חשבון הגוגל שלו) ----
@@ -116,7 +119,7 @@ export default {
       const profile = await verifyGoogle(String(body.credential || ''), googleClientId);
       if (!profile) return fail(401, 'לא הצלחתי לאמת את חשבון הגוגל. נסו שוב.');
       if (ownerEmail && profile.email.toLowerCase() === ownerEmail) return pass(await internal(accounts, 'POST', '/owner-session', {}));
-      return pass(await internal(accounts, 'POST', '/google', { ...profile, token: body.token || '' }));
+      return pass(await internal(accounts, 'POST', '/google', { ...profile, token: body.token || '', join: body.join || '' }));
     }
 
     // ---- מי שולח: בעל האפליקציה (בלי טוקן, או טוקן של בעלים) או משתמש שהוזמן ----
@@ -148,7 +151,7 @@ export default {
     if (ownerLocked && !signedIn) return fail(401, 'צריך להיכנס', { login: true });
 
     // הקטגוריות של הספר: הקבועות ואלה שהמשתמש הוסיף
-    const bookStub = () => bookOf(user?.id);
+    const bookStub = () => bookFor(user);
     const customCategories = async () => (await (await internal(bookStub(), 'GET', '/categories')).json()).custom || [];
     const allCategories = async () => [...CATEGORIES, ...(await customCategories())];
 
@@ -191,6 +194,19 @@ export default {
       }
     }
 
+    // ---- שיתוף הספר: בעל הספר (בעל האפליקציה או מי שנרשם מהזמנה) מצרף בני משפחה ----
+    if (parts[0] === 'members') {
+      if (user && user.role !== 'holder') return fail(403, 'רק בעל הספר יכול לנהל את השיתוף');
+      const bookId = user ? user.id : 'owner';
+      if (parts.length === 1 && request.method === 'GET') return pass(await internal(accounts, 'POST', '/members', { bookId }));
+      if (parts.length === 1 && request.method === 'POST') return pass(await internal(accounts, 'POST', '/members/invite', { bookId }));
+      if (parts.length === 2 && request.method === 'DELETE') return pass(await internal(accounts, 'POST', '/members/remove', { bookId, userId: parts[1] }));
+      if (parts.length === 3 && parts[1] === 'links' && request.method === 'DELETE') {
+        return pass(await internal(accounts, 'POST', '/members/cancel', { bookId, token: parts[2] }));
+      }
+      return fail(405, 'Method not allowed');
+    }
+
     // ---- ניהול הזמנות: רק בעל האפליקציה ----
     if (parts[0] === 'invites' || parts[0] === 'users') {
       if (user) return fail(403, 'רק לבעל האפליקציה');
@@ -217,7 +233,7 @@ export default {
 
     // ---- תכנון ארוחות שבועי ----
     if (parts[0] === 'plan' && parts.length === 1) {
-      const book = bookOf(user?.id);
+      const book = bookFor(user);
       if (request.method === 'GET') return pass(await internal(book, 'GET', '/plan'));
       if (request.method === 'PUT') {
         const { body, error } = await readJson(MAX_EDIT_BYTES);
@@ -231,7 +247,7 @@ export default {
 
     // ---- המלאי בבית: מקרר ומזווה ----
     if (parts[0] === 'pantry') {
-      const book = bookOf(user?.id);
+      const book = bookFor(user);
       if (parts.length === 1 && request.method === 'GET') return pass(await internal(book, 'GET', '/pantry'));
       if (parts.length === 1 && request.method === 'PUT') {
         const { body, error } = await readJson(MAX_EDIT_BYTES);
@@ -291,7 +307,7 @@ export default {
 
     // ---- רשימת קניות ----
     if (parts[0] === 'shopping') {
-      const book = bookOf(user?.id);
+      const book = bookFor(user);
       if (parts.length === 1 && request.method === 'GET') return pass(await internal(book, 'GET', '/shopping'));
       if (parts.length === 1 && request.method === 'PUT') {
         const { body, error } = await readJson(MAX_EDIT_BYTES);
@@ -319,7 +335,7 @@ export default {
     if (parts[0] !== 'recipes' || parts.length > 3) return fail(404, 'Not found');
     const id = parts[1];
     if (id && !/^[\w-]{1,64}$/.test(id)) return fail(404, 'Not found');
-    const book = bookOf(user?.id);
+    const book = bookFor(user);
 
     // מתכון שנכתב ידנית: בלי AI ובלי מכסה
     if (request.method === 'POST' && parts.length === 2 && id === 'manual') {

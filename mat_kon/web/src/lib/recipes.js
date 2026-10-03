@@ -119,6 +119,8 @@ export const CATEGORY_EMOJI = {
 export function parseAuthHash(hash) {
   const invite = String(hash || '').match(/[#&]invite=([\w-]{10,})/);
   if (invite) return { mode: 'register', token: invite[1] };
+  const join = String(hash || '').match(/[#&]join=([\w-]{10,})/);
+  if (join) return { mode: 'join', token: join[1] };
   if (/^#login\b/.test(String(hash || ''))) return { mode: 'login' };
   return null;
 }

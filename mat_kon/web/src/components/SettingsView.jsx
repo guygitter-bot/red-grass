@@ -1,10 +1,10 @@
 import { useRef, useState } from 'react';
-import { ArrowRight, Download, Loader2, Upload, UserPlus } from 'lucide-react';
+import { ArrowRight, Download, Loader2, Upload, UserPlus, Users } from 'lucide-react';
 import { restoreBackup } from '../lib/api';
 import { backupFile } from '../lib/recipes';
 
 // הגדרות: גיבוי ושחזור, הזמנות
-export default function SettingsView({ session, isOwner, recipes, custom, shopping, plan, onRestored, onBack, onToast }) {
+export default function SettingsView({ session, isOwner, user, recipes, custom, shopping, plan, onRestored, onBack, onToast }) {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const fileRef = useRef(null);
@@ -60,6 +60,22 @@ export default function SettingsView({ session, isOwner, recipes, custom, shoppi
             <UserPlus className="text-orange-500" size={22} />
             <span className="flex-1 font-bold">הזמנות</span>
             <span className="text-sm text-stone-500">קישורים לספר מתכונים נפרד</span>
+          </a>
+        )}
+
+        {user?.role === 'member' ? (
+          <div className="flex items-center gap-3 rounded-2xl bg-white shadow-sm p-4">
+            <Users className="text-orange-500" size={22} />
+            <span className="flex-1">
+              <span className="block font-bold">ספר משותף</span>
+              <span className="text-sm text-stone-500">אתם עובדים על ספר המתכונים של {user.bookName}</span>
+            </span>
+          </div>
+        ) : (isOwner || user) && (
+          <a href="#/share" className="flex items-center gap-3 rounded-2xl bg-white shadow-sm p-4">
+            <Users className="text-orange-500" size={22} />
+            <span className="flex-1 font-bold">שיתוף הספר</span>
+            <span className="text-sm text-stone-500">בן/בת זוג ובני משפחה</span>
           </a>
         )}
 

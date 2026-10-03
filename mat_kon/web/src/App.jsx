@@ -15,6 +15,7 @@ import { scaleSections } from './lib/scale';
 import { loadJson, saveJson } from './lib/storage';
 import { mergePantry } from './lib/fridge';
 import InvitesView from './components/InvitesView';
+import ShareView from './components/ShareView';
 import Paywall from './components/Paywall';
 import PendingList from './components/PendingList';
 import RecipeCard from './components/RecipeCard';
@@ -46,6 +47,7 @@ const AUTH_LINK = takeAuthLink();
 const route = () => {
   const h = window.location.hash;
   if (h === '#/invites') return { view: 'invites' };
+  if (h === '#/share') return { view: 'share' };
   if (h === '#/shopping') return { view: 'shopping' };
   if (h.startsWith('#/new')) return { view: 'new', mode: h.includes('manual') ? 'manual' : 'photo' };
   if (h === '#/plan') return { view: 'plan' };
@@ -77,7 +79,7 @@ export default function App() {
   // מכשיר של בעל האפליקציה שנכנס עם סיסמת הבעלים / חשבון הגוגל שלו (כשהספר נעול)
   const [ownerDevice, setOwnerDevice] = usePersistentState('matkon_owner_device', false);
   const [auth, setAuth] = useState(() => {
-    if (AUTH_LINK && !(AUTH_LINK.mode === 'register' && session)) return AUTH_LINK;
+    if (AUTH_LINK && !(['register', 'join'].includes(AUTH_LINK.mode) && session)) return AUTH_LINK;
     return guestDevice && !session ? { mode: 'login' } : null;
   });
   const [paywall, setPaywall] = useState(null);
@@ -272,6 +274,7 @@ export default function App() {
   }
 
   if (nav.view === 'invites' && isOwner) return <InvitesView onBack={back} />;
+  if (nav.view === 'share') return <ShareView session={session} user={ownerDevice ? null : user} onBack={back} />;
 
   const openShopping = shopping.filter((i) => !i.checked).length;
 
@@ -317,6 +320,7 @@ export default function App() {
         <SettingsView
           session={session}
           isOwner={isOwner}
+          user={ownerDevice ? null : user}
           recipes={recipes}
           custom={custom}
           shopping={shopping}
