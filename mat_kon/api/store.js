@@ -1,3 +1,5 @@
+import { buildRecipe, failure } from './jobs.js';
+import { trackedClient } from './deps.js';
 // ספר המתכונים: Durable Object אחד שמחזיק את כל המתכונים (כל מתכון במפתח r:<id>).
 
 const PREFIX = 'r:';
@@ -12,8 +14,55 @@ const LIST_LIMITS = { shopping: 500, pantry: 400, plan: 1500 };
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
 
 export class RecipeBook {
-  constructor(state) {
+  constructor(state, env) {
+    this.state = state;
     this.storage = state.storage;
+    this.env = env || {};
+  }
+
+  // תמונה שהועלתה לספר הזה (קישור /img/<book>/<id>) – נמחקת כשהמתכון נמחק או שהתמונה הוחלפה
+  async dropImage(image) {
+    const m = typeof image === 'string' && image.match(/\/img\/[^/]+\/([0-9a-f-]{36})$/);
+    if (m) await this.storage.delete(`img:${m[1]}`);
+  }
+
+  // ---- עבודות ברקע: הוספת מתכון מקישור ממשיכה גם אם האפליקציה נסגרה ----
+  async alarm() {
+    const jobs = await this.storage.list({ prefix: 'job:' });
+    const now = Date.now();
+    for (const [key, job] of jobs) {
+      if (now - Date.parse(job.createdAt) > 86400000) {
+        await this.storage.delete(key); // עבודות ישנות (יום) נמחקות
+        continue;
+      }
+      if (job.status !== 'pending') continue;
+      await this.storage.put(key, { ...job, status: 'running' });
+      const done = await this.runJob(job);
+      const { input, categories, quota, ...rest } = job;
+      void input; void categories; void quota;
+      await this.storage.put(key, { ...rest, ...done, finishedAt: new Date().toISOString() });
+    }
+  }
+
+  async runJob(job) {
+    const self = (path, body) => this.fetch(new Request(`https://do${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }));
+    const accounts = this.env.ACCOUNTS && this.env.ACCOUNTS.get(this.env.ACCOUNTS.idFromName('accounts'));
+    const toAccounts = (path, body) => accounts?.fetch(new Request(`https://do${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })).catch(() => {});
+    const giveBack = () => job.quota && toAccounts('/quota/give', { userId: job.quota.userId });
+    const month = new Date().toISOString().slice(0, 7);
+    try {
+      const client = trackedClient(this.env, (u) => self('/costs/add', { month, ...u }));
+      const recipe = await buildRecipe(this.env, client, job.input, job.categories);
+      const res = await self('/recipes', recipe);
+      const data = await res.json();
+      if (!data.counted) await giveBack();
+      return { status: 'done', recipeId: data.recipe.id, title: data.recipe.title, category: data.recipe.category, updated: data.updated };
+    } catch (e) {
+      await giveBack();
+      await toAccounts('/errors/add', { where: 'job', message: String(e?.message || e).slice(0, 300), status: e?.status || null, user: job.quota?.userId || 'owner' });
+      const f = failure(e, { owner: job.owner });
+      return { status: 'error', error: f.error, code: f.status };
+    }
   }
 
   // אינדקס מקור -> מתכון (נבנה פעם אחת לספרים שנוצרו לפניו)
@@ -68,6 +117,50 @@ export class RecipeBook {
       return json(key === 'plan' ? { plan: value } : { items: value });
     }
 
+    // תמונות שהועלו: נשמרות כקובץ בינארי במפתח נפרד
+    if (url.pathname === '/img' && request.method === 'POST') {
+      const { type, data } = await request.json();
+      const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+      if (bytes.byteLength > 400 * 1024) return json({ error: 'too large' }, 413);
+      const imageId = crypto.randomUUID();
+      await this.storage.put(`img:${imageId}`, { type, bytes });
+      return json({ id: imageId });
+    }
+    if (url.pathname.startsWith('/img/') && request.method === 'GET') {
+      const img = await this.storage.get(`img:${url.pathname.slice(5)}`);
+      if (!img) return json({ error: 'not found' }, 404);
+      return new Response(img.bytes, { headers: { 'content-type': img.type } });
+    }
+
+    // עבודה חדשה ברקע / מצב עבודה
+    if (url.pathname === '/jobs' && request.method === 'POST') {
+      const { input, categories, quota, owner } = await request.json();
+      const job = { id: crypto.randomUUID(), status: 'pending', createdAt: new Date().toISOString(), link: input.link, input, categories, quota, owner };
+      await this.storage.put(`job:${job.id}`, job);
+      await this.storage.setAlarm(Date.now());
+      return json({ job: { id: job.id, status: job.status, link: job.link } }, 202);
+    }
+    if (url.pathname.startsWith('/jobs/') && request.method === 'GET') {
+      const job = await this.storage.get(`job:${url.pathname.slice(6)}`);
+      if (!job) return json({ error: 'not found' }, 404);
+      const { input, categories, quota, ...pub } = job;
+      void input; void categories; void quota;
+      return json({ job: pub });
+    }
+
+    // מעקב עלויות AI לפי חודש: טוקנים, חיפושים ופעולות
+    if (url.pathname === '/costs/add' && request.method === 'POST') {
+      const { month, input = 0, output = 0, searches = 0 } = await request.json();
+      const key = `costs:${month}`;
+      const c = (await this.storage.get(key)) || { ops: 0, calls: 0, input: 0, output: 0, searches: 0 };
+      Object.assign(c, { calls: c.calls + 1, input: c.input + input, output: c.output + output, searches: c.searches + searches });
+      await this.storage.put(key, c);
+      return json(c);
+    }
+    if (url.pathname.startsWith('/costs/') && request.method === 'GET') {
+      return json((await this.storage.get(`costs:${url.pathname.slice(7)}`)) || { ops: 0, calls: 0, input: 0, output: 0, searches: 0 });
+    }
+
     // תקציב יומי לפעולות AI של הספר: {day, limit, cost}. הבדיקה והספירה באותו צעד (בלי מרוץ)
     if (url.pathname === '/usage/take' && request.method === 'POST') {
       const { day, limit, cost = 1 } = await request.json();
@@ -76,6 +169,10 @@ export class RecipeBook {
       if (usage.used + cost > limit) return json({ error: 'limit', used: usage.used }, 429);
       usage.used += cost;
       await this.storage.put('usage', usage);
+      const costsKey = `costs:${day.slice(0, 7)}`;
+      const c = (await this.storage.get(costsKey)) || { ops: 0, calls: 0, input: 0, output: 0, searches: 0 };
+      c.ops += cost;
+      await this.storage.put(costsKey, c);
       return json({ used: usage.used, limit });
     }
 
@@ -191,11 +288,13 @@ export class RecipeBook {
       const edited = EDITABLE.filter((k) => k in patch && !['favorite', 'myNotes', 'rating'].includes(k));
       if (edited.length) next.edited = { ...(current.edited || {}), ...Object.fromEntries(edited.map((k) => [k, true])) };
       await this.storage.put(PREFIX + id, next);
+      if ('image' in patch && current.image !== next.image) await this.dropImage(current.image);
       return json({ recipe: next });
     }
 
     if (request.method === 'DELETE') {
       await this.storage.delete(PREFIX + id);
+      await this.dropImage(current.image);
       const key = sourceKey(current);
       if (key) await this.storage.delete(SRC + key);
       return json({ ok: true });
