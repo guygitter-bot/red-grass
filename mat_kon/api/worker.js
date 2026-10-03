@@ -10,7 +10,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { RecipeBook } from './store.js';
 import { Accounts, canAdd } from './accounts.js';
 import { gatherSource, normalizeUrl, sourceKind } from './source.js';
-import { NoRecipeError, extractRecipe, ideasFromPantry, organizeShopping, scanPantry, searchRecipes } from './extract.js';
+import { NoRecipeError, aiMessage, extractRecipe, ideasFromPantry, organizeShopping, scanPantry, searchRecipes } from './extract.js';
 import { findStores } from './stores.js';
 import { CATEGORIES } from './categories.js';
 
@@ -95,6 +95,13 @@ export default {
       user = (await res.json()).user;
     }
 
+    // שגיאה מה-AI: הודעה ברורה בעברית במקום השגיאה הגולמית
+    const aiFail = (e, message) => {
+      const friendly = aiMessage(e, { owner: !user });
+      if (friendly) return fail(503, friendly);
+      return fail(502, message);
+    };
+
     // בדיקה: מה השרת מצליח לקרוא מקישור (בלי AI). משמש את .github/workflows/mat-kon-probe.yml
     if (url.pathname === '/debug/source' && request.method === 'GET') {
       const link = normalizeUrl(url.searchParams.get('url'));
@@ -142,7 +149,7 @@ export default {
       try {
         return reply(200, { results: await searchRecipes(deps.anthropic(env), q) });
       } catch (e) {
-        return fail(502, e.message || 'החיפוש נכשל');
+        return aiFail(e, (!e.status && e.message) || 'החיפוש נכשל');
       }
     }
 
@@ -208,8 +215,9 @@ export default {
           });
           return reply(200, { items });
         } catch (e) {
+          if (aiMessage(e)) return aiFail(e);
           if (e.status === 400) return fail(400, 'לא הצלחתי לקרוא את התמונה. נסו תמונה ברורה יותר.');
-          return fail(502, e.message || 'לא הצלחתי לזהות מוצרים');
+          return aiFail(e, (!e.status && e.message) || 'לא הצלחתי לזהות מוצרים');
         }
       }
       // מתכונים ברשת לפי מה שיש בבית
@@ -222,7 +230,7 @@ export default {
         try {
           return reply(200, { results: await ideasFromPantry(deps.anthropic(env), items, { wish: String(body.wish || '').trim().slice(0, 200) }) });
         } catch (e) {
-          return fail(502, e.message || 'החיפוש נכשל');
+          return aiFail(e, (!e.status && e.message) || 'החיפוש נכשל');
         }
       }
       return fail(405, 'Method not allowed');
@@ -239,7 +247,7 @@ export default {
       try {
         return reply(200, await findStores({ lat, lon, items }, { fetch: deps.fetch, client: deps.anthropic(env), cheapersalKey: env.CHEAPERSAL_API_KEY }));
       } catch (e) {
-        return fail(502, e.message || 'לא הצלחתי למצוא חנויות');
+        return aiFail(e, (!e.status && e.message) || 'לא הצלחתי למצוא חנויות');
       }
     }
 
@@ -263,7 +271,7 @@ export default {
         try {
           return reply(200, { groups: await organizeShopping(deps.anthropic(env), items) });
         } catch (e) {
-          return fail(502, e.message || 'לא הצלחתי לסדר את הרשימה');
+          return aiFail(e, (!e.status && e.message) || 'לא הצלחתי לסדר את הרשימה');
         }
       }
       return fail(405, 'Method not allowed');
@@ -356,8 +364,9 @@ export default {
       } catch (e) {
         if (e instanceof NoRecipeError) return fail(422, e.message);
         console.error('extract failed', link || text.key, e);
+        if (aiMessage(e)) return aiFail(e);
         if (e.status === 400 && isAddPhoto) return fail(400, 'לא הצלחתי לקרוא את התמונות. נסו תמונה ברורה יותר.');
-        return fail(502, `לא הצלחתי להוציא מתכון: ${e.message || e}`);
+        return fail(502, e.status ? 'לא הצלחתי להוציא מתכון. נסו שוב.' : `לא הצלחתי להוציא מתכון: ${e.message || e}`);
       }
       const res = await internal(book, 'POST', '/recipes', recipe);
       const data = await res.json();

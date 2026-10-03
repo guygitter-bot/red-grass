@@ -1,6 +1,6 @@
 // "איפה לקנות": סופרים קרובים למיקום של המשתמש (OpenStreetMap), כמה יעלה לקנות בכל רשת את מה שחסר,
 // וקישור להזמנה אונליין כשיש לרשת אתר הזמנות.
-import { MODEL } from './extract.js';
+import { MODEL, aiMessage } from './extract.js';
 
 // רשתות מוכרות: איך לזהות אותן בשם/מותג ב-OpenStreetMap, ואתר ההזמנות שלהן
 export const CHAINS = [
@@ -365,7 +365,7 @@ export async function findStores({ lat, lon, items }, { fetch: fetchFn, client, 
       })))
         || (chainNames.length ? { ...(await estimatePrices(client, items, chainNames)), source: 'estimate' } : null);
     } catch (e) {
-      prices = { chains: [], note: e.message || 'לא הצלחתי להשוות מחירים', source: 'error' };
+      prices = { chains: [], note: aiMessage(e) || (!e.status && e.message) || 'לא הצלחתי להשוות מחירים', source: 'error' };
     }
   }
   return { stores, prices };
