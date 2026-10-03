@@ -27,3 +27,46 @@ jobs:
             jq . result.json 2>/dev/null || cat result.json
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: This branch's reading code, run from the GitHub runner
+        env:
+          LINK: ${{ inputs.url }}
+        run: |
+          node --input-type=module -e "
+            const { gatherSource } = await import('./mat_kon/api/source.js');
+            const s = await gatherSource(process.env.LINK);
+            console.log(JSON.stringify({ kind: s.kind, author: s.author, image: !!s.image, caption: s.description.slice(0, 700),
+              comments: s.comments.length, firstComments: s.comments.slice(0, 5), linked: s.linked.map((l) => l.url),
+              warnings: s.warnings, debug: s.debug }, null, 1));
+          "
+      - name: Raw Instagram pages from the GitHub runner (diagnostics)
+        if: contains(inputs.url, 'instagram.com')
+        env:
+          LINK: ${{ inputs.url }}
+        run: |
+          CODE=$(echo "$LINK" | sed -E 's#.*/(reel|reels|p|tv)/([A-Za-z0-9_-]+).*#\2#')
+          probe() {
+            echo "=== [$1] $2"
+            curl -sS -L -A "$1" -H 'accept-language: he-IL,he;q=0.9,en;q=0.8' -o page.html -w 'status=%{http_code} size=%{size_download} final=%{url_effective}\n' "$2" || true
+            grep -o '<title>[^<]*</title>' page.html | head -1 | cut -c1-200 || true
+            grep -oE '<meta[^>]+(og:description|og:title|name="description")[^>]*>' page.html | head -3 | cut -c1-600 || true
+            for M in edge_media_to_caption xdt_shortcode_media edge_media_to_parent_comment '"comments"' '"caption"' '"text":'; do
+              printf '%s=%s ' "$M" "$(grep -o "$M" page.html | wc -l)"
+            done
+            echo
+          }
+          GB='Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
+          for U in "https://www.instagram.com/p/$CODE/embed/captioned/" "https://www.instagram.com/reel/$CODE/"; do
+            probe "$GB" "$U"
+            echo '--- around edge_media_to_caption'
+            grep -o '.\{0,300\}edge_media_to_caption.\{0,900\}' page.html | head -2 | cut -c1-1300 || true
+            echo '--- around "caption"'
+            grep -o '.\{0,150\}"caption".\{0,600\}' page.html | head -3 | cut -c1-800 || true
+            echo '--- around comment'
+            grep -o '.\{0,150\}comment.\{0,500\}' page.html | grep -v -i 'commentsdisabled\|comment_count' | head -4 | cut -c1-700 || true
+          done
+          echo '=== uuinstagram'
+          curl -sS -L -A 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)' "https://www.uuinstagram.com/reel/$CODE/" | head -c 3000; echo

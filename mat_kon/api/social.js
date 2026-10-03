@@ -5,13 +5,15 @@ const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36';
 const MAX_COMMENTS = 60;
 const IG_APP_ID = '936619743392459';
+// לבוט של גוגל אינסטגרם מחזיר את הפוסט עם הכיתוב (לדפדפן רגיל/שרת – רק דף התחברות)
+export const GOOGLEBOT = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
 // מזהה השאילתה הציבורית של אינסטגרם לפוסט. אפשר להחליף בלי שינוי קוד (משתנה IG_DOC_ID ב-wrangler.toml).
 export const IG_DOC_ID = '8845758582119845';
 
 async function request(fetchFn, url, init = {}) {
   const res = await fetchFn(url, {
     ...init,
-    headers: { 'user-agent': UA, 'accept-language': 'he-IL,he;q=0.9,en;q=0.8', ...(init.headers || {}) },
+    headers: { 'user-agent': init.ua || UA, 'accept-language': 'he-IL,he;q=0.9,en;q=0.8', ...(init.headers || {}) },
     redirect: 'follow',
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -134,10 +136,37 @@ const decode = (s) =>
     return ENT[e.toLowerCase()] ?? all;
   });
 
+// תווי כיווניות וטאבים שאינסטגרם מוסיף בתחילת הכיתוב
+export const cleanCaption = (t) => String(t || '').replace(/[\u2066-\u2069\u200e\u200f]/g, '').replace(/^[\s\t]+/, '').trim();
+
+// JSON שמוטמע בדף כמחרוזת (\"key\":\"value\"): מורידים רמת escape אחת וקוראים את אובייקט הפוסט
+export function readEscapedMedia(html, into) {
+  for (const key of ['\\"xdt_shortcode_media\\"', '\\"shortcode_media\\"']) {
+    const at = html.indexOf(key);
+    if (at < 0) continue;
+    const window = html.slice(at, at + 2_000_000).replace(/\\(["\\/])/g, '$1');
+    const start = window.indexOf('{');
+    const media = start >= 0 ? balancedJson(window, start) : null;
+    if (media) {
+      readInstagramJson({ shortcode_media: media }, into);
+      return into;
+    }
+  }
+  // לפחות הכיתוב
+  const at = html.indexOf('\\"edge_media_to_caption\\"');
+  if (at >= 0) {
+    const window = html.slice(at, at + 200_000).replace(/\\(["\\/])/g, '$1');
+    const m = window.match(/"edge_media_to_caption":\{"edges":\[\{"node":\{"text":"((?:[^"\\]|\\.)*)"/);
+    const text = m ? tryJson(`"${m[1]}"`) : null;
+    if (text && text.length > into.caption.length) into.caption = text;
+  }
+  return into;
+}
+
 // og:description של אינסטגרם: '123 likes, 4 comments - user on March 1, 2026: "הכיתוב"'
 export function captionFromOgDescription(desc) {
-  const m = String(desc || '').match(/:\s*["“](.*)["”]\s*\.?\s*$/s);
-  return m ? m[1].trim() : '';
+  const m = String(desc || '').replace(/[\u200e\u200f]/g, '').match(/:\s*["“]([\s\S]*?)["”]?\s*\.?\s*$/);
+  return m ? cleanCaption(m[1]) : '';
 }
 
 export async function instagram(fetchFn, url, { docId = IG_DOC_ID } = {}) {
@@ -145,7 +174,26 @@ export async function instagram(fetchFn, url, { docId = IG_DOC_ID } = {}) {
   const into = { caption: '', author: '', image: null, comments: [], warnings: [], tried: [] };
   if (!code) return into;
   const attempts = [
-    ['embed', async () => readInstagramEmbed(await request(fetchFn, `https://www.instagram.com/p/${code}/embed/captioned/`), into)],
+    ['embed-googlebot', async () => {
+      const html = await request(fetchFn, `https://www.instagram.com/p/${code}/embed/captioned/`, { ua: GOOGLEBOT });
+      readEscapedMedia(html, into);
+      readInstagramEmbed(html, into);
+    }],
+    ['page-googlebot', async () => {
+      if (into.caption) return;
+      // בדף עצמו יש גם כיתובים של פוסטים קשורים, לכן לוקחים רק את ה-og של הפוסט הזה
+      const html = await request(fetchFn, `https://www.instagram.com/reel/${code}/`, { ua: GOOGLEBOT });
+      const og = (name) => decode((html.match(new RegExp(`<meta[^>]+property="og:${name}"[^>]+content="([^"]*)"`)) || [])[1] || '');
+      const caption = captionFromOgDescription(og('description'));
+      if (caption.length > into.caption.length) into.caption = caption;
+      into.image = into.image || og('image') || null;
+      const user = og('url').match(/instagram\.com\/([\w.]+)\/(?:reel|p)\//);
+      if (user && !into.author) into.author = user[1];
+    }],
+    ['embed', async () => {
+      if (into.caption) return;
+      readInstagramEmbed(await request(fetchFn, `https://www.instagram.com/p/${code}/embed/captioned/`), into);
+    }],
     ['graphql', async () => {
       const body = new URLSearchParams({
         variables: JSON.stringify({ shortcode: code, fetch_tagged_user_count: null, hoisted_comment_id: null, hoisted_reply_id: null }),
@@ -184,6 +232,7 @@ export async function instagram(fetchFn, url, { docId = IG_DOC_ID } = {}) {
     // יש כיתוב וגם תגובות - מספיק
     if (into.caption && into.comments.length >= 5) break;
   }
+  into.caption = cleanCaption(into.caption);
   into.comments = sortComments(into.comments);
   return into;
 }
