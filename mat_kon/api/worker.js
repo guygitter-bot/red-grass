@@ -235,7 +235,7 @@ export default {
       const lat = Number(body.lat);
       const lon = Number(body.lon);
       if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return fail(400, 'מיקום לא תקין');
-      const items = strList(body.items, 40).map((i) => i.slice(0, 120));
+      const items = [...new Set(strList(body.items, 60).map((i) => i.slice(0, 120)))];
       try {
         return reply(200, await findStores({ lat, lon, items }, { fetch: deps.fetch, client: deps.anthropic(env), cheapersalKey: env.CHEAPERSAL_API_KEY }));
       } catch (e) {

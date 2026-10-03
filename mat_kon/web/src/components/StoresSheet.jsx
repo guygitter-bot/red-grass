@@ -54,7 +54,7 @@ export default function StoresSheet({ session, items, title, onClose }) {
         </div>
 
         {items.length > 0 && (
-          <p className="text-sm text-stone-600 mb-3 leading-relaxed">
+          <p className="text-sm text-stone-600 mb-3 leading-relaxed line-clamp-3">
             <span className="font-bold">צריך לקנות:</span> {items.join(' · ')}
           </p>
         )}

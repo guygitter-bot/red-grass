@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Camera, Check, ExternalLink, Globe, ImagePlus, Loader2, Plus, ScanLine, ShoppingBag, ShoppingCart, X } from 'lucide-react';
+import { Camera, Check, ExternalLink, Globe, ImagePlus, Loader2, Plus, ScanLine, ShoppingCart, X } from 'lucide-react';
 import { pantryIdeas, scanPantry } from '../lib/api';
 import { matchRecipes, mergePantry } from '../lib/fridge';
 import { dataUrlToPart, photoForReading } from '../lib/image';
 import { emojiOf, hostOf } from '../lib/recipes';
 import { usePersistentState } from '../lib/storage';
-import StoresSheet from './StoresSheet';
 
 const PLACES = [
   ['fridge', 'מקרר', '🧊'],
@@ -19,7 +18,6 @@ export default function InventoryView({ session, recipes, pantry, onChange, onAd
   const [text, setText] = useState('');
   const [scan, setScan] = useState(null); // { busy, mode, items?, error? }
   const [source, setSource] = useState('book'); // book | web
-  const [stores, setStores] = useState(null); // { items, title }
 
   const here = pantry.filter((i) => i.place === place);
   const names = useMemo(() => pantry.map((i) => i.name), [pantry]);
@@ -195,9 +193,6 @@ export default function InventoryView({ session, recipes, pantry, onChange, onAd
                           <>
                             <p className="mt-1.5 text-sm text-stone-500 line-clamp-2">חסר: {missing.join(' · ')}</p>
                             <div className="mt-2 flex flex-wrap gap-2 text-sm">
-                              <button onClick={() => setStores({ items: missing, title: recipe.title })} className="rounded-full bg-orange-500 text-white px-3 py-1 font-medium inline-flex items-center gap-1">
-                                <ShoppingBag size={14} /> איפה לקנות הכי זול
-                              </button>
                               <button onClick={() => onAddToShopping(recipe, missing)} className="rounded-full bg-orange-50 text-orange-800 px-3 py-1 font-medium inline-flex items-center gap-1">
                                 <ShoppingCart size={14} /> לרשימת קניות
                               </button>
@@ -215,7 +210,6 @@ export default function InventoryView({ session, recipes, pantry, onChange, onAd
           </>
         )}
       </div>
-      {stores && <StoresSheet session={session} items={stores.items} title={stores.title} onClose={() => setStores(null)} />}
     </div>
   );
 }

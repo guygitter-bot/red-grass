@@ -424,7 +424,6 @@ export default function App() {
       <RecipeView
         key={current.id}
         recipe={current}
-        session={session}
         pantryNames={pantry.map((i) => i.name)}
         categories={allCategories}
         onBack={back}

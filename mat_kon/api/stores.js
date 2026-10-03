@@ -248,7 +248,7 @@ const BARCODES_SYSTEM = `You find supermarket barcodes for a home cook in Israel
 product an Israeli would buy for it (a popular brand, the standard pack size; e.g. "שמנת מתוקה" → טרה שמנת מתוקה 38% 250 מ"ל) \
 and find its real barcode (EAN-13, Israeli products usually start with 729) with web_search. Shufersal product pages include \
 the barcode in the URL (shufersal.co.il/online/he/.../p/P_7290004131074), so searching "<product> שופרסל" works well. \
-Never invent a barcode: leave it empty if you cannot find it. Skip water. Call submit_barcodes.`;
+The list may be a whole shopping list: merge lines that are the same product into one (one product per item, use the first line's wording as item), and for vague amounts ("מעט שמן", "קצת אבקת מרק") still pick the standard pack. Never invent a barcode: leave it empty if you cannot find it. Skip water (מים, מים רותחים). Call submit_barcodes.`;
 
 async function findBarcodes(client, items) {
   const messages = [{ role: 'user', content: `Ingredients:\n${items.map((i) => `- ${i}`).join('\n')}` }];
@@ -315,7 +315,7 @@ export function basketByChain(perItem, nearbyChains = []) {
 }
 
 export async function cheapersalPrices(fetchFn, key, items, { client, city, nearbyChains }) {
-  const barcodes = (await findBarcodes(client, items)).slice(0, 10);
+  const barcodes = (await findBarcodes(client, items)).slice(0, 20);
   if (!barcodes.length) return null;
   const q = city ? `?city=${encodeURIComponent(city)}` : '';
   const perItem = (await Promise.all(barcodes.map(async (b) => {
