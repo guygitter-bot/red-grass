@@ -80,3 +80,23 @@ describe('sharing', () => {
     expect(shortUrl('https://www.foodis.co.il/r/1?x=1')).toBe('foodis.co.il/r/1');
   });
 });
+
+import { sortRecipes, topTags, emojiOf } from './recipes';
+
+describe('sorting, tags and backup', () => {
+  const list = [
+    { id: 1, title: 'בורקס', rating: 3, createdAt: '2026-01-02', tags: ['לשבת', 'אפייה'] },
+    { id: 2, title: 'אורז', rating: 5, createdAt: '2026-01-01', tags: ['לשבת'] },
+    { id: 3, title: 'גלידה', createdAt: '2026-01-03', tags: [] },
+  ];
+  it('sorts by newest, name and rating', () => {
+    expect(sortRecipes(list, 'new').map((r) => r.id)).toEqual([3, 1, 2]);
+    expect(sortRecipes(list, 'abc').map((r) => r.id)).toEqual([2, 1, 3]);
+    expect(sortRecipes(list, 'rating').map((r) => r.id)).toEqual([2, 1, 3]);
+  });
+  it('counts tags and filters by tag', () => {
+    expect(topTags(list)).toEqual([['לשבת', 2], ['אפייה', 1]]);
+    expect(filterRecipes(list, { tag: 'אפייה' }).map((r) => r.id)).toEqual([1]);
+    expect(emojiOf('מתכוני סבתא')).toBe('🏷️');
+  });
+});

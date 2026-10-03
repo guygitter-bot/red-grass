@@ -137,12 +137,12 @@ const cleanSections = (a) =>
     .filter((s) => s.items.length);
 
 // מאחד את תשובת הסוכן עם מה שנאסף מהדף לרשומת מתכון
-export function toRecipe(input, src) {
+export function toRecipe(input, src, categories = CATEGORIES) {
   return {
     title: clean(input.title) || clean(src.title) || 'מתכון',
     originalTitle: clean(input.original_title) || clean(src.title),
     description: clean(input.description),
-    category: CATEGORIES.includes(input.category) ? input.category : DEFAULT_CATEGORY,
+    category: categories.includes(input.category) ? input.category : DEFAULT_CATEGORY,
     tags: cleanList(input.tags).slice(0, 5),
     servings: clean(input.servings),
     prepTime: clean(input.prep_time),
@@ -227,12 +227,24 @@ export async function organizeShopping(client, items) {
 
 export class NoRecipeError extends Error {}
 
-export async function extractRecipe(client, src) {
+// הכלי עם רשימת הקטגוריות של הספר (הקבועות + אלה שהמשתמש הוסיף)
+export function recipeTool(categories = CATEGORIES) {
+  const tool = structuredClone(RECIPE_TOOL);
+  tool.input_schema.properties.category.enum = [...new Set([...CATEGORIES, ...categories])];
+  return tool;
+}
+
+export async function extractRecipe(client, src, { categories = CATEGORIES } = {}) {
   // מתכון מובנה מלא מהדף, או הודעת ווטסאפ: אין צורך ברשת, זה מהיר וזול יותר
   const complete = src.fromText || src.images || looksComplete(src);
+  const custom = categories.filter((c) => !CATEGORIES.includes(c));
+  const text = material(src) + (custom.length
+    ? `\n\nThe user added their own categories: ${custom.join(', ')}. Prefer one of them when it fits the dish better than the general ones.`
+    : '');
+  const RECIPE_TOOL = recipeTool(categories);
   const content = src.images
-    ? [...src.images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.type, data: i.data } })), { type: 'text', text: material(src) }]
-    : material(src);
+    ? [...src.images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.type, data: i.data } })), { type: 'text', text }]
+    : text;
   const messages = [{ role: 'user', content }];
   for (let step = 0; step < MAX_STEPS; step++) {
     const response = await client.beta.messages.create({
@@ -249,11 +261,74 @@ export async function extractRecipe(client, src) {
     const submit = response.content.find((b) => b.type === 'tool_use' && b.name === RECIPE_TOOL.name);
     if (submit) {
       if (!submit.input.found) throw new NoRecipeError(clean(submit.input.notes) || 'לא נמצא מתכון בקישור הזה.');
-      return toRecipe(submit.input, src);
+      return toRecipe(submit.input, src, recipeTool(categories).input_schema.properties.category.enum);
     }
     messages.push({ role: 'assistant', content: response.content });
     if (response.stop_reason === 'pause_turn') continue; // חיפוש ברשת עדיין רץ - ממשיכים
     messages.push({ role: 'user', content: `Call ${RECIPE_TOOL.name} now with what you have.` });
   }
   throw new Error('הסוכן לא החזיר מתכון. נסו שוב.');
+}
+
+// ---------- חיפוש מתכון ברשת לפי שם ----------
+
+export const SEARCH_TOOL = {
+  name: 'submit_results',
+  description: 'Submit the recipe pages that were found.',
+  strict: true,
+  input_schema: {
+    type: 'object',
+    properties: {
+      results: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            title: { type: 'string', description: 'Recipe name as on the page' },
+            url: { type: 'string', description: 'Direct link to the recipe page (not a search or list page)' },
+            site: { type: 'string', description: 'Site or creator name' },
+            description: { type: 'string', description: 'One short Hebrew sentence: what is special about this version' },
+          },
+          required: ['title', 'url', 'site', 'description'],
+          additionalProperties: false,
+        },
+      },
+    },
+    required: ['results'],
+    additionalProperties: false,
+  },
+};
+
+const SEARCH_SYSTEM = `You find recipes on the web for an Israeli home cook. Search for the dish the user asks for and \
+return up to 6 different, well-reviewed recipe pages - direct links to a single recipe each, not list or search pages. \
+Prefer Hebrew and Israeli sites and creators (10dakot, foodis, mako food, ynet food, chef blogs), and add a couple of \
+good English recipes when they are clearly better or the dish is foreign. Write the descriptions in Hebrew. \
+Call submit_results.`;
+
+export async function searchRecipes(client, query) {
+  const messages = [{ role: 'user', content: `Find recipes for: ${query}` }];
+  for (let step = 0; step < 6; step++) {
+    const response = await client.beta.messages.create({
+      model: MODEL,
+      max_tokens: 8000,
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      output_config: { effort: 'low' },
+      system: SEARCH_SYSTEM,
+      tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 4 }, SEARCH_TOOL],
+      messages,
+    });
+    if (response.stop_reason === 'refusal') throw new Error('הבקשה נדחתה על ידי המודל.');
+    const submit = response.content.find((b) => b.type === 'tool_use' && b.name === SEARCH_TOOL.name);
+    if (submit) {
+      return submit.input.results
+        .filter((r) => /^https?:\/\//.test(r.url))
+        .slice(0, 8)
+        .map((r) => ({ title: clean(r.title), url: r.url.trim(), site: clean(r.site), description: clean(r.description) }));
+    }
+    messages.push({ role: 'assistant', content: response.content });
+    if (response.stop_reason === 'pause_turn') continue;
+    messages.push({ role: 'user', content: `Call ${SEARCH_TOOL.name} now with what you found.` });
+  }
+  throw new Error('החיפוש לא החזיר תוצאות. נסו שוב.');
 }

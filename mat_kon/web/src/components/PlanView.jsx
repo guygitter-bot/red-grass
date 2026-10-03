@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Plus, Search, ShoppingCart, X } from 'lucide-react';
 import { addMeal, dateKey, MEALS, plannedRecipes, removeMeal, shiftWeek, shortDate, weekDays, weekStart } from '../lib/plan';
-import { filterRecipes, CATEGORY_EMOJI } from '../lib/recipes';
+import { filterRecipes, emojiOf } from '../lib/recipes';
 
 const newId = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 
@@ -59,7 +59,7 @@ export default function PlanView({ plan, recipes, onChange, onShopWeek }) {
                       const recipe = m.recipeId && recipes.find((r) => r.id === m.recipeId);
                       return (
                         <li key={m.id} className="flex items-center gap-2 rounded-xl bg-stone-50 px-2.5 py-2">
-                          <span className="text-lg">{recipe ? CATEGORY_EMOJI[recipe.category] : '📝'}</span>
+                          <span className="text-lg">{recipe ? emojiOf(recipe.category) : '📝'}</span>
                           <div className="flex-1 min-w-0">
                             {recipe ? (
                               <a href={`#/r/${recipe.id}`} className="font-medium text-stone-800 truncate block">{recipe.title}</a>
@@ -135,7 +135,7 @@ export function MealPicker({ recipes, dayLabel, onClose, onPick }) {
           {list.map((r) => (
             <li key={r.id}>
               <button onClick={() => onPick({ recipeId: r.id, title: r.title, meal })} className="w-full text-right flex items-center gap-2 py-2.5">
-                <span className="text-lg">{CATEGORY_EMOJI[r.category]}</span>
+                <span className="text-lg">{emojiOf(r.category)}</span>
                 <span className="flex-1 truncate">{r.title}</span>
                 <span className="text-xs text-stone-400">{r.category}</span>
               </button>

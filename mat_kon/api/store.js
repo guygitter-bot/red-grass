@@ -1,7 +1,7 @@
 // ספר המתכונים: Durable Object אחד שמחזיק את כל המתכונים (כל מתכון במפתח r:<id>).
 
 const PREFIX = 'r:';
-const EDITABLE = ['title', 'description', 'category', 'tags', 'servings', 'prepTime', 'cookTime', 'totalTime', 'ingredients', 'steps', 'tips', 'notes', 'favorite', 'myNotes', 'image'];
+const EDITABLE = ['title', 'description', 'category', 'tags', 'servings', 'prepTime', 'cookTime', 'totalTime', 'ingredients', 'steps', 'tips', 'notes', 'favorite', 'myNotes', 'image', 'rating'];
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
 
@@ -23,6 +23,32 @@ export class RecipeBook {
         return json({ plan });
       }
       return json({ error: 'method not allowed' }, 405);
+    }
+
+    // קטגוריות שהמשתמש הוסיף לספר
+    if (url.pathname === '/categories') {
+      if (request.method === 'GET') return json({ custom: (await this.storage.get('categories')) || [] });
+      if (request.method === 'PUT') {
+        const { custom } = await request.json();
+        await this.storage.put('categories', custom);
+        return json({ custom });
+      }
+      return json({ error: 'method not allowed' }, 405);
+    }
+    // מחיקת קטגוריה: המתכונים שבה עוברים ל"אחר"
+    if (url.pathname === '/categories/remove' && request.method === 'POST') {
+      const { name } = await request.json();
+      const custom = ((await this.storage.get('categories')) || []).filter((c) => c !== name);
+      await this.storage.put('categories', custom);
+      const all = await this.storage.list({ prefix: PREFIX });
+      let moved = 0;
+      for (const r of all.values()) {
+        if (r.category === name) {
+          await this.storage.put(PREFIX + r.id, { ...r, category: 'אחר', updatedAt: new Date().toISOString() });
+          moved += 1;
+        }
+      }
+      return json({ custom, moved });
     }
 
     // רשימת הקניות של הספר
@@ -52,7 +78,7 @@ export class RecipeBook {
       const now = new Date().toISOString();
       const saved = existing
         ? { ...recipe, id: existing.id, createdAt: existing.createdAt, updatedAt: now, favorite: existing.favorite, myNotes: existing.myNotes }
-        : { ...recipe, id: crypto.randomUUID(), createdAt: now, updatedAt: now };
+        : { ...recipe, id: crypto.randomUUID(), createdAt: typeof recipe.createdAt === 'string' ? recipe.createdAt : now, updatedAt: now };
       await this.storage.put(PREFIX + saved.id, saved);
       return json({ recipe: saved, updated: Boolean(existing) });
     }

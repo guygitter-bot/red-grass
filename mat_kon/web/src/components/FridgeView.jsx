@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { matchRecipes } from '../lib/fridge';
-import { CATEGORY_EMOJI } from '../lib/recipes';
+import { emojiOf } from '../lib/recipes';
 import { usePersistentState } from '../lib/storage';
 
 // מה יש לי במקרר: מקלידים מה יש בבית ומקבלים מתכונים מהספר שאפשר להכין, ומה חסר לכל אחד
@@ -68,7 +68,7 @@ export default function FridgeView({ recipes }) {
               <li key={recipe.id}>
                 <a href={`#/r/${recipe.id}`} className="block rounded-2xl bg-white shadow-sm p-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-xl">{CATEGORY_EMOJI[recipe.category]}</span>
+                    <span className="text-xl">{emojiOf(recipe.category)}</span>
                     <span className="flex-1 font-bold truncate">{recipe.title}</span>
                     <span className={`text-xs font-bold rounded-full px-2 py-0.5 ${missing.length ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
                       {missing.length ? `${matched.length}/${total}` : 'יש הכל!'}
