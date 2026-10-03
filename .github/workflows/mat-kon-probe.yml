@@ -100,3 +100,36 @@ jobs:
             grep -oiE 'api[^<]{0,200}(מפתח|key|token|מנוי|plan|price|חינם|free)[^<]{0,200}' page.html | head -5 | cut -c1-400 || true
             head -c 1500 page.html | tr '\n' ' ' | cut -c1-1500; echo
           done
+      - name: Cheapersal API (auth styles, response shapes)
+        if: contains(inputs.url, 'cheapersal')
+        env:
+          KEY: ${{ secrets.CHEAPERSAL_API_KEY }}
+        run: |
+          B=https://cheapersal.co.il
+          echo "key length: ${#KEY}"
+          for P in /developers /developers/playground; do
+            echo "=== page $P"
+            curl -sS -L "$B$P" -o page.html || true
+            sed -e 's/<script[^>]*>.*<\/script>//g' -e 's/<[^>]*>/ /g' page.html | tr -s ' \n' | grep -oiE '.{0,200}(header|x-api-key|authorization|bearer|api_key|apikey|search|\?q=|query).{0,300}' | head -20 || true
+            grep -oE '/api/v1/[A-Za-z0-9_/:?=&.-]+' page.html | sort -u | head -60 || true
+          done
+          call() {
+            echo "=== $1 $2"
+            curl -sS --max-time 30 "${@:3}" -o out.json -w 'status=%{http_code}\n' "$B$2" || true
+            head -c 900 out.json; echo
+          }
+          call bearer /api/v1/chains -H "Authorization: Bearer $KEY"
+          call x-api-key /api/v1/chains -H "x-api-key: $KEY"
+          call query /api/v1/chains?api_key=$KEY
+          for H in "Authorization: Bearer $KEY" "x-api-key: $KEY"; do
+            call cities /api/v1/cities -H "$H"
+            call search1 "/api/v1/products/search?q=%D7%97%D7%9C%D7%91" -H "$H"
+            call search2 "/api/v1/products?q=%D7%97%D7%9C%D7%91" -H "$H"
+            call search3 "/api/v1/search?q=%D7%97%D7%9C%D7%91" -H "$H"
+            call product /api/v1/products/7290004131074 -H "$H"
+            call prices /api/v1/products/7290004131074/prices -H "$H"
+            call branches "/api/v1/branches?city=%D7%AA%D7%9C%20%D7%90%D7%91%D7%99%D7%91&limit=3" -H "$H"
+            call promos "/api/v1/promos?limit=2" -H "$H"
+          done
+          echo "=== overpass"
+          curl -sS --max-time 60 -A 'mat-kon/1.0' --data-urlencode 'data=[out:json][timeout:25];nwr["shop"="supermarket"](around:2000,32.0853,34.7818);out center tags 5;' https://overpass-api.de/api/interpreter | head -c 1500; echo
