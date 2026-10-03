@@ -66,17 +66,17 @@ export default function ImportView({ session, user, recipes, onBack, onRecipe, o
 
   const setOne = (id, value) => setStatus((s) => ({ ...s, [id]: value }));
 
-  const run = async () => {
+  const run = async (only) => {
     stopRef.current = false;
     setRunning(true);
-    const queue = [...chosen];
+    const queue = [...(only || chosen)];
     const worker = async () => {
       while (queue.length && !stopRef.current) {
         const item = queue.shift();
         setOne(item.id, { state: 'working' });
         try {
           const res = item.type === 'link'
-            ? await addRecipe(session, item.url)
+            ? await addRecipe(session, item.url, item.context)
             : await addTextRecipe(session, { key: item.id, text: item.text, chat: chat.name, author: item.author, date: item.date });
           onRecipe(res.recipe, res.user);
           setOne(item.id, { state: 'done', message: `${res.recipe.title} · ${res.recipe.category}`, recipeId: res.recipe.id });
@@ -86,7 +86,7 @@ export default function ImportView({ session, user, recipes, onBack, onRecipe, o
             setOne(item.id, { state: 'waiting' });
             onPaywall(e.data.paymentUrl || '');
           } else if (e.status === 422) {
-            setOne(item.id, { state: 'skip', message: 'לא נמצא מתכון' });
+            setOne(item.id, { state: 'skip', message: e.message || 'לא נמצא מתכון' });
           } else {
             setOne(item.id, { state: 'error', message: e.message });
           }
@@ -180,6 +180,14 @@ export default function ImportView({ session, user, recipes, onBack, onRecipe, o
       {chat && items.length > 0 && (
         <div className="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur border-t border-stone-200 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="max-w-2xl mx-auto">
+            {!running && counts.skip + counts.error > 0 && (
+              <button
+                onClick={() => run(items.filter((i) => ['skip', 'error'].includes(status[i.id]?.state)))}
+                className="w-full mb-2 rounded-2xl bg-orange-50 text-orange-800 font-medium py-2.5 text-sm"
+              >
+                ניסיון נוסף ל-{counts.skip + counts.error} שלא נמצאו
+              </button>
+            )}
             {(counts.done > 0 || counts.skip > 0 || counts.error > 0) && (
               <p className="text-xs text-stone-500 mb-2 text-center">
                 נוספו {counts.done}
@@ -198,7 +206,7 @@ export default function ImportView({ session, user, recipes, onBack, onRecipe, o
             ) : (
               <button
                 disabled={!chosen.length}
-                onClick={run}
+                onClick={() => run()}
                 className="w-full rounded-2xl bg-orange-500 text-white font-bold py-3 disabled:opacity-40 flex items-center justify-center gap-2"
               >
                 <Upload size={18} /> {chosen.length ? `ייבוא ${chosen.length} לספר המתכונים` : 'בחרו מה לייבא'}

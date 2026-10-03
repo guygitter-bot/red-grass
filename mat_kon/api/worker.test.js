@@ -230,3 +230,36 @@ test('WhatsApp text recipes count toward the free recipes', async () => {
   assert.equal(first.user.added, 1);
   assert.equal((await call('POST', '/recipes/text', { key: 'wa:2', text: `${text} עוד` }, session)).status, 402);
 });
+
+// ---------- רשתות חברתיות ----------
+
+test('an Instagram reel: caption, creator comments and the WhatsApp hint reach the agent', async () => {
+  deps.fetch = async (url, init = {}) => {
+    if (String(url).endsWith('/graphql/query') && init.method === 'POST') {
+      return new Response(JSON.stringify({ data: { xdt_shortcode_media: {
+        owner: { username: 'chef' },
+        edge_media_to_caption: { edges: [{ node: { text: 'עוגת גבינה - המתכון בתגובות' } }] },
+        edge_media_to_parent_comment: { edges: [{ node: { text: 'מצרכים: 500 גרם גבינה, 3 ביצים', owner: { username: 'chef' } } }] },
+      } } }));
+    }
+    return new Response('', { status: 404 });
+  };
+  const res = await call('POST', '/recipes', { url: 'https://www.instagram.com/reel/DXCJXPRjQfE/?igsh=abc', hint: 'עוגת הגבינה של דנה' });
+  assert.equal(res.status, 200);
+  const prompt = apiCalls[0].messages[0].content;
+  assert.match(prompt, /המתכון בתגובות/);
+  assert.match(prompt, /\[CREATOR\] @chef: מצרכים: 500 גרם גבינה/);
+  assert.match(prompt, /The person who shared this link wrote: עוגת הגבינה של דנה/);
+  assert.ok(apiCalls[0].tools.some((t) => t.name === 'web_search'));
+  const { recipe } = await res.json();
+  assert.equal(recipe.source.url, 'https://www.instagram.com/reel/DXCJXPRjQfE/');
+  assert.equal(recipe.source.hint, 'עוגת הגבינה של דנה');
+
+  // רענון שולח שוב את אותו רמז
+  await call('POST', `/recipes/${recipe.id}/refresh`);
+  assert.match(apiCalls.at(-1).messages[0].content, /עוגת הגבינה של דנה/);
+
+  const probe = await (await call('GET', `/debug/source?url=${encodeURIComponent('https://www.instagram.com/reel/DXCJXPRjQfE/')}`)).json();
+  assert.equal(probe.comments, 1);
+  assert.equal(probe.creatorComments, 1);
+});

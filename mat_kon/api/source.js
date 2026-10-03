@@ -203,6 +203,10 @@ function pickCaptionTrack(tracks) {
   );
 }
 
+import {
+  captionFromOgDescription, instagram, linksIn, readTiktokPage, tiktokComments, youtubeComments,
+} from './social.js';
+
 // ---------- איסוף ----------
 
 async function get(fetchFn, url, accept = 'text/html') {
@@ -245,6 +249,12 @@ async function youtube(fetchFn, url, id, out) {
       out.author = details.author || out.author;
       out.description = details.shortDescription || '';
     }
+    // תגובות (היוצר קודם): הרבה פעמים המתכון בתגובה המוצמדת
+    try {
+      out.comments = await youtubeComments(fetchFn, html, jsonAfter(html, 'ytInitialData'), out.author);
+    } catch (e) {
+      out.warnings.push(`youtube comments: ${e.message}`);
+    }
     const track = pickCaptionTrack(player?.captions?.playerCaptionsTracklistRenderer?.captionTracks);
     if (track?.baseUrl) {
       const caps = await getJson(fetchFn, `${track.baseUrl}&fmt=json3`);
@@ -257,7 +267,7 @@ async function youtube(fetchFn, url, id, out) {
 }
 
 // טוען את הקישור ומחזיר את החומר הגולמי למתכון. לא זורק שגיאה - מה שלא הצליח נרשם ב-warnings.
-export async function gatherSource(url, fetchFn = fetch) {
+export async function gatherSource(url, fetchFn = fetch, { hint = '', igDocId } = {}) {
   const kind = sourceKind(url);
   const out = {
     url,
@@ -271,12 +281,26 @@ export async function gatherSource(url, fetchFn = fetch) {
     transcript: '',
     recipes: [],
     text: '',
+    comments: [],
+    linked: [],
+    hint: String(hint || '').trim().slice(0, 500),
     warnings: [],
+    debug: [],
   };
 
   if (kind === 'youtube') {
     await youtube(fetchFn, url, youtubeId(url), out);
+    await followLinks(fetchFn, out);
     return out;
+  }
+
+  if (kind === 'instagram') {
+    const ig = await instagram(fetchFn, url, igDocId ? { docId: igDocId } : {});
+    out.description = ig.caption;
+    out.author = ig.author;
+    out.image = ig.image;
+    out.comments = ig.comments;
+    out.debug.push(`instagram: ${ig.tried.join(', ')}`);
   }
 
   if (kind === 'tiktok') {
@@ -297,13 +321,28 @@ export async function gatherSource(url, fetchFn = fetch) {
     out.title = out.title || meta['og:title'] || meta['twitter:title'] || meta['<title>'] || '';
     out.siteName = meta['og:site_name'] || new URL(finalUrl).hostname.replace(/^www\./, '');
     out.image = out.image || meta['og:image'] || meta['twitter:image'] || null;
-    const desc = meta['og:description'] || meta.description || '';
+    let desc = meta['og:description'] || meta.description || '';
+    if (kind === 'instagram') desc = captionFromOgDescription(desc) || desc;
     if (desc.length > out.description.length) out.description = desc;
+    if (kind === 'tiktok') {
+      const tt = readTiktokPage(html);
+      if (tt) {
+        if (tt.caption.length > out.description.length) out.description = tt.caption;
+        out.author = out.author || tt.author;
+        out.image = out.image || tt.image;
+        try {
+          out.comments = await tiktokComments(fetchFn, tt.id, tt.author);
+        } catch (e) {
+          out.warnings.push(`tiktok comments: ${e.message}`);
+        }
+      }
+    }
     out.recipes = findJsonLdRecipes(html).map(compactRecipe);
     if (!out.image && out.recipes[0]?.image) out.image = out.recipes[0].image;
     // בדף עם מתכון מובנה מלא אין צורך בכל טקסט הדף
     const full = out.recipes.some((r) => r.ingredients.length && r.instructions.length);
-    out.text = full ? '' : pageText(html);
+    // ברשת חברתית טקסט הדף הוא רק תפריטים - הכיתוב והתגובות כבר נאספו
+    out.text = full || kind !== 'page' ? '' : pageText(html);
     if (kind === 'instagram') {
       const post = new URL(url).pathname.match(/\/(reel|reels|p|tv)\/([\w-]+)/);
       if (post) out.embed = `https://www.instagram.com/${post[1] === 'reels' ? 'reel' : post[1]}/${post[2]}/embed/captioned/`;
@@ -315,6 +354,7 @@ export async function gatherSource(url, fetchFn = fetch) {
   } catch (e) {
     out.warnings.push(`page: ${e.message}`);
   }
+  if (isVideoKind(kind)) await followLinks(fetchFn, out);
   if (out.image && !/^https?:\/\//i.test(out.image)) {
     try {
       out.image = new URL(out.image, url).toString();
@@ -325,7 +365,22 @@ export async function gatherSource(url, fetchFn = fetch) {
   return out;
 }
 
+// קישורים לאתרים שמופיעים בכיתוב או בתגובות של היוצר (למשל "המתכון המלא בבלוג"): קוראים עד 2
+async function followLinks(fetchFn, out) {
+  const creator = out.comments.filter((c) => c.byCreator).map((c) => c.text);
+  const others = out.comments.filter((c) => !c.byCreator).map((c) => c.text);
+  for (const link of linksIn([out.description, ...creator, ...others], 2)) {
+    try {
+      const { text: html } = await get(fetchFn, link);
+      const recipes = findJsonLdRecipes(html).map(compactRecipe);
+      out.linked.push({ url: link, recipes, text: recipes.length ? '' : pageText(html).slice(0, 8000) });
+    } catch (e) {
+      out.warnings.push(`linked ${link}: ${e.message}`);
+    }
+  }
+}
+
 // האם יש מספיק חומר כדי לבנות מתכון בלי חיפוש ברשת
 export function looksComplete(src) {
-  return src.recipes.some((r) => r.ingredients.length >= 2 && r.instructions.length >= 1);
+  return [...src.recipes, ...(src.linked || []).flatMap((l) => l.recipes)].some((r) => r.ingredients.length >= 2 && r.instructions.length >= 1);
 }

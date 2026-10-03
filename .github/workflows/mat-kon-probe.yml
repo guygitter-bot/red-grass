@@ -1,0 +1,29 @@
+name: mat-kon probe
+
+# בדיקה: מה השרת של mat-kon מצליח לקרוא מקישור (כיתוב, תגובות, מתכון מובנה) – בלי AI ובלי לשמור.
+# Actions → mat-kon probe → Run workflow → מדביקים קישור.
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Link to check"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read the link through the server
+        env:
+          LINK: ${{ inputs.url }}
+          API: ${{ vars.MATKON_API_URL || 'https://mat-kon-api.guygitter.workers.dev' }}
+        run: |
+          curl -sS --max-time 120 -G "$API/debug/source" --data-urlencode "url=$LINK" | tee result.json | jq . || cat result.json
+          {
+            echo '```json'
+            jq . result.json 2>/dev/null || cat result.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

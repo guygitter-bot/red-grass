@@ -90,6 +90,13 @@ export default {
       user = (await res.json()).user;
     }
 
+    // בדיקה: מה השרת מצליח לקרוא מקישור (בלי AI). משמש את .github/workflows/mat-kon-probe.yml
+    if (url.pathname === '/debug/source' && request.method === 'GET') {
+      const link = normalizeUrl(url.searchParams.get('url'));
+      if (!link) return fail(400, 'זה לא נראה כמו קישור תקין');
+      return reply(200, summarizeSource(await gatherSource(link, deps.fetch, { igDocId: env.IG_DOC_ID })));
+    }
+
     if (url.pathname === '/me') {
       return reply(200, { owner: !user, user, categories: CATEGORIES, paymentUrl: env.PAYMENT_URL || '' });
     }
@@ -131,6 +138,7 @@ export default {
     if (isAdd || isRefresh) {
       let link;
       let text = null;
+      let hint = '';
       if (isAdd) {
         if (!canAdd(user)) {
           return fail(402, `נגמרו ${user.freeLimit} המתכונים החינמיים`, { paywall: true, paymentUrl: env.PAYMENT_URL || '' });
@@ -143,17 +151,21 @@ export default {
         } else {
           link = normalizeUrl(body.url);
           if (!link) return fail(400, 'זה לא נראה כמו קישור תקין');
+          hint = String(body.hint || '');
         }
       } else {
         const res = await internal(book, 'GET', `/recipes/${id}`);
         if (!res.ok) return fail(404, 'המתכון לא נמצא');
         const { source } = (await res.json()).recipe;
         if (source.kind === 'whatsapp') text = textSource(source);
-        else link = source.url;
+        else {
+          link = source.url;
+          hint = source.hint || '';
+        }
       }
       let recipe;
       try {
-        const src = text || (await gatherSource(link, deps.fetch));
+        const src = text || (await gatherSource(link, deps.fetch, { hint, igDocId: env.IG_DOC_ID }));
         recipe = await extractRecipe(deps.anthropic(env), src);
       } catch (e) {
         if (e instanceof NoRecipeError) return fail(422, e.message);
@@ -181,6 +193,27 @@ export default {
     return fail(405, 'Method not allowed');
   },
 };
+
+function summarizeSource(src) {
+  const cut = (t, n = 300) => String(t || '').slice(0, n);
+  return {
+    kind: src.kind,
+    title: cut(src.title, 120),
+    author: src.author,
+    image: Boolean(src.image),
+    description: cut(src.description, 600),
+    descriptionLength: src.description.length,
+    transcriptLength: src.transcript.length,
+    textLength: src.text.length,
+    recipes: src.recipes.map((r) => ({ name: r.name, ingredients: r.ingredients.length, steps: r.instructions.length })),
+    comments: src.comments.length,
+    creatorComments: src.comments.filter((c) => c.byCreator).length,
+    firstComments: src.comments.slice(0, 5).map((c) => `${c.byCreator ? '[CREATOR] ' : ''}@${c.author}: ${cut(c.text, 200)}`),
+    linked: src.linked.map((l) => ({ url: l.url, recipes: l.recipes.length, textLength: l.text.length })),
+    warnings: src.warnings,
+    debug: src.debug,
+  };
+}
 
 // מתכון שנכתב כהודעה בווטסאפ (בלי קישור)
 function textSource(body) {
