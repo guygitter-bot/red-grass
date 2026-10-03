@@ -432,3 +432,101 @@ test('backup restore: valid recipes saved as they were, bad ones skipped, same s
   assert.equal((await (await call('GET', '/recipes')).json()).recipes.length, 3);
   assert.equal((await call('POST', '/recipes/restore', { recipes: 'x' })).status, 400);
 });
+
+test('pantry: saved per book and cleaned; a photo is scanned into items without saving', async () => {
+  const put = await call('PUT', '/pantry', { items: [{ name: ' חלב ', place: 'fridge', qty: '1 ליטר' }, { name: 'אורז', place: 'weird' }, { name: '' }] });
+  assert.equal(put.status, 200);
+  const { items } = await (await call('GET', '/pantry')).json();
+  assert.deepEqual(items.map((i) => [i.name, i.place, i.qty]), [['חלב', 'fridge', '1 ליטר'], ['אורז', 'fridge', undefined]]);
+  assert.equal((await call('PUT', '/pantry', { items: 'x' })).status, 400);
+
+  reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_items', input: { items: [
+    { name: 'שמנת מתוקה', qty: '2 קופסאות', place: 'fridge' }, { name: 'רסק עגבניות', qty: '', place: 'pantry' },
+  ] } }] });
+  const scan = await call('POST', '/pantry/scan', { images: [{ type: 'image/jpeg', data: 'AAAA' }], mode: 'many', place: 'fridge' });
+  assert.equal(scan.status, 200);
+  assert.deepEqual((await scan.json()).items.map((i) => i.name), ['שמנת מתוקה', 'רסק עגבניות']);
+  assert.equal(apiCalls.at(-1).messages[0].content[0].type, 'image');
+  assert.match(apiCalls.at(-1).messages[0].content.at(-1).text, /whole fridge/);
+  // לא נשמר לפני אישור
+  assert.equal((await (await call('GET', '/pantry')).json()).items.length, 2);
+  assert.equal((await call('POST', '/pantry/scan', { images: [] })).status, 400);
+});
+
+test('recipe ideas from what is at home use web search', async () => {
+  reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_results', input: { results: [
+    { title: 'פסטה ברוטב שמנת', url: 'https://food.example/pasta', site: 'food', description: 'משתמש בשמנת ובפסטה' },
+  ] } }] });
+  const res = await call('POST', '/pantry/ideas', { items: ['שמנת מתוקה', 'פסטה'], wish: 'מהיר' });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).results[0].url, 'https://food.example/pasta');
+  assert.match(apiCalls[0].messages[0].content, /שמנת מתוקה[\s\S]*מהיר/);
+  assert.ok(apiCalls[0].tools.some((t) => t.type.startsWith('web_search')));
+  assert.equal((await call('POST', '/pantry/ideas', { items: [] })).status, 400);
+});
+
+test('stores: nearby supermarkets from OpenStreetMap, chains recognized, prices estimated when there is no price list', async () => {
+  deps.fetch = async (url) => {
+    if (String(url).includes('overpass')) {
+      return Response.json({ elements: [
+        { type: 'node', id: 1, lat: 32.081, lon: 34.781, tags: { shop: 'supermarket', name: 'רמי לוי', 'addr:street': 'הרצל', 'addr:housenumber': '5' } },
+        { type: 'way', id: 2, center: { lat: 32.09, lon: 34.79 }, tags: { shop: 'supermarket', brand: 'Shufersal', name: 'שופרסל דיל' } },
+        { type: 'node', id: 3, lat: 32.0805, lon: 34.7805, tags: { shop: 'convenience', name: 'המכולת של משה' } },
+      ] });
+    }
+    return new Response('', { status: 404 });
+  };
+  reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_prices', input: { note: 'הערכה', chains: [
+    { chain: 'שופרסל', total: 99, items: [{ item: 'שמנת', product: 'שמנת מתוקה 250 מ"ל', price: 6.9 }] },
+    { chain: 'רמי לוי', total: 5.5, items: [{ item: 'שמנת', product: 'שמנת מתוקה 250 מ"ל', price: 5.5 }] },
+  ] } }] });
+  const res = await call('POST', '/stores', { lat: 32.08, lon: 34.78, items: ['שמנת מתוקה'] });
+  assert.equal(res.status, 200);
+  const { stores, prices } = await res.json();
+  assert.deepEqual(stores.map((s) => s.chain), ['ramilevy', 'shufersal', null]);
+  assert.equal(stores[0].address, 'הרצל 5');
+  assert.ok(stores[0].orderUrl.startsWith('https://www.rami-levy.co.il'));
+  assert.equal(prices.source, 'estimate');
+  assert.deepEqual(prices.chains.map((c) => [c.chainName, c.total]), [['רמי לוי', 5.5], ['שופרסל', 6.9]]);
+  assert.equal((await call('POST', '/stores', { lat: 'x', lon: 1 })).status, 400);
+});
+
+test('stores: with a Cheapersal key, real prices by barcode in the city, cheapest chain first', async () => {
+  env.CHEAPERSAL_API_KEY = 'csal_test';
+  const seen = [];
+  deps.fetch = async (url, init) => {
+    const u = String(url);
+    if (u.includes('overpass')) return new Response('busy', { status: 504 });
+    if (u.startsWith('https://api.cheapersal.co.il/api/v1/')) {
+      seen.push([u, init.headers['X-API-Key']]);
+      if (u.includes('/branches?')) {
+        return Response.json({ success: true, data: { branches: [
+          { id: 'b1', name: 'רמי לוי תלפיות', city: 'ירושלים', address: 'יד חרוצים 1', isOnline: false, location: { lat: 31.76, lon: 35.21 }, chain: { name: 'רמי לוי' } },
+          { id: 'b2', name: 'שופרסל דיל תלפיות', city: 'ירושלים', address: 'פייר קניג 2', isOnline: false, location: { lat: 31.755, lon: 35.215 }, chain: { name: 'שופרסל דיל' } },
+        ] } });
+      }
+      if (u.includes('/products/7290000000001/prices')) {
+        return Response.json({ success: true, data: { product: { name: 'שמנת מתוקה 38%' }, prices: [
+          { price: 6.9, chain: { name: 'שופרסל דיל' }, branch: { isOnline: false } },
+          { price: 6.5, chain: { name: 'רמי לוי' }, branch: { isOnline: false }, promo: { promoPrice: 4.9, minQuantity: 1, requiresClub: false } },
+          { price: 3, chain: { name: 'רמי לוי' }, branch: { isOnline: true } },
+        ] } });
+      }
+      return Response.json({ success: false, error: { message: 'Product not found.' } }, { status: 404 });
+    }
+    return new Response('', { status: 404 });
+  };
+  reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_barcodes', input: { products: [
+    { item: 'שמנת מתוקה', barcode: '7290000000001', product: 'טרה שמנת מתוקה' },
+    { item: 'פטרוזיליה', barcode: '', product: '' },
+  ] } }] });
+  const res = await call('POST', '/stores', { lat: 31.76, lon: 35.21, items: ['שמנת מתוקה', 'פטרוזיליה'] });
+  assert.equal(res.status, 200);
+  const { stores, prices } = await res.json();
+  assert.deepEqual(stores.map((s) => s.chain), ['ramilevy', 'shufersal']);
+  assert.equal(prices.source, 'cheapersal');
+  assert.deepEqual(prices.chains.map((c) => [c.chainName, c.total]), [['רמי לוי', 4.9], ['שופרסל', 6.9]]);
+  assert.match(prices.note, /1 מתוך 2.*ירושלים/);
+  assert.ok(seen.every(([, key]) => key === 'csal_test'));
+  assert.ok(seen.some(([u]) => u.includes('prices?city=%D7%99%D7%A8%D7%95%D7%A9%D7%9C%D7%99%D7%9D')));
+});

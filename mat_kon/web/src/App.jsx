@@ -8,11 +8,12 @@ import ImportView from './components/ImportView';
 import NewRecipeView from './components/NewRecipeView';
 import ShoppingView from './components/ShoppingView';
 import PlanView from './components/PlanView';
-import FridgeView from './components/FridgeView';
+import InventoryView from './components/InventoryView';
 import BottomNav from './components/BottomNav';
 import { prunePlan } from './lib/plan';
 import { scaleSections } from './lib/scale';
-import { loadJson } from './lib/storage';
+import { loadJson, saveJson } from './lib/storage';
+import { mergePantry } from './lib/fridge';
 import InvitesView from './components/InvitesView';
 import Paywall from './components/Paywall';
 import PendingList from './components/PendingList';
@@ -21,7 +22,7 @@ import RecipeView from './components/RecipeView';
 import { CATEGORIES } from './lib/categories';
 import {
   addCategory, addRecipe, addTextRecipe, deleteRecipe, removeCategory, getMe, getPlan, getShopping, listRecipes, logout as apiLogout, putPlan, putShopping, refreshRecipe,
-  updateRecipe,
+  updateRecipe, getPantry, putPantry,
 } from './lib/api';
 import { SORTS, countByCategory, emojiOf, filterRecipes, freeLeft, linkFromShare, parseAuthHash, sortRecipes, topTags } from './lib/recipes';
 import { usePersistentState } from './lib/storage';
@@ -67,6 +68,8 @@ export default function App() {
   const shoppingTimer = useRef(null);
   // תכנון ארוחות שבועי (נשמר בשרת, כמו רשימת הקניות)
   const [plan, setPlan] = usePersistentState('matkon_plan', {});
+  const [pantry, setPantry] = usePersistentState('matkon_pantry', []);
+  const pantryTimer = useRef(null);
   const planTimer = useRef(null);
   // מכשיר שנרשם פעם מקישור הזמנה נשאר מכשיר של משתמש מוזמן, גם אחרי יציאה
   const [guestDevice, setGuestDevice] = usePersistentState('matkon_guest', false);
@@ -128,6 +131,17 @@ export default function App() {
       setRecipes(await listRecipes(session));
       getShopping(session).then(setShopping).catch(() => {});
       getPlan(session).then(setPlan).catch(() => {});
+      getPantry(session)
+        .then((items) => {
+          // מעבר חד פעמי: מה שנכתב פעם ב"מה יש במקרר" (רק במכשיר) עובר למלאי בשרת
+          const old = loadJson('matkon_fridge', []);
+          if (!items.length && old.length) {
+            const moved = mergePantry([], old.map((name) => ({ name, place: 'fridge' })));
+            setPantry(moved);
+            putPantry(session, moved).then(() => saveJson('matkon_fridge', [])).catch(() => {});
+          } else setPantry(items);
+        })
+        .catch(() => {});
       setLoadError('');
     } catch (e) {
       if (e.status === 401) signOut();
@@ -148,6 +162,17 @@ export default function App() {
       }, 600);
     },
     [session, setShopping],
+  );
+
+  const savePantry = useCallback(
+    (items) => {
+      setPantry(items);
+      clearTimeout(pantryTimer.current);
+      pantryTimer.current = setTimeout(() => {
+        putPantry(session, items).catch((e) => setToast(`המלאי לא נשמר: ${e.message}`));
+      }, 600);
+    },
+    [session, setPantry],
   );
 
   const savePlan = useCallback(
@@ -301,14 +326,7 @@ export default function App() {
   }
 
   if (nav.view === 'search') {
-    const savedUrls = new Set(recipes.map((r) => {
-      try {
-        const u = new URL(r.source?.url);
-        return u.hostname.replace(/^(www|m)\./, '') + u.pathname.replace(/\/+$/, '');
-      } catch {
-        return '';
-      }
-    }));
+    const savedUrls = savedUrlSet(recipes);
     return (
       <>
         {paywall && <Paywall user={user} paymentUrl={paywall.paymentUrl} onClose={() => setPaywall(null)} />}
@@ -332,7 +350,26 @@ export default function App() {
   if (nav.view === 'fridge') {
     return (
       <>
-        <FridgeView recipes={recipes} />
+        {paywall && <Paywall user={user} paymentUrl={paywall.paymentUrl} onClose={() => setPaywall(null)} />}
+        <InventoryView
+          session={session}
+          recipes={recipes}
+          pantry={pantry}
+          onChange={savePantry}
+          savedUrls={savedUrlSet(recipes)}
+          onAdd={(url, title) => {
+            add(url);
+            setToast(`"${title}" נכנס לספר – מסדר מתכון ברקע`);
+          }}
+          onAddToShopping={(recipe, lines) => {
+            const { list, added } = shoppingWith(shopping, recipe, lines);
+            saveShopping(list);
+            setToast(added ? `נוספו ${added} מצרכים לרשימת הקניות` : 'המצרכים כבר ברשימה');
+          }}
+          onToast={setToast}
+          onPaywall={(url) => setPaywall({ paymentUrl: url || paymentUrl })}
+        />
+        {toast && <Toast text={toast} />}
         <BottomNav view="fridge" shoppingCount={openShopping} onPhotos={takePhotos} />
       </>
     );
@@ -387,6 +424,8 @@ export default function App() {
       <RecipeView
         key={current.id}
         recipe={current}
+        session={session}
+        pantryNames={pantry.map((i) => i.name)}
         categories={allCategories}
         onBack={back}
         onUpdate={async (patch) => {
@@ -687,4 +726,16 @@ function Empty() {
       </p>
     </div>
   );
+}
+
+// הקישורים שכבר בספר (כדי לסמן "נוסף" בתוצאות חיפוש)
+function savedUrlSet(recipes) {
+  return new Set(recipes.map((r) => {
+    try {
+      const u = new URL(r.source?.url);
+      return u.hostname.replace(/^(www|m)\./, '') + u.pathname.replace(/\/+$/, '');
+    } catch {
+      return '';
+    }
+  }));
 }

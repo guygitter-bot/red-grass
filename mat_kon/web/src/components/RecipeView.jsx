@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
 import {
   ArrowRight, Camera, Check, ChefHat, Clock, ExternalLink, Heart, ImagePlus, Info, Loader2, MessageCircle, Minus, PenLine, Pencil, PlayCircle,
-  CalendarPlus, Plus, Printer, RotateCw, Share2, ShoppingCart, Star, Trash2, Users, X,
+  CalendarPlus, Plus, Printer, RotateCw, Share2, ShoppingBag, ShoppingCart, Star, Trash2, Users, X,
 } from 'lucide-react';
 import CookMode from './CookMode';
+import StoresSheet from './StoresSheet';
+import { missingLines } from '../lib/fridge';
 import { baseServings, formatAmount, scaleSections } from '../lib/scale';
 import { thumbnail } from '../lib/image';
 import { DAY_NAMES, MEALS, dateKey, shortDate } from '../lib/plan';
 import { emojiOf, VIDEO_LABEL, isVideo, recipeAsText, sectionsToText, shortUrl, textToSections } from '../lib/recipes';
 import { usePersistentState } from '../lib/storage';
 
-export default function RecipeView({ recipe, categories, onBack, onUpdate, onRefresh, onDelete, onAddToShopping, onAddToPlan }) {
+export default function RecipeView({ recipe, session, pantryNames = [], categories, onBack, onUpdate, onRefresh, onDelete, onAddToShopping, onAddToPlan }) {
   const [editing, setEditing] = useState(false);
   const [planning, setPlanning] = useState(false);
   const [cooking, setCooking] = useState(false);
@@ -20,6 +22,7 @@ export default function RecipeView({ recipe, categories, onBack, onUpdate, onRef
   const ingredients = scaleSections(recipe.ingredients, factor);
   const canRefresh = Boolean(recipe.source.url) || recipe.source.kind === 'whatsapp';
   const [busy, setBusy] = useState('');
+  const [stores, setStores] = useState(null);
   const [error, setError] = useState('');
   // סימון מצרכים ושלבים בזמן הבישול - נשמר רק במכשיר הזה
   const [checked, setChecked] = usePersistentState(`matkon_checked_${recipe.id}`, {});
@@ -248,7 +251,14 @@ export default function RecipeView({ recipe, categories, onBack, onUpdate, onRef
                   </ul>
                 </div>
               ))}
+              <MissingBox
+                lines={ingredients.flatMap((s) => s.items)}
+                pantryNames={pantryNames}
+                onShop={(lines) => onAddToShopping(lines)}
+                onStores={(lines) => setStores(lines)}
+              />
             </Section>
+            {stores && <StoresSheet session={session} items={stores} title={recipe.title} onClose={() => setStores(null)} />}
 
             <Section
               title="אופן ההכנה"
@@ -556,5 +566,34 @@ function Tags({ tags, onChange }) {
         </button>
       )}
     </>
+  );
+}
+
+// מה חסר בבית (לפי המלאי במקרר ובמזווה), ואיפה לקנות את זה הכי זול
+function MissingBox({ lines, pantryNames, onShop, onStores }) {
+  if (!lines.length) return null;
+  const hasPantry = pantryNames.length > 0;
+  const missing = hasPantry ? missingLines(lines, pantryNames) : missingLines(lines, []);
+  return (
+    <div className="mt-2 rounded-2xl bg-orange-50/70 p-3 text-sm print:hidden">
+      {hasPantry && (
+        <p className="text-stone-700 mb-2">
+          {missing.length ? <><span className="font-bold">חסר לך בבית:</span> {missing.join(' · ')}</> : <span className="font-bold text-emerald-700">יש לך בבית את כל המצרכים! 🎉</span>}
+        </p>
+      )}
+      {missing.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => onStores(missing)} className="rounded-full bg-orange-500 text-white px-3 py-1.5 font-medium inline-flex items-center gap-1.5">
+            <ShoppingBag size={15} /> איפה לקנות הכי זול
+          </button>
+          {hasPantry && (
+            <button onClick={() => onShop(missing)} className="rounded-full bg-white text-orange-800 px-3 py-1.5 font-medium inline-flex items-center gap-1.5">
+              <ShoppingCart size={15} /> רק החסרים לרשימה
+            </button>
+          )}
+        </div>
+      )}
+      {!hasPantry && <p className="mt-2 text-xs text-stone-500">טיפ: מוסיפים ב"מקרר ומזווה" מה יש בבית, ואז נראה כאן רק מה חסר.</p>}
+    </div>
   );
 }

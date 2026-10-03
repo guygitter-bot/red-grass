@@ -85,3 +85,45 @@ jobs:
             grep -oE '<meta[^>]+(og:title|og:description|name="description")[^>]*>' page.html | head -3 | cut -c1-900 || true
             printf 'login=%s private=%s desc=%s\n' "$(grep -oi 'log in\|התחבר' page.html | wc -l)" "$(grep -oi 'private group\|קבוצה פרטית' page.html | wc -l)" "$(grep -o '"desc":"[^"]\{0,300\}' page.html | head -1)"
           done
+      - name: Raw page and API hints (diagnostics for any site)
+        if: "!contains(inputs.url, 'instagram.com') && !contains(inputs.url, 'facebook.com') && !contains(inputs.url, 'tiktok.com')"
+        env:
+          LINK: ${{ inputs.url }}
+        run: |
+          ORIGIN=$(echo "$LINK" | sed -E 's#^(https?://[^/]+).*#\1#')
+          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36'
+          for U in "$LINK" "$ORIGIN/robots.txt" "$ORIGIN/api" "$ORIGIN/api/docs" "$ORIGIN/developers" "$ORIGIN/sitemap.xml"; do
+            echo "=== $U"
+            curl -sS -L -A "$UA" -o page.html -w 'status=%{http_code} size=%{size_download} type=%{content_type} final=%{url_effective}\n' "$U" || true
+            grep -o '<title>[^<]*</title>' page.html | head -1 | cut -c1-200 || true
+            grep -oiE '(https?://[^"'"'"' <>]*|/)[^"'"'"' <>]*api[^"'"'"' <>]*' page.html | sort -u | head -25 || true
+            grep -oiE 'api[^<]{0,200}(מפתח|key|token|מנוי|plan|price|חינם|free)[^<]{0,200}' page.html | head -5 | cut -c1-400 || true
+            head -c 1500 page.html | tr '\n' ' ' | cut -c1-1500; echo
+          done
+      - name: Cheapersal API (auth styles, response shapes)
+        if: contains(inputs.url, 'cheapersal')
+        env:
+          KEY: ${{ secrets.CHEAPERSAL_API_KEY }}
+        run: |
+          B=https://cheapersal.co.il
+          curl -sS -L "$B/developers/playground" -o p.html
+          C=$(grep -oE '/_next/static/chunks/app/developers/playground/page-[^"]+\.js' p.html | head -1)
+          curl -sS "$B$C" -o c.js
+          echo "=== playground endpoint definitions"
+          grep -oE '.{0,40}path:"[^"]+".{0,700}' c.js | head -30 | cut -c1-900 || true
+          grep -oE '.{0,60}/api/v1/[^"]*".{0,500}' c.js | head -30 | cut -c1-600 || true
+          A=https://api.cheapersal.co.il/api/v1
+          call() {
+            echo "=== $1"
+            curl -sS --max-time 30 -H "X-API-Key: $KEY" -o out.json -w 'status=%{http_code}\n' "$A$1" || true
+            jq -c 'if type=="object" and .data then (.data |= (if type=="array" then (.[0:3] | map(del(.logo?))) else (if type=="object" then del(.logo?) else . end) end)) else . end' out.json 2>/dev/null | head -c 2500 || head -c 1200 out.json
+            echo
+          }
+          call /chains
+          call "/products/search?q=%D7%97%D7%9C%D7%91"
+          call "/products?search=%D7%97%D7%9C%D7%91"
+          call "/products?q=%D7%97%D7%9C%D7%91"
+          call /products/7290004131074
+          call /products/7290004131074/prices
+          call "/branches?limit=3"
+          call /cities

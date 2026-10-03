@@ -41,7 +41,7 @@ export default function BottomNav({ view, shoppingCount, onPhotos }) {
             }}
           />
         </label>
-        {tab('fridge', '#/fridge', 'מה יש במקרר', Refrigerator)}
+        {tab('fridge', '#/fridge', 'מקרר ומזווה', Refrigerator)}
         {tab('shopping', '#/shopping', 'קניות', ShoppingCart)}
       </div>
     </nav>
