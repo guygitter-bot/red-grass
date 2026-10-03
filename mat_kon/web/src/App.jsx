@@ -52,6 +52,7 @@ const route = () => {
   if (h.startsWith('#/new')) return { view: 'new', mode: h.includes('manual') ? 'manual' : 'photo' };
   if (h === '#/plan') return { view: 'plan' };
   if (h === '#/fridge') return { view: 'fridge' };
+  if (h === '#/fridge/fridge' || h === '#/fridge/pantry') return { view: 'fridge', place: h.slice(9) };
   if (h === '#/settings') return { view: 'settings' };
   if (h.startsWith('#/search')) return { view: 'search', q: decodeURIComponent((h.match(/[?&]q=([^&]*)/) || [])[1] || '') };
   if (h.startsWith('#/import')) return { view: 'import' };
@@ -361,6 +362,8 @@ export default function App() {
       <>
         {paywall && <Paywall user={user} paymentUrl={paywall.paymentUrl} onClose={() => setPaywall(null)} />}
         <InventoryView
+          key={nav.place || 'home'}
+          place={nav.place}
           session={session}
           recipes={recipes}
           pantry={pantry}
