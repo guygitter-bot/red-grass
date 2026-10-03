@@ -85,3 +85,18 @@ jobs:
             grep -oE '<meta[^>]+(og:title|og:description|name="description")[^>]*>' page.html | head -3 | cut -c1-900 || true
             printf 'login=%s private=%s desc=%s\n' "$(grep -oi 'log in\|התחבר' page.html | wc -l)" "$(grep -oi 'private group\|קבוצה פרטית' page.html | wc -l)" "$(grep -o '"desc":"[^"]\{0,300\}' page.html | head -1)"
           done
+      - name: Raw page and API hints (diagnostics for any site)
+        if: "!contains(inputs.url, 'instagram.com') && !contains(inputs.url, 'facebook.com') && !contains(inputs.url, 'tiktok.com')"
+        env:
+          LINK: ${{ inputs.url }}
+        run: |
+          ORIGIN=$(echo "$LINK" | sed -E 's#^(https?://[^/]+).*#\1#')
+          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36'
+          for U in "$LINK" "$ORIGIN/robots.txt" "$ORIGIN/api" "$ORIGIN/api/docs" "$ORIGIN/developers" "$ORIGIN/sitemap.xml"; do
+            echo "=== $U"
+            curl -sS -L -A "$UA" -o page.html -w 'status=%{http_code} size=%{size_download} type=%{content_type} final=%{url_effective}\n' "$U" || true
+            grep -o '<title>[^<]*</title>' page.html | head -1 | cut -c1-200 || true
+            grep -oiE '(https?://[^"'"'"' <>]*|/)[^"'"'"' <>]*api[^"'"'"' <>]*' page.html | sort -u | head -25 || true
+            grep -oiE 'api[^<]{0,200}(מפתח|key|token|מנוי|plan|price|חינם|free)[^<]{0,200}' page.html | head -5 | cut -c1-400 || true
+            head -c 1500 page.html | tr '\n' ' ' | cut -c1-1500; echo
+          done
