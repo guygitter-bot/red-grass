@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
-  ArrowRight, Check, Clock, ExternalLink, Heart, Info, Loader2, Pencil, PlayCircle, RotateCw, Share2, Trash2, Users,
+  ArrowRight, Check, Clock, ExternalLink, Heart, Info, Loader2, MessageCircle, Pencil, PlayCircle, RotateCw, Share2, Trash2, Users,
 } from 'lucide-react';
 import { CATEGORIES } from '../lib/categories';
-import { CATEGORY_EMOJI, VIDEO_LABEL, hostOf, isVideo, sectionsToText, textToSections } from '../lib/recipes';
+import { CATEGORY_EMOJI, VIDEO_LABEL, isVideo, recipeAsText, sectionsToText, shortUrl, textToSections } from '../lib/recipes';
 import { usePersistentState } from '../lib/storage';
 
 export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDelete }) {
@@ -28,13 +28,17 @@ export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDele
     }
   };
 
+  const fromChat = recipe.source.kind === 'whatsapp';
+  const [showMessage, setShowMessage] = useState(false);
+
   const share = async () => {
-    const data = { title: recipe.title, text: `${recipe.title}\n${recipe.source.url}`, url: recipe.source.url };
+    // מתכון מווטסאפ אין לו קישור: משתפים את המתכון עצמו
+    const text = fromChat ? recipeAsText(recipe) : `${recipe.title}\n${recipe.source.url}`;
     try {
-      if (navigator.share) await navigator.share(data);
+      if (navigator.share) await navigator.share(fromChat ? { title: recipe.title, text } : { title: recipe.title, text, url: recipe.source.url });
       else {
-        await navigator.clipboard.writeText(recipe.source.url);
-        setError('הקישור המקורי הועתק');
+        await navigator.clipboard.writeText(fromChat ? text : recipe.source.url);
+        setError(fromChat ? 'המתכון הועתק' : 'הקישור המקורי הועתק');
       }
     } catch {
       // המשתמש ביטל
@@ -67,28 +71,47 @@ export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDele
       </div>
 
       <article className="max-w-2xl mx-auto px-4">
-        {/* הקישור המקורי בראש הדף */}
-        <a
-          href={recipe.source.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-4 flex items-center gap-3 rounded-2xl bg-orange-50 border border-orange-200 p-3 hover:bg-orange-100 transition"
-        >
-          <span className="w-10 h-10 rounded-xl bg-orange-500 text-white flex items-center justify-center shrink-0">
-            {video ? <PlayCircle size={22} /> : <ExternalLink size={20} />}
-          </span>
-          <span className="flex-1 min-w-0">
-            <span className="block text-xs text-orange-700 font-medium">
-              {video ? `הסרטון המקורי ב-${VIDEO_LABEL[recipe.source.kind]}` : 'המתכון המקורי'}
-              {recipe.source.author ? ` · ${recipe.source.author}` : ''}
+        {/* המקור בראש הדף: הקישור המקורי, או ההודעה מווטסאפ */}
+        {fromChat ? (
+          <div className="mt-4 rounded-2xl bg-emerald-50 border border-emerald-200 p-3">
+            <button onClick={() => setShowMessage((v) => !v)} className="w-full flex items-center gap-3 text-right">
+              <span className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0">
+                <MessageCircle size={20} />
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-xs text-emerald-700 font-medium">
+                  מתוך ווטסאפ{recipe.source.chat ? ` · ${recipe.source.chat}` : ''}
+                </span>
+                <span className="block text-sm text-stone-800 truncate">
+                  {[recipe.source.author, recipe.source.date].filter(Boolean).join(' · ')}
+                </span>
+              </span>
+              <span className="text-xs text-emerald-700 shrink-0">{showMessage ? 'הסתרה' : 'ההודעה המקורית'}</span>
+            </button>
+            {showMessage && (
+              <p className="mt-3 text-sm text-stone-700 whitespace-pre-line bg-white rounded-xl p-3" dir="auto">{recipe.source.text}</p>
+            )}
+          </div>
+        ) : (
+          <a
+            href={recipe.source.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-4 flex items-center gap-3 rounded-2xl bg-orange-50 border border-orange-200 p-3 hover:bg-orange-100 transition"
+          >
+            <span className="w-10 h-10 rounded-xl bg-orange-500 text-white flex items-center justify-center shrink-0">
+              {video ? <PlayCircle size={22} /> : <ExternalLink size={20} />}
             </span>
-            <span className="block text-sm text-stone-800 truncate" dir="ltr">
-              {hostOf(recipe.source.url)}
-              {new URL(recipe.source.url).pathname.length > 1 ? new URL(recipe.source.url).pathname : ''}
+            <span className="flex-1 min-w-0">
+              <span className="block text-xs text-orange-700 font-medium">
+                {video ? `הסרטון המקורי ב-${VIDEO_LABEL[recipe.source.kind]}` : 'המתכון המקורי'}
+                {recipe.source.author ? ` · ${recipe.source.author}` : ''}
+              </span>
+              <span className="block text-sm text-stone-800 truncate" dir="ltr">{shortUrl(recipe.source.url)}</span>
             </span>
-          </span>
-          <ExternalLink size={16} className="text-orange-400 shrink-0" />
-        </a>
+            <ExternalLink size={16} className="text-orange-400 shrink-0" />
+          </a>
+        )}
 
         {recipe.source.embed ? (
           <div className={`mt-3 rounded-2xl overflow-hidden bg-black ${recipe.source.kind === 'tiktok' ? 'aspect-[9/16] max-w-xs mx-auto' : 'aspect-video'}`}>
@@ -221,7 +244,7 @@ export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDele
           <div className="mt-8 pt-5 border-t border-stone-200 flex flex-wrap gap-2 justify-center text-sm">
             <ActionButton onClick={() => setEditing(true)} icon={<Pencil size={16} />}>עריכה</ActionButton>
             <ActionButton onClick={() => run('refresh', onRefresh)} icon={busy === 'refresh' ? <Loader2 size={16} className="animate-spin" /> : <RotateCw size={16} />} disabled={Boolean(busy)}>
-              {busy === 'refresh' ? 'קורא שוב מהמקור…' : 'רענון מהמקור'}
+              {busy === 'refresh' ? 'מסדר שוב מהמקור…' : 'רענון מהמקור'}
             </ActionButton>
             <ActionButton
               onClick={() => window.confirm(`למחוק את "${recipe.title}"?`) && run('delete', onDelete)}

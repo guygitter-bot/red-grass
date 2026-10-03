@@ -23,6 +23,7 @@ export const deps = {
 
 const MAX_EDIT_BYTES = 200 * 1024;
 const MAX_SMALL_BYTES = 4000;
+const MAX_TEXT_BYTES = 30000;
 
 function corsHeaders(request, env) {
   const origin = request.headers.get('origin') || '';
@@ -123,31 +124,40 @@ export default {
     if (id && !/^[\w-]{1,64}$/.test(id)) return fail(404, 'Not found');
     const book = bookOf(user?.id);
 
-    // הוספת מתכון מקישור, או רענון מתכון קיים מהמקור שלו
-    const isAdd = request.method === 'POST' && parts.length === 1;
+    // הוספת מתכון מקישור או מהודעת ווטסאפ, או רענון מתכון קיים מהמקור שלו
+    const isAddText = request.method === 'POST' && parts.length === 2 && id === 'text';
+    const isAdd = (request.method === 'POST' && parts.length === 1) || isAddText;
     const isRefresh = request.method === 'POST' && parts.length === 3 && parts[2] === 'refresh';
     if (isAdd || isRefresh) {
       let link;
+      let text = null;
       if (isAdd) {
         if (!canAdd(user)) {
           return fail(402, `נגמרו ${user.freeLimit} המתכונים החינמיים`, { paywall: true, paymentUrl: env.PAYMENT_URL || '' });
         }
-        const { body, error } = await readJson();
+        const { body, error } = await readJson(isAddText ? MAX_TEXT_BYTES : MAX_SMALL_BYTES);
         if (error) return error;
-        link = normalizeUrl(body.url);
-        if (!link) return fail(400, 'זה לא נראה כמו קישור תקין');
+        if (isAddText) {
+          text = textSource(body);
+          if (!text) return fail(400, 'אין כאן טקסט של מתכון');
+        } else {
+          link = normalizeUrl(body.url);
+          if (!link) return fail(400, 'זה לא נראה כמו קישור תקין');
+        }
       } else {
         const res = await internal(book, 'GET', `/recipes/${id}`);
         if (!res.ok) return fail(404, 'המתכון לא נמצא');
-        link = (await res.json()).recipe.source.url;
+        const { source } = (await res.json()).recipe;
+        if (source.kind === 'whatsapp') text = textSource(source);
+        else link = source.url;
       }
       let recipe;
       try {
-        const src = await gatherSource(link, deps.fetch);
+        const src = text || (await gatherSource(link, deps.fetch));
         recipe = await extractRecipe(deps.anthropic(env), src);
       } catch (e) {
         if (e instanceof NoRecipeError) return fail(422, e.message);
-        console.error('extract failed', link, e);
+        console.error('extract failed', link || text.key, e);
         return fail(502, `לא הצלחתי להוציא מתכון: ${e.message || e}`);
       }
       const res = await internal(book, 'POST', '/recipes', recipe);
@@ -171,6 +181,15 @@ export default {
     return fail(405, 'Method not allowed');
   },
 };
+
+// מתכון שנכתב כהודעה בווטסאפ (בלי קישור)
+function textSource(body) {
+  const text = String(body.text || '').trim().slice(0, 20000);
+  if (text.length < 20) return null;
+  const str = (v) => String(v || '').trim().slice(0, 120);
+  const key = /^wa:[\w-]{1,40}$/.test(body.key) ? body.key : `wa:${text.length}:${text.slice(0, 40)}`;
+  return { kind: 'whatsapp', key, text, chat: str(body.chat), author: str(body.author), date: str(body.date) };
+}
 
 function bearer(request) {
   const m = (request.headers.get('authorization') || '').match(/^Bearer\s+(\S{10,200})$/i);
