@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  captionFromOgDescription, instagram, instagramCode, linksIn, readInstagramEmbed, readInstagramJson, readTiktokPage,
+  GOOGLEBOT, readEscapedMedia, captionFromOgDescription, instagram, instagramCode, linksIn, readInstagramEmbed, readInstagramJson, readTiktokPage,
   readYoutubeComments, youtubeCommentsToken,
 } from './social.js';
 import { gatherSource } from './source.js';
@@ -72,7 +72,7 @@ test('Instagram end to end: embed blocked, GraphQL works, recipe and comments re
   assert.equal(src.text, '', 'no menu text from the social page');
   assert.equal(src.hint, 'עוגת גבינה מעולה');
   assert.deepEqual(src.warnings, []);
-  assert.ok(src.debug[0].startsWith('instagram: embed:HTTP 429, graphql:ok'));
+  assert.ok(src.debug[0].startsWith('instagram: embed-googlebot:HTTP 429, page-googlebot:empty, embed:HTTP 429, graphql:ok'));
   assert.ok(RECIPE_TOOL);
 });
 
@@ -115,4 +115,45 @@ test('follows a blog link from the caption and reads its recipe', async () => {
   const src = await gatherSource('https://youtu.be/AbCdEf12345', fakeFetch);
   assert.equal(src.linked.length, 1);
   assert.equal(src.linked[0].recipes[0].ingredients.length, 2);
+});
+
+// כך אינסטגרם מחזיר את דף ה-embed לבוט של גוגל: JSON של הפוסט בתוך מחרוזת (רמת escape אחת)
+const MEDIA = {
+  owner: { username: 'michi_blog' },
+  display_url: 'https://cdn.example/basque.jpg',
+  edge_media_to_caption: { edges: [{ node: { text: '⁨\t⁨\tלא סתם עוגת הגבינה הבאסקית כבשה את כולם.\nבתבנית אינגליש קייק.' } }] },
+  edge_media_preview_comment: { edges: [{ node: { text: 'המתכון: 750 גרם גבינת שמנת, 4 ביצים', owner: { username: 'michi_blog' } } }] },
+};
+const escapedPage = (obj) => `<script>s.handle({"contextData":${JSON.stringify(JSON.stringify({ gql_data: obj }))}})</script>`;
+
+test('reads the caption Instagram gives Googlebot (escaped JSON in the embed page)', async () => {
+  const into = readEscapedMedia(escapedPage({ shortcode_media: MEDIA }), { caption: '', author: '', image: null, comments: [] });
+  assert.equal(into.author, 'michi_blog');
+  assert.match(into.caption, /עוגת הגבינה הבאסקית/);
+  assert.equal(into.comments[0].byCreator, true);
+
+  // רק הכיתוב (בלי אובייקט פוסט שלם)
+  const only = readEscapedMedia(escapedPage({ x: { edge_media_to_caption: MEDIA.edge_media_to_caption } }), { caption: '', author: '', image: null, comments: [] });
+  assert.match(only.caption, /אינגליש קייק/);
+
+  const uas = [];
+  const fakeFetch = async (url, init) => {
+    uas.push([String(url), init.headers['user-agent']]);
+    if (String(url).includes('/embed/captioned/') && init.headers['user-agent'] === GOOGLEBOT) return new Response(escapedPage({ shortcode_media: MEDIA }));
+    return new Response('<title>Instagram</title> login', { status: 200 });
+  };
+  const ig = await instagram(fakeFetch, 'https://www.instagram.com/reel/DXCJXPRjQfE/?igsh=x');
+  assert.equal(ig.caption.startsWith('לא סתם עוגת הגבינה הבאסקית'), true, 'direction marks and tabs removed');
+  assert.equal(ig.author, 'michi_blog');
+  assert.equal(ig.image, 'https://cdn.example/basque.jpg');
+  assert.equal(uas[0][1], GOOGLEBOT);
+});
+
+test('falls back to the og:description of the post page', async () => {
+  const og = '<meta property="og:url" content="https://www.instagram.com/michi_blog/reel/DXCJXPRjQfE/" />'
+    + '<meta property="og:description" content="&#x200f;11K likes, 726 comments - michi_blog &#x5d1;-April 12, 2026: &quot;&#x2068;\t&#x5dc;&#x5d0; &#x5e1;&#x5ea;&#x5dd; &#x5e2;&#x5d5;&#x5d2;&#x5d4;&quot;" />';
+  const fakeFetch = async (url) => (String(url).endsWith('/reel/DXCJXPRjQfE/') ? new Response(og) : new Response('', { status: 403 }));
+  const ig = await instagram(fakeFetch, 'https://www.instagram.com/reel/DXCJXPRjQfE/');
+  assert.equal(ig.caption, 'לא סתם עוגה');
+  assert.equal(ig.author, 'michi_blog');
 });
