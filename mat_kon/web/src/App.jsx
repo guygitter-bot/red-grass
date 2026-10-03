@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, Globe, Heart, Loader2, LogOut, MessageCircle, PenLine, Plus, Search, Settings, Trash2, X } from 'lucide-react';
+import { Globe, Heart, Loader2, LogOut, MessageCircle, PenLine, Plus, Search, Settings, Trash2, X } from 'lucide-react';
 import SearchView from './components/SearchView';
 import SettingsView from './components/SettingsView';
 import Auth from './components/Auth';
@@ -84,6 +84,10 @@ export default function App() {
   const [tag, setTag] = useState(null);
   // תמונות שצולמו מהמסך הראשי ("צילום מתכון"), עוברות למסך בניית המתכון
   const [photoFiles, setPhotoFiles] = useState(null);
+  const takePhotos = (files) => {
+    setPhotoFiles(files);
+    window.location.hash = '#/new';
+  };
   const [sort, setSort] = usePersistentState('matkon_sort', 'new');
   // קטגוריות שהמשתמש הוסיף (הקבועות ב-lib/categories)
   const [custom, setCustom] = usePersistentState('matkon_custom_categories', []);
@@ -246,7 +250,7 @@ export default function App() {
       <>
         <ShoppingView session={session} items={shopping} onChange={saveShopping} onBack={() => open(null)} onToast={setToast} />
         {toast && <Toast text={toast} />}
-        <BottomNav view="shopping" shoppingCount={openShopping} />
+        <BottomNav view="shopping" shoppingCount={openShopping} onPhotos={takePhotos} />
       </>
     );
   }
@@ -272,7 +276,7 @@ export default function App() {
           }}
         />
         {toast && <Toast text={toast} />}
-        <BottomNav view="plan" shoppingCount={openShopping} />
+        <BottomNav view="plan" shoppingCount={openShopping} onPhotos={takePhotos} />
       </>
     );
   }
@@ -329,7 +333,7 @@ export default function App() {
     return (
       <>
         <FridgeView recipes={recipes} />
-        <BottomNav view="fridge" shoppingCount={openShopping} />
+        <BottomNav view="fridge" shoppingCount={openShopping} onPhotos={takePhotos} />
       </>
     );
   }
@@ -443,23 +447,7 @@ export default function App() {
           </div>
           <AddLink onAdd={add} onSearch={(q) => { window.location.hash = `#/search?q=${encodeURIComponent(q)}`; }} />
           {/* עוד דרכים להוסיף מתכון */}
-          <div className="mt-3 grid grid-cols-4 gap-2 text-center text-xs font-medium">
-            <label className="rounded-2xl bg-white/15 hover:bg-white/25 py-2.5 flex flex-col items-center gap-1 cursor-pointer">
-              <Camera size={20} /> צילום מתכון
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                multiple
-                className="hidden"
-                onChange={(e) => {
-                  if (!e.target.files?.length) return;
-                  setPhotoFiles([...e.target.files]);
-                  e.target.value = '';
-                  window.location.hash = '#/new';
-                }}
-              />
-            </label>
+          <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs font-medium">
             <a href="#/new?manual" className="rounded-2xl bg-white/15 hover:bg-white/25 py-2.5 flex flex-col items-center gap-1">
               <PenLine size={20} /> כתיבה ידנית
             </a>
@@ -610,7 +598,7 @@ export default function App() {
       </main>
 
       {toast && <Toast text={toast} />}
-      <BottomNav view="home" shoppingCount={openShopping} />
+      <BottomNav view="home" shoppingCount={openShopping} onPhotos={takePhotos} />
     </div>
   );
 }
