@@ -14,6 +14,7 @@
 
 export const PBKDF2_ITERATIONS = 20000;
 export const MAX_MEMBERS = 5; // כולל בעל הספר
+const SESSION_DAYS = 180;
 const JOIN_DAYS = 7;
 export const OWNER_BOOK = 'owner';
 
@@ -62,7 +63,23 @@ export const publicUser = (u, freeLimit) => ({
 export class Accounts {
   constructor(state, env) {
     this.storage = state.storage;
+    this.env = env || {};
     this.freeLimit = Number(env?.FREE_RECIPES ?? 10);
+  }
+
+  // גרסת הסוד של בעל האפליקציה: החלפת הסיסמה מנתקת את כל מכשירי הבעלים
+  async ownerVersion() {
+    return (await sha256(`${this.env.OWNER_PASSWORD || ''}|${this.env.OWNER_EMAIL || ''}`)).slice(0, 16);
+  }
+
+  // הגבלת קצב: עד limit פעולות בחלון של windowSec לכל מפתח. מחזיר true אם מותר (וסופר את הפעולה)
+  async allow(key, limit, windowSec) {
+    const now = Date.now();
+    let a = (await this.storage.get(`rate:${key}`)) || { count: 0, since: now };
+    if (now - a.since > windowSec * 1000) a = { count: 0, since: now };
+    if (a.count >= limit) return false;
+    await this.storage.put(`rate:${key}`, { ...a, count: a.count + 1 });
+    return true;
   }
 
   // המשתמש כמו שהשרת עובד איתו: חבר בספר משותף מקבל את המנוי והמכסה של בעל הספר
@@ -132,14 +149,12 @@ export class Accounts {
       return json({ name: invite.name, used: Boolean(invite.userId), freeLimit: this.freeLimit });
     }
     if (path === '/register' && request.method === 'POST') {
-      const claim = await this.claim(body);
-      if (claim.error) return err(claim.status, claim.error);
       const name = String(body.name || '').trim().slice(0, 80);
       const email = normalizeEmail(body.email);
       const password = String(body.password || '');
       if (!name) return err(400, 'נא למלא שם');
       if (!validEmail(email)) return err(400, 'כתובת האימייל לא תקינה');
-      if (password.length < 6 || password.length > 200) return err(400, 'הסיסמה צריכה להיות לפחות 6 תווים');
+      if (password.length < 8 || password.length > 200) return err(400, 'הסיסמה צריכה להיות לפחות 8 תווים');
       const existingId = await this.storage.get(`email:${email}`);
       if (existingId) {
         const existing = await this.storage.get(`user:${existingId}`);
@@ -149,8 +164,11 @@ export class Accounts {
         }
         return err(409, 'האימייל הזה כבר רשום. אפשר להיכנס איתו.');
       }
+      const id = crypto.randomUUID();
+      const claim = await this.claim(body, id);
+      if (claim.error) return err(claim.status, claim.error);
       const salt = randomToken(16);
-      return this.createUser({ name, email, salt, hash: await hashPassword(password, salt) }, claim);
+      return this.createUser(id, { name, email, salt, hash: await hashPassword(password, salt) }, claim);
     }
     if (path === '/login' && request.method === 'POST') {
       const id = await this.storage.get(`email:${normalizeEmail(body.email)}`);
@@ -183,7 +201,7 @@ export class Accounts {
     if (path === '/members/invite' && request.method === 'POST') {
       const bookId = String(body.bookId || '');
       if (bookId !== OWNER_BOOK && !(await this.storage.get(`user:${bookId}`))) return err(404, 'הספר לא נמצא');
-      if (bookId !== OWNER_BOOK && (await this.membersOf(bookId)).length + 1 >= MAX_MEMBERS) {
+      if ((await this.membersOf(bookId)).length + 1 >= MAX_MEMBERS) {
         return err(400, `אפשר עד ${MAX_MEMBERS} אנשים בספר`);
       }
       const join = {
@@ -223,16 +241,26 @@ export class Accounts {
       }
       if (user) {
         if (!user.google) {
+          // גוגל מוכיח שהאימייל שייך למי שנכנס. אם מישהו אחר רשם את האימייל הזה עם סיסמה (בלי אימות),
+          // הסיסמה מבוטלת וכל החיבורים הקיימים מנותקים – כך אי אפשר "לתפוס" חשבון של מישהו לפני שנרשם
           user.google = String(body.sub);
+          if (user.hash) {
+            user.hash = null;
+            user.salt = null;
+            const sessions = await this.storage.list({ prefix: 'session:' });
+            const keys = [...sessions].filter(([, x]) => x.userId === user.id).map(([k]) => k);
+            for (let i = 0; i < keys.length; i += 128) await this.storage.delete(keys.slice(i, i + 128));
+          }
           await this.storage.put(`user:${user.id}`, user);
         } else if (user.google !== String(body.sub)) return err(401, 'חשבון הגוגל לא תואם למשתמש');
         return this.signedIn(user);
       }
-      const claim = await this.claim(body);
+      const newId = crypto.randomUUID();
+      const claim = await this.claim(body, newId);
       if (claim.error) {
         return err(claim.status, claim.missing ? 'אין עדיין משתמש עם החשבון הזה. כדי להירשם צריך קישור הזמנה.' : claim.error);
       }
-      return this.createUser({
+      return this.createUser(newId, {
         name: String(body.name || '').trim().slice(0, 80) || email.split('@')[0], email, salt: null, hash: null, google: String(body.sub),
       }, claim);
     }
@@ -245,38 +273,67 @@ export class Accounts {
     // ---- בעל האפליקציה: מכשיר שנכנס, והגבלת ניסיונות סיסמה (10 ברבע שעה) ----
     if (path === '/owner-session' && request.method === 'POST') {
       const token = randomToken(32);
-      await this.storage.put(`session:${await sha256(token)}`, { owner: true, createdAt: now });
-      await this.storage.delete('owner-attempts');
+      await this.storage.put(`session:${await sha256(token)}`, { owner: true, v: await this.ownerVersion(), createdAt: now });
       return json({ session: token, user: null, owner: true });
     }
-    if (path === '/owner-attempt' && request.method === 'POST') {
-      const windowMs = 15 * 60 * 1000;
-      let a = (await this.storage.get('owner-attempts')) || { count: 0, since: now };
-      if (Date.now() - Date.parse(a.since) > windowMs) a = { count: 0, since: now };
-      if (a.count >= 10) return err(429, 'יותר מדי ניסיונות. נסו שוב בעוד רבע שעה.');
-      if (body.failed) await this.storage.put('owner-attempts', { ...a, count: a.count + 1 });
+    // הגבלת קצב כללית (ניסיונות כניסה, הרשמה...): {checks: [{key, limit, window}]} – כולם חייבים לעבור
+    if (path === '/rate' && request.method === 'POST') {
+      for (const c of Array.isArray(body.checks) ? body.checks : []) {
+        if (!(await this.allow(String(c.key).slice(0, 200), Number(c.limit) || 10, Number(c.window) || 900))) {
+          return err(429, body.message || 'יותר מדי ניסיונות. נסו שוב מאוחר יותר.');
+        }
+      }
       return json({ ok: true });
+    }
+    // יציאה מכל המכשירים
+    if (path === '/logout-all' && request.method === 'POST') {
+      const current = await this.storage.get(`session:${await sha256(String(body.session || ''))}`);
+      if (!current) return err(401, 'צריך להיכנס מחדש');
+      const sessions = await this.storage.list({ prefix: 'session:' });
+      const keys = [...sessions].filter(([, x]) => (current.owner ? x.owner : x.userId === current.userId)).map(([k]) => k);
+      for (let i = 0; i < keys.length; i += 128) await this.storage.delete(keys.slice(i, i + 128));
+      return json({ ok: true, count: keys.length });
+    }
+    // מחיקת חשבון עצמית: חבר בספר משותף – רק הוא; בעל ספר – גם החברים בספר וההזמנה שלו
+    if (path === '/account/delete' && request.method === 'POST') {
+      const user = await this.storage.get(`user:${body.userId}`);
+      if (!user) return err(404, 'המשתמש לא נמצא');
+      await this.deleteUser(user.id);
+      if (!user.bookId && user.invite) await this.storage.delete(`invite:${user.invite}`);
+      return json({ ok: true, deletedBook: !user.bookId });
     }
 
     // ---- פנימי: זיהוי משתמש ומכסה ----
     if (path === '/auth' && request.method === 'POST') {
-      const session = await this.storage.get(`session:${await sha256(String(body.session || ''))}`);
+      const key = `session:${await sha256(String(body.session || ''))}`;
+      const session = await this.storage.get(key);
+      // חיבור פג אחרי 180 יום, וחיבור בעלים – גם כשסיסמת הבעלים הוחלפה
+      const expired = session && (Date.now() - Date.parse(session.createdAt) > SESSION_DAYS * 86400000
+        || (session.owner && session.v !== (await this.ownerVersion())));
+      if (expired) {
+        await this.storage.delete(key);
+        return err(401, 'צריך להיכנס מחדש');
+      }
       if (session?.owner) return json({ user: null, owner: true });
       const stored = session && (await this.storage.get(`user:${session.userId}`));
       const user = stored && (await this.effectiveUser(stored));
       if (!user) return err(401, 'צריך להיכנס מחדש');
       return json({ user });
     }
-    if (path === '/count' && request.method === 'POST') {
+    // מכסת המתכונים החינמיים נלקחת לפני העבודה (כדי ששתי בקשות במקביל לא יעברו את המכסה),
+    // ומוחזרת אם העבודה נכשלה או שלא נוסף מתכון חדש. נספרת אצל בעל הספר.
+    if ((path === '/quota/take' || path === '/quota/give') && request.method === 'POST') {
       const member = await this.storage.get(`user:${body.userId}`);
       if (!member) return err(404, 'המשתמש לא נמצא');
-      // המכסה של ספר משותף נספרת אצל בעל הספר (בספר של בעל האפליקציה אין מכסה)
-      if (member.bookId !== OWNER_BOOK) {
-        const holder = member.bookId ? await this.storage.get(`user:${member.bookId}`) : member;
-        if (holder) {
+      const holder = member.bookId === OWNER_BOOK ? null : member.bookId ? await this.storage.get(`user:${member.bookId}`) : member;
+      if (holder) {
+        if (path === '/quota/take') {
+          if (holder.plan !== 'paid' && holder.added >= this.freeLimit) {
+            return err(402, `נגמרו ${this.freeLimit} המתכונים החינמיים`);
+          }
           holder.added += 1;
-          await this.storage.put(`user:${holder.id}`, holder);
-        }
+        } else holder.added = Math.max(0, holder.added - 1);
+        await this.storage.put(`user:${holder.id}`, holder);
       }
       return json({ user: await this.effectiveUser(await this.storage.get(`user:${member.id}`)) });
     }
@@ -285,14 +342,19 @@ export class Accounts {
   }
 
   // הרשמה מקישור הזמנה (ספר חדש) או מקישור הצטרפות (ספר משותף)
-  async claim(body) {
+  // הרשמה מקישור הזמנה (ספר חדש) או מקישור הצטרפות (ספר משותף).
+  // הקישור "נתפס" מיד (באותו צעד של הבדיקה), כדי ששתי הרשמות במקביל לא ינצלו אותו פעמיים
+  async claim(body, userId) {
     if (body.join) {
       const join = await this.validJoin(body.join);
-      return join.error ? join : { join: join.join };
+      if (join.error) return join;
+      await this.storage.put(`join:${join.join.token}`, { ...join.join, usedBy: userId });
+      return { join: join.join };
     }
     const invite = body.token && (await this.storage.get(`invite:${body.token}`));
     if (!invite) return { status: 404, error: 'קישור ההזמנה לא תקף', missing: !body.token };
     if (invite.userId) return { status: 409, error: 'כבר נרשמו עם הקישור הזה. אפשר להיכנס עם החשבון שנרשמתם בו.' };
+    await this.storage.put(`invite:${invite.token}`, { ...invite, userId });
     return { invite };
   }
 
@@ -305,15 +367,15 @@ export class Accounts {
     if (join.bookId !== OWNER_BOOK) {
       const holder = await this.storage.get(`user:${join.bookId}`);
       if (!holder) return { status: 404, error: 'הספר לא קיים יותר' };
-      if ((await this.membersOf(join.bookId)).length + 1 >= MAX_MEMBERS) return { status: 400, error: `בספר הזה כבר ${MAX_MEMBERS} אנשים` };
       bookName = holder.name;
     }
+    if ((await this.membersOf(join.bookId)).length + 1 >= MAX_MEMBERS) return { status: 400, error: `בספר הזה כבר ${MAX_MEMBERS} אנשים` };
     return { join, bookName };
   }
 
-  async createUser(fields, { invite, join }) {
+  async createUser(id, fields, { invite, join }) {
     const user = {
-      id: crypto.randomUUID(), ...fields, plan: 'free', added: 0, createdAt: new Date().toISOString(),
+      id, ...fields, plan: 'free', added: 0, createdAt: new Date().toISOString(),
       invite: invite?.token || null, ...(join ? { bookId: join.bookId } : {}),
     };
     const puts = { [`user:${user.id}`]: user, [`email:${user.email}`]: user.id };

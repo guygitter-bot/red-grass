@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
-import { ArrowRight, Download, Loader2, Upload, UserPlus, Users } from 'lucide-react';
-import { restoreBackup } from '../lib/api';
+import { ArrowRight, Download, Loader2, LogOut, ShieldCheck, Trash2, Upload, UserPlus, Users } from 'lucide-react';
+import { deleteAccount, logoutAll, restoreBackup } from '../lib/api';
 import { backupFile } from '../lib/recipes';
 
 // הגדרות: גיבוי ושחזור, הזמנות
-export default function SettingsView({ session, isOwner, user, recipes, custom, shopping, plan, onRestored, onBack, onToast }) {
+export default function SettingsView({ session, isOwner, user, recipes, custom, shopping, plan, pantry, onRestored, onSignedOut, onBack, onToast }) {
+  const [progress, setProgress] = useState('');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const fileRef = useRef(null);
@@ -22,7 +23,7 @@ export default function SettingsView({ session, isOwner, user, recipes, custom, 
   };
 
   const download = () => {
-    const blob = new Blob([backupFile({ recipes, categories: custom, shopping, plan })], { type: 'application/json' });
+    const blob = new Blob([backupFile({ recipes, categories: custom, shopping, plan, pantry })], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `mat-kon-backup-${new Date().toISOString().slice(0, 10)}.json`;
@@ -39,8 +40,9 @@ export default function SettingsView({ session, isOwner, user, recipes, custom, 
         throw new Error('הקובץ הזה לא קובץ גיבוי של mat-kon');
       }
       if (!Array.isArray(data.recipes)) throw new Error('הקובץ הזה לא קובץ גיבוי של mat-kon');
-      const res = await restoreBackup(session, { recipes: data.recipes, categories: data.categories || [] });
-      onToast(`שוחזרו ${res.restored} מתכונים${res.skipped ? ` (${res.skipped} דולגו)` : ''}`);
+      const res = await restoreBackup(session, data, (done, total) => setProgress(`${done}/${total}`));
+      setProgress('');
+      onToast(`שוחזרו ${res.restored} מתכונים${res.skipped ? ` (${res.skipped} דולגו)` : ''}, וגם רשימת הקניות, התכנון והמלאי`);
       onRestored();
     });
 
@@ -94,11 +96,50 @@ export default function SettingsView({ session, isOwner, user, recipes, custom, 
               <Download size={16} /> הורדת גיבוי
             </button>
             <button onClick={() => fileRef.current?.click()} disabled={busy === 'restore'} className="rounded-xl bg-stone-100 px-4 py-2.5 font-medium flex items-center gap-1.5 disabled:opacity-40">
-              {busy === 'restore' ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />} שחזור מקובץ
+              {busy === 'restore' ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />} {busy === 'restore' && progress ? `משחזר ${progress}` : 'שחזור מקובץ'}
             </button>
             <input ref={fileRef} type="file" accept=".json,application/json" className="hidden" onChange={(e) => e.target.files[0] && restore(e.target.files[0])} />
           </div>
         </section>
+
+        {session && (
+          <section className="rounded-2xl bg-white shadow-sm p-4">
+            <h2 className="font-bold text-lg">החשבון</h2>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                onClick={() => window.confirm('לצאת מהחשבון בכל המכשירים (כולל זה)?') && run('logout-all', async () => {
+                  await logoutAll(session);
+                  onSignedOut();
+                })}
+                className="rounded-xl bg-stone-100 px-4 py-2.5 font-medium flex items-center gap-1.5"
+              >
+                <LogOut size={16} /> יציאה מכל המכשירים
+              </button>
+              {user && (
+                <button
+                  onClick={() => {
+                    const holder = user.role !== 'member';
+                    const warn = holder
+                      ? 'למחוק את החשבון לצמיתות? כל המתכונים, רשימת הקניות והתכנון יימחקו, וגם בני המשפחה שבספר יאבדו גישה. אי אפשר לבטל.'
+                      : 'למחוק את החשבון שלך? הספר המשותף נשאר אצל בעל הספר.';
+                    if (window.prompt(`${warn}\n\nכדי לאשר כתבו: מחיקה`) !== 'מחיקה') return;
+                    run('delete', async () => {
+                      await deleteAccount(session);
+                      onSignedOut();
+                    });
+                  }}
+                  className="rounded-xl bg-red-50 text-red-700 px-4 py-2.5 font-medium flex items-center gap-1.5"
+                >
+                  <Trash2 size={16} /> מחיקת החשבון
+                </button>
+              )}
+            </div>
+          </section>
+        )}
+
+        <a href="#/privacy" className="flex items-center gap-2 text-sm text-stone-600 px-1">
+          <ShieldCheck size={16} /> פרטיות ותנאי שימוש
+        </a>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
       </div>

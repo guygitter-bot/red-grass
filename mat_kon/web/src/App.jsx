@@ -18,6 +18,7 @@ import { itemsToPlan, planToItems } from './lib/sync';
 import useSyncedList from './hooks/useSyncedList';
 import InvitesView from './components/InvitesView';
 import ShareView from './components/ShareView';
+import PrivacyView from './components/PrivacyView';
 import Paywall from './components/Paywall';
 import PendingList from './components/PendingList';
 import RecipeCard from './components/RecipeCard';
@@ -50,6 +51,7 @@ const route = () => {
   const h = window.location.hash;
   if (h === '#/invites') return { view: 'invites' };
   if (h === '#/share') return { view: 'share' };
+  if (h === '#/privacy') return { view: 'privacy' };
   if (h === '#/shopping') return { view: 'shopping' };
   if (h.startsWith('#/new')) return { view: 'new', mode: h.includes('manual') ? 'manual' : 'photo' };
   if (h === '#/plan') return { view: 'plan' };
@@ -307,6 +309,7 @@ export default function App() {
   }
 
   if (nav.view === 'invites' && isOwner) return <InvitesView onBack={back} />;
+  if (nav.view === 'privacy') return <PrivacyView onBack={back} />;
   if (nav.view === 'share') return <ShareView session={session} user={ownerDevice ? null : user} onBack={back} />;
 
   const openShopping = shopping.filter((i) => !i.checked).length;
@@ -358,7 +361,9 @@ export default function App() {
           custom={custom}
           shopping={shopping}
           plan={plan}
+          pantry={pantry}
           onRestored={reload}
+          onSignedOut={signOut}
           onBack={() => open(null)}
           onToast={setToast}
         />

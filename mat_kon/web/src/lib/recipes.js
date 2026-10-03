@@ -177,6 +177,6 @@ export function topTags(recipes, limit = 12) {
 export const emojiOf = (category) => CATEGORY_EMOJI[category] || '🏷️';
 
 // קובץ הגיבוי: המתכונים והקטגוריות שלי (רשימת הקניות והתכנון נכללים לעיון, ולא משוחזרים)
-export function backupFile({ recipes, categories, shopping, plan }) {
-  return JSON.stringify({ app: 'mat-kon', version: 1, exportedAt: new Date().toISOString(), categories, recipes, shopping, plan }, null, 1);
+export function backupFile({ recipes, categories, shopping, plan, pantry }) {
+  return JSON.stringify({ app: 'mat-kon', version: 2, exportedAt: new Date().toISOString(), categories, recipes, shopping, plan, pantry }, null, 1);
 }

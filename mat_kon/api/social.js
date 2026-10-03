@@ -1,3 +1,4 @@
+import { isPublicUrl, safeFetch } from './net.js';
 // קריאה מעמיקה של רשתות חברתיות: הכיתוב של הפוסט והתגובות (תגובות של היוצר קודם),
 // כי הרבה פעמים המתכון כתוב שם ולא בסרטון. הכל "best effort": מה שנחסם פשוט מדולג.
 
@@ -11,13 +12,13 @@ export const GOOGLEBOT = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.go
 export const IG_DOC_ID = '8845758582119845';
 
 async function request(fetchFn, url, init = {}) {
-  const res = await fetchFn(url, {
-    ...init,
-    headers: { 'user-agent': init.ua || UA, 'accept-language': 'he-IL,he;q=0.9,en;q=0.8', ...(init.headers || {}) },
-    redirect: 'follow',
+  const { ua, ...rest } = init;
+  const { res, text } = await safeFetch(fetchFn, url, {
+    ...rest,
+    headers: { 'user-agent': ua || UA, 'accept-language': 'he-IL,he;q=0.9,en;q=0.8', ...(init.headers || {}) },
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.text();
+  return text();
 }
 
 const tryJson = (text) => {
@@ -329,7 +330,7 @@ export function linksIn(texts, limit = 3) {
     for (const raw of String(t || '').match(/(?:https?:\/\/|www\.)[^\s<>"'״)]+/gi) || []) {
       const url = (raw.startsWith('http') ? raw : `https://${raw}`).replace(/[.,!?;:]+$/, '');
       try {
-        if (SOCIAL.test(new URL(url).hostname.replace(/^www\./, ''))) continue;
+        if (!isPublicUrl(url) || SOCIAL.test(new URL(url).hostname.replace(/^www\./, ''))) continue;
       } catch {
         continue;
       }

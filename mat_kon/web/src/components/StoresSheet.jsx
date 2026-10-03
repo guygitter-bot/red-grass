@@ -11,7 +11,8 @@ function locate() {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) return reject(new Error('המכשיר לא תומך במיקום'));
     navigator.geolocation.getCurrentPosition(
-      (p) => resolve({ lat: p.coords.latitude, lon: p.coords.longitude }),
+      // מיקום בקירוב (~100 מ'): מספיק למציאת סופרים, ולא נשלח מיקום מדויק לשירותים חיצוניים
+      (p) => resolve({ lat: Math.round(p.coords.latitude * 1000) / 1000, lon: Math.round(p.coords.longitude * 1000) / 1000 }),
       (e) => reject(new Error(e.code === 1
         ? 'אין הרשאת מיקום. אפשר לאשר אותה בהגדרות הדפדפן (סמל המנעול ליד הכתובת) ולנסות שוב.'
         : 'לא הצלחתי למצוא את המיקום. נסו שוב.')),

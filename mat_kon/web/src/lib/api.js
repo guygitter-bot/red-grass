@@ -98,7 +98,36 @@ export const addCategory = (s, name) => api(s, 'POST', '/categories', { name }).
 export const removeCategory = (s, name) => api(s, 'POST', '/categories/remove', { name });
 
 // גיבוי ושחזור
-export const restoreBackup = (s, backup) => api(s, 'POST', '/recipes/restore', backup);
+// שחזור במנות של 40 מתכונים (קובץ גדול עם תמונות לא נשלח בבקשה אחת), ואחר כך רשימת קניות, תכנון ומלאי
+export async function restoreBackup(s, backup, onProgress) {
+  const recipes = backup.recipes || [];
+  const ids = {};
+  let restored = 0;
+  let skipped = 0;
+  for (let i = 0; i < recipes.length || i === 0; i += 40) {
+    const part = await api(s, 'POST', '/recipes/restore', { recipes: recipes.slice(i, i + 40), ...(i === 0 ? { categories: backup.categories || [] } : {}) });
+    restored += part.restored;
+    skipped += part.skipped;
+    Object.assign(ids, part.ids || {});
+    onProgress?.(Math.min(i + 40, recipes.length), recipes.length);
+    if (i + 40 >= recipes.length) break;
+  }
+  const remap = (id) => (id && ids[id]) || id;
+  const add = (items) => items.map((item) => ({ op: 'add', id: String(item.id || `${Date.now()}-${Math.random()}`), item }));
+  if (Array.isArray(backup.shopping) && backup.shopping.length) {
+    await shoppingOps(s, add(backup.shopping.slice(0, 500).map((i) => ({ ...i, recipeId: remap(i.recipeId) }))));
+  }
+  if (Array.isArray(backup.pantry) && backup.pantry.length) await pantryOps(s, add(backup.pantry.slice(0, 400)));
+  if (backup.plan && typeof backup.plan === 'object') {
+    const meals = Object.entries(backup.plan).flatMap(([day, list]) => (Array.isArray(list) ? list : []).map((m) => ({ ...m, day, recipeId: remap(m.recipeId) })));
+    if (meals.length) await planOps(s, add(meals.slice(-500)));
+  }
+  return { restored, skipped };
+}
+
+// חשבון: יציאה מכל המכשירים, מחיקת החשבון
+export const logoutAll = (s) => api(s, 'POST', '/logout-all', {});
+export const deleteAccount = (s) => api(s, 'DELETE', '/account');
 
 // המלאי בבית: מקרר ומזווה
 export const getPantry = (s) => api(s, 'GET', '/pantry').then((d) => d.items);
