@@ -11,16 +11,19 @@ export class ApiError extends Error {
   }
 }
 
-export async function api(session, method, path, body) {
+export async function api(session, method, path, body, { keepalive = false } = {}) {
   let res;
+  const payload = body && JSON.stringify(body);
   try {
     res = await fetch(`${API_URL}${path}`, {
       method,
+      // keepalive: הבקשה ממשיכה גם כשהאפליקציה נסגרת (עד 64KB)
+      keepalive: keepalive && payload && payload.length < 60000,
       headers: {
         ...(session ? { authorization: `Bearer ${session}` } : {}),
         ...(body ? { 'content-type': 'application/json' } : {}),
       },
-      body: body && JSON.stringify(body),
+      body: payload,
     });
   } catch {
     throw new ApiError('אין חיבור לשרת. בדקו את האינטרנט ונסו שוב.', 0);
@@ -52,8 +55,25 @@ export function safeRecipe(r) {
 }
 export const addRecipe = (s, url, hint) => api(s, 'POST', '/recipes', hint ? { url, hint } : { url });
 // הוספה ברקע: השרת מחזיר מספר עבודה מיד, וממשיך גם אם האפליקציה נסגרת
-export const addRecipeAsync = (s, url) => api(s, 'POST', '/recipes?async=1', { url }).then((d) => d.job);
+export const addRecipeAsync = (s, url, hint) => api(s, 'POST', '/recipes?async=1', hint ? { url, hint } : { url }).then((d) => d.job);
 export const getJob = (s, id) => api(s, 'GET', `/jobs/${id}`).then((d) => d.job);
+
+// הוספה ברקע ומחכים לתוצאה (ייבוא מווטסאפ): גם אם האפליקציה ברקע, השרת ממשיך, והמעקב חוזר כשחוזרים
+export async function addRecipeAndWait(s, url, hint) {
+  const job = await addRecipeAsync(s, url, hint);
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 3000));
+    let state;
+    try {
+      state = await getJob(s, job.id);
+    } catch (e) {
+      if (e.status === 404) throw e;
+      continue; // רשת נפלה לרגע – ממשיכים לבדוק
+    }
+    if (state.status === 'done') return { recipe: await getRecipe(s, state.recipeId) };
+    if (state.status === 'error') throw new ApiError(state.error, state.code || 502, {});
+  }
+}
 export const getRecipe = (s, id) => api(s, 'GET', `/recipes/${id}`).then((d) => safeRecipe(d.recipe));
 export const refreshRecipe = (s, id) => api(s, 'POST', `/recipes/${id}/refresh`);
 export const updateRecipe = (s, id, patch) => api(s, 'PUT', `/recipes/${id}`, patch).then((d) => d.recipe);
@@ -86,9 +106,9 @@ export const putShopping = (s, items) => api(s, 'PUT', '/shopping', { items }).t
 export const organizeShopping = (s, items) => api(s, 'POST', '/shopping/organize', { items }).then((d) => d.groups);
 
 // שינויים ברמת פריט (כדי ששני בני משפחה לא ימחקו זה לזה)
-export const shoppingOps = (s, ops) => api(s, 'POST', '/shopping/ops', { ops }).then((d) => d.items);
-export const pantryOps = (s, ops) => api(s, 'POST', '/pantry/ops', { ops }).then((d) => d.items);
-export const planOps = (s, ops) => api(s, 'POST', '/plan/ops', { ops }).then((d) => d.plan);
+export const shoppingOps = (s, ops) => api(s, 'POST', '/shopping/ops', { ops }, { keepalive: true }).then((d) => d.items);
+export const pantryOps = (s, ops) => api(s, 'POST', '/pantry/ops', { ops }, { keepalive: true }).then((d) => d.items);
+export const planOps = (s, ops) => api(s, 'POST', '/plan/ops', { ops }, { keepalive: true }).then((d) => d.plan);
 
 // תכנון ארוחות שבועי
 export const getPlan = (s) => api(s, 'GET', '/plan').then((d) => d.plan);
@@ -157,5 +177,6 @@ export const ownerLogin = (password) => api('', 'POST', '/owner-login', { passwo
 
 // ניהול (בעל האפליקציה): עלויות AI לפי ספר ותקלות אחרונות
 export const getAdminUsage = (month) => api(own(), 'GET', `/admin/usage${month ? `?month=${month}` : ''}`);
-export const getAdminErrors = () => api(own(), 'GET', '/admin/errors').then((d) => d.errors);
+export const getAdminErrors = () => api(own(), 'GET', '/admin/errors');
+export const linkGoogle = (s, credential) => api(s, 'POST', '/google', { credential, link: true }).then((d) => d.user);
 export const reportClientError = (where, message) => api(loadJson('matkon_session', ''), 'POST', '/client-error', { where, message }).catch(() => {});

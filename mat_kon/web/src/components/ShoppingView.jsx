@@ -38,10 +38,20 @@ export default function ShoppingView({ session, items, onChange, onBack, onToast
     try {
       const open = items.filter((i) => !i.checked);
       const result = await organizeShopping(session, open.map((i) => i.text));
-      // רק הפריטים שנשלחו לסידור מוחלפים; מה שסומן או נוסף בינתיים (גם ע"י בן משפחה) נשאר
+      // רק הפריטים שנשלחו לסידור מוחלפים; מה שנוסף בינתיים נשאר. אם פריט שנשלח סומן או נמחק בזמן הסידור –
+      // לא מחליפים (כדי לא להחזיר אותו לא מסומן), ומבקשים לסדר שוב
       const sentIds = new Set(open.map((i) => i.id));
       const organized = result.flatMap((g) => g.items.map((t) => ({ id: newId(), text: t, checked: false, group: g.title })));
-      onChange((current) => [...current.filter((i) => !sentIds.has(i.id)), ...organized]);
+      let changed = false;
+      onChange((current) => {
+        const stillOpen = current.filter((i) => sentIds.has(i.id) && !i.checked);
+        if (stillOpen.length !== sentIds.size) {
+          changed = true;
+          return current;
+        }
+        return [...current.filter((i) => !sentIds.has(i.id)), ...organized];
+      });
+      if (changed) throw new Error('הרשימה השתנתה בזמן הסידור. נסו "סידור חכם" שוב.');
       onToast('הרשימה סודרה לפי מחלקות');
     } catch (err) {
       setError(err.message);
@@ -141,12 +151,12 @@ export default function ShoppingView({ session, items, onChange, onBack, onToast
                       <button
                         onClick={() => onChange(items.map((i) => (i.id === item.id ? { ...i, checked: !i.checked } : i)))}
                         className={`w-6 h-6 rounded-md border-2 shrink-0 flex items-center justify-center ${item.checked ? 'bg-orange-500 border-orange-500 text-white' : 'border-stone-300'}`}
-                        aria-label="סימון"
+                        aria-label={`סימון ${item.text}`}
                       >
                         {item.checked && <Check size={15} strokeWidth={3} />}
                       </button>
                       <span className={`flex-1 ${item.checked ? 'line-through text-stone-400' : 'text-stone-800'}`}>{item.text}</span>
-                      <button onClick={() => onChange(items.filter((i) => i.id !== item.id))} className="p-1 text-stone-300 hover:text-red-500" aria-label="הסרה">
+                      <button onClick={() => onChange(items.filter((i) => i.id !== item.id))} className="p-1 text-stone-300 hover:text-red-500" aria-label={`הסרת ${item.text}`}>
                         <X size={16} />
                       </button>
                     </li>

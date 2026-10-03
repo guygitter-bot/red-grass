@@ -96,11 +96,11 @@ function PhotoForm({ session, initialFiles, onFilesTaken, onSaved, onPaywall }) 
           <>
             <label className="aspect-square rounded-xl border-2 border-dashed border-orange-300 bg-orange-50 text-orange-700 flex flex-col items-center justify-center gap-1 text-xs cursor-pointer">
               <Camera size={22} /> צילום
-              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => pick(e.target.files)} />
+              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { pick([...e.target.files]); e.target.value = ''; }} />
             </label>
             <label className="aspect-square rounded-xl border-2 border-dashed border-stone-300 text-stone-600 flex flex-col items-center justify-center gap-1 text-xs cursor-pointer">
               <ImagePlus size={22} /> מהגלריה
-              <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => pick(e.target.files)} />
+              <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => { pick([...e.target.files]); e.target.value = ''; }} />
             </label>
           </>
         )}
@@ -192,7 +192,11 @@ function ManualForm({ session, categories, onSaved }) {
             type="file"
             accept="image/*"
             className="hidden"
-            onChange={async (e) => e.target.files[0] && setImage(await thumbnail(e.target.files[0]).catch(() => null))}
+            onChange={async (e) => {
+              const file = e.target.files[0];
+              e.target.value = '';
+              if (file) setImage(await thumbnail(file).catch(() => null));
+            }}
           />
         </label>
         {image && <button type="button" onClick={() => setImage(null)} className="text-sm text-stone-500">הסרה</button>}

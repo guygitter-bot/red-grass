@@ -1,5 +1,6 @@
 import { Component } from 'react';
 import { reportClientError } from '../lib/api';
+import { idbDel } from '../lib/idb';
 
 // רשת ביטחון: תקלה במסך אחד (למשל נתון פגום) לא משאירה מסך לבן
 export default class ErrorBoundary extends Component {
@@ -17,7 +18,8 @@ export default class ErrorBoundary extends Component {
     reportClientError(window.location.hash || 'home', `${error?.message || error}`.slice(0, 300));
   }
 
-  reset = () => {
+  reset = async () => {
+    await idbDel('matkon_recipes').catch(() => {});
     try {
       // הנתונים השמורים במכשיר ייטענו מחדש מהשרת; הכניסה לחשבון נשמרת
       for (const k of Object.keys(localStorage)) {

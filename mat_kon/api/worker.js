@@ -95,7 +95,8 @@ export default {
       if (parts[0] === 'login') {
         const limited = await rate([
           { key: `login-ip:${ip}`, limit: 30, window: 900 },
-          { key: `login:${String(body.email || '').trim().toLowerCase()}`, limit: 10, window: 900 },
+          { key: `login:${String(body.email || '').trim().toLowerCase()}:${ip}`, limit: 10, window: 900 },
+          { key: `login-all:${String(body.email || '').trim().toLowerCase()}`, limit: 100, window: 3600 },
         ], 'יותר מדי ניסיונות כניסה. נסו שוב בעוד רבע שעה.');
         if (limited) return limited;
       }
@@ -113,7 +114,10 @@ export default {
       const res = await internal(bookOf(parts[1] === 'book' ? null : parts[1]), 'GET', `/img/${parts[2]}`);
       if (!res.ok) return fail(404, 'Not found');
       return new Response(res.body, {
-        headers: { 'content-type': res.headers.get('content-type'), 'cache-control': 'public, max-age=31536000, immutable', 'x-content-type-options': 'nosniff' },
+        headers: {
+          'content-type': res.headers.get('content-type'), 'cache-control': 'public, max-age=31536000, immutable',
+          'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*', // כדי שהגיבוי יוכל לשמור את התמונה עצמה
+        },
       });
     }
 
@@ -134,7 +138,7 @@ export default {
       // כל ניסיון נספר מראש (גם ניסיונות במקביל), לפי כתובת – וגם תקרה כללית נגד ניחוש מפוזר
       const limited = await rate([
         { key: `owner-ip:${ip}`, limit: 10, window: 900 },
-        { key: 'owner-all', limit: 60, window: 900 },
+        { key: 'owner-all', limit: 300, window: 900 },
       ], 'יותר מדי ניסיונות. נסו שוב בעוד רבע שעה.');
       if (limited) return limited;
       if (!(await sameSecret(String(body.password || ''), ownerPassword))) return fail(401, 'הסיסמה שגויה');
@@ -150,6 +154,13 @@ export default {
       if (limited) return limited;
       const profile = await verifyGoogle(String(body.credential || ''), googleClientId);
       if (!profile) return fail(401, 'לא הצלחתי לאמת את חשבון הגוגל. נסו שוב.');
+      // מתוך חשבון מחובר: חיבור גוגל לחשבון הקיים (ולא כניסה)
+      if (body.link) {
+        const auth = await internal(accounts, 'POST', '/auth', { session: bearer(request) });
+        const me = auth.ok ? (await auth.json()).user : null;
+        if (!me) return fail(401, 'צריך להיכנס מחדש');
+        return pass(await internal(accounts, 'POST', '/google/link', { userId: me.id, ...profile }));
+      }
       if (ownerEmail && profile.email.toLowerCase() === ownerEmail) return pass(await internal(accounts, 'POST', '/owner-session', {}));
       return pass(await internal(accounts, 'POST', '/google', { ...profile, token: body.token || '', join: body.join || '' }));
     }
@@ -185,15 +196,6 @@ export default {
     };
 
     // שגיאה מה-AI: הודעה ברורה בעברית במקום השגיאה הגולמית
-    // תקלה באפליקציה (מסך "משהו השתבש") – נשמרת לבעל האפליקציה
-    if (url.pathname === '/client-error' && request.method === 'POST') {
-      const limited = await rate([{ key: `client-error:${ip}`, limit: 20, window: 3600 }]);
-      if (limited) return limited;
-      const { body } = await readJson();
-      await recordError(`app: ${String(body?.where || '').slice(0, 60)}`, { message: String(body?.message || '').slice(0, 300) });
-      return reply(200, { ok: true });
-    }
-
     const aiFail = async (e, message) => {
       await recordError('ai', e);
       const friendly = aiMessage(e, { owner: !user });
@@ -203,6 +205,18 @@ export default {
 
     // ספר נעול: בלי כניסה אין גישה לספר של בעל האפליקציה
     if (ownerLocked && !signedIn) return fail(401, 'צריך להיכנס', { login: true });
+
+    // תקלה באפליקציה (מסך "משהו השתבש") – רק ממי שמחובר, ברשימה נפרדת מתקלות השרת
+    if (url.pathname === '/client-error' && request.method === 'POST') {
+      const limited = await rate([{ key: `client-error:${ip}`, limit: 20, window: 3600 }]);
+      if (limited) return limited;
+      const { body } = await readJson();
+      await internal(accounts, 'POST', '/errors/add', {
+        list: 'client', where: String(body?.where || '').slice(0, 60), message: String(body?.message || '').slice(0, 300), user: user?.email || 'owner',
+      });
+      return reply(200, { ok: true });
+    }
+
 
     // בדיקה (רק לבעל האפליקציה): מה השרת מצליח לקרוא מקישור (בלי AI). משמש את .github/workflows/mat-kon-probe.yml
     if (url.pathname === '/debug/source' && request.method === 'GET') {
@@ -385,10 +399,8 @@ export default {
       const lon = Number(body.lon);
       if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return fail(400, 'מיקום לא תקין');
       const items = [...new Set(strList(body.items, 60).map((i) => i.slice(0, 120)))];
-      if (items.length) {
-        const limited = await aiBudget(2);
-        if (limited) return limited;
-      }
+      const limited = await aiBudget(items.length ? 2 : 1);
+      if (limited) return limited;
       try {
         return reply(200, await findStores({ lat, lon, items }, { fetch: deps.fetch, client: ai(), cheapersalKey: env.CHEAPERSAL_API_KEY }));
       } catch (e) {
@@ -481,6 +493,8 @@ export default {
 
     // שחזור מגיבוי: המתכונים נשמרים כמו שהם (בלי AI ובלי מכסה). מתכון שכבר קיים (אותו מקור) מתעדכן.
     if (request.method === 'POST' && parts.length === 2 && id === 'restore') {
+      const limited = await rate([{ key: `restore:${bookKeyOf(user)}`, limit: 100, window: 86400 }], 'הגעתם למגבלת השחזורים היומית. נסו שוב מחר.');
+      if (limited) return limited;
       const { body, error } = await readJson(MAX_RESTORE_BYTES);
       if (error) return error;
       const list = Array.isArray(body.recipes) ? body.recipes.slice(0, 200) : null;
@@ -606,7 +620,11 @@ export default {
       if ('image' in patch && !validImage(patch.image)) return fail(400, 'תמונה לא תקינה');
       const bad = cleanPatch(patch);
       if (bad) return fail(400, bad);
-      if ('image' in patch) patch.image = await storeImage(patch.image);
+      if ('image' in patch) {
+        const uploaded = typeof patch.image === 'string' && patch.image.startsWith('data:image/');
+        patch.image = await storeImage(patch.image);
+        if (uploaded && patch.image) patch.imageFresh = true; // העלאה חדשה (ולא הפניה לתמונה קיימת)
+      }
       return pass(await internal(book, 'PUT', `/recipes/${id}`, patch));
     }
     return fail(405, 'Method not allowed');
@@ -628,7 +646,7 @@ function cleanPatch(patch) {
   }
   for (const k of ['ingredients', 'steps']) {
     if (!(k in patch)) continue;
-    if (!Array.isArray(patch[k])) return 'עריכה לא תקינה';
+    if (!Array.isArray(patch[k]) || patch[k].some((x) => !x || !Array.isArray(x.items))) return 'עריכה לא תקינה';
     patch[k] = sections(patch[k]);
   }
   if ('tips' in patch) {
@@ -791,6 +809,14 @@ function cleanShopping(items) {
     .filter((i) => i.text);
 }
 
+// יום בתכנון: תאריך אמיתי, עד 120 יום אחורה ושנה קדימה
+function validDay(day) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
+  const t = Date.parse(`${day}T00:00:00Z`);
+  if (Number.isNaN(t) || new Date(t).toISOString().slice(0, 10) !== day) return false;
+  return t > Date.now() - 120 * 86400000 && t < Date.now() + 366 * 86400000;
+}
+
 // שינויים ברמת פריט: כל פריט עובר את אותו ניקוי כמו ברשימה שלמה
 function cleanOps(kind, ops) {
   if (!Array.isArray(ops) || ops.length > 500) return null;
@@ -807,10 +833,10 @@ function cleanOps(kind, ops) {
     else if (kind === 'pantry') item = cleanPantry([{ ...o.item, id }])?.[0];
     else {
       const day = String(o.item?.day || '');
-      const plan = /^\d{4}-\d{2}-\d{2}$/.test(day) ? cleanPlan({ [day]: [{ ...o.item, id }] }) : null;
+      const plan = validDay(day) ? cleanPlan({ [day]: [{ ...o.item, id }] }) : null;
       item = plan?.[day]?.[0] && { ...plan[day][0], day };
     }
-    if (!item) return null;
+    if (!item) continue; // פריט לא תקין (למשל טקסט ריק) מדולג, ושאר השינויים נשמרים
     out.push({ op: o.op, id, item });
   }
   return out;

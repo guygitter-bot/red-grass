@@ -194,7 +194,8 @@ test('deleting an invite removes the user and their recipes', async () => {
   assert.equal((await call('DELETE', `/invites/${inv.token}`)).status, 200);
   assert.equal((await call('GET', '/recipes', undefined, session)).status, 401);
   assert.equal((await call('POST', '/login', { email: 'dana@example.com', password: 'secret12' })).status, 401);
-  assert.equal(env.BOOK.objects.get(`user:${user.id}`).storage.map.size, 0, 'their recipes are deleted');
+  const left = [...env.BOOK.objects.get(`user:${user.id}`).storage.map.keys()];
+  assert.deepEqual(left, ['closed'], 'their recipes are deleted');
   const again = await (await call('GET', '/invites')).json();
   assert.equal(again.invites.length, 0);
 });
@@ -588,12 +589,17 @@ test('Google sign-in: registers only with an invite, then logs in; the token is 
   assert.match((await pw.json()).error, /גוגל/);
 });
 
-test('Google sign-in links to an existing password user with the same email', async () => {
+test('Google sign-in does not take over a password account; it can be linked from inside the account', async () => {
   env.GOOGLE_CLIENT_ID = 'cid';
-  const { user } = await (await register((await invite()).token, 'same@example.com')).json();
+  const { user, session } = await (await register((await invite()).token, 'same@example.com')).json();
   deps.fetch = async () => Response.json({ aud: 'cid', iss: 'accounts.google.com', email_verified: true, exp: Date.now() / 1000 + 60, sub: 's1', email: 'same@example.com' });
-  const res = await (await call('POST', '/google', { credential: 'x.y.z' })).json();
-  assert.equal(res.user.id, user.id);
+  const res = await call('POST', '/google', { credential: 'x.y.z' });
+  assert.equal(res.status, 409);
+  assert.match((await res.json()).error, /סיסמה/);
+  // חיבור מתוך החשבון, ואז כניסה עם גוגל עובדת
+  const linked = await (await call('POST', '/google', { credential: 'x.y.z', link: true }, session)).json();
+  assert.equal(linked.user.google, true);
+  assert.equal((await (await call('POST', '/google', { credential: 'x.y.z' })).json()).user.id, user.id);
 });
 
 test('locked owner book: only devices signed in with the owner password or Google account get in', async () => {
@@ -688,7 +694,8 @@ test('shared book: the holder invites a family member, both work on one book wit
   assert.deepEqual((await (await call('GET', '/members', undefined, holder.session)).json()).members, []);
   // הצטרפות חוזרת עם קישור חדש
   const again = await (await call('POST', '/members', {}, holder.session)).json();
-  const back = await call('POST', '/register', { join: again.join.token, name: 'רונית', email: 'ronit@example.com', password: 'newpass12' });
+  // מצטרפת שוב – עם הסיסמה שלה (מוכיחה שזו היא)
+  const back = await call('POST', '/register', { join: again.join.token, name: 'רונית', email: 'ronit@example.com', password: 'secret12' });
   assert.equal(back.status, 200);
   assert.equal((await (await call('GET', '/recipes', undefined, (await back.json()).session)).json()).recipes.length, 11);
 });
@@ -741,18 +748,26 @@ test('lists change item by item: two family members editing at once keep both ch
   await call('POST', '/shopping/ops', { ops: [{ op: 'remove', id: 'b' }] });
   const after = await (await call('POST', '/shopping/ops', { ops: [{ op: 'update', id: 'b', item: { text: 'לחם', checked: true } }] })).json();
   assert.deepEqual(after.items.map((i) => i.text), ['חלב', 'ביצים']);
-  assert.equal((await call('POST', '/shopping/ops', { ops: [{ op: 'add', id: 'x', item: { text: '' } }] })).status, 400);
+  // תאריכים לא אמיתיים או רחוקים נדחים
+  const junk = await (await call('POST', '/plan/ops', { ops: [{ op: 'add', id: 'j', item: { day: '9999-01-00', title: 'x' } }, { op: 'add', id: 'k', item: { day: '2026-02-30', title: 'x' } }] })).json();
+  assert.deepEqual(junk.plan, {});
+  // פריט לא תקין מדולג, ושאר השינויים באותה שליחה נשמרים
+  const mixed = await (await call('POST', '/shopping/ops', { ops: [{ op: 'add', id: 'x', item: { text: '' } }, add('גבינה', 'g')] })).json();
+  assert.deepEqual(mixed.items.map((i) => i.text), ['חלב', 'ביצים', 'גבינה']);
+  assert.equal((await call('POST', '/shopping/ops', { ops: 'x' })).status, 400);
 
   const pantry = await (await call('POST', '/pantry/ops', { ops: [{ op: 'add', id: 'p1', item: { name: 'אורז', place: 'pantry' } }] })).json();
   assert.equal(pantry.items[0].place, 'pantry');
+  const d1 = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const d2 = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
   const plan = await (await call('POST', '/plan/ops', { ops: [
-    { op: 'add', id: 'm1', item: { day: '2026-10-05', title: 'שקשוקה' } },
-    { op: 'add', id: 'm2', item: { day: '2026-10-06', title: 'פסטה' } },
+    { op: 'add', id: 'm1', item: { day: d1, title: 'שקשוקה' } },
+    { op: 'add', id: 'm2', item: { day: d2, title: 'פסטה' } },
   ] })).json();
-  assert.deepEqual(Object.keys(plan.plan), ['2026-10-05', '2026-10-06']);
-  const moved = await (await call('POST', '/plan/ops', { ops: [{ op: 'update', id: 'm1', item: { day: '2026-10-06', title: 'שקשוקה' } }] })).json();
-  assert.deepEqual(moved.plan['2026-10-06'].map((m) => m.title).sort(), ['פסטה', 'שקשוקה']);
-  assert.equal(moved.plan['2026-10-05'], undefined);
+  assert.deepEqual(Object.keys(plan.plan), [d1, d2]);
+  const moved = await (await call('POST', '/plan/ops', { ops: [{ op: 'update', id: 'm1', item: { day: d2, title: 'שקשוקה' } }] })).json();
+  assert.deepEqual(moved.plan[d2].map((m) => m.title).sort(), ['פסטה', 'שקשוקה']);
+  assert.equal(moved.plan[d1], undefined);
 });
 
 test('refresh keeps what the user edited; a recipe edit with a broken shape is refused', async () => {
@@ -835,14 +850,34 @@ test('rate limits on sign-in, sessions end when the owner password changes, logo
   assert.equal((await call('GET', '/recipes', undefined, b2)).status, 401);
 });
 
-test('Google proves the email: a squatted password account loses its password and sessions', async () => {
+test('pre-registering someone else\'s email never puts them in your book', async () => {
   env.GOOGLE_CLIENT_ID = 'cid';
-  const squatter = await (await register((await invite()).token, 'victim@gmail.com')).json();
+  // מלורי רושמת את האימייל של הקורבן כחברה בספר שלה
+  const mallory = await (await register((await invite('מלורי')).token, 'mallory@example.com')).json();
+  const { join } = await (await call('POST', '/members', {}, mallory.session)).json();
+  await call('POST', '/register', { join: join.token, name: 'x', email: 'victim@gmail.com', password: 'mallory-pass' });
   deps.fetch = async () => Response.json({ aud: 'cid', iss: 'accounts.google.com', email_verified: 'true', exp: Date.now() / 1000 + 60, sub: 'v1', email: 'victim@gmail.com' });
-  const victim = await (await call('POST', '/google', { credential: 'a.b.c' })).json();
-  assert.equal(victim.user.id, squatter.user.id);
-  assert.equal((await call('GET', '/recipes', undefined, squatter.session)).status, 401);
-  assert.equal((await call('POST', '/login', { email: 'victim@gmail.com', password: 'secret12' })).status, 401);
+  const victim = await call('POST', '/google', { credential: 'a.b.c', token: (await invite('קורבן')).token });
+  assert.equal(victim.status, 409);
+  assert.equal((await victim.json()).session, undefined);
+});
+
+test('a removed member cannot be taken over by re-registering their email', async () => {
+  env.GOOGLE_CLIENT_ID = 'cid';
+  const bob = await (await register((await invite('בוב')).token, 'bob@example.com')).json();
+  const link1 = (await (await call('POST', '/members', {}, bob.session)).json()).join;
+  deps.fetch = async () => Response.json({ aud: 'cid', iss: 'accounts.google.com', email_verified: 'true', exp: Date.now() / 1000 + 60, sub: 'alice-sub', email: 'alice@gmail.com', name: 'אליס' });
+  const alice = await (await call('POST', '/google', { credential: 'a.b.c', join: link1.token })).json();
+  await call('DELETE', `/members/${alice.user.id}`, undefined, bob.session);
+  // מלורי מנסה "להצטרף מחדש" עם האימייל של אליס וסיסמה שלה
+  const mallory = await (await register((await invite('מלורי')).token, 'mallory@example.com')).json();
+  const mlink = (await (await call('POST', '/members', {}, mallory.session)).json()).join;
+  assert.equal((await call('POST', '/register', { join: mlink.token, name: 'm', email: 'alice@gmail.com', password: 'mallory-pass' })).status, 409);
+  // אליס חוזרת עם הגוגל שלה ובקישור חדש
+  const link2 = (await (await call('POST', '/members', {}, bob.session)).json()).join;
+  const back = await (await call('POST', '/google', { credential: 'a.b.c', join: link2.token })).json();
+  assert.equal(back.user.id, alice.user.id);
+  assert.equal(back.user.role, 'member');
 });
 
 test('a user deletes their own account (and their shared book)', async () => {
@@ -907,13 +942,13 @@ test('admin: AI costs per book and recent errors, owner only', async () => {
   reply = () => ({ stop_reason: 'tool_use', usage: { input_tokens: 1000, output_tokens: 200, server_tool_use: { web_search_requests: 2 } }, content: [{ type: 'tool_use', name: 'submit_recipe', input: recipeInput }] });
   const { session } = await (await register((await invite()).token)).json();
   await call('POST', '/recipes', { url: 'https://cake.example/cost' }, session);
-  await call('POST', '/client-error', { where: 'home', message: 'boom' });
+  await call('POST', '/client-error', { where: 'home', message: 'boom' }, session);
   const usage = await (await call('GET', '/admin/usage')).json();
   const dana = usage.rows.find((r) => r.name === 'דנה');
   assert.deepEqual([dana.ops, dana.calls, dana.input, dana.output, dana.searches], [1, 1, 1000, 200, 2]);
   assert.ok(dana.usd > 0);
-  const { errors } = await (await call('GET', '/admin/errors')).json();
-  assert.equal(errors[0].message, 'boom');
+  const { clientErrors } = await (await call('GET', '/admin/errors')).json();
+  assert.equal(clientErrors[0].message, 'boom');
   assert.equal((await call('GET', '/admin/usage', undefined, session)).status, 403);
 });
 
@@ -929,4 +964,34 @@ test('uploaded images are stored apart from the recipe and served by an unguessa
   // החלפה ומחיקה מוחקות את הקובץ הישן
   await call('PUT', `/recipes/${recipe.id}`, { image: null });
   assert.equal((await worker.fetch(new Request(recipe.image), env)).status, 404);
+});
+
+test('jobs interrupted mid-run fail and refund; a deleted book takes no more recipes', async () => {
+  const { session, user } = await (await register((await invite()).token)).json();
+  const res = await (await call('POST', '/recipes?async=1', { url: 'https://cake.example/stuck' }, session)).json();
+  const book = env.BOOK.objects.get(`user:${user.id}`);
+  // מדמים עבודה שנתקעה ב"רצה" (השרת עודכן באמצע) לפני 10 דקות
+  await new Promise((r) => setTimeout(r, 30));
+  const key = `job:${res.job.id}`;
+  const job = book.storage.map.get(key);
+  book.storage.map.set(key, { ...job, status: 'running', startedAt: new Date(Date.now() - 600000).toISOString(), quota: { userId: user.id } });
+  const before = (await (await call('GET', '/me', undefined, session)).json()).user.added;
+  await book.alarm();
+  const after = await (await call('GET', `/jobs/${res.job.id}`, undefined, session)).json();
+  assert.equal(after.job.status, 'error');
+  assert.equal((await (await call('GET', '/me', undefined, session)).json()).user.added, before - 1);
+  await book.fetch(new Request('https://do/recipes', { method: 'DELETE' }));
+  const late = await book.fetch(new Request('https://do/recipes', { method: 'POST', body: JSON.stringify({ title: 'x', source: { url: 'https://a.example' } }) }));
+  assert.equal(late.status, 410);
+});
+
+test('an uploaded image cannot be pointed at from another recipe; replacing on refresh drops the old file', async () => {
+  const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+  const a = (await (await call('POST', '/recipes/manual', { title: 'א', ingredients: [{ title: '', items: ['x'] }], image: png })).json()).recipe;
+  const b = (await (await call('POST', '/recipes/manual', { title: 'ב', ingredients: [{ title: '', items: ['x'] }] })).json()).recipe;
+  const hijack = (await (await call('PUT', `/recipes/${b.id}`, { image: a.image })).json()).recipe;
+  assert.equal(hijack.image, null);
+  await call('DELETE', `/recipes/${b.id}`);
+  assert.equal((await worker.fetch(new Request(a.image), env)).status, 200);
+  assert.equal((await worker.fetch(new Request(a.image), env)).headers.get('access-control-allow-origin'), '*');
 });

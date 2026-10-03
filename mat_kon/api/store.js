@@ -6,6 +6,7 @@ const PREFIX = 'r:';
 const EDITABLE = ['title', 'description', 'category', 'tags', 'servings', 'prepTime', 'cookTime', 'totalTime', 'ingredients', 'steps', 'tips', 'notes', 'favorite', 'myNotes', 'image', 'rating'];
 
 const SRC = 'src:';
+const STALE_JOB_MS = 5 * 60 * 1000;
 // המקור של מתכון: קישור, או מפתח (הודעת ווטסאפ, צילום...)
 const sourceKey = (r) => String(r?.source?.url || r?.source?.key || '').slice(0, 1500);
 
@@ -30,18 +31,38 @@ export class RecipeBook {
   async alarm() {
     const jobs = await this.storage.list({ prefix: 'job:' });
     const now = Date.now();
+    let next = null;
     for (const [key, job] of jobs) {
       if (now - Date.parse(job.createdAt) > 86400000) {
         await this.storage.delete(key); // עבודות ישנות (יום) נמחקות
-        continue;
+      } else if (job.status === 'running' && now - Date.parse(job.startedAt || job.createdAt) > STALE_JOB_MS) {
+        // עבודה שנקטעה באמצע (עדכון שרת וכו'): נכשלת, והמכסה חוזרת
+        await this.finishJob(key, job, { status: 'error', error: 'העבודה נקטעה. נסו שוב.', code: 502 }, true);
+      } else if (job.status === 'pending' && !next) {
+        next = [key, job];
       }
-      if (job.status !== 'pending') continue;
-      await this.storage.put(key, { ...job, status: 'running' });
-      const done = await this.runJob(job);
-      const { input, categories, quota, ...rest } = job;
-      void input; void categories; void quota;
-      await this.storage.put(key, { ...rest, ...done, finishedAt: new Date().toISOString() });
     }
+    if (!next) {
+      const left = [...jobs.values()].filter((j) => j.status === 'running');
+      if (left.length) await this.storage.setAlarm(now + STALE_JOB_MS);
+      return;
+    }
+    // עבודה אחת בכל פעם; האזעקה הבאה נקבעת לפני העבודה, כדי שתמשיך גם אם זו נקטעת
+    const [key, job] = next;
+    await this.storage.put(key, { ...job, status: 'running', startedAt: new Date().toISOString() });
+    await this.storage.setAlarm(Date.now() + 1000);
+    const done = await this.runJob(job);
+    await this.finishJob(key, job, done, false);
+  }
+
+  async finishJob(key, job, done, giveBack) {
+    if (giveBack && job.quota) {
+      const accounts = this.env.ACCOUNTS?.get(this.env.ACCOUNTS.idFromName('accounts'));
+      await accounts?.fetch(new Request('https://do/quota/give', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ userId: job.quota.userId }) })).catch(() => {});
+    }
+    const { input, categories, quota, ...rest } = job;
+    void input; void categories; void quota;
+    await this.storage.put(key, { ...rest, ...done, finishedAt: new Date().toISOString() });
   }
 
   async runJob(job) {
@@ -243,6 +264,7 @@ export class RecipeBook {
 
     // מתכון חדש (אחרי שהסוכן הוציא אותו). קישור שכבר נשמר מתעדכן במקום להיכפל.
     if (request.method === 'POST' && !id) {
+      if (await this.storage.get('closed')) return json({ error: 'gone' }, 410); // ספר שנמחק
       const recipe = await request.json();
       // אותו מקור (קישור, או הודעת ווטסאפ לפי key) מתעדכן ולא נכפל. האינדקס src: חוסך מעבר על כל הספר
       await this.ensureSourceIndex();
@@ -262,8 +284,10 @@ export class RecipeBook {
       const saved = existing
         ? { ...recipe, ...keep, id: existing.id, createdAt: existing.createdAt, updatedAt: now }
         : { ...recipe, id: crypto.randomUUID(), createdAt: typeof recipe.createdAt === 'string' ? recipe.createdAt : now, updatedAt: now };
-      if (url.searchParams.get('replace') !== '1') delete saved.restored;
+      // "שוחזר ועוד לא נקרא מהמקור" – רק למתכון שלא היה בספר (שחזור לאותו ספר לא מחייב שוב במכסה)
+      if (url.searchParams.get('replace') !== '1' || (existing && !existing.restored)) delete saved.restored;
       await this.storage.put(PREFIX + saved.id, saved);
+      if (existing && existing.image !== saved.image) await this.dropImage(existing.image);
       if (key) await this.storage.put(SRC + key, saved.id);
       // counted: נוסף מתכון חדש (או שמתכון שרק שוחזר מגיבוי נקרא עכשיו לראשונה) – נספר במכסה
       return json({ recipe: saved, updated: Boolean(existing), counted: !existing || Boolean(existing.restored) });
@@ -272,6 +296,7 @@ export class RecipeBook {
     // מחיקת כל הספר (כשמוחקים משתמש שהוזמן)
     if (request.method === 'DELETE' && !id) {
       await this.storage.deleteAll();
+      await this.storage.put('closed', true); // עבודה ברקע שעוד רצה לא תכתוב לספר שנמחק
       return json({ ok: true });
     }
 
@@ -283,6 +308,9 @@ export class RecipeBook {
     if (request.method === 'PUT') {
       const patch = await request.json();
       const next = { ...current, updatedAt: new Date().toISOString() };
+      // תמונה שהועלתה לספר שייכת למתכון אחד: אי אפשר לכוון מתכון לתמונה של מתכון אחר (ואז למחוק אותה)
+      if (typeof patch.image === 'string' && /\/img\/[^/]+\/[0-9a-f-]{36}$/.test(patch.image) && patch.image !== current.image && !patch.imageFresh) delete patch.image;
+      delete patch.imageFresh;
       for (const k of EDITABLE) if (k in patch) next[k] = patch[k];
       // שדות שהמשתמש ערך בעצמו – רענון מהמקור לא ידרוס אותם
       const edited = EDITABLE.filter((k) => k in patch && !['favorite', 'myNotes', 'rating'].includes(k));

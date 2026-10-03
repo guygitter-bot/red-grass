@@ -3,10 +3,21 @@
 //      קישור או טקסט עוברים לאפליקציה כ-?url=... / ?text=...
 //   2. עבודה בלי אינטרנט: האפליקציה עצמה (דפים, קבצים, אייקונים) ותמונות מתכונים נשמרים במטמון.
 //      המתכונים עצמם שמורים במכשיר (IndexedDB), כך שאפשר לפתוח ולקרוא גם בלי רשת.
-const SHELL = 'matkon-shell-v1';
+// הגרסה ורשימת הקבצים נכתבות בזמן הבנייה (vite.config.js) – כל עדכון מתקין את עצמו ומנקה את הישן
+const BUILD = '__BUILD__';
+const PRECACHE = [/*PRECACHE*/];
+const SHELL = `matkon-shell-${BUILD}`;
 const IMAGES = 'matkon-images-v1';
+const API_HOST = /(^|\.)workers\.dev$/;
 
-self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('install', (event) => {
+  event.waitUntil((async () => {
+    const cache = await caches.open(SHELL);
+    // שמירה מראש של האפליקציה: נפתחת בלי רשת כבר אחרי הביקור הראשון
+    await Promise.all(PRECACHE.map((f) => cache.add(new Request(f, { cache: 'reload' })).catch(() => {})));
+    await self.skipWaiting();
+  })());
+});
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     for (const name of await caches.keys()) {
@@ -14,6 +25,13 @@ self.addEventListener('activate', (event) => {
     }
     await self.clients.claim();
   })());
+});
+
+// יציאה מהחשבון: מוחקים תמונות ושיתופים שנשמרו
+self.addEventListener('message', (event) => {
+  if (event.data === 'clear-user-caches') {
+    event.waitUntil(Promise.all([caches.delete(IMAGES), caches.delete('matkon-share')]));
+  }
 });
 
 self.addEventListener('fetch', (event) => {
@@ -35,20 +53,26 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(staleWhileRevalidate(SHELL, request));
     return;
   }
-  // תמונות מתכונים שהועלו (השרת שלנו) – לא משתנות לעולם
-  if (/\/img\/[^/]+\/[0-9a-f-]{36}$/.test(url.pathname)) {
+  // תמונות מתכונים שהועלו (רק מהשרת שלנו) – לא משתנות לעולם
+  if (API_HOST.test(url.hostname) && /\/img\/[^/]+\/[0-9a-f-]{36}$/.test(url.pathname)) {
     event.respondWith(cacheFirst(IMAGES, request));
   }
 });
 
+// דף האפליקציה: מהרשת, אבל אם הרשת איטית (מעל 3 שניות) או לא קיימת – מהמטמון
 async function networkFirst(request, fallbackKey) {
   const cache = await caches.open(SHELL);
-  try {
-    const res = await fetch(request);
+  const fromCache = async () => (await cache.match(fallbackKey)) || (await cache.match(request));
+  const network = fetch(request).then((res) => {
     if (res.ok) cache.put(fallbackKey, res.clone());
     return res;
+  });
+  const slow = new Promise((resolve) => setTimeout(resolve, 3000)).then(fromCache);
+  try {
+    const first = await Promise.race([network, slow]);
+    return first || (await network);
   } catch {
-    return (await cache.match(fallbackKey)) || (await cache.match(request)) || Response.error();
+    return (await fromCache()) || Response.error();
   }
 }
 
@@ -83,12 +107,15 @@ async function receiveShare(request) {
       await cache.put('shared-chat', new Response(file, { headers: { 'x-file-name': encodeURIComponent(file.name || 'chat.txt') } }));
       return Response.redirect(`${scope}#/import?shared=1`, 303);
     }
-    const params = new URLSearchParams();
+    // קישור או טקסט: נשמרים במטמון (ולא בכתובת), כדי שקישור מזויף מבחוץ לא יוסיף מתכון בלי לשאול
+    const shared = {};
     for (const key of ['url', 'text', 'title']) {
       const value = form.get(key);
-      if (typeof value === 'string' && value) params.set(key, value);
+      if (typeof value === 'string' && value) shared[key] = value.slice(0, 20000);
     }
-    return Response.redirect(`${scope}?${params}`, 303);
+    const cache = await caches.open('matkon-share');
+    await cache.put('shared-link', new Response(JSON.stringify(shared), { headers: { 'content-type': 'application/json' } }));
+    return Response.redirect(`${scope}?shared=link`, 303);
   } catch {
     return Response.redirect(scope, 303);
   }

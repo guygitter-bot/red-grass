@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle, ArrowRight, Check, FileUp, Link2, Loader2, MessageSquareText, MinusCircle, PlayCircle, Square, Upload,
 } from 'lucide-react';
-import { addRecipe, addTextRecipe } from '../lib/api';
+import { addRecipeAndWait, addTextRecipe } from '../lib/api';
 import { findCandidates, parseChat, readChatFile } from '../lib/whatsapp';
 import PasteBox from './PasteBox';
 import { freeLeft } from '../lib/recipes';
@@ -84,7 +84,7 @@ export default function ImportView({ session, user, recipes, onBack, onRecipe, o
         setOne(item.id, { state: 'working' });
         try {
           const res = item.type === 'link'
-            ? await addRecipe(session, item.url, item.context)
+            ? await addRecipeAndWait(session, item.url, item.context)
             : await addTextRecipe(session, { key: item.id, text: item.text, chat: chat.name, author: item.author, date: item.date });
           onRecipe(res.recipe, res.user);
           setOne(item.id, { state: 'done', message: `${res.recipe.title} · ${res.recipe.category}`, recipeId: res.recipe.id });
@@ -142,7 +142,7 @@ export default function ImportView({ session, user, recipes, onBack, onRecipe, o
                 type="file"
                 accept=".txt,.zip,text/plain,application/zip"
                 className="hidden"
-                onChange={(e) => e.target.files[0] && load(e.target.files[0])}
+                onChange={(e) => { if (e.target.files[0]) load(e.target.files[0]); e.target.value = ''; }}
               />
             </label>
             {error && <p className="mt-3 text-sm text-red-600">{error}</p>}

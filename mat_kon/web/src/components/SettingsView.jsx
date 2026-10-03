@@ -1,11 +1,16 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, BarChart3, Download, Loader2, LogOut, ShieldCheck, Trash2, Upload, UserPlus, Users } from 'lucide-react';
-import { deleteAccount, logoutAll, restoreBackup } from '../lib/api';
+import { deleteAccount, getAuthConfig, linkGoogle, logoutAll, restoreBackup } from '../lib/api';
+import GoogleButton from './GoogleButton';
 import { backupFile } from '../lib/recipes';
 
 // הגדרות: גיבוי ושחזור, הזמנות
 export default function SettingsView({ session, isOwner, user, recipes, custom, shopping, plan, pantry, onRestored, onSignedOut, onBack, onToast }) {
   const [progress, setProgress] = useState('');
+  const [googleId, setGoogleId] = useState('');
+  useEffect(() => {
+    if (user?.password && !user.google) getAuthConfig().then((c) => setGoogleId(c.googleClientId || '')).catch(() => {});
+  }, [user]);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const fileRef = useRef(null);
@@ -22,14 +27,33 @@ export default function SettingsView({ session, isOwner, user, recipes, custom, 
     }
   };
 
-  const download = () => {
-    const blob = new Blob([backupFile({ recipes, categories: custom, shopping, plan, pantry })], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `mat-kon-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-  };
+  // הגיבוי כולל את התמונות עצמן (ולא רק קישור אליהן), כדי שישוחזרו גם אם המתכון או החשבון נמחקו
+  const download = () =>
+    run('download', async () => {
+      const toDataUrl = async (src) => {
+        try {
+          const blob = await (await fetch(src)).blob();
+          return await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch {
+          return src;
+        }
+      };
+      const withImages = [];
+      for (const r of recipes) {
+        withImages.push(typeof r.image === 'string' && /\/img\/[^/]+\/[0-9a-f-]{36}$/.test(r.image) ? { ...r, image: await toDataUrl(r.image) } : r);
+      }
+      const blob = new Blob([backupFile({ recipes: withImages, categories: custom, shopping, plan, pantry })], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `mat-kon-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    });
 
   const restore = (file) =>
     run('restore', async () => {
@@ -99,19 +123,35 @@ export default function SettingsView({ session, isOwner, user, recipes, custom, 
             מקובץ מוסיף אותם לספר, ומתכון שכבר קיים מתעדכן ולא נכפל. אפשר גם לשחזר לספר אחר (למשל ממכשיר של משתמש מוזמן).
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <button onClick={download} className="rounded-xl bg-orange-500 text-white px-4 py-2.5 font-bold flex items-center gap-1.5">
-              <Download size={16} /> הורדת גיבוי
+            <button onClick={download} disabled={busy === 'download'} className="rounded-xl bg-orange-500 text-white px-4 py-2.5 font-bold flex items-center gap-1.5 disabled:opacity-50">
+              {busy === 'download' ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} הורדת גיבוי
             </button>
             <button onClick={() => fileRef.current?.click()} disabled={busy === 'restore'} className="rounded-xl bg-stone-100 px-4 py-2.5 font-medium flex items-center gap-1.5 disabled:opacity-40">
               {busy === 'restore' ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />} {busy === 'restore' && progress ? `משחזר ${progress}` : 'שחזור מקובץ'}
             </button>
-            <input ref={fileRef} type="file" accept=".json,application/json" className="hidden" onChange={(e) => e.target.files[0] && restore(e.target.files[0])} />
+            <input ref={fileRef} type="file" accept=".json,application/json" className="hidden" onChange={(e) => { if (e.target.files[0]) restore(e.target.files[0]); e.target.value = ''; }} />
           </div>
         </section>
 
         {session && (
           <section className="rounded-2xl bg-white shadow-sm p-4">
             <h2 className="font-bold text-lg">החשבון</h2>
+            {googleId && (
+              <div className="mt-2">
+                <p className="text-sm text-stone-600 mb-2">נרשמתם עם סיסמה. אפשר לחבר את חשבון הגוגל שלכם (עם אותו אימייל) ולהיכנס גם בלחיצה.</p>
+                <GoogleButton
+                  clientId={googleId}
+                  text="continue_with"
+                  onError={setError}
+                  onCredential={(credential) => run('google', async () => {
+                    await linkGoogle(session, credential);
+                    setGoogleId('');
+                    onToast('חשבון הגוגל חובר');
+                    onRestored();
+                  })}
+                />
+              </div>
+            )}
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 onClick={() => window.confirm('לצאת מהחשבון בכל המכשירים (כולל זה)?') && run('logout-all', async () => {
