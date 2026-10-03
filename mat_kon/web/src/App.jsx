@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Heart, LogOut, Search, UserPlus, X } from 'lucide-react';
+import { Heart, LogOut, MessageCircle, Search, UserPlus, X } from 'lucide-react';
 import Auth from './components/Auth';
 import AddLink from './components/AddLink';
+import ImportView from './components/ImportView';
 import InvitesView from './components/InvitesView';
 import Paywall from './components/Paywall';
 import PendingList from './components/PendingList';
@@ -31,6 +32,7 @@ const AUTH_LINK = takeAuthLink();
 const route = () => {
   const h = window.location.hash;
   if (h === '#/invites') return { view: 'invites' };
+  if (h.startsWith('#/import')) return { view: 'import' };
   const id = (h.match(/^#\/r\/([\w-]+)/) || [])[1];
   return id ? { view: 'recipe', id } : { view: 'home' };
 };
@@ -163,6 +165,25 @@ export default function App() {
 
   if (nav.view === 'invites' && isOwner) return <InvitesView onBack={back} />;
 
+  if (nav.view === 'import') {
+    return (
+      <>
+        {paywall && <Paywall user={user} paymentUrl={paywall.paymentUrl} onClose={() => setPaywall(null)} />}
+        <ImportView
+          session={session}
+          user={user}
+          recipes={recipes}
+          onBack={() => open(null)}
+          onRecipe={(recipe, updatedUser) => {
+            upsert(recipe);
+            if (updatedUser) setUser(updatedUser);
+          }}
+          onPaywall={(url) => setPaywall({ paymentUrl: url || paymentUrl })}
+        />
+      </>
+    );
+  }
+
   if (current) {
     return (
       <RecipeView
@@ -215,6 +236,9 @@ export default function App() {
             )}
           </div>
           <AddLink onAdd={add} />
+          <a href="#/import" className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-white/95 hover:text-white">
+            <MessageCircle size={16} /> ייבוא מתכונים מצ'אט או מקבוצה בווטסאפ
+          </a>
           {left !== null && (
             <button onClick={() => left === 0 && setPaywall({ paymentUrl })} className="mt-3 w-full text-right text-sm text-orange-50">
               <div className="flex justify-between mb-1">

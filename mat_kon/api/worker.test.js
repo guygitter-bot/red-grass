@@ -198,3 +198,35 @@ test('deleting an invite removes the user and their recipes', async () => {
   const again = await (await call('GET', '/invites')).json();
   assert.equal(again.invites.length, 0);
 });
+
+// ---------- ייבוא מווטסאפ ----------
+
+test('a recipe written in a WhatsApp message: no web tools, counted once, refreshable', async () => {
+  const body = { key: 'wa:abc123', text: 'עוגה\nמצרכים: 2 ביצים, כוס סוכר\nאופים 30 דקות', chat: 'המשפחה', author: 'סבתא', date: '3.10.2026' };
+  const res = await call('POST', '/recipes/text', body);
+  assert.equal(res.status, 200);
+  const { recipe } = await res.json();
+  assert.deepEqual(recipe.source, { url: null, key: 'wa:abc123', kind: 'whatsapp', chat: 'המשפחה', author: 'סבתא', date: '3.10.2026', text: body.text });
+  assert.equal(apiCalls[0].tools.length, 1, 'only submit_recipe');
+  assert.match(apiCalls[0].messages[0].content, /WhatsApp/);
+  assert.match(apiCalls[0].messages[0].content, /2 ביצים/);
+
+  // אותה הודעה שוב מתעדכנת ולא נכפלת
+  assert.equal((await (await call('POST', '/recipes/text', body)).json()).updated, true);
+  const refreshed = await call('POST', `/recipes/${recipe.id}/refresh`);
+  assert.equal(refreshed.status, 200);
+  assert.match(apiCalls.at(-1).messages[0].content, /2 ביצים/);
+  assert.equal((await (await call('GET', '/recipes')).json()).recipes.length, 1);
+
+  assert.equal((await call('POST', '/recipes/text', { text: 'קצר' })).status, 400);
+});
+
+test('WhatsApp text recipes count toward the free recipes', async () => {
+  env = fakeEnv({ FREE_RECIPES: '1' });
+  const inv = await invite();
+  const { session } = await (await register(inv.token)).json();
+  const text = 'מצרכים: קמח, סוכר, ביצים. אופן ההכנה: מערבבים ואופים.';
+  const first = await (await call('POST', '/recipes/text', { key: 'wa:1', text }, session)).json();
+  assert.equal(first.user.added, 1);
+  assert.equal((await call('POST', '/recipes/text', { key: 'wa:2', text: `${text} עוד` }, session)).status, 402);
+});

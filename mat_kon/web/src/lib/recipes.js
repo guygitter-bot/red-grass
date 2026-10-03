@@ -127,3 +127,29 @@ export function freeLeft(user) {
   if (!user || user.plan === 'paid') return null;
   return Math.max(0, user.freeLimit - user.added);
 }
+
+export function shortUrl(url) {
+  try {
+    const u = new URL(url);
+    return `${hostOf(url)}${u.pathname.length > 1 ? u.pathname : ''}`;
+  } catch {
+    return String(url || '');
+  }
+}
+
+// המתכון כטקסט לשיתוף (למשל חזרה לווטסאפ)
+export function recipeAsText(r) {
+  const list = (sections, numbered) => {
+    let n = 0;
+    return (sections || [])
+      .map((s) => [s.title ? `*${s.title}*` : null, ...s.items.map((i) => (numbered ? `${(n += 1)}. ${i}` : `• ${i}`))].filter(Boolean).join('\n'))
+      .join('\n\n');
+  };
+  return [
+    `*${r.title}*`,
+    r.servings ? `${r.servings}` : null,
+    `\n*מצרכים*\n${list(r.ingredients, false)}`,
+    `\n*אופן ההכנה*\n${list(r.steps, true)}`,
+    r.tips?.length ? `\n*טיפים*\n${r.tips.map((t) => `• ${t}`).join('\n')}` : null,
+  ].filter(Boolean).join('\n');
+}

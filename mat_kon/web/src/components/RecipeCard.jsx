@@ -1,4 +1,4 @@
-import { Heart, PlayCircle } from 'lucide-react';
+import { Heart, MessageCircle, PlayCircle } from 'lucide-react';
 import { CATEGORY_EMOJI, isVideo } from '../lib/recipes';
 
 export default function RecipeCard({ recipe, onOpen }) {
@@ -11,6 +11,9 @@ export default function RecipeCard({ recipe, onOpen }) {
         <span className="text-4xl">{CATEGORY_EMOJI[recipe.category]}</span>
         {isVideo(recipe) && (
           <PlayCircle size={26} className="absolute bottom-2 left-2 text-white drop-shadow" fill="rgba(0,0,0,.35)" />
+        )}
+        {recipe.source?.kind === 'whatsapp' && (
+          <MessageCircle size={24} className="absolute bottom-2 left-2 text-white drop-shadow" fill="#10b981" />
         )}
         {recipe.favorite && (
           <Heart size={20} className="absolute top-2 left-2 text-white drop-shadow" fill="#f43f5e" />

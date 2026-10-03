@@ -50,3 +50,4 @@ export const logout = (s) => api(s, 'POST', '/logout', {}).catch(() => {});
 
 export const inviteLink = (token) => `${window.location.origin}${window.location.pathname}#invite=${token}`;
 export const loginLink = () => `${window.location.origin}${window.location.pathname}#login`;
+export const addTextRecipe = (s, item) => api(s, 'POST', '/recipes/text', item);

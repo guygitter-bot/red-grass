@@ -24,7 +24,9 @@ export class RecipeBook {
     if (request.method === 'POST' && !id) {
       const recipe = await request.json();
       const all = await this.storage.list({ prefix: PREFIX });
-      const existing = [...all.values()].find((r) => r.source?.url === recipe.source?.url);
+      // אותו מקור (קישור, או הודעת ווטסאפ לפי key) מתעדכן ולא נכפל
+      const sourceKey = (r) => r.source?.url || r.source?.key;
+      const existing = [...all.values()].find((r) => sourceKey(r) && sourceKey(r) === sourceKey(recipe));
       const now = new Date().toISOString();
       const saved = existing
         ? { ...recipe, id: existing.id, createdAt: existing.createdAt, updatedAt: now, favorite: existing.favorite, myNotes: existing.myNotes }

@@ -72,6 +72,7 @@ given is not enough, use web_fetch on the original link and on links from the de
 for the creator's written recipe (title + author). Only if the exact recipe cannot be found, reconstruct it \
 from what the video shows/says, set confidence to "low" and say so in notes.
 - A website: if the page text below is missing or blocked, web_fetch the link.
+- A WhatsApp message: use only the message text. If it is chatter and not a recipe, set found=false.
 - Choose the single best category. Desserts that are cakes → "עוגות"; cookies, rugelach, pastries → \
 "עוגיות ומאפים מתוקים"; bread, pita, savory pies/bourekas → "לחמים ומאפים"; shakshuka/pancakes → "ארוחת בוקר"; \
 a vegetarian main dish → "צמחוני וטבעוני" unless it is clearly a salad/soup/pasta.
@@ -79,6 +80,14 @@ a vegetarian main dish → "צמחוני וטבעוני" unless it is clearly a 
 - When done, call submit_recipe. Do not write anything else.`;
 
 function material(src) {
+  if (src.kind === 'whatsapp') {
+    return [
+      'Source: a message from a WhatsApp chat (no link). Build the recipe from this text only.',
+      src.chat ? `Chat: ${src.chat}` : '',
+      src.author ? `Sent by: ${src.author}` : '',
+      `Message:\n${src.text}`,
+    ].filter(Boolean).join('\n\n');
+  }
   const parts = [`Link: ${src.url}`, `Type: ${isVideoKind(src.kind) ? `video (${src.kind})` : 'website'}`];
   if (src.title) parts.push(`Title: ${src.title}`);
   if (src.author) parts.push(`Author/channel: ${src.author}`);
@@ -115,7 +124,15 @@ export function toRecipe(input, src) {
     tips: cleanList(input.tips),
     confidence: ['high', 'medium', 'low'].includes(input.confidence) ? input.confidence : 'medium',
     notes: clean(input.notes),
-    source: {
+    source: src.kind === 'whatsapp' ? {
+      url: null,
+      key: src.key,
+      kind: 'whatsapp',
+      chat: clean(src.chat),
+      author: clean(src.author),
+      date: clean(src.date),
+      text: src.text,
+    } : {
       url: src.url,
       kind: src.kind,
       title: clean(src.title),
@@ -130,7 +147,8 @@ export function toRecipe(input, src) {
 export class NoRecipeError extends Error {}
 
 export async function extractRecipe(client, src) {
-  const complete = looksComplete(src);
+  // מתכון מובנה מלא מהדף, או הודעת ווטסאפ: אין צורך ברשת, זה מהיר וזול יותר
+  const complete = src.kind === 'whatsapp' || looksComplete(src);
   const messages = [{ role: 'user', content: material(src) }];
   for (let step = 0; step < MAX_STEPS; step++) {
     const response = await client.beta.messages.create({
@@ -140,7 +158,6 @@ export async function extractRecipe(client, src) {
       fallbacks: 'default',
       output_config: { effort: complete ? 'low' : 'medium' },
       system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
-      // מתכון מובנה מלא מהדף: אין צורך ברשת, זה מהיר וזול יותר
       tools: complete ? [RECIPE_TOOL] : [...WEB_TOOLS, RECIPE_TOOL],
       messages,
     });

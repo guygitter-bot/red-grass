@@ -66,3 +66,17 @@ describe('invites', () => {
     expect(freeLeft({ plan: 'free', added: 12, freeLimit: 10 })).toBe(0);
   });
 });
+
+import { recipeAsText, shortUrl } from './recipes';
+
+describe('sharing', () => {
+  it('writes a recipe as WhatsApp text', () => {
+    const text = recipeAsText({
+      title: 'עוגה', servings: '8 מנות', tips: [],
+      ingredients: [{ title: '', items: ['קמח'] }, { title: 'לציפוי', items: ['שוקולד'] }],
+      steps: [{ title: '', items: ['מערבבים', 'אופים'] }],
+    });
+    expect(text).toBe('*עוגה*\n8 מנות\n\n*מצרכים*\n• קמח\n\n*לציפוי*\n• שוקולד\n\n*אופן ההכנה*\n1. מערבבים\n2. אופים');
+    expect(shortUrl('https://www.foodis.co.il/r/1?x=1')).toBe('foodis.co.il/r/1');
+  });
+});
