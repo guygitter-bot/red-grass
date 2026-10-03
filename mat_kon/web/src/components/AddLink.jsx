@@ -52,7 +52,7 @@ export default function AddLink({ onAdd, onSearch }) {
             setError('');
           }}
           inputMode="url"
-          placeholder="קישור למתכון, או שם של מנה לחיפוש…"
+          placeholder="קישור או שם של מנה"
           className="flex-1 min-w-0 rounded-2xl bg-white text-stone-900 px-4 py-3 outline-none placeholder:text-stone-400 shadow-sm"
           dir="auto"
         />
