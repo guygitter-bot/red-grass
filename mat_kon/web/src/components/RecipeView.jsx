@@ -1,17 +1,16 @@
 import { useEffect, useState } from 'react';
 import {
   ArrowRight, Camera, Check, ChefHat, Clock, ExternalLink, Heart, ImagePlus, Info, Loader2, MessageCircle, Minus, PenLine, Pencil, PlayCircle,
-  CalendarPlus, Plus, RotateCw, Share2, ShoppingCart, Trash2, Users, X,
+  CalendarPlus, Plus, Printer, RotateCw, Share2, ShoppingCart, Star, Trash2, Users, X,
 } from 'lucide-react';
 import CookMode from './CookMode';
 import { baseServings, formatAmount, scaleSections } from '../lib/scale';
 import { thumbnail } from '../lib/image';
 import { DAY_NAMES, MEALS, dateKey, shortDate } from '../lib/plan';
-import { CATEGORIES } from '../lib/categories';
-import { CATEGORY_EMOJI, VIDEO_LABEL, isVideo, recipeAsText, sectionsToText, shortUrl, textToSections } from '../lib/recipes';
+import { emojiOf, VIDEO_LABEL, isVideo, recipeAsText, sectionsToText, shortUrl, textToSections } from '../lib/recipes';
 import { usePersistentState } from '../lib/storage';
 
-export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDelete, onAddToShopping, onAddToPlan }) {
+export default function RecipeView({ recipe, categories, onBack, onUpdate, onRefresh, onDelete, onAddToShopping, onAddToPlan }) {
   const [editing, setEditing] = useState(false);
   const [planning, setPlanning] = useState(false);
   const [cooking, setCooking] = useState(false);
@@ -77,7 +76,7 @@ export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDele
           }}
         />
       )}
-      <div className="sticky top-0 z-10 bg-[#fffbf5]/90 backdrop-blur border-b border-stone-100 pt-[env(safe-area-inset-top)]">
+      <div className="sticky top-0 z-10 bg-[#fffbf5]/90 backdrop-blur border-b border-stone-100 pt-[env(safe-area-inset-top)] print:hidden">
         <div className="max-w-2xl mx-auto px-2 h-14 flex items-center gap-1">
           <button onClick={onBack} className="p-2 rounded-full hover:bg-stone-100" aria-label="חזרה">
             <ArrowRight size={22} />
@@ -156,7 +155,7 @@ export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDele
         )}
 
         {recipe.source.embed ? (
-          <div className={`mt-3 rounded-2xl overflow-hidden bg-black ${recipe.source.kind === 'tiktok' ? 'aspect-[9/16] max-w-xs mx-auto' : 'aspect-video'}`}>
+          <div className={`mt-3 rounded-2xl overflow-hidden bg-black print:hidden ${recipe.source.kind === 'tiktok' ? 'aspect-[9/16] max-w-xs mx-auto' : 'aspect-video'}`}>
             <iframe
               src={recipe.source.embed}
               title={recipe.title}
@@ -170,7 +169,7 @@ export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDele
           <img src={recipe.image} alt="" referrerPolicy="no-referrer" className="mt-3 w-full max-h-80 object-cover rounded-2xl" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
         ) : null}
 
-        <h1 className="mt-5 text-3xl font-black leading-tight text-stone-900">{recipe.title}</h1>
+        <h1 className="mt-5 text-3xl font-black leading-tight text-stone-900 print:mt-0">{recipe.title}</h1>
         {recipe.originalTitle && recipe.originalTitle !== recipe.title && (
           <p className="text-sm text-stone-400 mt-1" dir="auto">{recipe.originalTitle}</p>
         )}
@@ -178,22 +177,22 @@ export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDele
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <label className="inline-flex items-center gap-1 rounded-full bg-orange-100 text-orange-800 text-sm pr-3 pl-1 py-0.5">
-            {CATEGORY_EMOJI[recipe.category]}
+            {emojiOf(recipe.category)}
             <select
               value={recipe.category}
               onChange={(e) => onUpdate({ category: e.target.value })}
               className="bg-transparent font-medium outline-none py-1 cursor-pointer"
               aria-label="קטגוריה"
             >
-              {CATEGORIES.map((c) => (
+              {(categories.includes(recipe.category) ? categories : [...categories, recipe.category]).map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
           </label>
-          {(recipe.tags || []).map((t) => (
-            <span key={t} className="rounded-full bg-stone-100 text-stone-600 text-sm px-3 py-1">{t}</span>
-          ))}
+          <Tags tags={recipe.tags || []} onChange={(tags) => onUpdate({ tags })} />
         </div>
+
+        <Rating value={recipe.rating || 0} onChange={(rating) => onUpdate({ rating })} />
 
         {(recipe.servings || times.length > 0) && (
           <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-stone-700">
@@ -222,7 +221,7 @@ export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDele
               action={(
                 <button
                   onClick={() => onAddToShopping(ingredients.flatMap((s) => s.items))}
-                  className="rounded-full bg-orange-50 text-orange-800 px-3 py-1.5 text-sm font-medium flex items-center gap-1.5"
+                  className="rounded-full bg-orange-50 text-orange-800 px-3 py-1.5 text-sm font-medium flex items-center gap-1.5 print:hidden"
                 >
                   <ShoppingCart size={15} /> לרשימת קניות
                 </button>
@@ -254,7 +253,7 @@ export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDele
             <Section
               title="אופן ההכנה"
               action={recipe.steps.length > 0 && (
-                <button onClick={() => setCooking(true)} className="rounded-full bg-stone-900 text-white px-3 py-1.5 text-sm font-medium flex items-center gap-1.5">
+                <button onClick={() => setCooking(true)} className="rounded-full bg-stone-900 text-white px-3 py-1.5 text-sm font-medium flex items-center gap-1.5 print:hidden">
                   <ChefHat size={15} /> מצב בישול
                 </button>
               )}
@@ -290,7 +289,8 @@ export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDele
               </Section>
             )}
 
-            <MyNotes value={recipe.myNotes || ''} onSave={(myNotes) => onUpdate({ myNotes })} />
+            <div className="print:hidden"><MyNotes value={recipe.myNotes || ''} onSave={(myNotes) => onUpdate({ myNotes })} /></div>
+            {recipe.myNotes && <p className="hidden print:block mt-6 text-sm"><b>ההערות שלי:</b> {recipe.myNotes}</p>}
 
             {Object.values(checked).some(Boolean) && (
               <button onClick={() => setChecked({})} className="mt-4 text-sm text-stone-500 underline">ניקוי הסימונים</button>
@@ -301,8 +301,9 @@ export default function RecipeView({ recipe, onBack, onUpdate, onRefresh, onDele
         {error && <p className="mt-6 text-center text-sm text-stone-600">{error}</p>}
 
         {!editing && (
-          <div className="mt-8 pt-5 border-t border-stone-200 flex flex-wrap gap-2 justify-center text-sm">
+          <div className="mt-8 pt-5 border-t border-stone-200 flex flex-wrap gap-2 justify-center text-sm print:hidden">
             <ActionButton onClick={() => setEditing(true)} icon={<Pencil size={16} />}>עריכה</ActionButton>
+            <ActionButton onClick={() => window.print()} icon={<Printer size={16} />}>הדפסה / PDF</ActionButton>
             {canRefresh && (
               <ActionButton onClick={() => run('refresh', onRefresh)} icon={busy === 'refresh' ? <Loader2 size={16} className="animate-spin" /> : <RotateCw size={16} />} disabled={Boolean(busy)}>
                 {busy === 'refresh' ? 'מסדר שוב מהמקור…' : 'רענון מהמקור'}
@@ -345,7 +346,7 @@ function Servings({ base, factor, onChange }) {
     const count = Math.round(base * factor * 2) / 2;
     const step = (d) => onChange(Math.max(0.5, count + d) / base);
     return (
-      <div className="mb-4 flex items-center gap-3 rounded-2xl bg-stone-50 px-3 py-2">
+      <div className="mb-4 flex items-center gap-3 rounded-2xl bg-stone-50 px-3 py-2 print:hidden">
         <span className="text-sm text-stone-600 flex-1">כמות</span>
         <button onClick={() => step(-1)} disabled={count <= 1} className={btn} aria-label="פחות"><Minus size={16} /></button>
         <span className="font-bold min-w-[4.5rem] text-center">{formatAmount(count)} מנות</span>
@@ -355,7 +356,7 @@ function Servings({ base, factor, onChange }) {
     );
   }
   return (
-    <div className="mb-4 flex items-center gap-2 rounded-2xl bg-stone-50 px-3 py-2 overflow-x-auto no-scrollbar">
+    <div className="mb-4 flex items-center gap-2 rounded-2xl bg-stone-50 px-3 py-2 overflow-x-auto no-scrollbar print:hidden">
       <span className="text-sm text-stone-600 shrink-0 ml-1">כמות</span>
       {[0.5, 1, 1.5, 2, 3].map((f) => (
         <button
@@ -500,5 +501,60 @@ function DayPicker({ onClose, onPick }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// דירוג בכוכבים (לחיצה על אותו כוכב מבטלת)
+function Rating({ value, onChange }) {
+  return (
+    <div className="mt-3 flex items-center gap-0.5" aria-label="דירוג">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button key={n} onClick={() => onChange(value === n ? 0 : n)} className="p-0.5 print:pointer-events-none" aria-label={`${n} כוכבים`}>
+          <Star size={22} className={n <= value ? 'text-amber-400' : 'text-stone-300 print:hidden'} fill={n <= value ? 'currentColor' : 'none'} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// תגיות: הסרה ב-x, הוספה בכפתור +
+function Tags({ tags, onChange }) {
+  const [adding, setAdding] = useState(false);
+  const [text, setText] = useState('');
+  const submit = (e) => {
+    e.preventDefault();
+    const t = text.trim().replace(/^#/, '');
+    if (t && !tags.includes(t)) onChange([...tags, t]);
+    setText('');
+    setAdding(false);
+  };
+  return (
+    <>
+      {tags.map((t) => (
+        <span key={t} className="rounded-full bg-stone-100 text-stone-600 text-sm pr-3 pl-1.5 py-1 flex items-center gap-1">
+          #{t}
+          <button onClick={() => onChange(tags.filter((x) => x !== t))} className="text-stone-400 hover:text-red-500 print:hidden" aria-label={`הסרת ${t}`}>
+            <X size={13} />
+          </button>
+        </span>
+      ))}
+      {adding ? (
+        <form onSubmit={submit} className="print:hidden">
+          <input
+            autoFocus
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onBlur={submit}
+            maxLength={30}
+            placeholder="תגית"
+            className="w-28 rounded-full border border-orange-300 px-3 py-1 text-sm outline-none"
+          />
+        </form>
+      ) : (
+        <button onClick={() => setAdding(true)} className="rounded-full border border-dashed border-stone-300 text-stone-500 text-sm px-2.5 py-1 flex items-center gap-1 print:hidden">
+          <Plus size={13} /> תגית
+        </button>
+      )}
+    </>
   );
 }

@@ -365,3 +365,70 @@ test('weekly plan: saved per book and cleaned', async () => {
   assert.equal((await call('PUT', '/plan', { plan: [] })).status, 400);
   assert.equal((await call('PUT', '/plan', { plan: { '2026-10-04': 'x' } })).status, 400);
 });
+
+// ---------- קטגוריות משלי, חיפוש ברשת, דירוג ותגיות, גיבוי ושחזור ----------
+
+test('custom categories: added, offered to the agent, accepted on edit, removed to "other"', async () => {
+  assert.equal((await call('POST', '/categories', { name: 'עוגות' })).status, 409);
+  assert.deepEqual((await (await call('POST', '/categories', { name: '  מתכוני סבתא ' })).json()).custom, ['מתכוני סבתא']);
+  assert.ok((await (await call('GET', '/me')).json()).categories.includes('מתכוני סבתא'));
+
+  reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_recipe', input: { ...recipeInput, category: 'מתכוני סבתא' } }] });
+  const { recipe } = await (await call('POST', '/recipes', { url: 'https://cake.example/grandma' })).json();
+  assert.equal(recipe.category, 'מתכוני סבתא');
+  assert.ok(apiCalls[0].tools.find((t) => t.name === 'submit_recipe').input_schema.properties.category.enum.includes('מתכוני סבתא'));
+  assert.match(apiCalls[0].messages[0].content, /own categories: מתכוני סבתא/);
+
+  assert.equal((await call('PUT', `/recipes/${recipe.id}`, { category: 'לא קיים' })).status, 400);
+  const removed = await (await call('POST', '/categories/remove', { name: 'מתכוני סבתא' })).json();
+  assert.deepEqual(removed, { custom: [], moved: 1 });
+  assert.equal((await (await call('GET', `/recipes/${recipe.id}`)).json()).recipe.category, 'אחר');
+  assert.equal((await call('POST', '/categories/remove', { name: 'עוגות' })).status, 400);
+});
+
+test('rating and tags are validated on edit', async () => {
+  const { recipe } = await (await call('POST', '/recipes', { url: 'https://cake.example/choc' })).json();
+  assert.equal((await (await call('PUT', `/recipes/${recipe.id}`, { rating: 4 })).json()).recipe.rating, 4);
+  assert.equal((await call('PUT', `/recipes/${recipe.id}`, { rating: 9 })).status, 400);
+  const tagged = await (await call('PUT', `/recipes/${recipe.id}`, { tags: [' לשבת ', 'לשבת', '', 'מהיר'] })).json();
+  assert.deepEqual(tagged.recipe.tags, ['לשבת', 'מהיר']);
+});
+
+test('web search by dish name returns recipe links', async () => {
+  reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_results', input: { results: [
+    { title: 'עוגת גבינה פירורים', url: 'https://www.10dakot.co.il/recipe/x', site: '10 דקות', description: 'קלאסית' },
+    { title: 'bad', url: 'javascript:alert(1)', site: '', description: '' },
+  ] } }] });
+  const res = await (await call('POST', '/search', { q: 'עוגת גבינה פירורים' })).json();
+  assert.deepEqual(res.results.map((r) => r.url), ['https://www.10dakot.co.il/recipe/x']);
+  assert.ok(apiCalls[0].tools.some((t) => t.name === 'web_search'));
+  assert.equal((await call('POST', '/search', { q: 'א' })).status, 400);
+});
+
+test('backup restore: valid recipes saved as they were, bad ones skipped, same source updates', async () => {
+  const backup = {
+    categories: ['מתכוני סבתא'],
+    recipes: [
+      { title: 'קציצות', category: 'מתכוני סבתא', rating: 5, favorite: true, myNotes: 'יותר שום', createdAt: '2025-01-01T10:00:00.000Z',
+        ingredients: [{ title: '', items: ['בשר טחון'] }], steps: [{ title: '', items: ['מטגנים'] }], source: { url: 'https://site.example/r/1?utm_source=x', kind: 'page' } },
+      { title: 'מהווטסאפ', ingredients: [{ title: '', items: ['קמח'] }], steps: [], source: { key: 'wa:abc', kind: 'whatsapp', text: 'קמח' } },
+      { title: '', ingredients: [] },
+      { title: 'בלי מצרכים', ingredients: [], steps: [] },
+      { title: 'תמונה רעה', ingredients: [{ title: '', items: ['x'] }], image: 'javascript:1', source: {} },
+    ],
+  };
+  const res = await (await call('POST', '/recipes/restore', backup)).json();
+  assert.deepEqual(res, { restored: 3, skipped: 2 });
+  const list = (await (await call('GET', '/recipes')).json()).recipes;
+  const meat = list.find((r) => r.title === 'קציצות');
+  assert.equal(meat.category, 'מתכוני סבתא');
+  assert.equal(meat.rating, 5);
+  assert.equal(meat.createdAt, '2025-01-01T10:00:00.000Z');
+  assert.equal(meat.source.url, 'https://site.example/r/1');
+  assert.equal(list.find((r) => r.title === 'תמונה רעה').image, null);
+  assert.equal(apiCalls.length, 0, 'no agent');
+  // שחזור שוב לא מכפיל
+  await call('POST', '/recipes/restore', backup);
+  assert.equal((await (await call('GET', '/recipes')).json()).recipes.length, 3);
+  assert.equal((await call('POST', '/recipes/restore', { recipes: 'x' })).status, 400);
+});

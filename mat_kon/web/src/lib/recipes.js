@@ -33,12 +33,13 @@ const haystack = (r) =>
   ].join(' '));
 
 // חיפוש לפי שם, מצרך, תגית או ערוץ. כל המילים צריכות להופיע.
-export function filterRecipes(recipes, { query = '', category = null, favorites = false } = {}) {
+export function filterRecipes(recipes, { query = '', category = null, favorites = false, tag = null } = {}) {
   const words = normalize(query).split(' ').filter(Boolean);
   return recipes.filter(
     (r) =>
       (!category || r.category === category) &&
       (!favorites || r.favorite) &&
+      (!tag || (r.tags || []).includes(tag)) &&
       (!words.length || words.every((w) => haystack(r).includes(w))),
   );
 }
@@ -152,4 +153,27 @@ export function recipeAsText(r) {
     `\n*אופן ההכנה*\n${list(r.steps, true)}`,
     r.tips?.length ? `\n*טיפים*\n${r.tips.map((t) => `• ${t}`).join('\n')}` : null,
   ].filter(Boolean).join('\n');
+}
+
+// מיון הספר
+export const SORTS = { new: 'החדשים', abc: 'א-ב', rating: 'הדירוג הגבוה' };
+export function sortRecipes(recipes, sort) {
+  const list = [...recipes];
+  if (sort === 'abc') return list.sort((a, b) => a.title.localeCompare(b.title, 'he'));
+  if (sort === 'rating') return list.sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.createdAt || '').localeCompare(a.createdAt || ''));
+  return list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+}
+
+// התגיות הנפוצות בספר
+export function topTags(recipes, limit = 12) {
+  const counts = new Map();
+  for (const r of recipes) for (const t of r.tags || []) counts.set(t, (counts.get(t) || 0) + 1);
+  return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'he')).slice(0, limit);
+}
+
+export const emojiOf = (category) => CATEGORY_EMOJI[category] || '🏷️';
+
+// קובץ הגיבוי: המתכונים והקטגוריות שלי (רשימת הקניות והתכנון נכללים לעיון, ולא משוחזרים)
+export function backupFile({ recipes, categories, shopping, plan }) {
+  return JSON.stringify({ app: 'mat-kon', version: 1, exportedAt: new Date().toISOString(), categories, recipes, shopping, plan }, null, 1);
 }

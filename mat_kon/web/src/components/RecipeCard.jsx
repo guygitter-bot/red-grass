@@ -1,5 +1,5 @@
 import { Heart, MessageCircle, PlayCircle } from 'lucide-react';
-import { CATEGORY_EMOJI, isVideo } from '../lib/recipes';
+import { emojiOf, isVideo } from '../lib/recipes';
 
 export default function RecipeCard({ recipe, onOpen }) {
   return (
@@ -8,7 +8,7 @@ export default function RecipeCard({ recipe, onOpen }) {
         {recipe.image ? (
           <img src={recipe.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="absolute inset-0 w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
         ) : null}
-        <span className="text-4xl">{CATEGORY_EMOJI[recipe.category]}</span>
+        <span className="text-4xl">{emojiOf(recipe.category)}</span>
         {isVideo(recipe) && (
           <PlayCircle size={26} className="absolute bottom-2 left-2 text-white drop-shadow" fill="rgba(0,0,0,.35)" />
         )}
@@ -21,7 +21,10 @@ export default function RecipeCard({ recipe, onOpen }) {
       </div>
       <div className="p-2.5">
         <div className="font-bold text-stone-900 leading-snug line-clamp-2">{recipe.title}</div>
-        <div className="text-xs text-stone-500 mt-1">{recipe.category}</div>
+        <div className="text-xs text-stone-500 mt-1 flex items-center justify-between gap-1">
+          <span className="truncate">{recipe.category}</span>
+          {recipe.rating > 0 && <span className="text-amber-500 shrink-0">{'★'.repeat(recipe.rating)}</span>}
+        </div>
       </div>
     </button>
   );

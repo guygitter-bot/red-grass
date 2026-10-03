@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { ArrowRight, Camera, ImagePlus, Loader2, PenLine, X } from 'lucide-react';
-import { CATEGORIES } from '../lib/categories';
 import { addManualRecipe, addPhotoRecipe } from '../lib/api';
 import { dataUrlToPart, photoForReading, thumbnail } from '../lib/image';
 import { textToSections } from '../lib/recipes';
 
 // מתכון חדש בלי קישור: מצלמים דף מספר / פתק / צילום מסך, או כותבים בעצמכם
-export default function NewRecipeView({ session, onBack, onSaved, onPaywall }) {
+export default function NewRecipeView({ session, categories, onBack, onSaved, onPaywall }) {
   const [mode, setMode] = useState('photo');
   return (
     <div className="min-h-screen pb-16">
@@ -30,7 +29,7 @@ export default function NewRecipeView({ session, onBack, onSaved, onPaywall }) {
             </button>
           ))}
         </div>
-        {mode === 'photo' ? <PhotoForm session={session} onSaved={onSaved} onPaywall={onPaywall} /> : <ManualForm session={session} onSaved={onSaved} />}
+        {mode === 'photo' ? <PhotoForm session={session} onSaved={onSaved} onPaywall={onPaywall} /> : <ManualForm session={session} categories={categories} onSaved={onSaved} />}
       </div>
     </div>
   );
@@ -115,7 +114,7 @@ function PhotoForm({ session, onSaved, onPaywall }) {
   );
 }
 
-function ManualForm({ session, onSaved }) {
+function ManualForm({ session, categories, onSaved }) {
   const [form, setForm] = useState({ title: '', category: 'אחר', servings: '', ingredients: '', steps: '', tips: '' });
   const [image, setImage] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -154,7 +153,7 @@ function ManualForm({ session, onSaved }) {
         <label className="block">
           <span className="font-bold">קטגוריה</span>
           <select value={form.category} onChange={set('category')} className={`${field} mt-1`}>
-            {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </label>
         <label className="block">

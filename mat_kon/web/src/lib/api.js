@@ -64,3 +64,13 @@ export const organizeShopping = (s, items) => api(s, 'POST', '/shopping/organize
 // תכנון ארוחות שבועי
 export const getPlan = (s) => api(s, 'GET', '/plan').then((d) => d.plan);
 export const putPlan = (s, plan) => api(s, 'PUT', '/plan', { plan }).then((d) => d.plan);
+
+// חיפוש מתכון ברשת לפי שם
+export const searchRecipes = (s, q) => api(s, 'POST', '/search', { q }).then((d) => d.results);
+
+// קטגוריות משלי
+export const addCategory = (s, name) => api(s, 'POST', '/categories', { name }).then((d) => d.custom);
+export const removeCategory = (s, name) => api(s, 'POST', '/categories/remove', { name });
+
+// גיבוי ושחזור
+export const restoreBackup = (s, backup) => api(s, 'POST', '/recipes/restore', backup);

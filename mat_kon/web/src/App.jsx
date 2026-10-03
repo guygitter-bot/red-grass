@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Heart, LogOut, MessageCircle, PlusCircle, Search, UserPlus, X } from 'lucide-react';
+import { Globe, Heart, LogOut, MessageCircle, PlusCircle, Search, Settings, X } from 'lucide-react';
+import SearchView from './components/SearchView';
+import SettingsView from './components/SettingsView';
 import Auth from './components/Auth';
 import AddLink from './components/AddLink';
 import ImportView from './components/ImportView';
@@ -21,7 +23,7 @@ import {
   addRecipe, addTextRecipe, deleteRecipe, getMe, getPlan, getShopping, listRecipes, logout as apiLogout, putPlan, putShopping, refreshRecipe,
   updateRecipe,
 } from './lib/api';
-import { CATEGORY_EMOJI, countByCategory, filterRecipes, freeLeft, linkFromShare, parseAuthHash } from './lib/recipes';
+import { SORTS, countByCategory, emojiOf, filterRecipes, freeLeft, linkFromShare, parseAuthHash, sortRecipes, topTags } from './lib/recipes';
 import { usePersistentState } from './lib/storage';
 
 // קישור הזמנה (#invite=...) או כניסה (#login). נלקח מהכתובת ונמחק ממנה מיד.
@@ -47,6 +49,8 @@ const route = () => {
   if (h === '#/new') return { view: 'new' };
   if (h === '#/plan') return { view: 'plan' };
   if (h === '#/fridge') return { view: 'fridge' };
+  if (h === '#/settings') return { view: 'settings' };
+  if (h.startsWith('#/search')) return { view: 'search', q: decodeURIComponent((h.match(/[?&]q=([^&]*)/) || [])[1] || '') };
   if (h.startsWith('#/import')) return { view: 'import' };
   const id = (h.match(/^#\/r\/([\w-]+)/) || [])[1];
   return id ? { view: 'recipe', id } : { view: 'home' };
@@ -77,6 +81,10 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState(null);
   const [favorites, setFavorites] = useState(false);
+  const [tag, setTag] = useState(null);
+  const [sort, setSort] = usePersistentState('matkon_sort', 'new');
+  // קטגוריות שהמשתמש הוסיף (הקבועות ב-lib/categories)
+  const [custom, setCustom] = usePersistentState('matkon_custom_categories', []);
   const [loadError, setLoadError] = useState('');
   const [toast, setToast] = useState('');
 
@@ -105,11 +113,12 @@ export default function App() {
   const reload = useCallback(async () => {
     if (auth) return;
     try {
+      const me = await getMe(session);
       if (session) {
-        const me = await getMe(session);
         setUser(me.user);
         setPaymentUrl(me.paymentUrl);
       }
+      setCustom((me.categories || []).filter((c) => !CATEGORIES.includes(c)));
       setRecipes(await listRecipes(session));
       getShopping(session).then(setShopping).catch(() => {});
       getPlan(session).then(setPlan).catch(() => {});
@@ -118,7 +127,7 @@ export default function App() {
       if (e.status === 401) signOut();
       else setLoadError(e.message);
     }
-  }, [auth, session, setUser, setRecipes, signOut]);
+  }, [auth, session, setUser, setRecipes, setCustom, signOut]);
 
   useEffect(() => {
     reload();
@@ -200,7 +209,13 @@ export default function App() {
   const back = () => (window.history.length > 1 ? window.history.back() : open(null));
 
   const counts = useMemo(() => countByCategory(recipes), [recipes]);
-  const visible = useMemo(() => filterRecipes(recipes, { query, category, favorites }), [recipes, query, category, favorites]);
+  const visible = useMemo(
+    () => sortRecipes(filterRecipes(recipes, { query, category, favorites, tag }), sort),
+    [recipes, query, category, favorites, tag, sort],
+  );
+  // כל הקטגוריות: הקבועות, אחריהן שלי, ו"אחר" בסוף
+  const allCategories = [...CATEGORIES.filter((c) => c !== 'אחר'), ...custom, 'אחר'];
+  const tags = useMemo(() => topTags(recipes), [recipes]);
   const current = nav.view === 'recipe' && recipes.find((r) => r.id === nav.id);
   const left = freeLeft(user);
 
@@ -260,6 +275,58 @@ export default function App() {
     );
   }
 
+  if (nav.view === 'settings') {
+    return (
+      <>
+        <SettingsView
+          session={session}
+          isOwner={isOwner}
+          recipes={recipes}
+          custom={custom}
+          shopping={shopping}
+          plan={plan}
+          onCustomChange={(next, removed) => {
+            setCustom(next);
+            if (removed) setRecipes((list) => list.map((r) => (r.category === removed ? { ...r, category: 'אחר' } : r)));
+          }}
+          onRestored={reload}
+          onBack={() => open(null)}
+          onToast={setToast}
+        />
+        {toast && <Toast text={toast} />}
+      </>
+    );
+  }
+
+  if (nav.view === 'search') {
+    const savedUrls = new Set(recipes.map((r) => {
+      try {
+        const u = new URL(r.source?.url);
+        return u.hostname.replace(/^(www|m)\./, '') + u.pathname.replace(/\/+$/, '');
+      } catch {
+        return '';
+      }
+    }));
+    return (
+      <>
+        {paywall && <Paywall user={user} paymentUrl={paywall.paymentUrl} onClose={() => setPaywall(null)} />}
+        <SearchView
+          key={nav.q}
+          session={session}
+          initialQuery={nav.q}
+          savedUrls={savedUrls}
+          onAdd={(url, title) => {
+            add(url);
+            setToast(`"${title}" נכנס לספר – מסדר מתכון ברקע`);
+          }}
+          onBack={() => open(null)}
+          onPaywall={(url) => setPaywall({ paymentUrl: url || paymentUrl })}
+        />
+        {toast && <Toast text={toast} />}
+      </>
+    );
+  }
+
   if (nav.view === 'fridge') {
     return (
       <>
@@ -275,6 +342,7 @@ export default function App() {
         {paywall && <Paywall user={user} paymentUrl={paywall.paymentUrl} onClose={() => setPaywall(null)} />}
         <NewRecipeView
           session={session}
+          categories={allCategories}
           onBack={() => open(null)}
           onSaved={(recipe, updatedUser) => {
             upsert(recipe);
@@ -313,6 +381,7 @@ export default function App() {
       <RecipeView
         key={current.id}
         recipe={current}
+        categories={allCategories}
         onBack={back}
         onUpdate={async (patch) => {
           upsert({ ...current, ...patch });
@@ -360,19 +429,21 @@ export default function App() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-            {isOwner ? (
-              <a href="#/invites" className="flex items-center gap-1.5 rounded-full bg-white/15 hover:bg-white/25 px-3 py-2 text-sm font-medium">
-                <UserPlus size={18} /> <span className="hidden sm:inline">הזמנות</span>
+              <a href="#/settings" className="p-2 rounded-full bg-white/15 hover:bg-white/25" aria-label="הגדרות" title="הגדרות">
+                <Settings size={20} />
               </a>
-            ) : (
-              <button onClick={signOut} className="p-2 rounded-full hover:bg-white/15" aria-label="יציאה" title="יציאה">
-                <LogOut size={20} />
-              </button>
-            )}
+              {!isOwner && (
+                <button onClick={signOut} className="p-2 rounded-full hover:bg-white/15" aria-label="יציאה" title="יציאה">
+                  <LogOut size={20} />
+                </button>
+              )}
             </div>
           </div>
-          <AddLink onAdd={add} />
+          <AddLink onAdd={add} onSearch={(q) => { window.location.hash = `#/search?q=${encodeURIComponent(q)}`; }} />
           <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
+            <a href="#/search" className="inline-flex items-center gap-1.5 text-sm font-medium text-white/95 hover:text-white">
+              <Globe size={16} /> חיפוש מתכון ברשת
+            </a>
             <a href="#/new" className="inline-flex items-center gap-1.5 text-sm font-medium text-white/95 hover:text-white">
               <PlusCircle size={16} /> מתכון מתמונה או כתיבה ידנית
             </a>
@@ -441,17 +512,38 @@ export default function App() {
             </div>
 
             <div className="mt-3 -mx-4 px-4 flex gap-2 overflow-x-auto no-scrollbar pb-1">
-              <Chip active={!category && !favorites} onClick={() => { setCategory(null); setFavorites(false); }}>
+              <Chip active={!category && !favorites && !tag} onClick={() => { setCategory(null); setFavorites(false); setTag(null); }}>
                 הכל <span className="opacity-60">{recipes.length}</span>
               </Chip>
               <Chip active={favorites} onClick={() => setFavorites((f) => !f)}>
                 <Heart size={14} className="inline -mt-0.5" fill={favorites ? 'currentColor' : 'none'} /> מועדפים
               </Chip>
-              {CATEGORIES.filter((c) => counts[c]).map((c) => (
+              {allCategories.filter((c) => counts[c]).map((c) => (
                 <Chip key={c} active={category === c} onClick={() => setCategory(category === c ? null : c)}>
-                  {CATEGORY_EMOJI[c]} {c} <span className="opacity-60">{counts[c]}</span>
+                  {emojiOf(c)} {c} <span className="opacity-60">{counts[c]}</span>
                 </Chip>
               ))}
+            </div>
+
+            {tags.length > 0 && (
+              <div className="mt-2 -mx-4 px-4 flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
+                {tags.map(([t, n]) => (
+                  <button
+                    key={t}
+                    onClick={() => setTag(tag === t ? null : t)}
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-xs border ${tag === t ? 'bg-stone-800 border-stone-800 text-white' : 'bg-white border-stone-200 text-stone-600'}`}
+                  >
+                    #{t} <span className="opacity-60">{n}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-2 flex items-center justify-end gap-1 text-sm text-stone-500">
+              מיון:
+              <select value={sort} onChange={(e) => setSort(e.target.value)} className="bg-transparent font-medium text-stone-700 outline-none">
+                {Object.entries(SORTS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
             </div>
           </>
         )}

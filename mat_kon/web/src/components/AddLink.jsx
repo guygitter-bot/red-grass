@@ -2,13 +2,19 @@ import { useState } from 'react';
 import { ClipboardPaste, Plus } from 'lucide-react';
 import { linkFromText } from '../lib/recipes';
 
-export default function AddLink({ onAdd }) {
+export default function AddLink({ onAdd, onSearch }) {
   const [text, setText] = useState('');
   const [error, setError] = useState('');
 
   const submit = (value) => {
     const link = linkFromText(value);
     if (!link) {
+      // לא קישור: מחפשים ברשת מתכון בשם הזה
+      if (onSearch && value.trim().length >= 2) {
+        setText('');
+        onSearch(value.trim());
+        return;
+      }
       setError('הדביקו קישור למתכון או לסרטון');
       return;
     }
@@ -46,7 +52,7 @@ export default function AddLink({ onAdd }) {
             setError('');
           }}
           inputMode="url"
-          placeholder="הדביקו קישור למתכון או לסרטון…"
+          placeholder="קישור למתכון, או שם של מנה לחיפוש…"
           className="flex-1 min-w-0 rounded-2xl bg-white text-stone-900 px-4 py-3 outline-none placeholder:text-stone-400 shadow-sm"
           dir="auto"
         />
