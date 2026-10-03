@@ -31,7 +31,25 @@ export async function api(session, method, path, body) {
 }
 
 export const getMe = (s) => api(s, 'GET', '/me');
-export const listRecipes = (s) => api(s, 'GET', '/recipes').then((d) => d.recipes);
+export const listRecipes = (s) => api(s, 'GET', '/recipes').then((d) => (d.recipes || []).map(safeRecipe));
+
+// מתכון בצורה שהמסכים מצפים לה, גם אם משהו בשרת נשמר פגום
+const strOr = (v, d = '') => (typeof v === 'string' ? v : d);
+const sectionsOr = (v) => (Array.isArray(v) ? v : [])
+  .filter((x) => x && Array.isArray(x.items))
+  .map((x) => ({ title: strOr(x.title), items: x.items.map((i) => String(i ?? '')) }));
+export function safeRecipe(r) {
+  return {
+    ...r,
+    title: strOr(r.title, 'מתכון') || 'מתכון',
+    category: strOr(r.category, 'אחר') || 'אחר',
+    tags: Array.isArray(r.tags) ? r.tags.map(String) : [],
+    ingredients: sectionsOr(r.ingredients),
+    steps: sectionsOr(r.steps),
+    tips: Array.isArray(r.tips) ? r.tips.map(String) : [],
+    source: r.source && typeof r.source === 'object' ? r.source : {},
+  };
+}
 export const addRecipe = (s, url, hint) => api(s, 'POST', '/recipes', hint ? { url, hint } : { url });
 export const refreshRecipe = (s, id) => api(s, 'POST', `/recipes/${id}/refresh`);
 export const updateRecipe = (s, id, patch) => api(s, 'PUT', `/recipes/${id}`, patch).then((d) => d.recipe);
@@ -62,6 +80,11 @@ export const addManualRecipe = (s, recipe) => api(s, 'POST', '/recipes/manual', 
 export const getShopping = (s) => api(s, 'GET', '/shopping').then((d) => d.items);
 export const putShopping = (s, items) => api(s, 'PUT', '/shopping', { items }).then((d) => d.items);
 export const organizeShopping = (s, items) => api(s, 'POST', '/shopping/organize', { items }).then((d) => d.groups);
+
+// שינויים ברמת פריט (כדי ששני בני משפחה לא ימחקו זה לזה)
+export const shoppingOps = (s, ops) => api(s, 'POST', '/shopping/ops', { ops }).then((d) => d.items);
+export const pantryOps = (s, ops) => api(s, 'POST', '/pantry/ops', { ops }).then((d) => d.items);
+export const planOps = (s, ops) => api(s, 'POST', '/plan/ops', { ops }).then((d) => d.plan);
 
 // תכנון ארוחות שבועי
 export const getPlan = (s) => api(s, 'GET', '/plan').then((d) => d.plan);

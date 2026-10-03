@@ -144,7 +144,7 @@
 | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | כבר קיימים (הטוקן צריך גם Cloudflare Pages: Edit) |
 | `ANTHROPIC_API_KEY` | כבר קיים. למפתח נפרד: `MATKON_ANTHROPIC_API_KEY` |
 | `GOOGLE_CLIENT_ID` | לא חובה (משתנה או סוד). מוסיף "המשך עם Google" להרשמה מקישור הזמנה ולכניסה. יוצרים ב-Google Cloud Console ← APIs & Services ← Credentials ← OAuth client ID ← Web application, עם Authorized JavaScript origin `https://mat-kon.pages.dev` |
-| `OWNER_PASSWORD` | לא חובה. נועל את הספר של בעל האפליקציה: בלי זה הכתובת פתוחה לכל אחד. עם זה כל מכשיר נכנס פעם אחת ("בעל האפליקציה? כניסה עם סיסמת הבעלים") |
+| `OWNER_PASSWORD` | **נדרש** (או `OWNER_EMAIL` עם גוגל). בלי זה הספר של בעל האפליקציה סגור לכולם ("כשל סגור"); כדי להשאיר אותו פתוח בלי סיסמה צריך במפורש `OWNER_OPEN=true`. עם זה כל מכשיר נכנס פעם אחת ("בעל האפליקציה? כניסה עם סיסמת הבעלים") |
 | `OWNER_EMAIL` | לא חובה. האימייל של חשבון הגוגל של בעל האפליקציה – כניסה לספר שלו עם "המשך עם Google" (גם נועל את הספר) |
 | `CHEAPERSAL_API_KEY` | לא חובה. מחירים אמיתיים ב"איפה לקנות" ([מפתח חינמי](https://cheapersal.co.il/developers/keys), 100 בקשות ביום) |
 

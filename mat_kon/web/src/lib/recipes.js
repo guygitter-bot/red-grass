@@ -72,7 +72,8 @@ export function textToSections(text) {
         current = { title: '', items: [] };
         sections.push(current);
       }
-      current.items.push(line.replace(/^(\d+[.)]|[-•*])\s*/, ''));
+      // מספור רשימה ("1. ", "2) ") או תבליט – אבל לא מספר עשרוני כמו "1.5 כוסות"
+      current.items.push(line.replace(/^(\d+[.)](?=\s)|[-•*](?=\s|$))\s*/, ''));
     }
   }
   return sections.filter((s) => s.items.length);

@@ -682,6 +682,15 @@ test('shared book: the holder invites a family member, both work on one book wit
   assert.equal((await call('DELETE', `/members/${wife.user.id}`, undefined, holder.session)).status, 200);
   assert.equal((await call('GET', '/recipes', undefined, wife.session)).status, 401);
   assert.equal((await (await call('GET', '/recipes', undefined, holder.session)).json()).recipes.length, 11);
+  const removed = await call('POST', '/login', { email: 'ronit@example.com', password: 'secret12' });
+  assert.equal(removed.status, 403);
+  assert.match((await removed.json()).error, /הוסרתם מהספר/);
+  assert.deepEqual((await (await call('GET', '/members', undefined, holder.session)).json()).members, []);
+  // הצטרפות חוזרת עם קישור חדש
+  const again = await (await call('POST', '/members', {}, holder.session)).json();
+  const back = await call('POST', '/register', { join: again.join.token, name: 'רונית', email: 'ronit@example.com', password: 'newpass12' });
+  assert.equal(back.status, 200);
+  assert.equal((await (await call('GET', '/recipes', undefined, (await back.json()).session)).json()).recipes.length, 11);
 });
 
 test('shared book: deleting the holder removes the members; expired and pending links', async () => {
@@ -719,4 +728,57 @@ test('shared book: the owner shares their own book, a member joins with Google',
   const again = await (await call('POST', '/google', { credential: 'a.b.c' })).json();
   assert.equal(again.user.ownerBook, true);
   assert.deepEqual((await (await call('GET', '/members', undefined, owner.session)).json()).members.map((m) => m.email), ['wife@gmail.com']);
+});
+
+test('lists change item by item: two family members editing at once keep both changes', async () => {
+  const add = (text, id) => ({ op: 'add', id, item: { text, checked: false } });
+  await call('POST', '/shopping/ops', { ops: [add('חלב', 'a'), add('לחם', 'b')] });
+  // שני מכשירים עם אותה רשימה: אחד מוסיף ביצים, השני מסמן חלב
+  await call('POST', '/shopping/ops', { ops: [add('ביצים', 'c')] });
+  const res = await (await call('POST', '/shopping/ops', { ops: [{ op: 'update', id: 'a', item: { text: 'חלב', checked: true } }] })).json();
+  assert.deepEqual(res.items.map((i) => [i.text, i.checked]), [['חלב', true], ['לחם', false], ['ביצים', false]]);
+  // מחיקה של פריט שמישהו כבר מחק, ועדכון שלו – לא מחזירים אותו
+  await call('POST', '/shopping/ops', { ops: [{ op: 'remove', id: 'b' }] });
+  const after = await (await call('POST', '/shopping/ops', { ops: [{ op: 'update', id: 'b', item: { text: 'לחם', checked: true } }] })).json();
+  assert.deepEqual(after.items.map((i) => i.text), ['חלב', 'ביצים']);
+  assert.equal((await call('POST', '/shopping/ops', { ops: [{ op: 'add', id: 'x', item: { text: '' } }] })).status, 400);
+
+  const pantry = await (await call('POST', '/pantry/ops', { ops: [{ op: 'add', id: 'p1', item: { name: 'אורז', place: 'pantry' } }] })).json();
+  assert.equal(pantry.items[0].place, 'pantry');
+  const plan = await (await call('POST', '/plan/ops', { ops: [
+    { op: 'add', id: 'm1', item: { day: '2026-10-05', title: 'שקשוקה' } },
+    { op: 'add', id: 'm2', item: { day: '2026-10-06', title: 'פסטה' } },
+  ] })).json();
+  assert.deepEqual(Object.keys(plan.plan), ['2026-10-05', '2026-10-06']);
+  const moved = await (await call('POST', '/plan/ops', { ops: [{ op: 'update', id: 'm1', item: { day: '2026-10-06', title: 'שקשוקה' } }] })).json();
+  assert.deepEqual(moved.plan['2026-10-06'].map((m) => m.title).sort(), ['פסטה', 'שקשוקה']);
+  assert.equal(moved.plan['2026-10-05'], undefined);
+});
+
+test('refresh keeps what the user edited; a recipe edit with a broken shape is refused', async () => {
+  const { recipe } = await (await call('POST', '/recipes', { url: 'https://cake.example/keep' })).json();
+  await call('PUT', `/recipes/${recipe.id}`, { title: 'העוגה של סבתא', rating: 5, tags: ['של סבתא'] });
+  const { recipe: fresh } = await (await call('POST', `/recipes/${recipe.id}/refresh`)).json();
+  assert.equal(fresh.title, 'העוגה של סבתא');
+  assert.equal(fresh.rating, 5);
+  assert.deepEqual(fresh.tags, ['של סבתא']);
+  assert.equal((await call('PUT', `/recipes/${recipe.id}`, { ingredients: 'oops' })).status, 400);
+  assert.equal((await call('PUT', `/recipes/${recipe.id}`, { title: 12345 })).status, 400);
+  assert.equal((await call('PUT', `/recipes/${recipe.id}`, { title: '  ' })).status, 400);
+  const ok = await (await call('PUT', `/recipes/${recipe.id}`, { steps: [{ title: '', items: ['לערבב', 7] }] })).json();
+  assert.deepEqual(ok.recipe.steps[0].items, ['לערבב', '7']);
+});
+
+test('the server fails closed: without an owner password the owner book is not open to everyone', async () => {
+  env.OWNER_OPEN = undefined;
+  assert.equal((await call('GET', '/recipes')).status, 401);
+  assert.equal((await call('GET', '/invites')).status, 401);
+  assert.equal((await call('GET', '/debug/source?url=https://cake.example/x')).status, 401);
+  assert.equal((await (await call('GET', '/auth-config')).json()).ownerLocked, true);
+});
+
+test('AI output keeps decimal amounts (1.5 is not list numbering)', async () => {
+  reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_recipe', input: { ...recipeInput, ingredients: [{ title: '', items: ['1.5 כוסות קמח', '0.5 כפית מלח', '2. ביצים'] }] } }] });
+  const { recipe } = await (await call('POST', '/recipes', { url: 'https://cake.example/dec' })).json();
+  assert.deepEqual(recipe.ingredients[0].items, ['1.5 כוסות קמח', '0.5 כפית מלח', 'ביצים']);
 });

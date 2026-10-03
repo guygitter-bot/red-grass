@@ -133,7 +133,7 @@ const clean = (s) => String(s || '').trim();
 const cleanList = (a) => (Array.isArray(a) ? a.map(clean).filter(Boolean) : []);
 const cleanSections = (a) =>
   (Array.isArray(a) ? a : [])
-    .map((s) => ({ title: clean(s?.title), items: cleanList(s?.items).map((i) => i.replace(/^\d+[.)]\s*/, '')) }))
+    .map((s) => ({ title: clean(s?.title), items: cleanList(s?.items).map((i) => i.replace(/^\d+[.)](?=\s)\s*/, '')) }))
     .filter((s) => s.items.length);
 
 // מאחד את תשובת הסוכן עם מה שנאסף מהדף לרשומת מתכון

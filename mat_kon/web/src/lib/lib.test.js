@@ -106,3 +106,30 @@ describe('join links', () => {
     expect(parseAuthHash('#join=abcDEF123_-x')).toEqual({ mode: 'join', token: 'abcDEF123_-x' });
   });
 });
+
+describe('round 1 fixes', () => {
+  it('editing keeps decimal amounts but strips list numbering', async () => {
+    const { textToSections } = await import('./recipes');
+    expect(textToSections('1.5 כוסות קמח\n0.5 כפית מלח\n1. מערבבים\n2) אופים\n- תבליט')[0].items)
+      .toEqual(['1.5 כוסות קמח', '0.5 כפית מלח', 'מערבבים', 'אופים', 'תבליט']);
+  });
+  it('thousands separators scale as numbers', async () => {
+    const { scaleIngredient } = await import('./scale');
+    expect(scaleIngredient('1,000 גרם קמח', 2)).toBe('2000 גרם קמח');
+    expect(scaleIngredient('1,5 כוסות', 2)).toBe('3 כוסות');
+  });
+});
+
+describe('list sync', () => {
+  it('diffs and applies item changes', async () => {
+    const { diffItems, applyOps, planToItems, itemsToPlan } = await import('./sync');
+    const a = [{ id: '1', text: 'חלב' }, { id: '2', text: 'לחם' }];
+    const b = [{ id: '1', text: 'חלב', checked: true }, { id: '3', text: 'ביצים' }];
+    const ops = diffItems(a, b);
+    expect(ops.map((o) => o.op).sort()).toEqual(['add', 'remove', 'update']);
+    // מישהו אחר הוסיף בינתיים "גבינה" – נשמר
+    expect(applyOps([...a, { id: '4', text: 'גבינה' }], ops).map((i) => i.text)).toEqual(['חלב', 'גבינה', 'ביצים']);
+    const plan = { '2026-10-05': [{ id: 'm', title: 'פסטה' }] };
+    expect(itemsToPlan(planToItems(plan))).toEqual(plan);
+  });
+});

@@ -121,7 +121,7 @@ function PlaceView({ place, session, pantry, onChange, onToast, onPaywall }) {
   const addTyped = (e) => {
     e.preventDefault();
     const items = text.split(/[,\n،]+/).map((t) => t.trim()).filter(Boolean).map((name) => ({ name, place }));
-    if (items.length) onChange(mergePantry(pantry, items));
+    if (items.length) onChange((current) => mergePantry(current, items));
     setText('');
   };
 
@@ -138,7 +138,7 @@ function PlaceView({ place, session, pantry, onChange, onToast, onPaywall }) {
       }
       if (mode === 'single') {
         // מוצר בודד נכנס מיד למסך הזה
-        onChange(mergePantry(pantry, found.map((f) => ({ ...f, place }))));
+        onChange((current) => mergePantry(current, found.map((f) => ({ ...f, place }))));
         onToast(`נוסף ל${info.title}: ${found.map((f) => f.name).join(', ')}`);
         setScan(null);
       } else {
@@ -204,7 +204,7 @@ function PlaceView({ place, session, pantry, onChange, onToast, onPaywall }) {
             items={scan.items}
             onCancel={() => setScan(null)}
             onConfirm={(items) => {
-              onChange(mergePantry(pantry, items));
+              onChange((current) => mergePantry(current, items));
               onToast(`נוספו ${items.length} מוצרים`);
               setScan(null);
             }}
