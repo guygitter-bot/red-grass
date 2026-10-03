@@ -263,3 +263,22 @@ test('an Instagram reel: caption, creator comments and the WhatsApp hint reach t
   assert.equal(probe.comments, 1);
   assert.equal(probe.creatorComments, 1);
 });
+
+test('text pasted for a link that could not be read keeps the link on top and refreshes from the text', async () => {
+  const link = 'https://www.facebook.com/groups/hungryinyourhunger/permalink/2154404724737365/';
+  const res = await call('POST', '/recipes/text', { url: link, text: '3 קילו בשר מפורק. מצרכים: כתף בקר, בצל, יין אדום. מבשלים 6 שעות.' });
+  assert.equal(res.status, 200);
+  const { recipe } = await res.json();
+  assert.equal(recipe.source.url, link);
+  assert.equal(recipe.source.kind, 'facebook');
+  assert.equal(recipe.source.key, undefined);
+  assert.match(recipe.source.text, /כתף בקר/);
+  assert.equal(apiCalls[0].tools.length, 1, 'no web tools for pasted text');
+  assert.match(apiCalls[0].messages[0].content, /text the user copied from the post at https:\/\/www\.facebook\.com/);
+
+  // אותו קישור שוב (גם דרך הוספה רגילה) מעדכן את אותו מתכון
+  assert.equal((await (await call('POST', '/recipes/text', { url: link, text: 'מתכון מעודכן: כתף בקר, בצל, יין, 6 שעות בתנור' })).json()).updated, true);
+  await call('POST', `/recipes/${recipe.id}/refresh`);
+  assert.match(apiCalls.at(-1).messages[0].content, /מתכון מעודכן/);
+  assert.equal((await (await call('GET', '/recipes')).json()).recipes.length, 1);
+});

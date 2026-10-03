@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { addRecipe, addTextRecipe } from '../lib/api';
 import { findCandidates, parseChat, readChatFile } from '../lib/whatsapp';
+import PasteBox from './PasteBox';
 import { freeLeft } from '../lib/recipes';
 
 const CONCURRENCY = 2;
@@ -65,6 +66,13 @@ export default function ImportView({ session, user, recipes, onBack, onRecipe, o
   }, [status]);
 
   const setOne = (id, value) => setStatus((s) => ({ ...s, [id]: value }));
+
+  // טקסט שהמשתמש העתיק מפוסט שלא נקרא – המתכון נבנה ממנו והקישור נשאר
+  const fromPasted = async (item, text) => {
+    const res = await addTextRecipe(session, { url: item.url, text, chat: chat.name, author: item.author, date: item.date });
+    onRecipe(res.recipe, res.user);
+    setOne(item.id, { state: 'done', message: `${res.recipe.title} · ${res.recipe.category}`, recipeId: res.recipe.id });
+  };
 
   const run = async (only) => {
     stopRef.current = false;
@@ -169,6 +177,10 @@ export default function ImportView({ session, user, recipes, onBack, onRecipe, o
                   disabled={running || ['done', 'working'].includes(status[item.id]?.state)}
                   status={status[item.id]}
                   running={running}
+                  onPaste={(text) => fromPasted(item, text).catch((e) => {
+                    if (e.status === 402) onPaywall(e.data.paymentUrl || '');
+                    throw e;
+                  })}
                   onToggle={() => setSelected((s) => ({ ...s, [item.id]: !s[item.id] }))}
                 />
               ))}
@@ -219,7 +231,7 @@ export default function ImportView({ session, user, recipes, onBack, onRecipe, o
   );
 }
 
-function Row({ item, checked, disabled, status, running, onToggle }) {
+function Row({ item, checked, disabled, status, running, onToggle, onPaste }) {
   const state = status?.state;
   const icon = item.type === 'text'
     ? <MessageSquareText size={18} />
@@ -261,6 +273,7 @@ function Row({ item, checked, disabled, status, running, onToggle }) {
             {state === 'error' && <><AlertCircle size={15} /> {status.message}</>}
           </p>
         )}
+        {['skip', 'error'].includes(state) && item.type === 'link' && !running && <PasteBox url={item.url} onSubmit={onPaste} />}
       </div>
     </li>
   );

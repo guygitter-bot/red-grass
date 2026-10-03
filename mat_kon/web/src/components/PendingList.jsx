@@ -1,14 +1,15 @@
 import { AlertCircle, Loader2, RotateCw, X } from 'lucide-react';
 import { hostOf } from '../lib/recipes';
+import PasteBox from './PasteBox';
 
-export default function PendingList({ items, onRetry, onDismiss }) {
+export default function PendingList({ items, onRetry, onDismiss, onPaste }) {
   if (!items.length) return null;
   return (
     <div className="mt-4 space-y-2">
       {items.map((item) => (
         <div
           key={item.key}
-          className={`rounded-2xl p-3 flex items-center gap-3 ${item.error ? 'bg-red-50' : 'bg-white shadow-sm'}`}
+          className={`rounded-2xl p-3 flex items-start gap-3 ${item.error ? 'bg-red-50' : 'bg-white shadow-sm'}`}
         >
           {item.error ? (
             <AlertCircle className="text-red-500 shrink-0" size={22} />
@@ -20,6 +21,7 @@ export default function PendingList({ items, onRetry, onDismiss }) {
             <div className={`text-xs ${item.error ? 'text-red-700' : 'text-stone-500'}`}>
               {item.error || 'קוראים את הקישור ומסדרים מתכון… (בסרטון זה יכול לקחת דקה-שתיים)'}
             </div>
+            {item.error && <PasteBox url={item.url} onSubmit={(text) => onPaste(item, text)} />}
           </div>
           {item.error && (
             <>

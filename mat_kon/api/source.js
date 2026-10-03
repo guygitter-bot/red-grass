@@ -204,7 +204,7 @@ function pickCaptionTrack(tracks) {
 }
 
 import {
-  captionFromOgDescription, instagram, linksIn, readTiktokPage, tiktokComments, youtubeComments,
+  captionFromOgDescription, facebook, instagram, linksIn, readTiktokPage, tiktokComments, youtubeComments,
 } from './social.js';
 
 // ---------- איסוף ----------
@@ -303,6 +303,19 @@ export async function gatherSource(url, fetchFn = fetch, { hint = '', igDocId } 
     out.debug.push(`instagram: ${ig.tried.join(', ')}`);
   }
 
+  if (kind === 'facebook') {
+    try {
+      const fb = await facebook(fetchFn, url);
+      out.description = fb.caption;
+      out.title = fb.title;
+      out.author = fb.group;
+      out.image = fb.image;
+      out.debug.push(`facebook: ${fb.caption.length} chars`);
+    } catch (e) {
+      out.debug.push(`facebook: ${e.message}`);
+    }
+  }
+
   if (kind === 'tiktok') {
     const oembed = await getJson(fetchFn, `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`);
     if (oembed) {
@@ -315,7 +328,8 @@ export async function gatherSource(url, fetchFn = fetch, { hint = '', igDocId } 
     }
   }
 
-  try {
+  // בפייסבוק דף רגיל מחזיר שגיאה או דף התחברות – אם הבוט כבר קיבל את הפוסט, אין טעם
+  if (kind !== 'facebook' || !out.description) try {
     const { text: html, finalUrl } = await get(fetchFn, url);
     const meta = metaTags(html);
     out.title = out.title || meta['og:title'] || meta['twitter:title'] || meta['<title>'] || '';

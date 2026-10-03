@@ -339,3 +339,34 @@ export function linksIn(texts, limit = 3) {
   }
   return out;
 }
+
+// ---------- פייסבוק ----------
+
+// לבוט התצוגה המקדימה של פייסבוק עצמו מוחזר דף עם כותרת הפוסט (ולפעמים כל הטקסט), גם בקבוצות
+export const FACEBOOK_BOT = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)';
+
+export function readFacebookPage(html) {
+  const meta = (name) =>
+    decode((html.match(new RegExp(`<meta[^>]+(?:property|name)="${name}"[^>]+content="([^"]*)"`)) || [])[1] || '').trim();
+  const title = meta('og:title').replace(/\s*\|\s*Facebook\s*$/i, '');
+  // "שם הקבוצה | תחילת הפוסט.." או "שם | פוסט"
+  const parts = title.split(' | ');
+  const group = parts.length > 1 ? parts[0] : '';
+  const start = parts.length > 1 ? parts.slice(1).join(' | ') : title;
+  const texts = [meta('og:description'), meta('description'), start.replace(/\.\.+$/, '')];
+  // טקסט הפוסט בתוך ה-HTML או ה-JSON של הדף
+  for (const m of html.matchAll(/data-ad-(?:comet-)?preview="message"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/g)) {
+    texts.push(decode(m[1].replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '')));
+  }
+  for (const m of html.matchAll(/"message":\{(?:"__typename":"[^"]*",)?"text":"((?:[^"\\]|\\.)*)"/g)) {
+    const t = tryJson(`"${m[1]}"`);
+    if (t) texts.push(t);
+  }
+  const caption = texts.map((t) => String(t || '').trim()).sort((a, b) => b.length - a.length)[0] || '';
+  return { caption, group, image: meta('og:image') || null, title: start };
+}
+
+export async function facebook(fetchFn, url) {
+  const html = await request(fetchFn, url, { ua: FACEBOOK_BOT });
+  return readFacebookPage(html);
+}

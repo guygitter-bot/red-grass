@@ -70,3 +70,18 @@ jobs:
           done
           echo '=== uuinstagram'
           curl -sS -L -A 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)' "https://www.uuinstagram.com/reel/$CODE/" | head -c 3000; echo
+      - name: Raw Facebook / TikTok pages with different user agents (diagnostics)
+        if: contains(inputs.url, 'facebook.com') || contains(inputs.url, 'fb.watch') || contains(inputs.url, 'tiktok.com')
+        env:
+          LINK: ${{ inputs.url }}
+        run: |
+          for UA in 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36' \
+                    'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)' \
+                    'WhatsApp/2.24.20.80 A' \
+                    'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'; do
+            echo "=== [$UA]"
+            curl -sS -L -A "$UA" -H 'accept-language: he-IL,he;q=0.9,en;q=0.8' -o page.html -w 'status=%{http_code} size=%{size_download} final=%{url_effective}\n' "$LINK" || true
+            grep -o '<title>[^<]*</title>' page.html | head -1 | cut -c1-200 || true
+            grep -oE '<meta[^>]+(og:title|og:description|name="description")[^>]*>' page.html | head -3 | cut -c1-900 || true
+            printf 'login=%s private=%s desc=%s\n' "$(grep -oi 'log in\|התחבר' page.html | wc -l)" "$(grep -oi 'private group\|קבוצה פרטית' page.html | wc -l)" "$(grep -o '"desc":"[^"]\{0,300\}' page.html | head -1)"
+          done
