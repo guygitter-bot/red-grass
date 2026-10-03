@@ -27,7 +27,9 @@ export function lineHas(line, item) {
   return itemWords.length > 0 && itemWords.every((iw) => lineStems.some((lw) => lw === iw || (iw.length >= 4 && lw.startsWith(iw))));
 }
 
-const isStaple = (line) => STAPLES.some((s) => lineHas(line, s) && words(line).length <= words(s).length + 4);
+// "פלפל" לבד הוא תבלין, אבל פלפל אדום/ירוק/חריף הוא ירק שצריך לקנות
+const FRESH_PEPPER = /פלפל(ים)?\s+(אדו?ם|אדומים|ירוק|ירוקים|צהוב|צהובים|כתום|חריף|חריפים|קלוי|ממולא|שאטה)|גמבה/;
+const isStaple = (line) => !FRESH_PEPPER.test(normalize(line)) && STAPLES.some((s) => lineHas(line, s) && words(line).length <= words(s).length + 4);
 
 export function matchRecipes(recipes, have, { ignoreStaples = true } = {}) {
   const items = have.map((h) => h.trim()).filter(Boolean);

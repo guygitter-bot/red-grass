@@ -71,6 +71,8 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         env:
           ANTHROPIC_API_KEY: ${{ secrets.MATKON_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
+          # מחירון סופרים (לא חובה): https://cheapersal.co.il/developers/keys
+          CHEAPERSAL_API_KEY: ${{ secrets.CHEAPERSAL_API_KEY || 'none' }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -78,6 +80,7 @@ jobs:
           wranglerVersion: "4.146.0"
           secrets: |
             ANTHROPIC_API_KEY
+            CHEAPERSAL_API_KEY
       - name: Summary
         env:
           URL: ${{ steps.deploy.outputs.deployment-url }}
