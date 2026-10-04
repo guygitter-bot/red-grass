@@ -1,0 +1,19 @@
+name = "seder-api"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[vars]
+# האתרים שמותר להם לפנות לשרת (האפליקציה ב-Cloudflare Pages ופיתוח מקומי)
+ALLOWED_ORIGINS = "https://seder-tasks.pages.dev,http://localhost:5173,http://localhost:4173"
+
+# כל המשימות והתחומים של בעלת האפליקציה – אובייקט אחד ("main")
+[[durable_objects.bindings]]
+name = "VAULT"
+class_name = "Vault"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Vault"]
+
+# הסיסמה היא סוד, לא כאן: SEDER_PASSWORD (נקבע אוטומטית מ-GitHub, ראו .github/workflows/seder.yml)

@@ -1,6 +1,8 @@
 name: seder
 
-# אפליקציית המשימות (seder/web) -> Cloudflare Pages "seder-tasks" -> https://seder-tasks.pages.dev
+# אפליקציית המשימות (seder/):
+#   api -> Cloudflare Worker "seder-api" (סנכרון בין מכשירים; סיסמה בסוד SEDER_PASSWORD)
+#   web -> Cloudflare Pages "seder-tasks" -> https://seder-tasks.pages.dev
 on:
   push:
     branches: [main]
@@ -26,13 +28,55 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: seder/web/package-lock.json
-      - name: Tests and build
+      - name: Server tests
+        working-directory: seder/api
+        run: npm test
+      - name: App tests and build
         working-directory: seder/web
         run: |
           npm ci
           npm test
           npm run build
 
+  api:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check secrets
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PASSWORD: ${{ secrets.SEDER_PASSWORD }}
+        run: |
+          missing=""
+          [ -n "$CF_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -n "$CF_ACCOUNT" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          [ -n "$PASSWORD" ] || missing="$missing SEDER_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing (see seder/README.md)"
+            exit 1
+          fi
+      - name: Deploy worker
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        env:
+          SEDER_PASSWORD: ${{ secrets.SEDER_PASSWORD }}
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: seder/api
+          wranglerVersion: "4.146.0"
+          secrets: |
+            SEDER_PASSWORD
+      - name: Summary
+        env:
+          URL: ${{ steps.deploy.outputs.deployment-url }}
+        run: |
+          echo "Worker: $URL" >> "$GITHUB_STEP_SUMMARY"
+
+  # האתר עולה גם אם השרת נכשל (למשל סיסמה חסרה) – בלי סנכרון הוא עובד מהמכשיר כמו קודם
   web:
     needs: test
     if: github.event_name != 'pull_request'
