@@ -31,7 +31,10 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
   const [checked, setChecked] = usePersistentState(`matkon_checked_${recipe.id}`, {});
   const toggle = (key) => setChecked((c) => ({ ...c, [key]: !c[key] }));
 
-  useEffect(() => window.scrollTo(0, 0), [recipe.id]);
+  // בסוגריים מסולסלים: בכרום חדש scrollTo מחזיר ערך, ו-React היה מנסה להריץ אותו כ"ניקוי" ביציאה מהמסך (קריסה)
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [recipe.id]);
 
   const run = async (name, fn) => {
     setBusy(name);
@@ -400,7 +403,9 @@ function MyNotes({ value, onSave }) {
   const [text, setText] = useState(value);
   const pending = useRef({ text: value, value, onSave });
   pending.current = { text, value, onSave };
-  useEffect(() => setText(value), [value]);
+  useEffect(() => {
+    setText(value);
+  }, [value]);
   // שמירה אחרי הפסקה קצרה בהקלדה, וגם ביציאה מהמסך (חזרה אחורה בלי לצאת מהשדה)
   useEffect(() => {
     if (text === value) return undefined;
