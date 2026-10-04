@@ -14,11 +14,12 @@ const FIELDS = [
   ['fiber', 'סיבים'],
 ];
 
-export default function CalculatorView({ settings, onLog, onSaveFood, goHome }) {
+export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHome }) {
   const [values, setValues] = useState({ protein: '', carbs: '', fat: '', fiber: '' });
   const [labelUnits, setLabelUnits] = useState([]);
   const [servingGrams, setServingGrams] = useState(null);
   const [portion, setPortion] = useState(null);
+  const [favorite, setFavorite] = useState(false);
   const [foodName, setFoodName] = useState('');
   const [meal, setMeal] = useState('בוקר');
   const [scanning, setScanning] = useState(false);
@@ -57,6 +58,7 @@ export default function CalculatorView({ settings, onLog, onSaveFood, goHome }) 
     const food = { name, points: per100Points, grams: 100, per100: nums, source: 'user' };
     if (labelUnits.length) food.units = labelUnits;
     onSaveFood(food);
+    if (favorite) fav?.add(name);
     if (alsoLog && portion) {
       const item = plateItem(foodName, portion);
       onLog({
@@ -127,11 +129,19 @@ export default function CalculatorView({ settings, onLog, onSaveFood, goHome }) 
             <MeasurePicker per100={nums} units={units} onChange={setPortion} />
           </div>
           <div className="border-t border-emerald-200 pt-4 space-y-3">
-            <Input value={foodName} onChange={(e) => setFoodName(e.target.value)} placeholder="שם המאכל (למשל: יוגורט מולר)..." className="bg-white" />
+            <div className="space-y-1">
+              <Label>שם המוצר</Label>
+              <Input value={foodName} onChange={(e) => setFoodName(e.target.value)} placeholder="שם המאכל (למשל: יוגורט מולר)..." className="bg-white" />
+              <p className="text-xs text-slate-500">✎ אפשר לשנות לשם שתזכור/י כשתחפש/י בפעם הבאה (למשל "פרמזן").</p>
+            </div>
             <MealPicker value={meal} onChange={setMeal} />
             <Button onClick={() => save(true)} disabled={!foodName || !portion?.grams} className="w-full">
               הוסף ליומן · {portion ? formatPoints(portion.points) : 0} נק' (וישמור במאגר)
             </Button>
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              <input type="checkbox" checked={favorite} onChange={(e) => setFavorite(e.target.checked)} />
+              ⭐ שמור גם במועדפים
+            </label>
             <Button onClick={() => save(false)} disabled={!foodName} variant="secondary" className="w-full bg-white">
               שמור במאגר בלבד
             </Button>

@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Check, Pencil, Plus, Sparkles, Trash2, X } from 'lucide-react';
+import { Check, Pencil, Plus, Sparkles, Star, Trash2, X } from 'lucide-react';
 import { Button, Card, Input } from './ui';
 import { normalize, searchFoods } from '../lib/foodDb';
 import { formatPoints } from '../lib/points';
 
 const FILTERS = [
   { id: 'all', label: 'הכול' },
+  { id: 'fav', label: '⭐ מועדפים' },
   { id: 'manual', label: 'ידני' },
   { id: 'agent', label: 'הסוכן' },
 ];
@@ -25,7 +26,7 @@ function Badge({ food }) {
   return null;
 }
 
-function FoodLine({ food, canDelete, onSave, onDelete }) {
+function FoodLine({ food, canDelete, onSave, onRename, onDelete, fav }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(food.name);
   const [points, setPoints] = useState(String(food.points));
@@ -46,7 +47,8 @@ function FoodLine({ food, canDelete, onSave, onDelete }) {
           className="p-2 text-emerald-600 disabled:opacity-30"
           disabled={!name.trim() || points === ''}
           onClick={() => {
-            onSave({ ...food, name: name.trim(), points: parseFloat(points), source: 'user' }, food.name);
+            if (onRename && name.trim() !== food.name) onRename({ ...food, points: parseFloat(points) }, name.trim());
+            else onSave({ ...food, name: name.trim(), points: parseFloat(points), source: 'user' }, food.name);
             setEditing(false);
           }}
           aria-label="שמור"
@@ -61,6 +63,15 @@ function FoodLine({ food, canDelete, onSave, onDelete }) {
   }
   return (
     <div className="flex items-center gap-2 text-sm py-1.5 border-b border-slate-50">
+      {fav && (
+        <button
+          onClick={() => fav.toggle(food.name)}
+          className={fav.has(food.name) ? 'text-amber-400' : 'text-slate-300'}
+          aria-label={fav.has(food.name) ? 'הסר ממועדפים' : 'הוסף למועדפים'}
+        >
+          <Star size={15} fill={fav.has(food.name) ? 'currentColor' : 'none'} />
+        </button>
+      )}
       <span className="flex-1 min-w-0 truncate">{food.name}</span>
       <Badge food={food} />
       <span className="font-bold text-emerald-600 w-10 text-center">{formatPoints(food.points)}</span>
@@ -77,7 +88,7 @@ function FoodLine({ food, canDelete, onSave, onDelete }) {
 }
 
 // ניהול המאגר: הוספה ועריכה ידנית, בנפרד ממה שהסוכן מוסיף.
-export default function FoodDbManager({ foodDb, userFoods, remoteFoods = [], sharedOn, isAdmin, saveFood, removeUserFood }) {
+export default function FoodDbManager({ foodDb, userFoods, remoteFoods = [], sharedOn, isAdmin, saveFood, removeUserFood, renameFood, fav }) {
   const [name, setName] = useState('');
   const [points, setPoints] = useState('');
   const [query, setQuery] = useState('');
@@ -93,6 +104,7 @@ export default function FoodDbManager({ foodDb, userFoods, remoteFoods = [], sha
     let list = query ? searchFoods(foodDb, query, 200) : [...foodDb].reverse();
     if (filter === 'manual') list = list.filter(isManual);
     if (filter === 'agent') list = list.filter((f) => f.source === 'agent');
+    if (filter === 'fav') list = list.filter((f) => fav?.has(f.name));
     return list.slice(0, 60);
   }, [foodDb, query, filter]);
 
@@ -154,7 +166,9 @@ export default function FoodDbManager({ foodDb, userFoods, remoteFoods = [], sha
               food={f}
               canDelete={localNames.has(normalize(f.name))}
               onSave={saveFood}
+              onRename={renameFood}
               onDelete={removeUserFood}
+              fav={fav}
             />
           ))}
           {shown.length === 0 && <p className="text-center text-sm text-slate-400 py-4">אין מאכלים</p>}

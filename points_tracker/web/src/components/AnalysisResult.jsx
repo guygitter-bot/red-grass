@@ -16,6 +16,7 @@ export default function AnalysisResult({ analysis, db, onAdd }) {
   const [portion, setPortion] = useState(1);
   const [name, setName] = useState(analysis.dish_name);
   const [saveToDb, setSaveToDb] = useState(analysis.servings > 1);
+  const [favorite, setFavorite] = useState(false);
 
   const components = initial.map((c, i) => {
     const g = Number(grams[i]) || 0;
@@ -35,6 +36,7 @@ export default function AnalysisResult({ analysis, db, onAdd }) {
         parts: components.filter((c) => !c.removed).map((c) => `${c.amount} (${formatPoints(c.points)})`),
       },
       saveToDb,
+      favorite,
     );
 
   return (
@@ -45,7 +47,7 @@ export default function AnalysisResult({ analysis, db, onAdd }) {
           onChange={(e) => setName(e.target.value)}
           className="w-full text-lg font-bold bg-transparent border-b border-dashed border-slate-300 focus:outline-none focus:border-emerald-500"
         />
-        <p className="text-xs text-slate-400">{CONFIDENCE[analysis.confidence]}</p>
+        <p className="text-xs text-slate-400">✎ אפשר לשנות את השם · {CONFIDENCE[analysis.confidence]}</p>
         {analysis.notes_he && <p className="text-xs text-slate-500">{analysis.notes_he}</p>}
       </div>
 
@@ -110,8 +112,12 @@ export default function AnalysisResult({ analysis, db, onAdd }) {
       </div>
 
       <label className="flex items-center gap-2 text-sm text-slate-600">
-        <input type="checkbox" checked={saveToDb} onChange={(e) => setSaveToDb(e.target.checked)} />
+        <input type="checkbox" checked={saveToDb || favorite} onChange={(e) => setSaveToDb(e.target.checked)} />
         שמור את המאכל במאגר שלי לפעם הבאה
+      </label>
+      <label className="flex items-center gap-2 text-sm text-slate-600">
+        <input type="checkbox" checked={favorite} onChange={(e) => setFavorite(e.target.checked)} />
+        ⭐ שמור גם במועדפים
       </label>
 
       <Button onClick={add} className="w-full" disabled={!name}>

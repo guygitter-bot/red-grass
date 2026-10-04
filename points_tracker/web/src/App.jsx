@@ -6,7 +6,7 @@ import CalculatorView from './components/CalculatorView';
 import WeightView from './components/WeightView';
 import SettingsView from './components/SettingsView';
 import { usePersistentState, loadJson, newId } from './lib/storage';
-import { addDays, formatDisplayDate, today, weekDates } from './lib/dates';
+import { addDays, formatDisplayDate, today } from './lib/dates';
 import { SHARED_FOODS, extractUserFoods, findByName, mergeFoodDb, normalize, upsertUserFood } from './lib/foodDb';
 import { addSharedFood, adminDeleteFood, adminUpdateFood, fetchSharedFoods, sharedAvailable } from './lib/sharedFoods';
 import { DEFAULT_MODEL } from './lib/ai';
@@ -110,6 +110,14 @@ export default function App() {
   const [remoteFoods, setRemoteFoods] = usePersistentState('pointsApp_sharedFoods', []);
   // מאכלים משותפים שהמשתמש מחק אצלו בלבד
   const [hiddenFoods, setHiddenFoods] = usePersistentState('pointsApp_hiddenFoods', []);
+  // מועדפים: אישיים לכל טלפון (שמות מנורמלים)
+  const [favorites, setFavorites] = usePersistentState('pointsApp_favorites', []);
+  const fav = {
+    has: (name) => favorites.includes(normalize(name)),
+    toggle: (name) =>
+      setFavorites((prev) => (prev.includes(normalize(name)) ? prev.filter((n) => n !== normalize(name)) : [...prev, normalize(name)])),
+    add: (name) => setFavorites((prev) => (prev.includes(normalize(name)) ? prev : [...prev, normalize(name)])),
+  };
   const sharedOn = sharedAvailable(aiSettings);
   const isAdmin = sharedOn && Boolean(settings.adminCode);
   const refreshShared = () => {
@@ -140,13 +148,6 @@ export default function App() {
 
   const dayLogs = useMemo(() => logs.filter((l) => l.date === selectedDate), [logs, selectedDate]);
   const dailyUsed = sumPoints(dayLogs);
-  const weeklyLeft = useMemo(() => {
-    const used = weekDates(selectedDate).reduce((s, d) => {
-      const over = sumPoints(logs.filter((l) => l.date === d)) - user.dailyTarget;
-      return s + Math.max(0, over);
-    }, 0);
-    return user.weeklyTarget - used;
-  }, [logs, selectedDate, user.dailyTarget, user.weeklyTarget]);
 
   // מאכלים אחרונים לבחירה מהירה
   const recent = useMemo(() => {
@@ -177,6 +178,24 @@ export default function App() {
     setUserFoods((prev) => upsertUserFood(prev, clean, oldName));
     setHiddenFoods((prev) => prev.filter((n) => n !== normalize(food.name)));
     if (isNew && sharedOn) addSharedFood(aiSettings, clean).then(refreshShared).catch(() => {});
+  };
+
+  // שינוי שם של מאכל: השם הישן נשמר כשם נוסף, כך שהחיפוש מוצא את המאכל בשני השמות.
+  // אצל משתמש רגיל השינוי אישי; מנהל שמשנה שם של מאכל משותף משנה אותו לכולם.
+  const renameFood = (food, newName) => {
+    const name = newName.trim();
+    if (!name || normalize(name) === normalize(food.name)) return;
+    const renamed = { ...food, name, aliases: [...new Set([...(food.aliases || []), food.name])], source: 'user' };
+    delete renamed.shared;
+    if (isAdmin && inRemote(food.name)) {
+      saveFood(renamed, food.name);
+    } else {
+      setUserFoods((prev) => upsertUserFood(prev, { ...renamed, added: today() }, food.name));
+      if (!userFoods.some((f) => normalize(f.name) === normalize(food.name))) {
+        setHiddenFoods((prev) => [...new Set([...prev, normalize(food.name)])]);
+      }
+    }
+    setFavorites((prev) => prev.map((n) => (n === normalize(food.name) ? normalize(name) : n)));
   };
 
   const removeFood = (name) => {
@@ -267,7 +286,6 @@ export default function App() {
             changeDate={(n) => setSelectedDate((d) => addDays(d, n))}
             dayLogs={dayLogs}
             dailyUsed={dailyUsed}
-            weeklyLeft={weeklyLeft}
             water={water}
             addWater={() => setWater(water + 1)}
             removeWater={() => setWater(water - 1)}
@@ -276,11 +294,13 @@ export default function App() {
           />
         )}
         {view === 'calculator' && (
-          <CalculatorView settings={aiSettings} onLog={addLog} onSaveFood={saveFood} goHome={() => setView('dashboard')} />
+          <CalculatorView settings={aiSettings} onLog={addLog} onSaveFood={saveFood} fav={fav} goHome={() => setView('dashboard')} />
         )}
         {view === 'weight' && <WeightView user={user} history={weightHistory} addWeight={addWeight} removeWeight={removeWeight} />}
         {view === 'settings' && (
           <SettingsView
+            renameFood={renameFood}
+            fav={fav}
             user={user}
             setUser={setUser}
             settings={settings}
@@ -324,6 +344,9 @@ export default function App() {
             dateLabel={formatDisplayDate(selectedDate)}
             onLog={addLog}
             onSaveFood={saveFood}
+            onRename={renameFood}
+            fav={fav}
+            favorites={foodDb.filter((f) => fav.has(f.name))}
             onClose={() => setShowAdd(false)}
           />
         )}
