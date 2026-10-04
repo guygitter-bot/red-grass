@@ -39,7 +39,7 @@ export async function handleAccess(storage, path, request) {
     const device = await storage.get(`device:${hash}`);
     if (!device) return reply(401, { error: 'Unknown device' });
     if (now - (device.lastSeen || 0) > SEEN_EVERY_MS) await storage.put(`device:${hash}`, { ...device, lastSeen: now });
-    return reply(200, { ok: true, name: device.name });
+    return reply(200, { ok: true, name: device.name, canFix: Boolean(device.canFix) });
   }
 
   if (path === '/access/invite') {
@@ -74,8 +74,20 @@ export async function handleAccess(storage, path, request) {
   if (path === '/access/devices' && request.method === 'GET') {
     const devices = await storage.list({ prefix: 'device:' });
     return reply(200, {
-      devices: [...devices].map(([key, d]) => ({ id: key.slice('device:'.length), name: d.name, created: d.created, lastSeen: d.lastSeen })),
+      devices: [...devices].map(([key, d]) => ({
+        id: key.slice('device:'.length), name: d.name, created: d.created, lastSeen: d.lastSeen, canFix: Boolean(d.canFix),
+      })),
     });
+  }
+
+  // הרשאה לשלוח תיקונים לאפליקציה ("שלח תיקון"): בעל האפליקציה מסמן מכשיר מסוים
+  if (path === '/access/devices' && request.method === 'PATCH') {
+    const { id, canFix } = await readJson(request);
+    if (typeof id !== 'string' || !/^[0-9a-f]{64}$/.test(id)) return reply(400, { error: 'Bad id' });
+    const device = await storage.get(`device:${id}`);
+    if (!device) return reply(404, { error: 'Unknown device' });
+    await storage.put(`device:${id}`, { ...device, canFix: Boolean(canFix) });
+    return reply(200, { ok: true });
   }
 
   if (path === '/access/devices' && request.method === 'DELETE') {

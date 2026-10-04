@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link2, Smartphone, Trash2 } from 'lucide-react';
 import { Button, ErrorBox, Input } from './ui';
-import { createInvite, inviteLink, listDevices, removeDevice } from '../lib/proxy';
+import { createInvite, inviteLink, listDevices, removeDevice, setDeviceCanFix } from '../lib/proxy';
 
 const dateText = (ms) => (ms ? new Date(ms).toLocaleDateString('he-IL', { day: 'numeric', month: 'short' }) : '');
 
@@ -55,6 +55,15 @@ export default function InviteManager({ settings }) {
     }
   };
 
+  const toggleFix = async (d) => {
+    try {
+      await setDeviceCanFix(settings, d.id, !d.canFix);
+      loadDevices();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
   return (
     <div className="space-y-3 border-t border-slate-100 pt-3">
       <p className="text-sm font-bold text-slate-700 flex items-center gap-1">
@@ -81,14 +90,20 @@ export default function InviteManager({ settings }) {
         <p className="text-xs text-slate-400">אין עדיין מכשירים שהוזמנו.</p>
       ) : (
         devices.map((d) => (
-          <div key={d.id} className="flex items-center justify-between text-sm py-1">
-            <span>
-              {d.name}
-              <span className="text-xs text-slate-400"> · התחבר {dateText(d.created)} · פעיל {dateText(d.lastSeen)}</span>
-            </span>
-            <button onClick={() => disconnect(d)} className="text-red-300 hover:text-red-500 p-1 flex items-center gap-1 text-xs">
-              <Trash2 size={14} /> נתק
-            </button>
+          <div key={d.id} className="text-sm py-1 space-y-1">
+            <div className="flex items-center justify-between">
+              <span>
+                {d.name}
+                <span className="text-xs text-slate-400"> · התחבר {dateText(d.created)} · פעיל {dateText(d.lastSeen)}</span>
+              </span>
+              <button onClick={() => disconnect(d)} className="text-red-300 hover:text-red-500 p-1 flex items-center gap-1 text-xs">
+                <Trash2 size={14} /> נתק
+              </button>
+            </div>
+            <label className="flex items-center gap-2 text-xs text-slate-500">
+              <input type="checkbox" checked={Boolean(d.canFix)} onChange={() => toggleFix(d)} />
+              יכול/ה לשלוח תיקונים לאפליקציה ("שלח תיקון")
+            </label>
           </div>
         ))
       )}

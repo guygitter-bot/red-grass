@@ -69,6 +69,8 @@ export async function redeemInvite(proxyUrl, token) {
 export const createInvite = (s, name) => request(s, 'POST', '/invites', { name });
 export const listDevices = async (s) => (await request(s, 'GET', '/devices')).devices || [];
 export const removeDevice = (s, id) => request(s, 'DELETE', `/devices?id=${encodeURIComponent(id)}`);
+// מכשיר שמורשה לשלוח תיקונים לאפליקציה ("שלח תיקון")
+export const setDeviceCanFix = (s, id, canFix) => request(s, 'PATCH', '/devices', { id, canFix });
 
 export const inviteLink = (token) =>
   `${window.location.origin}${window.location.pathname}#invite=${encodeURIComponent(token)}`;
