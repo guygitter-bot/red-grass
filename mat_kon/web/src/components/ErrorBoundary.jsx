@@ -15,7 +15,10 @@ export default class ErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     console.error('mat-kon crashed', error, info?.componentStack);
-    reportClientError(window.location.hash || 'home', `${error?.message || error}`.slice(0, 300));
+    // איפה זה קרה: שלושת הרכיבים הקרובים (מופיע גם בדיווח וגם על המסך, לאבחון מהיר)
+    const where = (info?.componentStack || '').split('\n').map((l) => l.trim().replace(/^at\s+/, '').split(' ')[0]).filter(Boolean).slice(0, 3).join(' < ');
+    this.setState({ where });
+    reportClientError(window.location.hash || 'home', `${error?.message || error} @ ${where}`.slice(0, 300));
   }
 
   reset = async () => {
@@ -41,6 +44,9 @@ export default class ErrorBoundary extends Component {
           <h1 className="text-xl font-bold mb-2">משהו השתבש</h1>
           <p className="text-stone-600 mb-5">אפשר לטעון את הספר מחדש מהשרת. שום מתכון לא נמחק.</p>
           <button onClick={this.reset} className="w-full rounded-2xl bg-orange-500 text-white font-bold py-3">טעינה מחדש</button>
+          <p className="mt-4 text-[11px] leading-snug text-stone-400 break-words" dir="ltr">
+            {String(this.state.error?.message || this.state.error).slice(0, 200)}{this.state.where ? ` @ ${this.state.where}` : ''}
+          </p>
         </div>
       </div>
     );
