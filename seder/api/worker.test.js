@@ -136,7 +136,35 @@ function fakeGitHub() {
       return Response.json(issue, { status: 201 });
     }
     if (u.pathname === '/repos/o/r/issues') return Response.json(issues);
-    if (u.pathname === '/repos/o/r/pulls') return Response.json(pulls);
+    if (u.pathname === '/repos/o/r/pulls') {
+      const head = u.searchParams.get('head');
+      return Response.json(pulls.filter((p) => p.state !== 'closed' && (!head || `o:${p.head.ref}` === head)));
+    }
+    let m;
+    if ((m = u.pathname.match(/^\/repos\/o\/r\/issues\/(\d+)$/))) {
+      const issue = issues.find((i) => i.number === Number(m[1]));
+      if (!issue) return new Response('nope', { status: 404 });
+      if (init.method === 'PATCH') Object.assign(issue, JSON.parse(init.body));
+      return Response.json(issue);
+    }
+    if ((m = u.pathname.match(/^\/repos\/o\/r\/issues\/(\d+)\/labels$/))) {
+      const issue = issues.find((i) => i.number === Number(m[1]));
+      issue.labels.push(...JSON.parse(init.body).labels.map((name) => ({ name })));
+      return Response.json(issue.labels);
+    }
+    if ((m = u.pathname.match(/^\/repos\/o\/r\/pulls\/(\d+)\/merge$/))) {
+      const pr = pulls.find((p) => p.number === Number(m[1]));
+      if (pr.conflict) return new Response('{}', { status: 405 });
+      Object.assign(pr, { state: 'closed', merged: true });
+      // "Closes #N" סוגר את הבקשה
+      Object.assign(issues.find((i) => i.number === pr.closes), { state: 'closed', state_reason: 'completed' });
+      return Response.json({ merged: true });
+    }
+    if ((m = u.pathname.match(/^\/repos\/o\/r\/pulls\/(\d+)$/)) && init.method === 'PATCH') {
+      Object.assign(pulls.find((p) => p.number === Number(m[1])), JSON.parse(init.body));
+      return Response.json({});
+    }
+    if (u.pathname.startsWith('/repos/o/r/git/refs/heads/') && init.method === 'DELETE') return new Response(null, { status: 204 });
     return new Response('nope', { status: 404 });
   };
   return { issues, pulls, calls, restore: () => { globalThis.fetch = real; } };
@@ -159,11 +187,29 @@ test('change requests open GitHub issues and report their status', async () => {
     await call(env, '/requests', { text: 'בקשה שלישית' }, token);
     // 1: בעבודה, 2: PR פתוח, 3: נסגרה
     gh.issues.find((i) => i.number === 1).labels.push({ name: 'seder-working' });
-    gh.pulls.push({ head: { ref: 'seder/request-2' }, html_url: 'https://github.com/o/r/pull/9' });
+    gh.pulls.push({ number: 9, closes: 2, state: 'open', title: 'סדר: בקשה שנייה', body: 'הוספתי כפתור.\n\n---\nCloses #2', head: { ref: 'seder/request-2', repo: { full_name: 'o/r' } }, html_url: 'https://github.com/o/r/pull/9' });
     Object.assign(gh.issues.find((i) => i.number === 3), { state: 'closed', state_reason: 'completed' });
     const list = await call(env, '/requests/list', {}, token);
     assert.deepEqual(list.data.requests.map((r) => [r.number, r.status, r.prUrl]), [[3, 'done', null], [2, 'ready', 'https://github.com/o/r/pull/9'], [1, 'working', null]]);
     assert.equal(list.data.requests[2].text, 'להוסיף כפתור להעתקת משימה\nעם אישור');
+    assert.equal(list.data.requests[1].summary, 'הוספתי כפתור.');
+
+    // אישור מתוך האפליקציה: מיזוג ה-PR, והבקשה נסגרת
+    assert.equal((await call(env, '/requests/approve', { number: 2 })).status, 401);
+    assert.equal((await call(env, '/requests/approve', { number: 1 }, token)).status, 409);
+    const ok = await call(env, '/requests/approve', { number: 2 }, token);
+    assert.equal(ok.status, 200);
+    assert.ok(gh.calls.some((c) => c.url.endsWith('/pulls/9/merge') && c.init.method === 'PUT'));
+    const after = await call(env, '/requests/list', {}, token);
+    assert.equal(after.data.requests.find((r) => r.number === 2).status, 'done');
+
+    // לא מתאים: הבקשה נסגרת בלי מיזוג
+    assert.equal((await call(env, '/requests/reject', { number: 1 }, token)).status, 200);
+    assert.equal(gh.issues.find((i) => i.number === 1).state_reason, 'not_planned');
+
+    // לא נוגעים ב-issue שלא נפתח מהאפליקציה
+    gh.issues.unshift({ number: 99, title: 'other', labels: [], state: 'open' });
+    assert.equal((await call(env, '/requests/approve', { number: 99 }, token)).status, 404);
   } finally {
     gh.restore();
   }
@@ -173,4 +219,21 @@ test('change requests are off until a GitHub token is set', async () => {
   const env = fakeEnv({ SEDER_GITHUB_TOKEN: 'none', GITHUB_REPO: 'o/r' });
   const token = await login(env);
   assert.equal((await call(env, '/requests', { text: 'שינוי' }, token)).status, 503);
+});
+
+test('approve reports a conflict, and retry asks Claude again', async () => {
+  const env = fakeEnv({ SEDER_GITHUB_TOKEN: 'gh-token', GITHUB_REPO: 'o/r' });
+  const token = await login(env);
+  const gh = fakeGitHub();
+  try {
+    await call(env, '/requests', { text: 'בקשה' }, token);
+    gh.pulls.push({ number: 5, closes: 1, state: 'open', conflict: true, title: 't', body: '', head: { ref: 'seder/request-1', repo: { full_name: 'o/r' } } });
+    const res = await call(env, '/requests/approve', { number: 1 }, token);
+    assert.equal(res.status, 409);
+    assert.match(res.data.error, /מתנגש/);
+    assert.equal((await call(env, '/requests/retry', { number: 1 }, token)).status, 200);
+    assert.ok(gh.issues[0].labels.some((l) => l.name === 'seder-retry'));
+  } finally {
+    gh.restore();
+  }
 });
