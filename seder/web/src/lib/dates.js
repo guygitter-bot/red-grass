@@ -4,6 +4,13 @@ const MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 
 
 const pad = (n) => String(n).padStart(2, '0');
 
+// ברכה לפי השעה, עם השם מההגדרות אם נכתב ("בוקר טוב, נועה")
+export function greeting(h, name = '') {
+  const text = h < 5 ? 'לילה טוב' : h < 12 ? 'בוקר טוב' : h < 17 ? 'צהריים טובים' : h < 21 ? 'ערב טוב' : 'לילה טוב';
+  const clean = (name || '').trim();
+  return clean ? `${text}, ${clean}` : text;
+}
+
 export function toKey(date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }

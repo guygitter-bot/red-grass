@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import worker, { Vault } from '../../../api/worker.js';
-import { addTask, emptyState, removeCategory, removeTask, toggleDone, updateTask, upsertCategory } from './store';
+import { addTask, emptyState, removeCategory, removeTask, setName, toggleDone, updateTask, upsertCategory } from './store';
 import { collectChanges, getToken, login, runSync } from './sync';
 import { unlock } from './lock';
 
@@ -82,6 +82,28 @@ describe('sync between phone and computer', () => {
     expect(phone.state.tasks.map((t) => [t.title, t.done])).toEqual([['א', true], ['ג (מהמחשב)', false]]);
     expect(phone.state.categories.some((c) => c.id === 'guy')).toBe(false);
     expect(phone.state.tasks).toEqual(pc.state.tasks);
+  });
+
+  it('the name for the greeting reaches the other device, and a new device does not erase it', async () => {
+    const phone = device();
+    const pc = device();
+    await pc.sync();
+    phone.act(setName, 'נועה');
+    await phone.sync();
+    await pc.sync();
+    expect(pc.state.profile.name).toBe('נועה');
+    expect(collectChanges(pc.state)).toEqual([]);
+
+    // מכשיר חדש בלי שם לא שולח שם ריק
+    const tablet = device();
+    expect(collectChanges(tablet.state).some((c) => c.kind === 'setting')).toBe(false);
+    await tablet.sync();
+    expect(tablet.state.profile.name).toBe('נועה');
+
+    pc.act(setName, 'נועה כ.');
+    await pc.sync();
+    await phone.sync();
+    expect(phone.state.profile.name).toBe('נועה כ.');
   });
 
   it('the later edit of the same task wins', async () => {

@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { Bell, CalendarPlus, Cloud, CloudOff, Download, Lock, MessageSquarePlus, Upload } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Bell, CalendarPlus, Cloud, CloudOff, Download, Lock, MessageSquarePlus, Upload, UserRound } from 'lucide-react';
 import { useStore } from '../App';
-import { normalize } from '../lib/store';
-import { todayKey } from '../lib/dates';
+import { normalize, setName } from '../lib/store';
+import { greeting, todayKey } from '../lib/dates';
 import { downloadIcs } from '../lib/calendar';
 import { askPermission, notificationsSupported } from '../lib/notify';
 import { Sheet } from './ui';
@@ -13,6 +13,19 @@ export default function SettingsSheet({ onClose }) {
   const { state, act, syncStatus, syncNow, lock, openRequests } = useStore();
   const [perm, setPerm] = useState(() => (notificationsSupported() ? Notification.permission : 'unsupported'));
   const upcoming = state.tasks.filter((t) => !t.done && t.due && t.due >= todayKey());
+  // השם נשמר כשיוצאים מהשדה (או בסגירת ההגדרות), לא בכל אות
+  const [name, setNameDraft] = useState(state.profile?.name || '');
+  const nameRef = useRef(name);
+  nameRef.current = name;
+  const savedName = useRef(name);
+  const saveName = () => {
+    if (nameRef.current === savedName.current) return;
+    savedName.current = nameRef.current;
+    act(setName, nameRef.current);
+  };
+  const saveRef = useRef(saveName);
+  saveRef.current = saveName;
+  useEffect(() => () => saveRef.current(), []);
 
   const backup = () => {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
@@ -35,6 +48,8 @@ export default function SettingsSheet({ onClose }) {
         ...data,
         tasks: data.tasks.map((t) => ({ ...t, updatedAt: now })),
         categories: data.categories.map((c) => ({ ...c, updatedAt: now })),
+        // גיבוי ישן בלי שם – השם הנוכחי נשאר
+        profile: data.profile.updatedAt ? { ...data.profile, updatedAt: now } : s.profile,
         sync: s.sync,
       }));
       onClose();
@@ -46,7 +61,24 @@ export default function SettingsSheet({ onClose }) {
   return (
     <Sheet title="הגדרות" onClose={onClose}>
       <div className="space-y-2">
-        <h3 className="text-sm font-bold text-stone-500 mt-1">סנכרון בין מכשירים</h3>
+        <h3 className="text-sm font-bold text-stone-500 mt-1">השם שלי</h3>
+        <label className={row}>
+          <UserRound size={20} className="text-violet-600 shrink-0" />
+          <span className="flex-1 min-w-0">
+            <input
+              value={name}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onBlur={saveName}
+              onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+              maxLength={40}
+              placeholder="איך לקרוא לך?"
+              className="w-full bg-transparent outline-none text-base"
+            />
+            <span className="block text-xs text-stone-500">מופיע בלוח בברכה – "{greeting(new Date().getHours(), name)}"</span>
+          </span>
+        </label>
+
+        <h3 className="text-sm font-bold text-stone-500 pt-3">סנכרון בין מכשירים</h3>
         {syncStatus === 'off' ? (
           <button onClick={() => { onClose(); lock(); }} className={row}>
             <CloudOff size={20} className="text-stone-400" />

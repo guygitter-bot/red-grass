@@ -46,8 +46,22 @@ export function emptySync() {
   return { cursor: 0, known: {} };
 }
 
+// הגדרות אישיות (כרגע: השם לברכה בלוח). מסתנכרנות בין המכשירים כרשומה אחת מסוג setting
+export function emptyProfile() {
+  return { id: 'profile', name: '', updatedAt: 0 };
+}
+
+export function normalizeProfile(p) {
+  if (!p || typeof p !== 'object') return emptyProfile();
+  return {
+    id: 'profile',
+    name: typeof p.name === 'string' ? p.name.slice(0, 40) : '',
+    updatedAt: Number.isFinite(p.updatedAt) ? p.updatedAt : 0,
+  };
+}
+
 export function emptyState() {
-  return { categories: DEFAULT_CATEGORIES, tasks: [], notified: {}, sync: emptySync() };
+  return { categories: DEFAULT_CATEGORIES, tasks: [], notified: {}, profile: emptyProfile(), sync: emptySync() };
 }
 
 export function load() {
@@ -74,6 +88,7 @@ export function normalize(data) {
     categories: Array.isArray(data?.categories) && data.categories.length ? data.categories : DEFAULT_CATEGORIES,
     tasks: Array.isArray(data?.tasks) ? data.tasks.filter((t) => t && t.id && typeof t.title === 'string') : [],
     notified: data?.notified && typeof data.notified === 'object' ? data.notified : {},
+    profile: normalizeProfile(data?.profile),
     sync: data?.sync && Number.isInteger(data.sync.cursor) && data.sync.known && typeof data.sync.known === 'object' ? data.sync : emptySync(),
   };
 }
@@ -112,6 +127,13 @@ export function updateTask(state, id, patch) {
   // שינוי מועד או תזכורת -> תזכורת חדשה תצא שוב
   if ('due' in patch || 'time' in patch || 'remind' in patch) delete notified[id];
   return { ...state, notified, tasks: state.tasks.map((t) => (t.id === id ? { ...t, ...patch, updatedAt: Date.now() } : t)) };
+}
+
+// השם שמופיע בברכה בלוח ("בוקר טוב, נועה"). ריק = בלי שם
+export function setName(state, name) {
+  const clean = String(name || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  if (clean === (state.profile?.name || '')) return state;
+  return { ...state, profile: { id: 'profile', name: clean, updatedAt: Date.now() } };
 }
 
 export function toggleDone(state, id) {

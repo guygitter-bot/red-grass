@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, dayLabel, todayKey, weekdayShort } from './dates';
+import { addDays, dayLabel, greeting, todayKey, weekdayShort } from './dates';
 import { findDate, findTime, parseMessage, parseQuick } from './parse';
 import { googleCalendarUrl, toIcs } from './calendar';
-import { addTask, dashboard, dueReminders, emptyState, removeTask, saveTree, subtasksOf, toggleDone, updateTask } from './store';
+import { addTask, dashboard, dueReminders, emptyState, normalize, removeTask, saveTree, setName, subtasksOf, toggleDone, updateTask } from './store';
 import { taskText } from './share';
 
 // שבת, 3 באוקטובר 2026, 10:00
@@ -151,6 +151,26 @@ describe('store', () => {
     expect(dueReminders(s, NOW)).toHaveLength(0);
     s = updateTask(s, id, { time: '10:25' });
     expect(dueReminders(s, NOW)).toHaveLength(1);
+  });
+
+  it('saves the name for the greeting, and keeps old data without one', () => {
+    expect(normalize({ tasks: [] }).profile).toEqual({ id: 'profile', name: '', updatedAt: 0 });
+    let s = setName(emptyState(), '  נועה   כהן ');
+    expect(s.profile.name).toBe('נועה כהן');
+    expect(s.profile.updatedAt).toBeGreaterThan(0);
+    expect(setName(s, 'נועה כהן')).toBe(s);
+    s = setName(s, '');
+    expect(s.profile.name).toBe('');
+    expect(normalize(JSON.parse(JSON.stringify(setName(s, 'נועה')))).profile.name).toBe('נועה');
+  });
+});
+
+describe('greeting', () => {
+  it('greets by the time of day, with the name when there is one', () => {
+    expect(greeting(9)).toBe('בוקר טוב');
+    expect(greeting(13, 'נועה')).toBe('צהריים טובים, נועה');
+    expect(greeting(19, '  ')).toBe('ערב טוב');
+    expect(greeting(2, 'נועה')).toBe('לילה טוב, נועה');
   });
 });
 

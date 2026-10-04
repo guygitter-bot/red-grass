@@ -10,7 +10,8 @@
 //   seq            -> המספר הרץ האחרון
 //   fails          -> { count, since }  (ניסיונות כניסה שגויים)
 
-export const KINDS = new Set(['task', 'category']);
+// setting – הגדרות אישיות שמסתנכרנות (למשל השם לברכה בלוח)
+export const KINDS = new Set(['task', 'category', 'setting']);
 const ID_RE = /^[\w-]{1,64}$/;
 const MAX_RECORD_BYTES = 64 * 1024;
 export const MAX_CHANGES = 2000;
