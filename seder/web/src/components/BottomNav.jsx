@@ -40,7 +40,7 @@ export default function BottomNav({ tab, setTab, onAdd }) {
 export function SideNav({ tab, setTab, onAdd, children }) {
   return (
     <aside className="hidden lg:flex fixed inset-y-0 right-0 z-30 w-64 flex-col border-l border-violet-100 bg-white px-4 py-6">
-      <div className="px-3 text-3xl font-black text-violet-700 tracking-tight">סדר</div>
+      <div className="px-3 text-3xl font-black text-violet-700 tracking-tight whitespace-nowrap">יהיה בסדר</div>
       <button onClick={onAdd} className="mt-6 flex items-center justify-center gap-2 rounded-2xl bg-violet-600 text-white font-bold py-3 shadow-lg shadow-violet-200 hover:bg-violet-700 transition">
         <Plus size={20} strokeWidth={2.5} />משימה חדשה
       </button>

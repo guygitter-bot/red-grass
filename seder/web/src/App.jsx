@@ -203,7 +203,7 @@ export default function App() {
     <Store.Provider value={ctx}>
       <div className="min-h-screen max-w-xl mx-auto pb-28 lg:max-w-none lg:mr-64 lg:pb-12" dir="rtl">
         <header className="lg:hidden sticky top-0 z-20 bg-[#faf8ff]/90 backdrop-blur px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-2 flex items-center justify-between">
-          <h1 className="text-2xl font-black text-violet-700 tracking-tight">סדר</h1>
+          <h1 className="text-2xl font-black text-violet-700 tracking-tight whitespace-nowrap">יהיה בסדר</h1>
           <div className="flex gap-1">
             <SyncButton status={syncStatus} onClick={() => (syncStatus === 'off' ? setLocked(true) : sync())} />
             <button aria-label="חיפוש" onClick={() => setSheet('search')} className="p-2 rounded-full hover:bg-violet-100 text-stone-600"><Search size={22} /></button>

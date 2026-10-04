@@ -26,7 +26,7 @@ export default function LockScreen({ onUnlock }) {
     <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-b from-violet-600 to-fuchsia-500" dir="rtl">
       <form onSubmit={submit} className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl text-center">
         <div className="mx-auto w-14 h-14 rounded-2xl bg-violet-100 text-violet-700 flex items-center justify-center"><Lock size={28} /></div>
-        <h1 className="text-2xl font-black text-violet-700 mt-3">סדר</h1>
+        <h1 className="text-2xl font-black text-violet-700 mt-3">יהיה בסדר</h1>
         <p className="text-sm text-stone-500 mt-1">הקלידי סיסמה כדי להיכנס</p>
         <input
           type="password"
