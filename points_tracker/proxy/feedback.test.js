@@ -157,7 +157,15 @@ test('a device sees and acts only on its own requests', async () => {
   const { token } = await (await call(e, 'POST', '/invites', { name: 'טלפון' })).json();
   const { deviceKey } = await (await call(e, 'POST', '/redeem', { token }, {})).json();
   const dev = { 'x-device-key': deviceKey };
-  await call(e, 'POST', '/feedback', { text: 'של המכשיר' }, dev);
+  // only devices the owner allowed
+  assert.equal((await call(e, 'POST', '/feedback', { text: 'של המכשיר' }, dev)).status, 403);
+  assert.equal((await call(e, 'GET', '/feedback', undefined, dev)).status, 403);
+  const [device] = (await (await call(e, 'GET', '/devices')).json()).devices;
+  assert.equal(device.canFix, false);
+  assert.equal((await call(e, 'PATCH', '/devices', { id: device.id, canFix: true }, dev)).status, 403); // owner only
+  assert.equal((await call(e, 'PATCH', '/devices', { id: device.id, canFix: true })).status, 200);
+  assert.equal((await (await call(e, 'GET', '/devices')).json()).devices[0].canFix, true);
+  assert.equal((await call(e, 'POST', '/feedback', { text: 'של המכשיר' }, dev)).status, 201);
   assert.match(gh.issues.get(78).body, /נשלח מ: טלפון/);
   const mine = (await (await call(e, 'GET', '/feedback', undefined, dev)).json()).requests.map((r) => r.number);
   assert.deepEqual(mine, [78]);

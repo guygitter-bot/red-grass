@@ -93,12 +93,13 @@ export default {
     let allowed = isOwner;
     let deviceName = isOwner ? 'בעל האפליקציה' : '';
     let deviceHash = '';
+    let canFix = isOwner;
     const deviceKey = request.headers.get('x-device-key') || '';
     if (!allowed && env.FOODS && deviceKey && deviceKey.length <= 100) {
       deviceHash = await sha256(deviceKey);
       const res = await internal('/access/auth', 'POST', { hash: deviceHash });
       allowed = res.ok;
-      if (allowed) deviceName = (await res.json()).name || '';
+      if (allowed) ({ name: deviceName = '', canFix = false } = await res.json());
     }
     if (!allowed) return json(401, 'Wrong access code', cors);
 
@@ -112,6 +113,11 @@ export default {
         return pass(await internal('/access/invite', 'POST', { name: body.name }));
       }
       if (url.pathname === '/devices' && request.method === 'GET') return pass(await internal('/access/devices', 'GET'));
+      if (url.pathname === '/devices' && request.method === 'PATCH') {
+        const body = await smallJson();
+        if (!body) return json(413, 'Request too large', cors);
+        return pass(await internal('/access/devices', 'PATCH', { id: body.id, canFix: body.canFix }));
+      }
       if (url.pathname === '/devices' && request.method === 'DELETE') {
         return pass(await internal('/access/devices', 'DELETE', { id: url.searchParams.get('id') }));
       }
@@ -120,6 +126,8 @@ export default {
 
     // "שלח תיקון": בקשות, המצב שלהן, ואישור / דחייה / תשובה ל-Claude (feedback.js)
     if (url.pathname === '/feedback' || url.pathname.startsWith('/feedback/')) {
+      // רק בעל האפליקציה ומכשירים שהוא אישר
+      if (!canFix) return json(403, 'Not allowed to send fixes', cors);
       const device = isOwner ? 'owner' : deviceHash;
       return pass(await feedbackRoute({ request, url, env, internal, device, from: deviceName }));
     }

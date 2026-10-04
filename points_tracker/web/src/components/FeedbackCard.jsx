@@ -80,13 +80,20 @@ export default function FeedbackCard({ settings }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [requests, setRequests] = useState([]);
+  // רק בעל האפליקציה ומכשירים שהוא אישר רואים את הכרטיס (השרת עונה 403 לאחרים)
+  const [allowed, setAllowed] = useState(false);
 
   // settings נבנה מחדש בכל רינדור, אז תלויים רק בפרטי החיבור
   const { proxyUrl, accessCode, deviceKey } = settings;
   const refresh = useCallback(() => {
     listFeedback({ proxyUrl, accessCode, deviceKey })
-      .then(setRequests)
-      .catch(() => {});
+      .then((list) => {
+        setRequests(list);
+        setAllowed(true);
+      })
+      .catch((err) => {
+        if (err.status === 403 || err.status === 401) setAllowed(false);
+      });
   }, [proxyUrl, accessCode, deviceKey]);
 
   useEffect(() => {
@@ -143,6 +150,8 @@ export default function FeedbackCard({ settings }) {
     reply: 'נשלח ל-Claude ✓',
   };
   const act = (action, number, replyText) => run(() => feedbackAction(settings, action, number, replyText), NOTICES[action]);
+
+  if (!allowed) return null;
 
   return (
     <Card className="space-y-3 border-amber-100">
