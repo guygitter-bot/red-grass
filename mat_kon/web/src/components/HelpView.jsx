@@ -24,7 +24,7 @@ export default function HelpView({ playing, onBack, onClose }) {
                 <div className="relative aspect-[3/4] bg-orange-100 flex items-center justify-center">
                   <img src={`tutorials/${t.id}.jpg`} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover object-top" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                   <span className="text-5xl">{t.emoji}</span>
-                  <PlayCircle size={40} className="absolute text-white drop-shadow-lg" fill="rgba(249,115,22,.85)" />
+                  <PlayCircle size={34} className="absolute bottom-2 left-2 text-white drop-shadow-lg" fill="rgba(249,115,22,.9)" />
                 </div>
                 <div className="p-2.5">
                   <div className="text-xs text-orange-700 font-medium">מדריך {i + 1}</div>

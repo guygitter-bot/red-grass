@@ -116,7 +116,7 @@ function mockApi(opts = {}) {
       ].filter((g) => g.items.length) };
     }
     if (p === '/stores') { await sleep(state.delay); return opts.stores ?? demo.STORES; }
-    if (p === '/pantry/scan') { await sleep(state.delay); return { items: body.mode === 'one' ? demo.SCAN_SINGLE : demo.SCAN_MANY }; }
+    if (p === '/pantry/scan') { await sleep(state.delay); return { items: ['one', 'single'].includes(body.mode) ? demo.SCAN_SINGLE : demo.SCAN_MANY }; }
     if (p === '/pantry/ideas') { await sleep(state.delay); return { results: demo.IDEAS }; }
     for (const list of ['shopping', 'pantry', 'plan']) {
       if (p === `/${list}` && method === 'GET') return list === 'plan' ? { plan: toPlan(state.plan) } : { items: state[list] };
