@@ -13,7 +13,10 @@ export default function DayView({ day, setDay }) {
   const today = todayKey();
   const strip = Array.from({ length: 21 }, (_, i) => addDays(today, i - 3));
   const selected = useRef(null);
-  useEffect(() => selected.current?.scrollIntoView({ inline: 'center', block: 'nearest' }), [day]);
+  // בסוגריים מסולסלים: ב-Chrome החדש scrollIntoView מחזיר Promise, ו-React היה מנסה להריץ אותו כ"ניקוי" ביציאה מהמסך
+  useEffect(() => {
+    selected.current?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }, [day]);
 
   const tasks = sortTasks(forDay(state.tasks, day));
   const timed = tasks.filter((t) => t.time && !t.done);
