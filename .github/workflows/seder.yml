@@ -1,0 +1,74 @@
+name: seder
+
+# אפליקציית המשימות (seder/web) -> Cloudflare Pages "seder-tasks" -> https://seder-tasks.pages.dev
+on:
+  push:
+    branches: [main]
+    paths: ["seder/**", ".github/workflows/seder.yml"]
+  pull_request:
+    paths: ["seder/**", ".github/workflows/seder.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seder-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: seder/web/package-lock.json
+      - name: Tests and build
+        working-directory: seder/web
+        run: |
+          npm ci
+          npm test
+          npm run build
+
+  web:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: seder/web/package-lock.json
+      - name: Build
+        working-directory: seder/web
+        run: |
+          npm ci
+          npm run build
+      - name: Create the Pages project (first run only)
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: seder/web
+          wranglerVersion: "4.146.0"
+          command: pages project create seder-tasks --production-branch=main
+      - name: Publish
+        id: publish
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: seder/web
+          wranglerVersion: "4.146.0"
+          command: pages deploy dist --project-name=seder-tasks --branch=main --commit-dirty=true
+      - name: Summary
+        env:
+          URL: ${{ steps.publish.outputs.deployment-url }}
+        run: |
+          echo "Published: https://seder-tasks.pages.dev ($URL)" >> "$GITHUB_STEP_SUMMARY"
