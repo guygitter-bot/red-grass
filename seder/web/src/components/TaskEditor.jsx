@@ -11,6 +11,8 @@ import { Chip, Sheet } from './ui';
 
 // בלי שעה: התזכורת יוצאת ב-9 בבוקר של אותו יום
 const MORNING_OPTIONS = [REMIND_OPTIONS[0], { value: 0, label: 'בבוקר של אותו יום (9:00)' }];
+// תזכורת בשעה מדויקת שבוחרים (ביום של המשימה)
+const CUSTOM = { value: 'custom', label: 'בשעה שאבחר...' };
 const label = 'block text-xs font-bold text-stone-500 mb-1.5 mt-4';
 const input = 'w-full rounded-xl border border-stone-200 bg-card px-3 py-2 outline-none focus:border-violet-500';
 
@@ -131,9 +133,24 @@ export default function TaskEditor({ initial, onClose }) {
       {task.due && (
         <>
           <span className={label}>תזכורת</span>
-          <select value={task.remind ?? ''} onChange={(e) => set({ remind: e.target.value === '' ? null : Number(e.target.value) })} className={input}>
-            {(task.time ? REMIND_OPTIONS : MORNING_OPTIONS).map((o) => <option key={String(o.value)} value={o.value ?? ''}>{o.label}</option>)}
-          </select>
+          <div className="flex gap-2">
+            <select
+              aria-label="מתי להזכיר"
+              value={task.remindTime && task.remind != null ? 'custom' : task.remind ?? ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === 'custom') set({ remind: 0, remindTime: task.remindTime || task.time || '08:00' });
+                else set({ remind: v === '' ? null : Number(v), remindTime: null });
+              }}
+              className={input}
+            >
+              {[...(task.time ? REMIND_OPTIONS : MORNING_OPTIONS), CUSTOM].map((o) => <option key={String(o.value)} value={o.value ?? ''}>{o.label}</option>)}
+            </select>
+            {task.remindTime && task.remind != null && (
+              <input type="time" aria-label="שעת התזכורת" value={task.remindTime} onChange={(e) => e.target.value && set({ remindTime: e.target.value })} className={`${input} max-w-36`} />
+            )}
+          </div>
+          {task.remind != null && <p className="mt-1 text-xs text-stone-500">ההתראה מגיעה לטלפון בזמן, גם כשהאפליקציה סגורה – אחרי "הפעלת התראות" בהגדרות (פעם אחת בכל מכשיר).</p>}
         </>
       )}
 

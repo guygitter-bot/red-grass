@@ -28,6 +28,10 @@ export class AuthError extends Error {}
 // אין רשת או שהשרת לא זמין – אפשר לפתוח את האפליקציה עם בדיקת הסיסמה במכשיר
 export class NetworkError extends Error {}
 
+export async function apiPost(path, body = {}) {
+  return post(path, body, getToken());
+}
+
 async function post(path, body, token) {
   let res;
   try {
