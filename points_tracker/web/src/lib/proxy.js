@@ -87,3 +87,9 @@ export const isIos = () =>
   /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 export const isStandalone = () =>
   window.navigator.standalone === true || Boolean(window.matchMedia?.('(display-mode: standalone)').matches);
+
+// "שלח תיקון": נפתח כבקשה ב-GitHub, Claude מכין את השינוי, ומאשרים מכאן.
+export const sendFeedback = (s, { text, image, context }) => request(s, 'POST', '/feedback', { text, image, context });
+export const listFeedback = async (s) => (await request(s, 'GET', '/feedback')).requests || [];
+// action: approve | reject | retry | reply
+export const feedbackAction = (s, action, number, text) => request(s, 'POST', `/feedback/${action}`, { number, text });

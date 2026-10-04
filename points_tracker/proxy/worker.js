@@ -4,6 +4,7 @@
 
 import { SharedFoods } from './foods.js';
 import { sha256 } from './access.js';
+import { feedbackRoute } from './feedback.js';
 
 export { SharedFoods };
 
@@ -75,12 +76,29 @@ export default {
       return pass(await internal('/access/redeem', 'POST', { token: body.token, deviceName: body.deviceName }));
     }
 
+    const isAdmin = () => env.ADMIN_CODE && sameCode(request.headers.get('x-admin-code') || '', env.ADMIN_CODE);
+
+    // צילום מסך של בקשת תיקון: רק לתהליך התיקון ב-GitHub (עם קוד המנהל)
+    if (url.pathname === '/feedback/image' && request.method === 'GET') {
+      if (!isAdmin()) return json(401, 'Admin only', cors);
+      const res = await internal(`/feedback/shot?id=${encodeURIComponent(url.searchParams.get('id') || '')}`, 'GET');
+      if (!res.ok) return json(404, 'Not found', cors);
+      const { data } = await res.json();
+      const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+      return new Response(bytes, { headers: { 'content-type': 'image/jpeg' } });
+    }
+
     // בעל האפליקציה (קוד גישה) או מכשיר שהוזמן (מפתח מכשיר)
     const isOwner = sameCode(request.headers.get('x-access-code') || '', env.ACCESS_CODE);
     let allowed = isOwner;
+    let deviceName = isOwner ? 'בעל האפליקציה' : '';
+    let deviceHash = '';
     const deviceKey = request.headers.get('x-device-key') || '';
     if (!allowed && env.FOODS && deviceKey && deviceKey.length <= 100) {
-      allowed = (await internal('/access/auth', 'POST', { hash: await sha256(deviceKey) })).ok;
+      deviceHash = await sha256(deviceKey);
+      const res = await internal('/access/auth', 'POST', { hash: deviceHash });
+      allowed = res.ok;
+      if (allowed) deviceName = (await res.json()).name || '';
     }
     if (!allowed) return json(401, 'Wrong access code', cors);
 
@@ -100,10 +118,16 @@ export default {
       return json(405, 'Method not allowed', cors);
     }
 
+    // "שלח תיקון": בקשות, המצב שלהן, ואישור / דחייה / תשובה ל-Claude (feedback.js)
+    if (url.pathname === '/feedback' || url.pathname.startsWith('/feedback/')) {
+      const device = isOwner ? 'owner' : deviceHash;
+      return pass(await feedbackRoute({ request, url, env, internal, device, from: deviceName }));
+    }
+
     // מאגר המאכלים המשותף
     if (url.pathname === '/foods') {
       if (!env.FOODS) return json(500, 'Shared foods storage is not configured', cors);
-      const admin = env.ADMIN_CODE && sameCode(request.headers.get('x-admin-code') || '', env.ADMIN_CODE);
+      const admin = isAdmin();
       const headers = new Headers({ 'content-type': 'application/json', 'x-is-admin': admin ? '1' : '0' });
       const body = ['POST', 'PUT'].includes(request.method) ? await request.text() : undefined;
       if (body && body.length > 20000) return json(413, 'Request too large', cors);

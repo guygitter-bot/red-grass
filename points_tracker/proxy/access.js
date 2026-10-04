@@ -39,7 +39,7 @@ export async function handleAccess(storage, path, request) {
     const device = await storage.get(`device:${hash}`);
     if (!device) return reply(401, { error: 'Unknown device' });
     if (now - (device.lastSeen || 0) > SEEN_EVERY_MS) await storage.put(`device:${hash}`, { ...device, lastSeen: now });
-    return reply(200, { ok: true });
+    return reply(200, { ok: true, name: device.name });
   }
 
   if (path === '/access/invite') {
