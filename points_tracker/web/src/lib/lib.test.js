@@ -44,6 +44,12 @@ describe('dates', () => {
     expect(at(17)).toBe('ערב טוב');
     expect(at(2)).toBe('ערב טוב');
   });
+  it('adds the user name to the greeting when set', () => {
+    const d = new Date(2026, 9, 4, 8);
+    expect(greeting(d, 'דנה')).toBe('בוקר טוב, דנה');
+    expect(greeting(d, '  ')).toBe('בוקר טוב');
+    expect(greeting(d, 'אורח')).toBe('בוקר טוב');
+  });
 });
 
 describe('food db', () => {
