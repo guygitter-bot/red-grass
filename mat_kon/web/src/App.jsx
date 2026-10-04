@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Globe, Heart, Loader2, LogOut, MessageCircle, PenLine, Plus, Search, Settings, Trash2, X } from 'lucide-react';
+import { Globe, Heart, LogOut, MessageCircle, PenLine, Search, Settings, X } from 'lucide-react';
 import SearchView from './components/SearchView';
 import SettingsView from './components/SettingsView';
 import Auth from './components/Auth';
@@ -25,6 +25,7 @@ import ShareView from './components/ShareView';
 import PrivacyView from './components/PrivacyView';
 import AdminView from './components/AdminView';
 import HelpView from './components/HelpView';
+import CategoriesView from './components/CategoriesView';
 import Paywall from './components/Paywall';
 import PendingList from './components/PendingList';
 import RecipeCard from './components/RecipeCard';
@@ -34,7 +35,7 @@ import {
   addCategory, addRecipeAsync, addTextRecipe, getJob, getRecipe, deleteRecipe, removeCategory, getMe, getPlan, getShopping, listRecipes, logout as apiLogout, refreshRecipe,
   updateRecipe, safeRecipe, getPantry, shoppingOps, pantryOps, planOps,
 } from './lib/api';
-import { SORTS, countByCategory, emojiOf, filterRecipes, freeLeft, linkFromShare, parseAuthHash, sortRecipes, topTags } from './lib/recipes';
+import { SORTS, countByCategory, emojiOf, filterRecipes, freeLeft, linkFromShare, parseAuthHash, sortRecipes } from './lib/recipes';
 import { usePersistentState } from './lib/storage';
 
 // קישור הזמנה (#invite=...) או כניסה (#login). נלקח מהכתובת ונמחק ממנה מיד.
@@ -74,6 +75,7 @@ const route = () => {
   if (h === '#/share') return { view: 'share' };
   if (h === '#/privacy') return { view: 'privacy' };
   if (h === '#/admin') return { view: 'admin' };
+  if (h === '#/categories') return { view: 'categories' };
   if (h === '#/help' || h.startsWith('#/help/')) return { view: 'help', play: h.slice(7) };
   if (h === '#/shopping') return { view: 'shopping' };
   if (h.startsWith('#/new')) return { view: 'new', mode: h.includes('manual') ? 'manual' : 'photo' };
@@ -117,7 +119,6 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState(null);
   const [favorites, setFavorites] = useState(false);
-  const [tag, setTag] = useState(null);
   // תמונות שצולמו מהמסך הראשי ("צילום מתכון"), עוברות למסך בניית המתכון
   const [photoFiles, setPhotoFiles] = useState(null);
   const takePhotos = (files) => {
@@ -366,12 +367,11 @@ export default function App() {
 
   const counts = useMemo(() => countByCategory(recipes), [recipes]);
   const visible = useMemo(
-    () => sortRecipes(filterRecipes(recipes, { query, category, favorites, tag }), sort),
-    [recipes, query, category, favorites, tag, sort],
+    () => sortRecipes(filterRecipes(recipes, { query, category, favorites }), sort),
+    [recipes, query, category, favorites, sort],
   );
   // כל הקטגוריות: הקבועות, אחריהן שלי, ו"אחר" בסוף
   const allCategories = [...CATEGORIES.filter((c) => c !== 'אחר'), ...custom, 'אחר'];
-  const tags = useMemo(() => topTags(recipes), [recipes]);
   const current = nav.view === 'recipe' && recipes.find((r) => r.id === nav.id);
   const left = freeLeft(user);
 
@@ -412,6 +412,36 @@ export default function App() {
 
   if (nav.view === 'invites' && isOwner) return <InvitesView onBack={back} />;
   if (nav.view === 'privacy') return <PrivacyView onBack={back} />;
+  if (nav.view === 'categories') {
+    return (
+      <>
+        <CategoriesView
+          categories={allCategories}
+          custom={custom}
+          counts={counts}
+          recipes={recipes}
+          active={category}
+          onBack={back}
+          onPick={(c) => {
+            setCategory(c);
+            setFavorites(false);
+            back();
+          }}
+          onAdd={async (name) => {
+            setCustom(await addCategory(session, name));
+            setToast(`הקטגוריה "${name}" נוספה. בדף מתכון אפשר להעביר אליה מתכונים.`);
+          }}
+          onRemove={async (name) => {
+            const res = await removeCategory(session, name);
+            setCustom(res.custom);
+            setRecipes((list) => list.map((r) => (r.category === name ? { ...r, category: 'אחר' } : r)));
+            if (category === name) setCategory(null);
+          }}
+        />
+        {toast && <Toast text={toast} />}
+      </>
+    );
+  }
   if (nav.view === 'help') {
     return (
       <HelpView
@@ -732,7 +762,7 @@ export default function App() {
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="חיפוש לפי שם, מצרך או תגית"
+                placeholder="חיפוש לפי שם או מצרך"
                 className="w-full rounded-2xl border border-stone-200 bg-white py-3 pr-10 pl-10 outline-none focus:border-orange-400"
               />
               {query && (
@@ -742,65 +772,25 @@ export default function App() {
               )}
             </div>
 
-            <div className="mt-3 -mx-4 px-4 flex gap-2 overflow-x-auto no-scrollbar pb-1">
-              <Chip active={!category && !favorites && !tag} onClick={() => { setCategory(null); setFavorites(false); setTag(null); }}>
+            {/* שורה אחת קצרה: קטגוריות (מסך משלהן, וגם סרטוני ההדרכה שם), הכל, מועדפים */}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {category ? (
+                <span className="rounded-full bg-orange-500 border border-orange-500 text-white text-sm flex items-center">
+                  <a href="#/categories" className="pr-3.5 pl-1 py-1.5">{emojiOf(category)} {category} <span className="opacity-70">{counts[category] || 0}</span></a>
+                  <button onClick={() => setCategory(null)} className="pl-2.5 pr-1 py-1.5" aria-label="ביטול הסינון לפי קטגוריה"><X size={15} /></button>
+                </span>
+              ) : (
+                <a href="#/categories" className="rounded-full px-3.5 py-1.5 text-sm border bg-white border-stone-200 text-stone-700">
+                  📂 קטגוריות
+                </a>
+              )}
+              <Chip active={!category && !favorites} onClick={() => { setCategory(null); setFavorites(false); }}>
                 הכל <span className="opacity-60">{recipes.length}</span>
               </Chip>
               <Chip active={favorites} onClick={() => setFavorites((f) => !f)}>
                 <Heart size={14} className="inline -mt-0.5" fill={favorites ? 'currentColor' : 'none'} /> מועדפים
               </Chip>
-              <a href="#/help" className="shrink-0 rounded-full px-3.5 py-1.5 text-sm border border-orange-200 bg-orange-50 text-orange-800">
-                🎬 סרטוני הדרכה
-              </a>
-              {allCategories.filter((c) => counts[c] || custom.includes(c)).map((c) => (
-                <Chip key={c} active={category === c} onClick={() => setCategory(category === c ? null : c)}>
-                  {emojiOf(c)} {c} <span className="opacity-60">{counts[c] || 0}</span>
-                </Chip>
-              ))}
-              <NewCategory
-                onAdd={async (name) => {
-                  setCustom(await addCategory(session, name));
-                  setCategory(name);
-                  setToast(`הקטגוריה "${name}" נוספה. בדף מתכון אפשר להעביר אליה מתכונים.`);
-                }}
-              />
             </div>
-
-            {category && custom.includes(category) && (
-              <div className="mt-2 flex items-center gap-2 text-sm text-stone-500">
-                <span>"{category}" היא קטגוריה שלכם · הסוכן ישבץ בה מתכונים חדשים כשהיא מתאימה</span>
-                <button
-                  onClick={async () => {
-                    if (!window.confirm(`למחוק את הקטגוריה "${category}"? המתכונים שבה יעברו ל"אחר".`)) return;
-                    try {
-                      const res = await removeCategory(session, category);
-                      setCustom(res.custom);
-                      setRecipes((list) => list.map((r) => (r.category === category ? { ...r, category: 'אחר' } : r)));
-                      setCategory(null);
-                    } catch (e) {
-                      setToast(e.message);
-                    }
-                  }}
-                  className="shrink-0 inline-flex items-center gap-1 text-red-600"
-                >
-                  <Trash2 size={14} /> מחיקה
-                </button>
-              </div>
-            )}
-
-            {tags.length > 0 && (
-              <div className="mt-2 -mx-4 px-4 flex gap-1.5 overflow-x-auto no-scrollbar pb-1">
-                {tags.map(([t, n]) => (
-                  <button
-                    key={t}
-                    onClick={() => setTag(tag === t ? null : t)}
-                    className={`shrink-0 rounded-full px-2.5 py-1 text-xs border ${tag === t ? 'bg-stone-800 border-stone-800 text-white' : 'bg-white border-stone-200 text-stone-600'}`}
-                  >
-                    #{t} <span className="opacity-60">{n}</span>
-                  </button>
-                ))}
-              </div>
-            )}
 
             <div className="mt-2 flex items-center justify-end gap-1 text-sm text-stone-500">
               מיון:
@@ -835,54 +825,6 @@ function Toast({ text }) {
     <div className="fixed bottom-6 inset-x-4 z-50 flex justify-center pointer-events-none">
       <div className="bg-stone-900 text-white text-sm rounded-full px-4 py-2.5 shadow-lg">{text}</div>
     </div>
-  );
-}
-
-// "+ קטגוריה": יצירת קטגוריה חדשה ישר מהספר
-function NewCategory({ onAdd }) {
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  if (!open) {
-    return (
-      <button onClick={() => setOpen(true)} className="shrink-0 rounded-full px-3.5 py-1.5 text-sm border border-dashed border-orange-300 text-orange-700 bg-orange-50/50">
-        <Plus size={14} className="inline -mt-0.5" /> קטגוריה
-      </button>
-    );
-  }
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!name.trim()) return setOpen(false);
-    setBusy(true);
-    setError('');
-    try {
-      await onAdd(name.trim());
-      setName('');
-      setOpen(false);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <form onSubmit={submit} className="shrink-0 flex items-center gap-1">
-      <input
-        autoFocus
-        value={name}
-        onChange={(e) => { setName(e.target.value); setError(''); }}
-        maxLength={30}
-        placeholder="שם הקטגוריה"
-        title={error}
-        className={`w-36 rounded-full border px-3 py-1.5 text-sm outline-none ${error ? 'border-red-400' : 'border-orange-300'}`}
-      />
-      <button disabled={busy} className="rounded-full bg-orange-500 text-white px-3 py-1.5 text-sm font-bold disabled:opacity-50">
-        {busy ? <Loader2 size={14} className="animate-spin" /> : 'הוספה'}
-      </button>
-      <button type="button" onClick={() => { setOpen(false); setError(''); }} className="p-1 text-stone-400" aria-label="ביטול"><X size={16} /></button>
-      {error && <span className="text-xs text-red-600 whitespace-nowrap">{error}</span>}
-    </form>
   );
 }
 
