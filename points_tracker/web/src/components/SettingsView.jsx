@@ -28,7 +28,7 @@ function NumberField({ label, value, onChange }) {
 }
 
 export default function SettingsView({
-  user, setUser, settings, setSettings, proxyUrl, owner, onJoin, foodDb, userFoods, saveFood, removeUserFood, remoteFoods, sharedOn, isAdmin,
+  user, setUser, settings, setSettings, proxyUrl, owner, onJoin, foodDb, renameFood, fav, userFoods, saveFood, removeUserFood, remoteFoods, sharedOn, isAdmin,
   exportData, importData,
 }) {
   const [keyStatus, setKeyStatus] = useState('');
@@ -219,6 +219,8 @@ export default function SettingsView({
         isAdmin={isAdmin}
         saveFood={saveFood}
         removeUserFood={removeUserFood}
+        renameFood={renameFood}
+        fav={fav}
       />
 
       <Card className="bg-emerald-50 border-emerald-100 space-y-3">

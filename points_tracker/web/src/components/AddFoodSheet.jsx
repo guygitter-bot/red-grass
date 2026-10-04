@@ -129,7 +129,9 @@ function Sources({ urls }) {
 }
 
 export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, onSaveFood, onRename, fav, favorites = [], onClose }) {
-  const [tab, setTab] = useState('search');
+  // כשיש מועדפים, נפתחים ישר על רשימת המועדפים
+  const [tab, setTab] = useState(favorites.length ? 'favorites' : 'search');
+  const [favSearch, setFavSearch] = useState('');
   const [meal, setMeal] = useState(defaultMeal);
   const [plate, setPlate] = useState([]);
 
@@ -234,11 +236,36 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
           setError('');
         }}
         tabs={[
+          { id: 'favorites', label: 'מועדפים', icon: Star },
           { id: 'search', label: 'חיפוש', icon: Search },
           { id: 'photo', label: 'צילום', icon: Camera },
-          { id: 'text', label: 'תיאור / מתכון', icon: MessageSquareText },
+          { id: 'text', label: 'תיאור', icon: MessageSquareText },
         ]}
       />
+
+      {tab === 'favorites' && (
+        <div className="space-y-2">
+          {favorites.length === 0 ? (
+            <div className="text-center text-sm text-slate-500 py-6 space-y-1">
+              <Star size={28} className="mx-auto text-amber-300" />
+              <p>עוד אין מועדפים.</p>
+              <p className="text-xs text-slate-400">בחיפוש, לוחצים על ★ ליד מאכל כדי להוסיף אותו לכאן.</p>
+            </div>
+          ) : (
+            <>
+              {favorites.length > 5 && (
+                <div className="relative">
+                  <Search className="absolute right-3 top-3.5 text-slate-400" size={18} />
+                  <Input placeholder="חפש במועדפים..." className="pr-10" value={favSearch} onChange={(e) => setFavSearch(e.target.value)} />
+                </div>
+              )}
+              {(favSearch ? searchFoods(favorites, favSearch, 100) : favorites).map((item) => (
+                <FoodRow key={item.name} item={item} onAdd={addToPlate} fav={fav} onRename={onRename} />
+              ))}
+            </>
+          )}
+        </div>
+      )}
 
       {tab === 'search' && (
         <div className="space-y-3">
@@ -255,17 +282,6 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
               }}
             />
           </div>
-
-          {!search && favorites.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs text-amber-500 flex items-center gap-1">
-                <Star size={12} fill="currentColor" /> מועדפים
-              </p>
-              {favorites.map((item) => (
-                <FoodRow key={item.name} item={item} onAdd={addToPlate} fav={fav} onRename={onRename} />
-              ))}
-            </div>
-          )}
 
           {!search && recent.length > 0 && (
             <div className="space-y-2">

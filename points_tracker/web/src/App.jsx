@@ -299,6 +299,8 @@ export default function App() {
         {view === 'weight' && <WeightView user={user} history={weightHistory} addWeight={addWeight} removeWeight={removeWeight} />}
         {view === 'settings' && (
           <SettingsView
+            renameFood={renameFood}
+            fav={fav}
             user={user}
             setUser={setUser}
             settings={settings}
