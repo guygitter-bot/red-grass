@@ -19,6 +19,8 @@ export function saveJson(key, value) {
 
 export function usePersistentState(key, initial) {
   const [value, setValue] = useState(() => loadJson(key, typeof initial === 'function' ? initial() : initial));
-  useEffect(() => saveJson(key, value), [key, value]);
+  useEffect(() => {
+    saveJson(key, value);
+  }, [key, value]);
   return [value, setValue];
 }
