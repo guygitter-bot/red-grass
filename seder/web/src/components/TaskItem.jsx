@@ -1,6 +1,6 @@
-import { Bell, Check, Clock, Link2, ListChecks, PlayCircle, User } from 'lucide-react';
+import { Bell, Check, Clock, Link2, ListChecks, Paperclip, PlayCircle, User } from 'lucide-react';
 import { useStore } from '../App';
-import { PRIORITIES, TYPES, contactsOf, isOverdue, progress, reminderAt, toggleDone } from '../lib/store';
+import { PRIORITIES, TYPES, attachmentsOf, contactsOf, isOverdue, progress, reminderAt, toggleDone } from '../lib/store';
 import { dayLabel } from '../lib/dates';
 import { colorOf } from '../lib/colors';
 
@@ -14,6 +14,7 @@ export default function TaskItem({ task, showDate = true, showCategory = true })
   const video = task.links?.some((l) => l.kind === 'video');
   const people = contactsOf(task).map((c) => c.name || c.phone);
   const remindAt = reminderAt(task);
+  const files = attachmentsOf(task).length;
 
   return (
     <div className={`flex items-start gap-3 bg-card rounded-2xl border p-3 shadow-sm ${task.done ? 'border-stone-100 opacity-60' : 'border-stone-200'}`}>
@@ -43,6 +44,7 @@ export default function TaskItem({ task, showDate = true, showCategory = true })
           )}
           {total > 0 && <span className="flex items-center gap-0.5"><ListChecks size={12} />{done}/{total}</span>}
           {task.links?.length > 0 && (video ? <PlayCircle size={12} /> : <Link2 size={12} />)}
+          {files > 0 && <span className="flex items-center gap-0.5" title="תמונות וקבצים"><Paperclip size={12} />{files > 1 ? files : ''}</span>}
           {people.length > 0 && <span className="flex items-center gap-0.5 min-w-0 max-w-full"><User size={12} className="shrink-0" /><span className="truncate">{people.join(', ')}</span></span>}
           {showCategory && cat && <span className={`rounded-full px-2 py-0.5 ${colorOf(cat.color).soft}`}>{cat.emoji} {cat.name}</span>}
         </div>

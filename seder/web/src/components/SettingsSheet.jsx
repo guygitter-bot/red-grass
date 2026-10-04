@@ -7,6 +7,7 @@ import { downloadIcs } from '../lib/calendar';
 import { askPermission, notificationsSupported } from '../lib/notify';
 import { enablePush, pushActive, pushSupported, sendTestPush } from '../lib/push';
 import { THEME_OPTIONS, setTheme, useTheme } from '../lib/theme';
+import { FONT_OPTIONS, setFont, useFont } from '../lib/fontsize';
 import { Chip, Sheet } from './ui';
 
 const row = 'w-full flex items-center gap-3 rounded-2xl bg-stone-50 p-3 text-right';
@@ -14,6 +15,7 @@ const row = 'w-full flex items-center gap-3 rounded-2xl bg-stone-50 p-3 text-rig
 export default function SettingsSheet({ onClose }) {
   const { state, act, syncStatus, syncNow, lock, openRequests } = useStore();
   const theme = useTheme();
+  const font = useFont();
   const [perm, setPerm] = useState(() => (notificationsSupported() ? Notification.permission : 'unsupported'));
   const [push, setPush] = useState(() => pushActive());
   const [pushMsg, setPushMsg] = useState('');
@@ -110,6 +112,18 @@ export default function SettingsSheet({ onClose }) {
             ))}
           </div>
           <span className="block text-xs text-stone-500 mt-2">"אוטומטי" – לילה כשהטלפון או המחשב במצב כהה. נשמר בכל מכשיר בנפרד.</span>
+        </div>
+
+        <h3 className="text-sm font-bold text-stone-500 pt-3">גודל הטקסט</h3>
+        <div className={`${row} block`}>
+          <div className="flex gap-2">
+            {FONT_OPTIONS.map((o) => (
+              <Chip key={o.value} active={font === o.value} onClick={() => setFont(o.value)} className="flex-1 px-2! whitespace-nowrap">
+                <span style={{ fontSize: `${o.scale}em` }}>{o.label}</span>
+              </Chip>
+            ))}
+          </div>
+          <span className="block text-xs text-stone-500 mt-2">כל הטקסט באפליקציה גדל. נשמר בכל מכשיר בנפרד.</span>
         </div>
 
         <h3 className="text-sm font-bold text-stone-500 pt-3">סנכרון בין מכשירים</h3>

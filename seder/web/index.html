@@ -22,6 +22,11 @@
           document.querySelector('meta[name="theme-color"]').setAttribute('content', '#131118');
         }
       } catch (e) {}
+      // גודל הטקסט מההגדרות (הלוגיקה המלאה ב-src/lib/fontsize.js)
+      try {
+        var f = { large: 1.125, xlarge: 1.25 }[localStorage.getItem('seder_font')];
+        if (f) document.documentElement.style.setProperty('--font-scale', String(f));
+      } catch (e) {}
     </script>
   </head>
   <body>

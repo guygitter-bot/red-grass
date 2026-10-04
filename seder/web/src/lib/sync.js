@@ -1,7 +1,7 @@
 // סנכרון בין מכשירים דרך השרת (seder/api). האפליקציה עובדת קודם כול מהמכשיר;
 // כשיש רשת היא שולחת מה שהשתנה ומקבלת מה שהשתנה במכשירים האחרים.
 // כל רשומה נושאת updatedAt – בעריכה של אותה משימה בשני מכשירים, העריכה המאוחרת גוברת.
-import { emptySync, normalizeProfile } from './store';
+import { emptySync, normalizeProfile, sortCategories } from './store';
 
 export const API_URL = (import.meta.env.VITE_API_URL || 'https://seder-api.guygitter.workers.dev').replace(/\/+$/, '');
 const TOKEN_KEY = 'seder_token';
@@ -121,7 +121,8 @@ export function applyRemote(state, pushed, response) {
   return {
     ...state,
     tasks: [...tasks.values()],
-    categories: [...categories.values()],
+    // סדר התחומים שנקבע במכשיר אחר
+    categories: sortCategories([...categories.values()]),
     profile,
     sync: { cursor: response.cursor ?? state.sync.cursor, known },
   };
@@ -144,6 +145,15 @@ export async function runSync(getState, apply) {
 
 export function resetSync(state) {
   return { ...state, sync: emptySync() };
+}
+
+// קבצים ותמונות שמצורפים למשימות (נשמרים בשרת; data = base64)
+export async function uploadFile({ id, name, type, data }) {
+  return (await post('/files/put', { id, name, type, data }, getToken())).file;
+}
+
+export async function downloadFile(id) {
+  return (await post('/files/get', { id }, getToken())).file;
 }
 
 // בקשות לשינוי באפליקציה (נפתחות כ-issue ב-GitHub, ו-Claude מכין PR)
