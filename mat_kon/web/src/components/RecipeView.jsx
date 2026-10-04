@@ -199,7 +199,6 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
               ))}
             </select>
           </label>
-          <Tags tags={recipe.tags || []} onChange={(tags) => quiet({ tags })} />
         </div>
 
         <Rating value={recipe.rating || 0} onChange={(rating) => quiet({ rating })} />
@@ -570,49 +569,6 @@ function Rating({ value, onChange }) {
   );
 }
 
-// תגיות: הסרה ב-x, הוספה בכפתור +
-function Tags({ tags, onChange }) {
-  const [adding, setAdding] = useState(false);
-  const [text, setText] = useState('');
-  const submit = (e) => {
-    e.preventDefault();
-    const t = text.trim().replace(/^#/, '');
-    if (t && !tags.includes(t)) onChange([...tags, t]);
-    setText('');
-    setAdding(false);
-  };
-  return (
-    <>
-      {tags.map((t) => (
-        <span key={t} className="rounded-full bg-stone-100 text-stone-600 text-sm pr-3 pl-1.5 py-1 flex items-center gap-1">
-          #{t}
-          <button onClick={() => onChange(tags.filter((x) => x !== t))} className="text-stone-400 hover:text-red-500 print:hidden" aria-label={`הסרת ${t}`}>
-            <X size={13} />
-          </button>
-        </span>
-      ))}
-      {adding ? (
-        <form onSubmit={submit} className="print:hidden">
-          <input
-            autoFocus
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onBlur={submit}
-            maxLength={30}
-            placeholder="תגית"
-            className="w-28 rounded-full border border-orange-300 px-3 py-1 text-sm outline-none"
-          />
-        </form>
-      ) : (
-        <button onClick={() => setAdding(true)} className="rounded-full border border-dashed border-stone-300 text-stone-500 text-sm px-2.5 py-1 flex items-center gap-1 print:hidden">
-          <Plus size={13} /> תגית
-        </button>
-      )}
-    </>
-  );
-}
-
-// מה חסר בבית (לפי המלאי במקרר ובמזווה). מה שחסר נכנס לרשימת הקניות, ושם "איפה לקנות הכי זול" לכל הסל
 function MissingBox({ lines, pantryNames, onShop }) {
   if (!lines.length || !pantryNames.length) return null;
   const missing = missingLines(lines, pantryNames);
