@@ -1,0 +1,36 @@
+import { record } from '../kit.mjs';
+
+await record('settings', async ({ page, mock, say, tap, point, wait, card, uncard, scroll, hideDot, unsay }) => {
+  const handle = mock.handle;
+  const me = { id: 'u1', name: 'דנה כהן', email: 'dana@example.com', role: 'holder', plan: 'paid', added: 7, freeLimit: 10 };
+  mock.handle = async (method, path, body) => (path.split('?')[0] === '/me' ? { owner: false, user: me, categories: [], paymentUrl: '' } : handle(method, path, body));
+  await page.reload();
+  await page.waitForLoadState('networkidle').catch(() => {});
+  await wait(800);
+  await card('⚙️', 'מדריך 14', 'הגדרות, גיבוי והתקנה', 'שומרים את הספר, מנהלים את החשבון ומתקינים כמו אפליקציה');
+  await uncard();
+  await say('בראש המסך הראשי לוחצים על <b>גלגל השיניים</b>', 1400);
+  await tap(page.getByRole('link', { name: 'הגדרות' }), { after: 1000 });
+  await scroll(300, 900);
+  await say('<b>גיבוי ושחזור</b>: כל המתכונים שלכם בקובץ אחד', 2600, true);
+  await say('לוחצים <b>הורדת גיבוי</b>', 1200, true);
+  await tap(page.getByRole('button', { name: /הורדת גיבוי/ }), { after: 1800 });
+  await say('הקובץ נשמר בטלפון. כדאי לשמור אותו בענן או לשלוח לעצמכם', 3200, true);
+  await say('<b>שחזור מקובץ</b> מחזיר את הכל, גם לספר חדש. מתכון שכבר קיים לא יוכפל', 3600, true);
+  await point(page.getByRole('button', { name: /שחזור מקובץ/ }), 1000);
+  await hideDot();
+  await scroll(400, 900);
+  await say('<b>החשבון</b>: יציאה מכל המכשירים, למשל אם איבדתם טלפון', 3200, true);
+  await point(page.getByRole('button', { name: /יציאה מכל המכשירים/ }), 800);
+  await say('ו<b>מחיקת החשבון</b> מוחקת הכל לצמיתות. לא לוחצים בטעות!', 3200, true);
+  await point(page.getByRole('button', { name: /מחיקת החשבון/ }), 800);
+  await hideDot();
+  await scroll(400, 700);
+  await say('בתחתית – <b>פרטיות ותנאי שימוש</b>', 1500, true);
+  await tap(page.getByRole('link', { name: /פרטיות ותנאי שימוש/ }), { after: 1000 });
+  await say('כאן כתוב בפשטות מה נשמר ואיך', 2600, true);
+  await scroll(500, 1200);
+  await hideDot();
+  await card('📱', 'הוספה למסך הבית', 'כמו אפליקציה רגילה', '<b>אייפון</b> (ב-Safari): כפתור השיתוף ← "הוספה למסך הבית"<br><br><b>אנדרואיד</b> (ב-Chrome): תפריט ⋮ ← "התקנת אפליקציה"', 6500);
+  await card('🔗', 'טיפ', 'משתפים ישר מאינסטגרם וטיקטוק', 'אחרי ההתקנה, בסרטון או באתר לוחצים <b>שיתוף</b> ובוחרים <b>mat-kon</b> – והמתכון נכנס לספר', 5500);
+}, { start: '#/', storage: { matkon_session: 'demo-session', matkon_user: { id: 'u1', name: 'דנה כהן', email: 'dana@example.com', role: 'holder', plan: 'paid', added: 7, freeLimit: 10 } } });

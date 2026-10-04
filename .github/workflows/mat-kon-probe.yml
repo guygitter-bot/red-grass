@@ -1,0 +1,129 @@
+name: mat-kon probe
+
+# בדיקה: מה השרת של mat-kon מצליח לקרוא מקישור (כיתוב, תגובות, מתכון מובנה) – בלי AI ובלי לשמור.
+# Actions → mat-kon probe → Run workflow → מדביקים קישור.
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Link to check"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read the link through the server
+        env:
+          LINK: ${{ inputs.url }}
+          API: ${{ vars.MATKON_API_URL || 'https://mat-kon-api.guygitter.workers.dev' }}
+        run: |
+          curl -sS --max-time 120 -G "$API/debug/source" --data-urlencode "url=$LINK" | tee result.json | jq . || cat result.json
+          {
+            echo '```json'
+            jq . result.json 2>/dev/null || cat result.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: This branch's reading code, run from the GitHub runner
+        env:
+          LINK: ${{ inputs.url }}
+        run: |
+          node --input-type=module -e "
+            const { gatherSource } = await import('./mat_kon/api/source.js');
+            const s = await gatherSource(process.env.LINK);
+            console.log(JSON.stringify({ kind: s.kind, author: s.author, image: !!s.image, caption: s.description.slice(0, 700),
+              comments: s.comments.length, firstComments: s.comments.slice(0, 5), linked: s.linked.map((l) => l.url),
+              warnings: s.warnings, debug: s.debug }, null, 1));
+          "
+      - name: Raw Instagram pages from the GitHub runner (diagnostics)
+        if: contains(inputs.url, 'instagram.com')
+        env:
+          LINK: ${{ inputs.url }}
+        run: |
+          CODE=$(echo "$LINK" | sed -E 's#.*/(reel|reels|p|tv)/([A-Za-z0-9_-]+).*#\2#')
+          probe() {
+            echo "=== [$1] $2"
+            curl -sS -L -A "$1" -H 'accept-language: he-IL,he;q=0.9,en;q=0.8' -o page.html -w 'status=%{http_code} size=%{size_download} final=%{url_effective}\n' "$2" || true
+            grep -o '<title>[^<]*</title>' page.html | head -1 | cut -c1-200 || true
+            grep -oE '<meta[^>]+(og:description|og:title|name="description")[^>]*>' page.html | head -3 | cut -c1-600 || true
+            for M in edge_media_to_caption xdt_shortcode_media edge_media_to_parent_comment '"comments"' '"caption"' '"text":'; do
+              printf '%s=%s ' "$M" "$(grep -o "$M" page.html | wc -l)"
+            done
+            echo
+          }
+          GB='Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
+          for U in "https://www.instagram.com/p/$CODE/embed/captioned/" "https://www.instagram.com/reel/$CODE/"; do
+            probe "$GB" "$U"
+            echo '--- around edge_media_to_caption'
+            grep -o '.\{0,300\}edge_media_to_caption.\{0,900\}' page.html | head -2 | cut -c1-1300 || true
+            echo '--- around "caption"'
+            grep -o '.\{0,150\}"caption".\{0,600\}' page.html | head -3 | cut -c1-800 || true
+            echo '--- around comment'
+            grep -o '.\{0,150\}comment.\{0,500\}' page.html | grep -v -i 'commentsdisabled\|comment_count' | head -4 | cut -c1-700 || true
+          done
+          echo '=== uuinstagram'
+          curl -sS -L -A 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)' "https://www.uuinstagram.com/reel/$CODE/" | head -c 3000; echo
+      - name: Raw Facebook / TikTok pages with different user agents (diagnostics)
+        if: contains(inputs.url, 'facebook.com') || contains(inputs.url, 'fb.watch') || contains(inputs.url, 'tiktok.com')
+        env:
+          LINK: ${{ inputs.url }}
+        run: |
+          for UA in 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36' \
+                    'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)' \
+                    'WhatsApp/2.24.20.80 A' \
+                    'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'; do
+            echo "=== [$UA]"
+            curl -sS -L -A "$UA" -H 'accept-language: he-IL,he;q=0.9,en;q=0.8' -o page.html -w 'status=%{http_code} size=%{size_download} final=%{url_effective}\n' "$LINK" || true
+            grep -o '<title>[^<]*</title>' page.html | head -1 | cut -c1-200 || true
+            grep -oE '<meta[^>]+(og:title|og:description|name="description")[^>]*>' page.html | head -3 | cut -c1-900 || true
+            printf 'login=%s private=%s desc=%s\n' "$(grep -oi 'log in\|התחבר' page.html | wc -l)" "$(grep -oi 'private group\|קבוצה פרטית' page.html | wc -l)" "$(grep -o '"desc":"[^"]\{0,300\}' page.html | head -1)"
+          done
+      - name: Raw page and API hints (diagnostics for any site)
+        if: "!contains(inputs.url, 'instagram.com') && !contains(inputs.url, 'facebook.com') && !contains(inputs.url, 'tiktok.com')"
+        env:
+          LINK: ${{ inputs.url }}
+        run: |
+          ORIGIN=$(echo "$LINK" | sed -E 's#^(https?://[^/]+).*#\1#')
+          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36'
+          for U in "$LINK" "$ORIGIN/robots.txt" "$ORIGIN/api" "$ORIGIN/api/docs" "$ORIGIN/developers" "$ORIGIN/sitemap.xml"; do
+            echo "=== $U"
+            curl -sS -L -A "$UA" -o page.html -w 'status=%{http_code} size=%{size_download} type=%{content_type} final=%{url_effective}\n' "$U" || true
+            grep -o '<title>[^<]*</title>' page.html | head -1 | cut -c1-200 || true
+            grep -oiE '(https?://[^"'"'"' <>]*|/)[^"'"'"' <>]*api[^"'"'"' <>]*' page.html | sort -u | head -25 || true
+            grep -oiE 'api[^<]{0,200}(מפתח|key|token|מנוי|plan|price|חינם|free)[^<]{0,200}' page.html | head -5 | cut -c1-400 || true
+            head -c 1500 page.html | tr '\n' ' ' | cut -c1-1500; echo
+          done
+      - name: Cheapersal API (auth styles, response shapes)
+        if: contains(inputs.url, 'cheapersal')
+        env:
+          KEY: ${{ secrets.CHEAPERSAL_API_KEY }}
+        run: |
+          B=https://cheapersal.co.il
+          curl -sS -L "$B/developers/playground" -o p.html
+          C=$(grep -oE '/_next/static/chunks/app/developers/playground/page-[^"]+\.js' p.html | head -1)
+          curl -sS "$B$C" -o c.js
+          echo "=== playground endpoint definitions"
+          grep -oE '.{0,40}path:"[^"]+".{0,700}' c.js | head -30 | cut -c1-900 || true
+          grep -oE '.{0,60}/api/v1/[^"]*".{0,500}' c.js | head -30 | cut -c1-600 || true
+          A=https://api.cheapersal.co.il/api/v1
+          call() {
+            echo "=== $1"
+            curl -sS --max-time 30 -H "X-API-Key: $KEY" -o out.json -w 'status=%{http_code}\n' "$A$1" || true
+            jq -c 'if type=="object" and .data then (.data |= (if type=="array" then (.[0:3] | map(del(.logo?))) else (if type=="object" then del(.logo?) else . end) end)) else . end' out.json 2>/dev/null | head -c 2500 || head -c 1200 out.json
+            echo
+          }
+          call /chains
+          call "/products/search?q=%D7%97%D7%9C%D7%91"
+          call "/products?search=%D7%97%D7%9C%D7%91"
+          call "/products?q=%D7%97%D7%9C%D7%91"
+          call /products/7290004131074
+          call /products/7290004131074/prices
+          call "/branches?limit=3"
+          call /cities

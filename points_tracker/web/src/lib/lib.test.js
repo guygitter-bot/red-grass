@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatQty, pointsForGrams, pointsFromNutrition, qtyPrefix, round1 } from './points';
-import { addDays, weekDates } from './dates';
+import { addDays, greeting, weekDates } from './dates';
 import { extractUserFoods, mergeFoodDb, searchFoods, SHARED_FOODS, upsertUserFood } from './foodDb';
 import { researchToFood, scoreComponents } from './ai';
 import { parseInviteToken } from './proxy';
@@ -34,6 +34,15 @@ describe('dates', () => {
     const w = weekDates('2026-10-02'); // יום שישי
     expect(w[0]).toBe('2026-09-27');
     expect(w).toHaveLength(7);
+  });
+  it('greets by the hour', () => {
+    const at = (h) => greeting(new Date(2026, 9, 4, h));
+    expect(at(5)).toBe('בוקר טוב');
+    expect(at(11)).toBe('בוקר טוב');
+    expect(at(12)).toBe('צהריים טובים');
+    expect(at(16)).toBe('צהריים טובים');
+    expect(at(17)).toBe('ערב טוב');
+    expect(at(2)).toBe('ערב טוב');
   });
 });
 

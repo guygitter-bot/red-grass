@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+html,
+body {
+  font-family: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #faf8ff;
+  color: #1c1917;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom), 0.5rem);
+}
+
+/* במחשב: הכול קצת יותר גדול (הגדלים של Tailwind יחסיים לגודל הזה) */
+@media (min-width: 1024px) {
+  html {
+    font-size: 17.5px;
+  }
+}

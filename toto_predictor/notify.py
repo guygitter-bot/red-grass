@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import json
 import logging
 import os
 import smtplib
@@ -15,6 +16,7 @@ from toto_predictor import closing
 log = logging.getLogger(__name__)
 
 CALLMEBOT_URL = "https://api.callmebot.com/whatsapp.php"
+TELEGRAM_URL = "https://api.telegram.org/bot{token}/sendMessage"
 
 
 def format_chance(p: float) -> str:
@@ -92,6 +94,24 @@ def send_whatsapp(text: str) -> bool:
     return True
 
 
+def send_telegram(text: str) -> bool:
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+    if not token or not chat_id:
+        log.warning("TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set; skipping Telegram")
+        return False
+    data = json.dumps({"chat_id": chat_id, "text": text, "disable_web_page_preview": True}).encode()
+    req = urllib.request.Request(
+        TELEGRAM_URL.format(token=token), data=data, headers={"Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        body = json.loads(resp.read().decode("utf-8", "replace") or "{}")
+    if not body.get("ok"):
+        log.error("Telegram failed: %s", str(body)[:300])
+        return False
+    return True
+
+
 def send_email(subject: str, text: str, html_body: str) -> bool:
     address = os.environ.get("GMAIL_ADDRESS", "").strip()
     password = os.environ.get("GMAIL_APP_PASSWORD", "").strip()
@@ -111,15 +131,21 @@ def send_email(subject: str, text: str, html_body: str) -> bool:
     return True
 
 
-def notify(result: dict) -> None:
-    text = ticket_text(result)
-    subject = f"טוטו 16 – הטופס של מחזור {result['round_number']} מוכן"
+def send_all(subject: str, text: str, html_body: str) -> None:
+    """Send on every configured channel; unconfigured channels are skipped."""
     for name, send in (
         ("WhatsApp", lambda: send_whatsapp(text)),
-        ("email", lambda: send_email(subject, text, ticket_html(result))),
+        ("Telegram", lambda: send_telegram(text)),
+        ("email", lambda: send_email(subject, text, html_body)),
     ):
         try:
             if send():
                 log.info("Sent %s notification", name)
-        except Exception:  # one channel failing must not block the other
-            log.exception("Failed to send %s notification", name)
+        except Exception as e:  # one channel failing must not block the others
+            # No traceback: the request URLs carry the Telegram token / CallMeBot key.
+            log.error("Failed to send %s notification: %s: %s", name, type(e).__name__, e)
+
+
+def notify(result: dict) -> None:
+    subject = f"טוטו 16 – הטופס של מחזור {result['round_number']} מוכן"
+    send_all(subject, ticket_text(result), ticket_html(result))

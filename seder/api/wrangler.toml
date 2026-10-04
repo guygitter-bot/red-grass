@@ -1,0 +1,23 @@
+name = "seder-api"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[vars]
+# האתרים שמותר להם לפנות לשרת (האפליקציה ב-Cloudflare Pages ופיתוח מקומי)
+ALLOWED_ORIGINS = "https://seder-tasks.pages.dev,http://localhost:5173,http://localhost:4173"
+# המאגר שבו נפתחות בקשות לשינוי מתוך האפליקציה
+GITHUB_REPO = "guygitter-bot/red-grass"
+
+# כל המשימות והתחומים של בעלת האפליקציה – אובייקט אחד ("main")
+[[durable_objects.bindings]]
+name = "VAULT"
+class_name = "Vault"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Vault"]
+
+# סודות, לא כאן (נקבעים אוטומטית מ-GitHub, ראו .github/workflows/seder.yml):
+#   SEDER_PASSWORD      – הסיסמה לכניסה
+#   SEDER_GITHUB_TOKEN  – מפתח GitHub לפתיחת בקשות לשינוי (לא חובה)

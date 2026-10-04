@@ -1,0 +1,126 @@
+name: seder requests
+
+# בקשה לשינוי מתוך אפליקציית סדר (issue עם התווית seder-request, נפתח דרך השרת seder-api):
+# Claude מבצע את השינוי, הבדיקות רצות, ונפתח PR לאישור. מיזוג ה-PR סוגר את הבקשה ומעלה את השינוי.
+# מופעל רק על בקשות שנפתחו בשם בעל/ת המאגר (כלומר מהאפליקציה) – לא על issues של אחרים.
+# לנסות שוב בקשה שנכשלה: מוסיפים לה את התווית seder-retry.
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: seder-request-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  work:
+    if: >-
+      contains(github.event.issue.labels.*.name, 'seder-request') &&
+      github.event.issue.user.login == github.repository_owner &&
+      (github.event.action == 'opened' || github.event.label.name == 'seder-retry')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ secrets.SEDER_GITHUB_TOKEN }}
+      N: ${{ github.event.issue.number }}
+      BRANCH: seder/request-${{ github.event.issue.number }}
+      TITLE: ${{ github.event.issue.title }}
+    steps:
+      - name: Check secrets
+        env:
+          GH: ${{ secrets.SEDER_GITHUB_TOKEN }}
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          missing=""
+          [ -n "$GH" ] || missing="$missing SEDER_GITHUB_TOKEN"
+          [ -n "$KEY" ] || missing="$missing ANTHROPIC_API_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing (see seder/README.md)"
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          # המפתח האישי (ולא github.token) – כדי שה-PR יפעיל את הבדיקות של seder.yml
+          token: ${{ secrets.SEDER_GITHUB_TOKEN }}
+      - name: Mark as in progress
+        run: |
+          for l in "seder-working:fbbf24" "seder-ready:8b5cf6" "seder-failed:f43f5e" "seder-retry:a8a29e"; do
+            gh label create "${l%%:*}" --color "${l##*:}" 2>/dev/null || true
+          done
+          gh issue edit "$N" --add-label seder-working --remove-label seder-failed --remove-label seder-retry
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install
+        working-directory: seder/web
+        run: npm ci
+      - name: Claude makes the change
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.SEDER_GITHUB_TOKEN }}
+          prompt: |
+            את/ה עובד/ת על "סדר" – אפליקציית משימות בעברית (RTL) שנמצאת בתיקייה seder/ במאגר הזה:
+            - seder/web: האפליקציה (React + Vite + Tailwind). התצוגה מותאמת גם לטלפון וגם למחשב (lg:).
+            - seder/api: שרת הסנכרון (Cloudflare Worker).
+            קראו קודם את seder/README.md ואת הקוד הרלוונטי.
+
+            המשתמשת ביקשה מתוך האפליקציה את השינוי הבא (בקשה מספר ${{ github.event.issue.number }}):
+            -----
+            ${{ github.event.issue.body }}
+            -----
+
+            הנחיות:
+            1. בצעו את השינוי המבוקש בצורה מלאה, בסגנון של הקוד הקיים (הערות בעברית, אותם רכיבים).
+               שנו רק קבצים בתוך seder/. אל תשנו את מבנה הנתונים בצורה שתאבד משימות קיימות.
+            2. ודאו שהשינוי נראה טוב גם בטלפון וגם במחשב.
+            3. הוסיפו או עדכנו בדיקות כשיש לוגיקה חדשה.
+            4. הריצו `npm test` בתיקייה seder/web, `node --test` בתיקייה seder/api, ו-`npm run build` בתיקייה seder/web – הכול חייב לעבור.
+            5. אל תריצו פקודות git (לא commit ולא push) – ה-workflow עושה את זה אחריכם.
+            6. בסוף כתבו לקובץ ${{ runner.temp }}/summary.md סיכום קצר בעברית פשוטה (לא טכנית) למשתמשת:
+               מה השתנה, איך להשתמש בזה, ומה כדאי לבדוק אחרי העלייה. אם משהו בבקשה לא היה ברור או לא בוצע – כתבו זאת שם.
+          claude_args: |
+            --max-turns 80
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(npm test),Bash(npm run build),Bash(npx vitest:*),Bash(node --test:*),Bash(git status),Bash(git diff:*),Bash(ls:*)"
+      - name: Tests
+        run: |
+          (cd seder/api && npm test)
+          (cd seder/web && npm test && npm run build)
+      - name: Open PR for approval
+        run: |
+          git add -A seder
+          if git diff --cached --quiet; then
+            echo "::error::Claude did not change anything"
+            echo "לא בוצעו שינויים בקוד." > "$RUNNER_TEMP/failure.md"
+            exit 1
+          fi
+          git config user.name "seder-bot"
+          git config user.email "seder-bot@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git commit -q -m "${TITLE}" -m "Closes #${N}"
+          git push -f origin "$BRANCH"
+          summary="$RUNNER_TEMP/summary.md"
+          [ -s "$summary" ] || echo "השינוי מוכן." > "$summary"
+          printf '\n\n---\nבקשה מתוך האפליקציה: #%s\nCloses #%s\n' "$N" "$N" >> "$summary"
+          if gh pr view "$BRANCH" --json number >/dev/null 2>&1; then
+            gh pr edit "$BRANCH" --body-file "$summary"
+          else
+            gh pr create --base main --head "$BRANCH" --title "${TITLE}" --body-file "$summary"
+          fi
+          url=$(gh pr view "$BRANCH" --json url -q .url)
+          gh issue comment "$N" --body "✅ השינוי מוכן לאישור: $url
+          אחרי מיזוג ה-PR השינוי עולה לאפליקציה תוך כדקה."
+          gh issue edit "$N" --add-label seder-ready --remove-label seder-working
+      - name: Report failure
+        if: failure()
+        run: |
+          gh issue edit "$N" --add-label seder-failed --remove-label seder-working || true
+          gh issue comment "$N" --body "❌ לא הצלחתי להשלים את הבקשה הזו אוטומטית. $(cat "$RUNNER_TEMP/failure.md" 2>/dev/null)
+          פרטים: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          לנסות שוב: להוסיף לבקשה את התווית seder-retry." || true

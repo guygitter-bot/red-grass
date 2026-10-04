@@ -45,6 +45,8 @@
   .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .toolbar button, select { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line);
                             background: var(--card); color: var(--text); cursor: pointer; }
+  .toolbar a.button { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line);
+                     background: var(--card); color: var(--accent); text-decoration: none; }
   .toolbar button.primary { background: var(--accent); color: var(--pick-text); border-color: var(--accent); }
   .alts td { font-size: .9rem; }
   @media (max-width: 520px) {
@@ -61,6 +63,12 @@
 </main>
 <script>
 const OUT = ["1", "X", "2"];
+// On GitHub Pages (<owner>.github.io/<repo>/) link to the workflow page that has the "Run workflow" button.
+const RUN_URL = (() => {
+  const owner = location.hostname.endsWith(".github.io") ? location.hostname.split(".")[0] : "";
+  const repo = location.pathname.split("/").filter(Boolean)[0];
+  return owner && repo ? `https://github.com/${owner}/${repo}/actions/workflows/toto-weekly.yml` : "";
+})();
 const ADJ = {history: "עונות קודמות", league_draws: "נטיית תיקו בליגה", heat: "חום", rain: "גשם", wind: "רוח",
              absences: "נעדרים", rotation: "רוטציה", fatigue: "עומס", internationals: "נבחרות", venue: "ביתיות", h2h: "ראש בראש"};
 let data = null, covers = [], openRow = null;
@@ -159,7 +167,7 @@ function render(index) {
   const alts = data.alternatives.map(a => `<tr><td>${a.triples} משולשים, ${a.doubles} כפולים</td>
       <td>${a.columns} טורים</td><td>${a.cost} ₪</td><td>${chance(a.p16)}</td></tr>`).join("");
   document.getElementById("app").innerHTML = `
-    ${data.round_number === "demo" ? `<p class="banner">אלה נתוני הדגמה. הטופס האמיתי יופיע כאן אחרי הריצה הראשונה ביום חמישי.</p>` : ""}
+    ${data.round_number === "demo" ? `<p class="banner">אלה נתוני הדגמה. הטופס האמיתי יופיע כאן אחרי שתפעיל את הסוכן.</p>` : ""}
     <div class="card stats">
       <div class="stat close"><span class="muted">לשלוח עד</span><b class="${close.urgent ? "warn" : ""}">${close.left}</b>
         <span class="muted">${esc(close.at)}${data.close_time_source === "first_kickoff" ? " · 6 דק' לפני המשחק הראשון" : ""}</span></div>
@@ -171,6 +179,7 @@ function render(index) {
     <div class="toolbar">
       <button class="primary" id="copy">העתק טופס</button>
       <button id="reset">חזרה להמלצה</button>
+      ${RUN_URL ? `<a class="button" href="${esc(RUN_URL)}" target="_blank" rel="noopener">הפעל את הסוכן ↗</a>` : ""}
       ${index.length > 1 ? `<select id="round">${index.slice().reverse().map(r =>
         `<option value="${esc(r)}" ${r === data.round_number ? "selected" : ""}>מחזור ${esc(r)}</option>`).join("")}</select>` : ""}
       <span class="muted">התחזית מבוססת על מה שידוע ביום חמישי, לפני פרסום ההרכבים.</span>

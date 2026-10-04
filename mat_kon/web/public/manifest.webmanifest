@@ -1,0 +1,41 @@
+{
+  "name": "mat-kon · מתכונים",
+  "short_name": "mat-kon",
+  "description": "ספר מתכונים שמסדר לבד מתכון מכל קישור או סרטון",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fffbf5",
+  "theme_color": "#ea580c",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "share_target": {
+    "action": "./share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "chat",
+          "accept": [
+            "text/plain",
+            ".txt",
+            "application/zip",
+            ".zip"
+          ]
+        }
+      ]
+    }
+  }
+}

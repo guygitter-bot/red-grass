@@ -1,0 +1,30 @@
+import { record } from '../kit.mjs';
+
+await record('ideas', async ({ page, say, tap, type, wait, card, uncard, scroll, hideDot, unsay }) => {
+  await card('🍳', 'מדריך 11', 'מה לבשל ממה שיש', 'מתכונים מהספר שלכם ומהרשת, לפי מה שיש במקרר ובמזווה');
+  await uncard();
+  await say('אחרי שהמקרר והמזווה מעודכנים, נכנסים אליהם מהתפריט למטה', 2800);
+  await tap(page.getByRole('link', { name: 'מקרר ומזווה' }), { after: 800 });
+  await say('מתחת לשני האזורים מופיע <b>מה אפשר לבשל?</b>', 2400, true);
+  await scroll(250, 1000);
+  await say('קודם המתכונים <b>מהספר שלי</b>, לפי מה שיש לכם בבית', 2800, true);
+  await say('<b>יש הכל!</b> אומר שאפשר לבשל עכשיו, ומתחת רואים מה חסר', 3200, true);
+  await scroll(250, 1000);
+  await say('חסר משהו? לוחצים <b>לרשימת קניות</b> – נוספים רק המצרכים החסרים', 3000, true);
+  await tap(page.getByRole('button', { name: 'לרשימת קניות' }).first(), { after: 1800 });
+  await hideDot();
+  await scroll(-1000, 700);
+  await say('רוצים רעיונות חדשים? לוחצים <b>חיפוש ברשת</b>', 1500);
+  await tap(page.getByRole('button', { name: 'חיפוש ברשת' }), { after: 900 });
+  await say('אפשר לכתוב משאלה, למשל "משהו מהיר לערב". לא חובה', 1200, true);
+  await type(page.getByPlaceholder(/בא לי/), 'משהו מהיר לערב', { delay: 70 });
+  await tap(page.getByRole('button', { name: 'חיפוש', exact: true }), { after: 400 });
+  await say('מחפשים ברשת מתכונים שמתאימים למה שיש לכם…', 1800, true);
+  await page.getByText('חביתת ירק עם פטה').waitFor({ timeout: 15000 });
+  await hideDot();
+  await say('הנה כמה רעיונות, וליד כל אחד מה חסר', 2800, true);
+  await tap(page.getByRole('button', { name: /לספר/ }).first(), { after: 600 });
+  await say('לוחצים <b>לספר</b> – והמתכון נכנס לספר שלכם, מסודר', 3200, true);
+  await hideDot();
+  await say('💡 טיפ: כל מה שמוסיפים או מורידים מהמקרר מעדכן את ההצעות מיד', 3800, true);
+}, { start: '#/fridge', mock: { delay: 2200 } });
