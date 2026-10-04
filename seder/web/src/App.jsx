@@ -15,6 +15,7 @@ import { notify } from './lib/notify';
 import { AuthError, collectChanges, getToken, logout, resetSync, runSync } from './lib/sync';
 import { RELOCK_AFTER_MS } from './lib/lock';
 import LockScreen from './components/LockScreen';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const Store = createContext(null);
 export const useStore = () => useContext(Store);
@@ -209,10 +210,13 @@ export default function App() {
         </header>
 
         <main className="px-4">
-          {tab === 'home' && <Dashboard />}
-          {tab === 'day' && <DayView day={day} setDay={setDay} />}
-          {tab === 'areas' && <AreasView area={area} setArea={setArea} />}
-          {tab === 'later' && <LaterView seg={laterSeg} setSeg={setLaterSeg} />}
+          {/* מעבר לשונית מאפס את רשת הביטחון */}
+          <ErrorBoundary key={tab} onReset={() => { setArea(null); setTab('home'); }}>
+            {tab === 'home' && <Dashboard />}
+            {tab === 'day' && <DayView day={day} setDay={setDay} />}
+            {tab === 'areas' && <AreasView area={area} setArea={setArea} />}
+            {tab === 'later' && <LaterView seg={laterSeg} setSeg={setLaterSeg} />}
+          </ErrorBoundary>
         </main>
       </div>
 
