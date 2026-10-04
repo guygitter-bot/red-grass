@@ -31,14 +31,17 @@ Decide which case this is:
    users' data. Change nothing and describe a short plan. (If the app owner already approved an
    earlier plan in the conversation, implement it as in case 1.)
 
+If the conversation shows an earlier run already made a change, the code you see already contains
+it: build on it (for example, adjust it as the user asked) rather than starting over.
+
 Never edit files outside points_tracker/ (in particular not .github/), and do not commit; the
-workflow commits, publishes to the staging site and reports back.
+workflow commits and prepares the change, and the user approves it from inside the app.
 
 Finish by writing the file .fix/result.json:
 {{
   "status": "fixed" | "question" | "too_big",
   "title": "short English commit title (for fixed)",
-  "summary_he": "1-3 short Hebrew sentences for a non-technical person: what changed and where to see it",
+  "summary_he": "1-3 short Hebrew sentences for a non-technical person: what changed, where to see it, what to check after it goes live",
   "question_he": "the Hebrew question (for question), else empty",
   "plan_he": "the Hebrew plan (for too_big), else empty"
 }}

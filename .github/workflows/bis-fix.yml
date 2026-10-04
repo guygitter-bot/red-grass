@@ -1,10 +1,10 @@
 name: Bis fix requests
 
 # "שלח תיקון" באפליקציה פותח issue עם התווית bis-fix (דרך השרת bis-api, בשם בעל המאגר).
-# Claude Code קורא את הבקשה (וצילום המסך), מתקן בתוך points_tracker/ ומריץ בדיקות.
-# אם הכול עובר: PR ל-staging שממוזג אוטומטית -> https://staging.bis-app.pages.dev,
-# תגובה ב-issue והודעת וואטסאפ לבעל האפליקציה. לאפליקציה הרגילה (main) עולה רק אחרי אישור שלך.
-# בקשה לא ברורה -> שאלה בתגובה. תגובה שלך ב-issue מריצה שוב עם כל השיחה.
+# Claude Code קורא את הבקשה (וצילום המסך), מתקן בתוך points_tracker/ ומריץ בדיקות,
+# ופותח PR ל-main מהענף bis-fix/<מספר>. המצב וההסבר של Claude מופיעים באפליקציה, ושם מאשרים
+# ("לאשר ולהעלות" ממזג את ה-PR והשינוי עולה) או דוחים. בקשה לא ברורה -> שאלה, ותשובה מהאפליקציה
+# (תגובה בשם בעל המאגר) מריצה שוב עם כל השיחה. "לנסות שוב" באפליקציה מוסיף את התווית bis-retry.
 on:
   issues:
     types: [labeled]
@@ -30,9 +30,10 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (contains(github.event.issue.labels.*.name, 'bis-fix') &&
+       github.event.issue.state == 'open' &&
        github.event.issue.user.login == github.repository_owner &&
        !github.event.issue.pull_request &&
-       ((github.event_name == 'issues' && github.event.label.name == 'bis-fix') ||
+       ((github.event_name == 'issues' && (github.event.label.name == 'bis-fix' || github.event.label.name == 'bis-retry')) ||
         (github.event_name == 'issue_comment' && github.event.comment.user.login == github.repository_owner)))
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -49,10 +50,22 @@ jobs:
           [ -n "$KEY" ] || { echo "::error::Missing secret ANTHROPIC_API_KEY"; exit 1; }
       - uses: actions/checkout@v4
         with:
-          ref: staging
+          ref: main
           fetch-depth: 0
           # Claude runs without the push token; only the publish step below gets it
           persist-credentials: false
+      - name: Mark as in progress
+        run: python3 points_tracker/fixbot/fixbot.py start
+      - name: Continue an earlier version of this fix
+        run: |
+          if git fetch -q origin "bis-fix/${ISSUE}" 2>/dev/null; then
+            git checkout -q -B "bis-fix/${ISSUE}" FETCH_HEAD
+            git config user.name "bis-fix"
+            git config user.email "bis-fix@users.noreply.github.com"
+            git merge -q --no-edit origin/main || { git merge --abort; git checkout -q -B "bis-fix/${ISSUE}" origin/main; }
+          else
+            git checkout -q -B "bis-fix/${ISSUE}" origin/main
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -92,30 +105,28 @@ jobs:
           (cd points_tracker/web && npm test && npm run build)
           python -m unittest discover -s points_tracker/tests -t .
           (cd points_tracker/proxy && npm test)
-      - name: Publish to staging
+      - name: Prepare the change for approval
         id: publish
         if: steps.check.outputs.status == 'fixed'
         env:
-          # a personal token, so the merge into staging triggers the staging deploy
+          # a personal token, so the PR runs the app checks
           GH_TOKEN: ${{ secrets.POINTS_GITHUB_TOKEN }}
         run: |
-          branch="bis-fix/${ISSUE}-${GITHUB_RUN_ID}"
+          branch="bis-fix/${ISSUE}"
           git config user.name "bis-fix"
           git config user.email "bis-fix@users.noreply.github.com"
-          git checkout -b "$branch"
           git add -A -- points_tracker
-          git commit -F .fix/commit.txt
-          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$branch"
-          url=$(gh pr create --base staging --head "$branch" --title "$(head -n1 .fix/commit.txt)" --body-file .fix/pr.md)
-          gh pr merge "$url" --merge --delete-branch
-          echo "pr=$url" >> "$GITHUB_OUTPUT"
+          git commit -q -F .fix/commit.txt
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$branch"
+          if gh pr view "$branch" --json number >/dev/null 2>&1; then
+            gh pr edit "$branch" --body-file .fix/pr.md
+          else
+            gh pr create --base main --head "$branch" --title "$(head -n1 .fix/commit.txt)" --body-file .fix/pr.md
+          fi
       - name: Report
         if: always()
         env:
           STATUS: ${{ steps.check.outputs.status }}
           TESTS: ${{ steps.tests.outcome }}
           PUBLISH: ${{ steps.publish.outcome }}
-          PR: ${{ steps.publish.outputs.pr }}
-          CALLMEBOT_PHONE: ${{ secrets.CALLMEBOT_PHONE }}
-          CALLMEBOT_APIKEY: ${{ secrets.CALLMEBOT_APIKEY }}
-        run: python points_tracker/fixbot/fixbot.py report
+        run: python3 points_tracker/fixbot/fixbot.py report
