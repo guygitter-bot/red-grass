@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Cloud, CloudOff, RefreshCw, Search, Settings } from 'lucide-react';
+import { Cloud, CloudOff, MessageSquarePlus, RefreshCw, Search, Settings } from 'lucide-react';
 import { dueReminders, load, save } from './lib/store';
 import { todayKey } from './lib/dates';
 import BottomNav, { SideNav } from './components/BottomNav';
@@ -11,6 +11,7 @@ import TaskEditor from './components/TaskEditor';
 import ImportSheet from './components/ImportSheet';
 import SettingsSheet from './components/SettingsSheet';
 import SearchSheet from './components/SearchSheet';
+import RequestsSheet from './components/RequestsSheet';
 import { notify } from './lib/notify';
 import { AuthError, collectChanges, getToken, logout, resetSync, runSync } from './lib/sync';
 import { RELOCK_AFTER_MS } from './lib/lock';
@@ -182,6 +183,7 @@ export default function App() {
     syncStatus,
     syncNow: sync,
     lock: () => setLocked(true),
+    openRequests: () => setSheet('requests'),
   }), [state, act, syncStatus, sync]);
 
   if (locked) {
@@ -225,12 +227,14 @@ export default function App() {
         <SyncButton status={syncStatus} onClick={() => (syncStatus === 'off' ? setLocked(true) : sync())} />
         <button aria-label="חיפוש" onClick={() => setSheet('search')} className="p-2 rounded-full hover:bg-violet-100 text-stone-600"><Search size={22} /></button>
         <button aria-label="הגדרות" onClick={() => setSheet('settings')} className="p-2 rounded-full hover:bg-violet-100 text-stone-600"><Settings size={22} /></button>
+        <button aria-label="בקשה לשינוי באפליקציה" title="בקשה לשינוי באפליקציה" onClick={() => setSheet('requests')} className="p-2 rounded-full hover:bg-violet-100 text-stone-600"><MessageSquarePlus size={22} /></button>
       </SideNav>
 
       {editing && <TaskEditor initial={editing} onClose={() => setEditing(null)} />}
       {importing != null && <ImportSheet text={importing} onClose={() => setImporting(null)} />}
       {sheet === 'settings' && <SettingsSheet onClose={() => setSheet(null)} />}
       {sheet === 'search' && <SearchSheet onClose={() => setSheet(null)} />}
+      {sheet === 'requests' && <RequestsSheet onClose={() => setSheet(null)} />}
 
       {toast && (
         <button

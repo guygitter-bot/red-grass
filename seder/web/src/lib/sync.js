@@ -40,7 +40,7 @@ async function post(path, body, token) {
     throw new NetworkError('אין חיבור לשרת');
   }
   const data = await res.json().catch(() => ({}));
-  if (res.status === 401 && path === '/sync') throw new AuthError(data.error || 'צריך להתחבר מחדש');
+  if (res.status === 401 && path !== '/login') throw new AuthError(data.error || 'צריך להתחבר מחדש');
   if (res.status >= 500) throw new NetworkError(data.error || 'השרת לא זמין');
   if (!res.ok) throw new Error(data.error || `שגיאה ${res.status}`);
   return data;
@@ -128,4 +128,14 @@ export async function runSync(getState, apply) {
 
 export function resetSync(state) {
   return { ...state, sync: emptySync() };
+}
+
+// בקשות לשינוי באפליקציה (נפתחות כ-issue ב-GitHub, ו-Claude מכין PR)
+export async function sendChangeRequest(text) {
+  const context = [navigator.userAgent.match(/Android|iPhone|iPad|Windows|Mac/)?.[0], `${window.innerWidth}px`].filter(Boolean).join(' · ');
+  return (await post('/requests', { text, context }, getToken())).request;
+}
+
+export async function listChangeRequests() {
+  return (await post('/requests/list', {}, getToken())).requests;
 }
