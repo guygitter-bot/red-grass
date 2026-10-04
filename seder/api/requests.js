@@ -2,6 +2,9 @@
 // הפעולה .github/workflows/seder-requests.yml מפעילה את Claude על הבקשה ופותחת PR לאישור.
 // המצב של כל בקשה נקרא מ-GitHub: תוויות (seder-working / seder-ready / seder-failed), PR פתוח, וסגירה.
 // האישור נעשה מתוך האפליקציה: השרת ממזג את ה-PR (או סוגר אותו) – בלי להיכנס ל-GitHub.
+// לפני הביצוע: הערכת מחיר (seder-estimating -> seder-quote), ו-Claude מתחיל רק אחרי "לבצע" (התווית seder-go).
+import { balanceOf, parseCosts, parseEstimate, totalCost } from './costs.js';
+
 export const LABEL = 'seder-request';
 const MAX_TEXT = 4000;
 
@@ -46,13 +49,17 @@ export async function createRequest(env, text, context) {
   return { number: issue.number, title: issue.title, status: 'received', createdAt: issue.created_at, url: issue.html_url };
 }
 
-// received -> working -> ready (PR לאישור) -> done; או failed / rejected
+const labelsOf = (issue) => (issue.labels || []).map((l) => (typeof l === 'string' ? l : l.name));
+
+// received -> estimating -> quote (מחכה לאישור המחיר) -> working -> ready (PR לאישור) -> done; או failed / rejected
 export function statusOf(issue, pr) {
-  const labels = (issue.labels || []).map((l) => (typeof l === 'string' ? l : l.name));
+  const labels = labelsOf(issue);
   if (issue.state === 'closed') return issue.state_reason === 'not_planned' ? 'rejected' : 'done';
   if (labels.includes('seder-failed')) return 'failed';
   if (pr || labels.includes('seder-ready')) return 'ready';
-  if (labels.includes('seder-working')) return 'working';
+  if (labels.includes('seder-working') || labels.includes('seder-go')) return 'working';
+  if (labels.includes('seder-quote')) return 'quote';
+  if (labels.includes('seder-estimating')) return 'estimating';
   return 'received';
 }
 
@@ -76,8 +83,18 @@ export async function listRequests(env) {
         prUrl: pr?.html_url || null,
         // ההסבר של Claude (מה השתנה ומה לבדוק) – מוצג באפליקציה ליד כפתור האישור
         summary: pr ? (pr.body || '').split(/\n+---\n/)[0].trim().slice(0, 3000) : '',
+        // הערכת המחיר לפני הביצוע, וכמה הבקשה עלתה בפועל עד עכשיו
+        estimate: parseEstimate(i.body),
+        cost: totalCost(parseCosts(i.body)),
       };
     });
+}
+
+// היתרה בחשבון הקרדיטים: הסכום שהוקלד פחות מה שהוצא מאז (בקשות שהשתנו מאז – כדי לא לפספס ישנות)
+export async function creditsOf(env, credits) {
+  if (!credits) return null;
+  const issues = await gh(env, `/issues?labels=${LABEL}&state=all&per_page=100&since=${encodeURIComponent(credits.setAt)}`);
+  return balanceOf(credits, issues.filter((i) => !i.pull_request));
 }
 
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
@@ -114,6 +131,16 @@ export async function rejectRequest(env, number) {
   if (pr) await gh(env, `/pulls/${pr.number}`, { method: 'PATCH', body: JSON.stringify({ state: 'closed' }) });
   if (issue.state === 'open') await gh(env, `/issues/${number}`, { method: 'PATCH', body: JSON.stringify({ state: 'closed', state_reason: 'not_planned' }) });
   return { number, status: 'rejected' };
+}
+
+// לבצע אחרי שראו את המחיר: התווית seder-go מפעילה את Claude
+export async function startRequest(env, number) {
+  const { issue } = await requestWithPr(env, number);
+  if (issue.state !== 'open') throw fail('הבקשה כבר סגורה', 409);
+  if (statusOf(issue) !== 'quote') throw fail('הבקשה הזו לא מחכה לאישור מחיר', 409);
+  await gh(env, `/issues/${number}/labels`, { method: 'POST', body: JSON.stringify({ labels: ['seder-go'] }) });
+  await gh(env, `/issues/${number}/labels/seder-quote`, { method: 'DELETE' }).catch(() => {});
+  return { number, status: 'working' };
 }
 
 // לנסות שוב: התווית seder-retry מפעילה שוב את Claude על הבקשה

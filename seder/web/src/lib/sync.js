@@ -162,8 +162,20 @@ export async function sendChangeRequest(text) {
   return (await post('/requests', { text, context }, getToken())).request;
 }
 
+// הבקשות, והיתרה בחשבון הקרדיטים של Claude (null – עוד לא הוקלדה)
 export async function listChangeRequests() {
-  return (await post('/requests/list', {}, getToken())).requests;
+  const { requests, credits = null } = await post('/requests/list', {}, getToken());
+  return { requests, credits };
+}
+
+// את היתרה אי אפשר לקרוא מ-Anthropic, ולכן מקלידים אותה; מכאן השרת מוריד את מה שכל שינוי עלה
+export async function setCredits(amount) {
+  return (await post('/credits', { amount }, getToken())).credits;
+}
+
+// לבצע בקשה אחרי שראו כמה היא תעלה
+export async function startChangeRequest(number) {
+  return post('/requests/go', { number }, getToken());
 }
 
 // אישור / דחייה / ניסיון חוזר של בקשה – השרת מבצע ב-GitHub מאחורי הקלעים
