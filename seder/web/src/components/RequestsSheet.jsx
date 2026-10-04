@@ -99,12 +99,12 @@ export default function RequestsSheet({ onClose }) {
               <div className="mt-1 text-xs text-stone-500">{new Date(r.createdAt).toLocaleDateString('he-IL')}</div>
               {r.status === 'ready' && (
                 <>
-                  {r.summary && <p className="mt-2 text-sm text-stone-700 whitespace-pre-line rounded-xl bg-white border border-stone-100 p-2.5 max-h-56 overflow-auto">{r.summary}</p>}
+                  {r.summary && <p className="mt-2 text-sm text-stone-700 whitespace-pre-line rounded-xl bg-card border border-stone-100 p-2.5 max-h-56 overflow-auto">{r.summary}</p>}
                   <div className="mt-2 flex gap-2">
                     <button disabled={!!acting} onClick={() => act(r, 'approve')} className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-violet-600 text-white font-bold py-2.5 disabled:opacity-50">
                       <Check size={18} />{acting === `approve:${r.number}` ? 'מאשר...' : 'לאשר ולהעלות'}
                     </button>
-                    <button disabled={!!acting} onClick={() => act(r, 'reject')} className="flex items-center justify-center gap-1 rounded-xl border border-stone-200 bg-white px-3 text-stone-600 disabled:opacity-50">
+                    <button disabled={!!acting} onClick={() => act(r, 'reject')} className="flex items-center justify-center gap-1 rounded-xl border border-stone-200 bg-card px-3 text-stone-600 disabled:opacity-50">
                       <X size={16} />לא מתאים
                     </button>
                   </div>
@@ -112,7 +112,7 @@ export default function RequestsSheet({ onClose }) {
               )}
               {r.status === 'failed' && (
                 <div className="mt-2 flex gap-2">
-                  <button disabled={!!acting} onClick={() => act(r, 'retry')} className="flex items-center gap-1.5 rounded-xl bg-white border border-stone-200 px-3 py-1.5 text-sm disabled:opacity-50">
+                  <button disabled={!!acting} onClick={() => act(r, 'retry')} className="flex items-center gap-1.5 rounded-xl bg-card border border-stone-200 px-3 py-1.5 text-sm disabled:opacity-50">
                     <RotateCcw size={14} />{busyHere ? 'שולח...' : 'לנסות שוב'}
                   </button>
                   <button disabled={!!acting} onClick={() => act(r, 'reject')} className="rounded-xl px-3 py-1.5 text-sm text-stone-500 disabled:opacity-50">לוותר</button>

@@ -10,7 +10,7 @@ const TABS = [
 
 export default function BottomNav({ tab, setTab, onAdd }) {
   return (
-    <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t border-violet-100 pb-safe">
+    <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-card/95 backdrop-blur border-t border-violet-100 pb-safe">
       <div className="max-w-xl mx-auto grid grid-cols-5 items-end">
         {TABS.map((t) => {
           if (!t) {
@@ -39,9 +39,9 @@ export default function BottomNav({ tab, setTab, onAdd }) {
 // במחשב: תפריט צד קבוע במקום הסרגל התחתון
 export function SideNav({ tab, setTab, onAdd, children }) {
   return (
-    <aside className="hidden lg:flex fixed inset-y-0 right-0 z-30 w-64 flex-col border-l border-violet-100 bg-white px-4 py-6">
+    <aside className="hidden lg:flex fixed inset-y-0 right-0 z-30 w-64 flex-col border-l border-violet-100 bg-card px-4 py-6">
       <div className="px-3 text-3xl font-black text-violet-700 tracking-tight whitespace-nowrap">יהיה בסדר</div>
-      <button onClick={onAdd} className="mt-6 flex items-center justify-center gap-2 rounded-2xl bg-violet-600 text-white font-bold py-3 shadow-lg shadow-violet-200 hover:bg-violet-700 transition">
+      <button onClick={onAdd} className="mt-6 flex items-center justify-center gap-2 rounded-2xl bg-violet-600 text-white font-bold py-3 shadow-lg shadow-violet-200 hover:bg-violet-500 transition">
         <Plus size={20} strokeWidth={2.5} />משימה חדשה
       </button>
       <nav className="mt-6 space-y-1">

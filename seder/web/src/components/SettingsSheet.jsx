@@ -5,13 +5,15 @@ import { normalize, setName } from '../lib/store';
 import { greeting, todayKey } from '../lib/dates';
 import { downloadIcs } from '../lib/calendar';
 import { askPermission, notificationsSupported } from '../lib/notify';
-import { Sheet } from './ui';
+import { THEME_OPTIONS, setTheme, useTheme } from '../lib/theme';
+import { Chip, Sheet } from './ui';
 
 const row = 'w-full flex items-center gap-3 rounded-2xl bg-stone-50 p-3 text-right';
 
 export default function SettingsSheet({ onClose }) {
   const { state, act, syncStatus, syncNow, lock, openRequests } = useStore();
-  const [perm, setPerm] = useState(() => (notificationsSupported() ? Notification.permission : 'unsupported'));
+  const theme = useTheme();
+  const [perm, setPerm] =useState(() => (notificationsSupported() ? Notification.permission : 'unsupported'));
   const upcoming = state.tasks.filter((t) => !t.done && t.due && t.due >= todayKey());
   // השם נשמר כשיוצאים מהשדה (או בסגירת ההגדרות), לא בכל אות
   const [name, setNameDraft] = useState(state.profile?.name || '');
@@ -78,6 +80,16 @@ export default function SettingsSheet({ onClose }) {
           </span>
         </label>
 
+        <h3 className="text-sm font-bold text-stone-500 pt-3">מצב לילה</h3>
+        <div className={`${row} block`}>
+          <div className="flex gap-2">
+            {THEME_OPTIONS.map((o) => (
+              <Chip key={o.value} active={theme.pref === o.value} onClick={() => setTheme(o.value)} className="flex-1">{o.emoji} {o.label}</Chip>
+            ))}
+          </div>
+          <span className="block text-xs text-stone-500 mt-2">"אוטומטי" – לילה כשהטלפון או המחשב במצב כהה. נשמר בכל מכשיר בנפרד.</span>
+        </div>
+
         <h3 className="text-sm font-bold text-stone-500 pt-3">סנכרון בין מכשירים</h3>
         {syncStatus === 'off' ? (
           <button onClick={() => { onClose(); lock(); }} className={row}>
@@ -88,7 +100,7 @@ export default function SettingsSheet({ onClose }) {
           <div className={row}>
             <Cloud size={20} className="text-emerald-600" />
             <span className="flex-1">מחובר – המשימות מסתנכרנות<span className="block text-xs text-stone-500">{syncStatus === 'offline' ? 'אין אינטרנט כרגע – יסונכרן כשהרשת תחזור' : syncStatus === 'error' ? 'הסנכרון האחרון נכשל' : 'בטלפון ובמחשב, אוטומטית'}</span></span>
-            <button onClick={syncNow} className="text-xs rounded-lg bg-white border border-stone-200 px-2 py-1">סנכרון עכשיו</button>
+            <button onClick={syncNow} className="text-xs rounded-lg bg-card border border-stone-200 px-2 py-1">סנכרון עכשיו</button>
           </div>
         )}
         <button onClick={() => { onClose(); lock(); }} className={row}>

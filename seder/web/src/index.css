@@ -1,11 +1,111 @@
 @import "tailwindcss";
 
+/* מצב לילה: מחלקה dark על html (נקבעת ב-src/lib/theme.js) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* צבעי רקע: page = רקע המסך, card = כרטיסים וחלונות */
+@theme {
+  --color-page: #faf8ff;
+  --color-card: #ffffff;
+  --color-ink: #1c1917;
+}
+
 html,
 body {
   font-family: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
-  background: #faf8ff;
-  color: #1c1917;
+  background: var(--color-page);
+  color: var(--color-ink);
   -webkit-tap-highlight-color: transparent;
+}
+
+/*
+ * מצב לילה – במקום לשנות כל רכיב, מחליפים את הצבעים עצמם:
+ * אפור (stone) מתהפך – רקעים בהירים נהיים כהים וטקסט כהה נהיה בהיר.
+ * בכל צבע: הגוונים הבהירים (50–300, רקעים ומסגרות) נהיים גוון כהה של אותו צבע,
+ * והגוונים הכהים (700–900, טקסט) נהיים בהירים. 400–500 (נקודות ופסים) נשארים.
+ */
+.dark {
+  color-scheme: dark;
+  --color-page: #131118;
+  --color-card: #1e1b24;
+  --color-ink: #ece9f1;
+
+  --color-stone-50: #26232c;
+  --color-stone-100: #2c2933;
+  --color-stone-200: #3a3642;
+  --color-stone-300: #4d4856;
+  --color-stone-400: #847d8e;
+  --color-stone-500: #a09aa9;
+  --color-stone-600: #bdb7c5;
+  --color-stone-700: #d5d0dc;
+  --color-stone-800: #e5e1ea;
+  --color-stone-900: #f2eff5;
+}
+
+.dark * {
+  --tw-ring-offset-color: var(--color-card);
+}
+
+/* גוונים לכל צבע (גם הצבעים של תחומי החיים) */
+.dark {
+  --color-rose-50: color-mix(in oklab, var(--color-rose-500) 12%, var(--color-card));
+  --color-rose-100: color-mix(in oklab, var(--color-rose-500) 22%, var(--color-card));
+  --color-rose-200: color-mix(in oklab, var(--color-rose-500) 35%, var(--color-card));
+  --color-rose-300: color-mix(in oklab, var(--color-rose-500) 55%, var(--color-card));
+  --color-rose-600: color-mix(in oklab, var(--color-rose-400) 85%, white);
+  --color-rose-700: color-mix(in oklab, var(--color-rose-400) 65%, white);
+  --color-rose-800: color-mix(in oklab, var(--color-rose-400) 50%, white);
+  --color-rose-900: color-mix(in oklab, var(--color-rose-400) 35%, white);
+
+  --color-orange-100: color-mix(in oklab, var(--color-orange-500) 22%, var(--color-card));
+  --color-orange-700: color-mix(in oklab, var(--color-orange-400) 65%, white);
+
+  --color-amber-50: color-mix(in oklab, var(--color-amber-500) 12%, var(--color-card));
+  --color-amber-100: color-mix(in oklab, var(--color-amber-500) 22%, var(--color-card));
+  --color-amber-300: color-mix(in oklab, var(--color-amber-500) 55%, var(--color-card));
+  --color-amber-600: color-mix(in oklab, var(--color-amber-400) 85%, white);
+  --color-amber-700: color-mix(in oklab, var(--color-amber-400) 65%, white);
+  --color-amber-800: color-mix(in oklab, var(--color-amber-400) 50%, white);
+
+  --color-lime-100: color-mix(in oklab, var(--color-lime-500) 22%, var(--color-card));
+  --color-lime-700: color-mix(in oklab, var(--color-lime-400) 65%, white);
+
+  --color-emerald-50: color-mix(in oklab, var(--color-emerald-500) 12%, var(--color-card));
+  --color-emerald-100: color-mix(in oklab, var(--color-emerald-500) 22%, var(--color-card));
+  --color-emerald-200: color-mix(in oklab, var(--color-emerald-500) 35%, var(--color-card));
+  --color-emerald-600: color-mix(in oklab, var(--color-emerald-400) 85%, white);
+  --color-emerald-700: color-mix(in oklab, var(--color-emerald-400) 65%, white);
+  --color-emerald-800: color-mix(in oklab, var(--color-emerald-400) 50%, white);
+
+  --color-teal-100: color-mix(in oklab, var(--color-teal-500) 22%, var(--color-card));
+  --color-teal-700: color-mix(in oklab, var(--color-teal-400) 65%, white);
+
+  --color-sky-50: color-mix(in oklab, var(--color-sky-500) 12%, var(--color-card));
+  --color-sky-100: color-mix(in oklab, var(--color-sky-500) 22%, var(--color-card));
+  --color-sky-300: color-mix(in oklab, var(--color-sky-500) 55%, var(--color-card));
+  --color-sky-600: color-mix(in oklab, var(--color-sky-400) 85%, white);
+  --color-sky-700: color-mix(in oklab, var(--color-sky-400) 65%, white);
+  --color-sky-800: color-mix(in oklab, var(--color-sky-400) 50%, white);
+
+  --color-indigo-100: color-mix(in oklab, var(--color-indigo-500) 22%, var(--color-card));
+  --color-indigo-700: color-mix(in oklab, var(--color-indigo-400) 65%, white);
+
+  /* סגול: 600 נשאר (כפתורים עם טקסט לבן) */
+  --color-violet-50: color-mix(in oklab, var(--color-violet-500) 12%, var(--color-card));
+  --color-violet-100: color-mix(in oklab, var(--color-violet-500) 22%, var(--color-card));
+  --color-violet-200: color-mix(in oklab, var(--color-violet-500) 35%, var(--color-card));
+  --color-violet-300: color-mix(in oklab, var(--color-violet-500) 55%, var(--color-card));
+  --color-violet-700: color-mix(in oklab, var(--color-violet-400) 70%, white);
+  --color-violet-800: color-mix(in oklab, var(--color-violet-400) 50%, white);
+  --color-violet-900: color-mix(in oklab, var(--color-violet-400) 35%, white);
+
+  --color-fuchsia-100: color-mix(in oklab, var(--color-fuchsia-500) 22%, var(--color-card));
+  --color-fuchsia-700: color-mix(in oklab, var(--color-fuchsia-400) 65%, white);
+}
+
+/* סמלים סגולים על רקע כהה – קצת יותר בהירים, כדי שיהיה קל לראות */
+.dark .text-violet-600 {
+  color: var(--color-violet-400);
 }
 
 .no-scrollbar::-webkit-scrollbar {

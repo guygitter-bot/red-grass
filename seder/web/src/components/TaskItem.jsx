@@ -14,7 +14,7 @@ export default function TaskItem({ task, showDate = true, showCategory = true })
   const video = task.links?.some((l) => l.kind === 'video');
 
   return (
-    <div className={`flex items-start gap-3 bg-white rounded-2xl border p-3 shadow-sm ${task.done ? 'border-stone-100 opacity-60' : 'border-stone-200'}`}>
+    <div className={`flex items-start gap-3 bg-card rounded-2xl border p-3 shadow-sm ${task.done ? 'border-stone-100 opacity-60' : 'border-stone-200'}`}>
       <button
         aria-label={task.done ? 'סימון כלא בוצע' : 'סימון כבוצע'}
         onClick={() => act(toggleDone, task.id)}

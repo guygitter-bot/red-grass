@@ -18,8 +18,8 @@ export function Sheet({ title, onClose, children, footer }) {
   }, [onClose]);
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center lg:items-center lg:p-6" dir="rtl">
-      <div className="absolute inset-0 bg-stone-900/40" onClick={onClose} />
-      <div className="relative w-full max-w-xl max-h-[92vh] flex flex-col bg-white rounded-t-3xl shadow-2xl lg:max-w-2xl lg:max-h-[88vh] lg:rounded-3xl">
+      <div className="absolute inset-0 bg-stone-900/40 dark:bg-black/60" onClick={onClose} />
+      <div className="relative w-full max-w-xl max-h-[92vh] flex flex-col bg-card rounded-t-3xl shadow-2xl lg:max-w-2xl lg:max-h-[88vh] lg:rounded-3xl">
         <div className="flex items-center justify-between px-5 pt-4 pb-2">
           <h2 className="text-lg font-bold">{title}</h2>
           <button aria-label="סגירה" onClick={onClose} className="p-1.5 rounded-full hover:bg-stone-100 text-stone-500"><X size={22} /></button>
@@ -44,7 +44,7 @@ export function Section({ title, action, children }) {
 }
 
 export function Empty({ children }) {
-  return <p className="text-sm text-stone-400 bg-white rounded-2xl border border-dashed border-stone-200 p-4 text-center">{children}</p>;
+  return <p className="text-sm text-stone-400 bg-card rounded-2xl border border-dashed border-stone-200 p-4 text-center">{children}</p>;
 }
 
 // שורת הוספה מהירה: "להתקשר לרופא מחר ב10 !" -> משימה עם תאריך, שעה וחשיבות
@@ -59,7 +59,7 @@ export function QuickAdd({ placeholder, defaults = {} }) {
     setText('');
   };
   return (
-    <form onSubmit={submit} className="flex items-center gap-2 bg-white rounded-2xl border border-violet-200 shadow-sm pr-4 pl-1.5 py-1.5 focus-within:border-violet-500">
+    <form onSubmit={submit} className="flex items-center gap-2 bg-card rounded-2xl border border-violet-200 shadow-sm pr-4 pl-1.5 py-1.5 focus-within:border-violet-500">
       <input
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -76,7 +76,7 @@ export function QuickAdd({ placeholder, defaults = {} }) {
 
 export function Chip({ active, onClick, children, className = '' }) {
   return (
-    <button type="button" onClick={onClick} className={`shrink-0 rounded-full px-3 py-1.5 text-sm border transition ${active ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-stone-600 border-stone-200'} ${className}`}>
+    <button type="button" onClick={onClick} className={`shrink-0 rounded-full px-3 py-1.5 text-sm border transition ${active ? 'bg-violet-600 text-white border-violet-600' : 'bg-card text-stone-600 border-stone-200'} ${className}`}>
       {children}
     </button>
   );

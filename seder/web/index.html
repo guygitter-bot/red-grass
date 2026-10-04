@@ -13,6 +13,16 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;900&display=swap" rel="stylesheet" />
     <title>יהיה בסדר · משימות</title>
+    <script>
+      // מצב לילה מיד בטעינה, כדי שלא יהבהב מסך לבן (הלוגיקה המלאה ב-src/lib/theme.js)
+      try {
+        var t = localStorage.getItem('seder_theme');
+        if (t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark');
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#131118');
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
