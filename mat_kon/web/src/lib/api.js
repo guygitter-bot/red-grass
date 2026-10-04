@@ -119,6 +119,7 @@ export const searchRecipes = (s, q) => api(s, 'POST', '/search', { q }).then((d)
 
 // קטגוריות משלי
 export const addCategory = (s, name) => api(s, 'POST', '/categories', { name }).then((d) => d.custom);
+export const setCategoryPrefs = (s, prefs) => api(s, 'PUT', '/categories/prefs', prefs);
 export const removeCategory = (s, name) => api(s, 'POST', '/categories/remove', { name });
 
 // גיבוי ושחזור

@@ -218,6 +218,16 @@ export class RecipeBook {
       }
       return json({ error: 'method not allowed' }, 405);
     }
+    // סדר הקטגוריות במסך ומועדפות (משותף לכל מי שבספר)
+    if (url.pathname === '/category-prefs') {
+      if (request.method === 'GET') return json((await this.storage.get('categoryPrefs')) || { order: [], favorites: [] });
+      if (request.method === 'PUT') {
+        const prefs = await request.json();
+        await this.storage.put('categoryPrefs', prefs);
+        return json(prefs);
+      }
+      return json({ error: 'method not allowed' }, 405);
+    }
     // מחיקת קטגוריה: המתכונים שבה עוברים ל"אחר"
     if (url.pathname === '/categories/remove' && request.method === 'POST') {
       const { name } = await request.json();

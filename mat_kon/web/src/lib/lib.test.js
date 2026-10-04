@@ -147,3 +147,13 @@ describe('round 4 fixes', () => {
     expect(lineHas('100 גרם חלבה', 'חלבה')).toBe(true);
   });
 });
+
+import { orderCategories } from './recipes';
+describe('orderCategories', () => {
+  it('puts favorites first, then saved order, then the rest in default order', () => {
+    const list = ['עוגות', 'סלטים', 'מרקים', 'אחר', 'שלי'];
+    expect(orderCategories(list, {})).toEqual(list);
+    expect(orderCategories(list, { order: ['מרקים', 'עוגות'], favorites: ['שלי'] })).toEqual(['שלי', 'מרקים', 'עוגות', 'סלטים', 'אחר']);
+    expect(orderCategories(list, { order: ['גון'], favorites: ['לא קיים'] })).toEqual(list);
+  });
+});

@@ -233,13 +233,21 @@ export default {
     const allCategories = async () => [...CATEGORIES, ...(await customCategories())];
 
     if (url.pathname === '/me') {
-      return reply(200, { owner: !user, user, categories: await allCategories(), paymentUrl: env.PAYMENT_URL || '' });
+      const categoryPrefs = await (await internal(bookStub(), 'GET', '/category-prefs')).json();
+      return reply(200, { owner: !user, user, categories: await allCategories(), categoryPrefs, paymentUrl: env.PAYMENT_URL || '' });
     }
 
     // ---- קטגוריות משלי ----
     if (parts[0] === 'categories') {
       const book = bookStub();
       if (parts.length === 1 && request.method === 'GET') return pass(await internal(book, 'GET', '/categories'));
+      // סדר האריחים במסך הקטגוריות ומועדפות: רשימות של שמות (עד 60, בלי כפילויות)
+      if (parts[1] === 'prefs' && parts.length === 2 && request.method === 'PUT') {
+        const { body, error } = await readJson();
+        if (error) return error;
+        const names = (v) => [...new Set((Array.isArray(v) ? v : []).filter((c) => typeof c === 'string').map((c) => c.trim().slice(0, 30)).filter(Boolean))].slice(0, 60);
+        return pass(await internal(book, 'PUT', '/category-prefs', { order: names(body.order), favorites: names(body.favorites) }));
+      }
       if (request.method === 'POST' && parts.length <= 2) {
         const { body, error } = await readJson();
         if (error) return error;

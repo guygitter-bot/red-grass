@@ -32,10 +32,10 @@ import RecipeCard from './components/RecipeCard';
 import RecipeView from './components/RecipeView';
 import { CATEGORIES } from './lib/categories';
 import {
-  addCategory, addRecipeAsync, addTextRecipe, getJob, getRecipe, deleteRecipe, removeCategory, getMe, getPlan, getShopping, listRecipes, logout as apiLogout, refreshRecipe,
+  addCategory, setCategoryPrefs, addRecipeAsync, addTextRecipe, getJob, getRecipe, deleteRecipe, removeCategory, getMe, getPlan, getShopping, listRecipes, logout as apiLogout, refreshRecipe,
   updateRecipe, safeRecipe, getPantry, shoppingOps, pantryOps, planOps,
 } from './lib/api';
-import { SORTS, countByCategory, emojiOf, filterRecipes, freeLeft, linkFromShare, parseAuthHash, sortRecipes } from './lib/recipes';
+import { SORTS, countByCategory, emojiOf, filterRecipes, freeLeft, linkFromShare, orderCategories, parseAuthHash, sortRecipes } from './lib/recipes';
 import { usePersistentState } from './lib/storage';
 
 // קישור הזמנה (#invite=...) או כניסה (#login). נלקח מהכתובת ונמחק ממנה מיד.
@@ -128,6 +128,8 @@ export default function App() {
   const [sort, setSort] = usePersistentState('matkon_sort', 'new');
   // קטגוריות שהמשתמש הוסיף (הקבועות ב-lib/categories)
   const [custom, setCustom] = usePersistentState('matkon_custom_categories', []);
+  // סדר הקטגוריות ומועדפות (נשמר בשרת לכל הספר)
+  const [categoryPrefs, setCategoryPrefsState] = usePersistentState('matkon_category_prefs', { order: [], favorites: [] });
   const [loadError, setLoadError] = useState('');
   const [toast, setToast] = useState('');
 
@@ -157,6 +159,7 @@ export default function App() {
     setPlan({});
     setPantry([]);
     setCustom([]);
+    setCategoryPrefsState({ order: [], favorites: [] });
     setPending([]);
     navigator.serviceWorker?.controller?.postMessage('clear-user-caches');
     try {
@@ -202,6 +205,7 @@ export default function App() {
         setPaymentUrl(me.paymentUrl);
       }
       setCustom((me.categories || []).filter((c) => !CATEGORIES.includes(c)));
+      if (me.categoryPrefs) setCategoryPrefsState(me.categoryPrefs);
       setRecipes(await listRecipes(session));
       const started = Date.now();
       getShopping(session).then((v) => shoppingSync.loaded(v, started)).catch(() => {});
@@ -372,6 +376,18 @@ export default function App() {
   );
   // כל הקטגוריות: הקבועות, אחריהן שלי, ו"אחר" בסוף
   const allCategories = [...CATEGORIES.filter((c) => c !== 'אחר'), ...custom, 'אחר'];
+  const orderedCategories = orderCategories(allCategories, categoryPrefs);
+  const favoriteCategories = orderedCategories.filter((c) => categoryPrefs.favorites?.includes(c));
+  // קיצורי דרך במסך הבית: עד 2 קטגוריות מועדפות שיש בהן מתכונים
+  const shortcuts = favoriteCategories.filter((c) => counts[c]).slice(0, 2);
+  const saveCategoryPrefs = (next) => {
+    const prev = categoryPrefs;
+    setCategoryPrefsState(next);
+    setCategoryPrefs(session, next).catch((e) => {
+      setCategoryPrefsState(prev);
+      setToast(`הסדר לא נשמר: ${e.message}`);
+    });
+  };
   const current = nav.view === 'recipe' && recipes.find((r) => r.id === nav.id);
   const left = freeLeft(user);
 
@@ -416,8 +432,17 @@ export default function App() {
     return (
       <>
         <CategoriesView
-          categories={allCategories}
+          categories={orderedCategories}
           custom={custom}
+          favorites={categoryPrefs.favorites || []}
+          onToggleFavorite={(c) => {
+            const favs = categoryPrefs.favorites || [];
+            saveCategoryPrefs({ ...categoryPrefs, favorites: favs.includes(c) ? favs.filter((x) => x !== c) : [...favs, c] });
+          }}
+          onReorder={(shown) => {
+            // הסדר החדש של מה שמוצג, ואחריו שאר הקטגוריות בסדר שהיה
+            saveCategoryPrefs({ ...categoryPrefs, order: [...shown, ...orderedCategories.filter((c) => !shown.includes(c))] });
+          }}
           counts={counts}
           recipes={recipes}
           active={category}
@@ -774,7 +799,7 @@ export default function App() {
 
             {/* שורה אחת קצרה: קטגוריות (מסך משלהן, וגם סרטוני ההדרכה שם), הכל, מועדפים */}
             <div className="mt-3 flex flex-wrap gap-2">
-              {category ? (
+              {category && !shortcuts.includes(category) ? (
                 <span className="rounded-full bg-orange-500 border border-orange-500 text-white text-sm flex items-center">
                   <a href="#/categories" className="pr-3.5 pl-1 py-1.5">{emojiOf(category)} {category} <span className="opacity-70">{counts[category] || 0}</span></a>
                   <button onClick={() => setCategory(null)} className="pl-2.5 pr-1 py-1.5" aria-label="ביטול הסינון לפי קטגוריה"><X size={15} /></button>
@@ -790,6 +815,11 @@ export default function App() {
               <Chip active={favorites} onClick={() => setFavorites((f) => !f)}>
                 <Heart size={14} className="inline -mt-0.5" fill={favorites ? 'currentColor' : 'none'} /> מועדפים
               </Chip>
+              {shortcuts.map((c) => (
+                <Chip key={c} active={category === c} onClick={() => { setCategory(category === c ? null : c); setFavorites(false); }}>
+                  {emojiOf(c)} {c}
+                </Chip>
+              ))}
             </div>
 
             <div className="mt-2 flex items-center justify-end gap-1 text-sm text-stone-500">
