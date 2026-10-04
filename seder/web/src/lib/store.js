@@ -128,7 +128,9 @@ export function updateTask(state, id, patch) {
   const notified = { ...state.notified };
   // שינוי מועד או תזכורת -> תזכורת חדשה תצא שוב
   if ('due' in patch || 'time' in patch || 'remind' in patch || 'remindTime' in patch) delete notified[id];
-  return { ...state, notified, tasks: state.tasks.map((t) => (t.id === id ? { ...t, ...patch, updatedAt: Date.now() } : t)) };
+  // משימה שעוברת לתחום אחר מאבדת את הסדר הידני – היא תופיע למעלה בתחום החדש
+  const moved = (t) => 'categoryId' in patch && patch.categoryId !== t.categoryId;
+  return { ...state, notified, tasks: state.tasks.map((t) => (t.id === id ? { ...t, ...patch, ...(moved(t) && { order: null }), updatedAt: Date.now() } : t)) };
 }
 
 // השם שמופיע בברכה בלוח ("בוקר טוב, נועה"). ריק = בלי שם
@@ -183,14 +185,21 @@ export function sortCategories(categories) {
     .map((x) => x.c);
 }
 
-// הזזת תחום מקום אחד למעלה (-1) או למטה (+1). כל התחומים מקבלים מספור חדש 0,1,2...
+// הזזת פריט ברשימה ממקום from למקום to (המשיכה באצבע מכניסה אותו בין שני פריטים, לא מחליפה ביניהם)
+export function moveItem(list, from, to) {
+  if (from === to || from < 0 || to < 0 || from >= list.length || to >= list.length) return list;
+  const next = [...list];
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
+
+// הזזת תחום: delta = כמה מקומות למעלה (מינוס) או למטה (פלוס). כל התחומים מקבלים מספור חדש 0,1,2...
 export function moveCategory(state, id, delta) {
   const list = sortCategories(state.categories);
   const from = list.findIndex((c) => c.id === id);
-  const to = from + delta;
-  if (from < 0 || to < 0 || to >= list.length) return state;
-  const next = [...list];
-  [next[from], next[to]] = [next[to], next[from]];
+  const next = moveItem(list, from, from + delta);
+  if (next === list) return state;
   const now = Date.now();
   return { ...state, categories: next.map((c, i) => (c.order === i ? c : { ...c, order: i, updatedAt: now })) };
 }
@@ -223,6 +232,31 @@ export function sortTasks(list) {
     if (a.priority !== b.priority) return b.priority - a.priority;
     return a.createdAt - b.createdAt;
   });
+}
+
+// ---- סדר ידני של משימות בתוך תחום ----
+// משימה שהוזזה באצבע מקבלת order. משימות בלי order (חדשות, או שעברו מתחום אחר) מופיעות למעלה
+// לפי הסדר הרגיל, ואחריהן המשימות לפי הסדר שנקבע. משימות שבוצעו תמיד בסוף.
+// כל עוד לא הזיזו כלום – הסדר בדיוק כמו קודם (sortTasks)
+export function sortManual(list) {
+  const ordered = (t) => !t.done && Number.isFinite(t.order);
+  const rank = (t) => (t.done ? 2 : ordered(t) ? 1 : 0);
+  return sortTasks(list)
+    .map((t, i) => ({ t, i }))
+    .sort((a, b) => rank(a.t) - rank(b.t) || (ordered(a.t) && ordered(b.t) ? a.t.order - b.t.order : 0) || a.i - b.i)
+    .map((x) => x.t);
+}
+
+// הזזת משימה בתוך הרשימה שעל המסך (ids לפי הסדר המוצג). כל הרשימה מקבלת מספור חדש 0,1,2...
+export function moveTask(state, ids, from, to) {
+  const next = moveItem(ids, from, to);
+  if (next === ids) return state;
+  const order = new Map(next.map((id, i) => [id, i]));
+  const now = Date.now();
+  return {
+    ...state,
+    tasks: state.tasks.map((t) => (order.has(t.id) && t.order !== order.get(t.id) ? { ...t, order: order.get(t.id), updatedAt: now } : t)),
+  };
 }
 
 export function isOverdue(task, now = new Date()) {
