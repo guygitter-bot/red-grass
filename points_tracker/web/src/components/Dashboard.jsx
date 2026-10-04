@@ -1,6 +1,6 @@
 import { Calendar, ChevronLeft, ChevronRight, Droplets, Plus, Trash2 } from 'lucide-react';
 import { Button, Card, MEALS } from './ui';
-import { formatDisplayDate, today } from '../lib/dates';
+import { formatDisplayDate, greeting, today } from '../lib/dates';
 import { formatPoints, qtyPrefix } from '../lib/points';
 
 export default function Dashboard({
@@ -13,6 +13,7 @@ export default function Dashboard({
 
   return (
     <div className="space-y-5 pb-20">
+      <h2 className="text-2xl font-bold text-slate-700 px-1">{greeting()} 👋</h2>
       <div className="flex justify-between items-center bg-white p-2 rounded-2xl shadow-sm border border-slate-100">
         <button onClick={() => changeDate(1)} className="p-3 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-xl" aria-label="יום הבא">
           <ChevronRight size={24} />

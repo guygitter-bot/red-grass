@@ -36,3 +36,11 @@ export function formatDisplayDate(dateStr) {
   if (dateStr === addDays(t, 1)) return `מחר, ${dateText}`;
   return d.toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' });
 }
+
+// ברכה לפי השעה: בוקר 5–12, צהריים 12–17, ערב בשאר הזמן.
+export function greeting(d = new Date()) {
+  const h = d.getHours();
+  if (h >= 5 && h < 12) return 'בוקר טוב';
+  if (h >= 12 && h < 17) return 'צהריים טובים';
+  return 'ערב טוב';
+}
