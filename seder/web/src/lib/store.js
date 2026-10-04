@@ -361,10 +361,8 @@ export function dashboard(state, now = new Date()) {
     // פריטים ברשימות (קניות, אריזה...) הם לא "משימות בלי תאריך"
     noDate: open.filter((t) => !t.due && !t.parentId && t.type !== 'later' && !lists.has(t.categoryId)).length,
     doneThisWeek,
-    byCategory: state.categories.map((c) => {
-      const mine = state.tasks.filter((t) => t.categoryId === c.id && t.type !== 'later' && !t.parentId);
-      return { ...c, open: mine.filter((t) => !t.done).length, done: mine.filter((t) => t.done).length };
-    }),
+    // כמה משימות לביצוע יש כרגע – פתוחות, בלי תתי משימות, אירועים, מעקבים, "לבדוק" ופריטים ברשימות
+    openTotal: open.filter((t) => (t.type || 'task') === 'task' && !t.parentId && !lists.has(t.categoryId)).length,
   };
 }
 

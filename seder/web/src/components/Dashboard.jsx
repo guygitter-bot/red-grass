@@ -1,8 +1,7 @@
 import { ClipboardPaste } from 'lucide-react';
 import { useStore } from '../App';
-import { dashboard, forDay, isList, sortTasks } from '../lib/store';
+import { dashboard, forDay, sortTasks } from '../lib/store';
 import { DAY_NAMES, greeting, todayKey } from '../lib/dates';
-import { colorOf } from '../lib/colors';
 import { TaskList } from './TaskItem';
 import { Empty, QuickAdd, Section } from './ui';
 
@@ -16,7 +15,7 @@ function Stat({ value, label, tone, onClick }) {
 }
 
 export default function Dashboard() {
-  const { state, openDay, openArea, openLater, importText } = useStore();
+  const { state, openDay, openLater, importText } = useStore();
   const now = new Date();
   const today = todayKey(now);
   const d = dashboard(state, now);
@@ -44,7 +43,13 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-2 mt-3">
+      {/* כמה משימות לביצוע יש עכשיו, מעל הפירוט (באיחור, מעקבים...) */}
+      <div className="mt-3 rounded-2xl bg-card border border-stone-200 px-4 py-3 flex items-center justify-between gap-3">
+        <div className="text-sm text-stone-500">משימות לביצוע כרגע</div>
+        <div className="text-2xl font-black leading-none text-violet-700">{d.openTotal}</div>
+      </div>
+
+      <div className="grid grid-cols-4 gap-2 mt-2">
         <Stat value={d.overdue.length} label="באיחור" tone={d.overdue.length ? 'bg-rose-100 text-rose-700' : 'bg-card text-stone-500 border border-stone-200'} onClick={() => openDay(today)} />
         <Stat value={d.waiting.length} label="מעקבים" tone="bg-amber-100 text-amber-800" onClick={() => openLater('followup')} />
         <Stat value={d.later} label="לבדוק" tone="bg-sky-100 text-sky-800" onClick={() => openLater('later')} />
@@ -90,26 +95,7 @@ export default function Dashboard() {
         </Section>
       )}
 
-      <Section title="תחומי חיים">
-        <div className="grid grid-cols-2 gap-2">
-          {d.byCategory.map((c) => {
-            const total = c.open + c.done;
-            return (
-              <button key={c.id} onClick={() => openArea(c.id)} className="rounded-2xl bg-card border border-stone-200 p-3 text-right shadow-sm">
-                <div className="flex items-center gap-2">
-                  <span className={`w-8 h-8 rounded-xl flex items-center justify-center ${colorOf(c.color).soft}`}>{c.emoji}</span>
-                  <span className="font-medium truncate">{c.name}</span>
-                </div>
-                <div className="text-xs text-stone-500 mt-2">{isList(c) ? `📝 ${c.open ? `${c.open} פריטים ברשימה` : 'הכול סומן'}` : c.open ? `${c.open} פתוחות` : 'אין משימות פתוחות'}</div>
-                <div className="mt-1.5 h-1.5 rounded-full bg-stone-100 overflow-hidden">
-                  <div className={`h-full rounded-full ${colorOf(c.color).bar}`} style={{ width: `${total ? (c.done / total) * 100 : 0}%` }} />
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </Section>
-
+      {/* התחומים לא מוצגים בלוח – יש להם כפתור משלהם בתפריט */}
       {d.noDate > 0 && <p className="text-xs text-stone-400 text-center mt-6">{d.noDate} משימות בלי תאריך – נמצאות בתוך התחומים</p>}
       </div>
     </div>
