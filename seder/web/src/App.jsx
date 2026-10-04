@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Cloud, CloudOff, RefreshCw, Search, Settings } from 'lucide-react';
 import { dueReminders, load, save } from './lib/store';
 import { todayKey } from './lib/dates';
-import BottomNav from './components/BottomNav';
+import BottomNav, { SideNav } from './components/BottomNav';
 import Dashboard from './components/Dashboard';
 import DayView from './components/DayView';
 import AreasView from './components/AreasView';
@@ -199,8 +199,8 @@ export default function App() {
 
   return (
     <Store.Provider value={ctx}>
-      <div className="min-h-screen max-w-xl mx-auto pb-28" dir="rtl">
-        <header className="sticky top-0 z-20 bg-[#faf8ff]/90 backdrop-blur px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-2 flex items-center justify-between">
+      <div className="min-h-screen max-w-xl mx-auto pb-28 lg:max-w-none lg:mr-64 lg:pb-12" dir="rtl">
+        <header className="lg:hidden sticky top-0 z-20 bg-[#faf8ff]/90 backdrop-blur px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-2 flex items-center justify-between">
           <h1 className="text-2xl font-black text-violet-700 tracking-tight">סדר</h1>
           <div className="flex gap-1">
             <SyncButton status={syncStatus} onClick={() => (syncStatus === 'off' ? setLocked(true) : sync())} />
@@ -209,7 +209,7 @@ export default function App() {
           </div>
         </header>
 
-        <main className="px-4">
+        <main className="px-4 lg:px-10 lg:pt-8 lg:max-w-6xl lg:mx-auto">
           {/* מעבר לשונית מאפס את רשת הביטחון */}
           <ErrorBoundary key={tab} onReset={() => { setArea(null); setTab('home'); }}>
             {tab === 'home' && <Dashboard />}
@@ -221,6 +221,11 @@ export default function App() {
       </div>
 
       <BottomNav tab={tab} setTab={(t) => { setTab(t); if (t === 'areas') setArea(null); if (t === 'day') setDay(todayKey()); }} onAdd={() => setEditing({ due: tab === 'day' ? day : null, categoryId: tab === 'areas' ? area : null, type: tab === 'later' ? laterSeg : 'task' })} />
+      <SideNav tab={tab} setTab={(t) => { setTab(t); if (t === 'areas') setArea(null); if (t === 'day') setDay(todayKey()); }} onAdd={() => setEditing({ due: tab === 'day' ? day : null, categoryId: tab === 'areas' ? area : null, type: tab === 'later' ? laterSeg : 'task' })}>
+        <SyncButton status={syncStatus} onClick={() => (syncStatus === 'off' ? setLocked(true) : sync())} />
+        <button aria-label="חיפוש" onClick={() => setSheet('search')} className="p-2 rounded-full hover:bg-violet-100 text-stone-600"><Search size={22} /></button>
+        <button aria-label="הגדרות" onClick={() => setSheet('settings')} className="p-2 rounded-full hover:bg-violet-100 text-stone-600"><Settings size={22} /></button>
+      </SideNav>
 
       {editing && <TaskEditor initial={editing} onClose={() => setEditing(null)} />}
       {importing != null && <ImportSheet text={importing} onClose={() => setImporting(null)} />}

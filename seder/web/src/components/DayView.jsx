@@ -25,7 +25,7 @@ export default function DayView({ day, setDay }) {
   const count = (key) => forDay(state.tasks, key).filter((t) => !t.done).length;
 
   return (
-    <div>
+    <div className="lg:max-w-3xl">
       <div className="flex gap-1.5 overflow-x-auto no-scrollbar -mx-4 px-4 py-1">
         {strip.map((key) => {
           const active = key === day;

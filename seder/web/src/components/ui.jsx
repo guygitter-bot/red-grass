@@ -17,15 +17,15 @@ export function Sheet({ title, onClose, children, footer }) {
     };
   }, [onClose]);
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center" dir="rtl">
+    <div className="fixed inset-0 z-40 flex items-end justify-center lg:items-center lg:p-6" dir="rtl">
       <div className="absolute inset-0 bg-stone-900/40" onClick={onClose} />
-      <div className="relative w-full max-w-xl max-h-[92vh] flex flex-col bg-white rounded-t-3xl shadow-2xl">
+      <div className="relative w-full max-w-xl max-h-[92vh] flex flex-col bg-white rounded-t-3xl shadow-2xl lg:max-w-2xl lg:max-h-[88vh] lg:rounded-3xl">
         <div className="flex items-center justify-between px-5 pt-4 pb-2">
           <h2 className="text-lg font-bold">{title}</h2>
           <button aria-label="סגירה" onClick={onClose} className="p-1.5 rounded-full hover:bg-stone-100 text-stone-500"><X size={22} /></button>
         </div>
         <div className="overflow-y-auto px-5 pb-4 flex-1">{children}</div>
-        {footer && <div className="border-t border-stone-100 px-5 pt-3 pb-safe">{footer}</div>}
+        {footer && <div className="border-t border-stone-100 px-5 pt-3 pb-safe lg:pb-4">{footer}</div>}
       </div>
     </div>
   );

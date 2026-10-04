@@ -61,7 +61,7 @@ function CategoryDetail({ id, back }) {
   const shown = all.filter((t) => (filter === 'open' ? !t.done && t.type !== 'later' : filter === 'later' ? t.type === 'later' && !t.done : t.done));
 
   return (
-    <div>
+    <div className="lg:max-w-3xl">
       <button onClick={back} className="flex items-center gap-1 text-sm text-violet-700 mt-1"><ChevronRight size={18} />כל התחומים</button>
       <div className="flex items-center gap-3 mt-3">
         <span className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl ${colorOf(cat.color).soft}`}>{cat.emoji}</span>
@@ -94,7 +94,7 @@ export default function AreasView({ area, setArea }) {
   return (
     <div>
       <h2 className="text-xl font-bold mt-1">תחומי חיים</h2>
-      <div className="grid grid-cols-2 gap-2 mt-3">
+      <div className="grid grid-cols-2 gap-2 mt-3 sm:grid-cols-3 xl:grid-cols-4 lg:gap-3">
         {state.categories.map((c) => {
           const open = topLevel(state.tasks).filter((t) => t.categoryId === c.id && !t.done && t.type !== 'later').length;
           return (

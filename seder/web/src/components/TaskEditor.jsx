@@ -81,12 +81,12 @@ export default function TaskEditor({ initial, onClose }) {
       />
 
       <span className={label}>סוג</span>
-      <div className="flex gap-2 overflow-x-auto no-scrollbar">
+      <div className="flex gap-2 overflow-x-auto no-scrollbar lg:flex-wrap lg:overflow-visible">
         {Object.entries(TYPES).map(([id, t]) => <Chip key={id} active={task.type === id} onClick={() => set({ type: id })}>{t.emoji} {t.label}</Chip>)}
       </div>
 
       <span className={label}>תחום</span>
-      <div className="flex gap-2 overflow-x-auto no-scrollbar">
+      <div className="flex gap-2 overflow-x-auto no-scrollbar lg:flex-wrap lg:overflow-visible">
         <Chip active={!task.categoryId} onClick={() => set({ categoryId: null })}>ללא</Chip>
         {state.categories.map((c) => (
           <Chip key={c.id} active={task.categoryId === c.id} onClick={() => set({ categoryId: c.id })} className={task.categoryId === c.id ? '' : colorOf(c.color).soft + ' border-transparent'}>{c.emoji} {c.name}</Chip>
@@ -94,7 +94,7 @@ export default function TaskEditor({ initial, onClose }) {
       </div>
 
       <span className={label}>מתי</span>
-      <div className="flex gap-2 overflow-x-auto no-scrollbar mb-2">
+      <div className="flex gap-2 overflow-x-auto no-scrollbar lg:flex-wrap lg:overflow-visible mb-2">
         <Chip active={task.due === today} onClick={() => set({ due: today })}>היום</Chip>
         <Chip active={task.due === addDays(today, 1)} onClick={() => set({ due: addDays(today, 1) })}>מחר</Chip>
         <Chip active={task.due === addDays(today, 7)} onClick={() => set({ due: addDays(today, 7) })}>בעוד שבוע</Chip>
