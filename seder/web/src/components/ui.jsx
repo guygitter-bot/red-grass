@@ -3,6 +3,7 @@ import { ArrowUp, GripVertical, X } from 'lucide-react';
 import { useStore } from '../App';
 import { addTask } from '../lib/store';
 import { parseQuick } from '../lib/parse';
+import { parseTime, timeDraft } from '../lib/dates';
 
 // חלון שעולה מלמטה
 export function Sheet({ title, onClose, children, footer }) {
@@ -192,5 +193,32 @@ export function Chip({ active, onClick, children, className = '' }) {
     <button type="button" onClick={onClick} className={`shrink-0 rounded-full px-3 py-1.5 text-sm border transition ${active ? 'bg-violet-600 text-white border-violet-600' : 'bg-card text-stone-600 border-stone-200'} ${className}`}>
       {children}
     </button>
+  );
+}
+
+// שדה שעה דיגיטלי: מקלידים ספרות (מקלדת מספרים בטלפון) במקום השעון העגול. value/onChange ב-"HH:MM" ('' = בלי שעה)
+export function TimeInput({ value, onChange, className = '', ...props }) {
+  const [draft, setDraft] = useState(value || '');
+  const [editing, setEditing] = useState(false);
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      autoComplete="off"
+      dir="ltr"
+      placeholder="--:--"
+      maxLength={5}
+      value={editing ? draft : value || ''}
+      onFocus={(e) => { setDraft(value || ''); setEditing(true); e.target.select(); }}
+      onChange={(e) => {
+        const next = timeDraft(e.target.value);
+        setDraft(next);
+        const t = parseTime(next);
+        if (t !== null && t !== (value || '')) onChange(t);
+      }}
+      onBlur={() => setEditing(false)}
+      className={`text-center tabular-nums ${className}`}
+      {...props}
+    />
   );
 }

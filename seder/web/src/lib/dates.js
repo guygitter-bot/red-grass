@@ -68,3 +68,29 @@ export function dueDate(task) {
   }
   return d;
 }
+
+// הקלדת שעה בספרות (במקום השעון העגול של הטלפון): "1030" → "10:30", הנקודתיים נכנסות לבד
+export function timeDraft(raw) {
+  const text = String(raw || '').replace(/[.,;\s]/g, ':').replace(/[^\d:]/g, '');
+  if (text.includes(':')) {
+    const [h, ...rest] = text.split(':');
+    return `${h.slice(0, 2)}:${rest.join('').slice(0, 2)}`;
+  }
+  const d = text.slice(0, 4);
+  if (d.length < 3) return d;
+  // 3 ספרות: "130" → "13:0" (ממשיכים להקליד), אבל "930" → "9:30"
+  if (d.length === 3) return Number(d.slice(0, 2)) <= 23 ? `${d.slice(0, 2)}:${d[2]}` : `${d[0]}:${d.slice(1)}`;
+  return `${d.slice(0, 2)}:${d.slice(2)}`;
+}
+
+// מה שהוקלד → "HH:MM", מחרוזת ריקה כשנמחק, או null כשזו לא שעה ("25:00")
+export function parseTime(text) {
+  const t = timeDraft(text);
+  if (!t) return '';
+  const [h, m = ''] = t.split(':');
+  if (!h) return null;
+  const hh = Number(h);
+  const mm = Number(m || 0);
+  if (hh > 23 || mm > 59) return null;
+  return `${pad(hh)}:${pad(mm)}`;
+}

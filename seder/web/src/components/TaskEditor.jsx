@@ -7,7 +7,7 @@ import { extractLinks, linkKind } from '../lib/parse';
 import { downloadIcs, googleCalendarUrl } from '../lib/calendar';
 import { shareText, taskText } from '../lib/share';
 import { colorOf } from '../lib/colors';
-import { Chip, Sheet } from './ui';
+import { Chip, Sheet, TimeInput } from './ui';
 import Attachments from './Attachments';
 
 // בלי שעה: התזכורת יוצאת ב-9 בבוקר של אותו יום
@@ -119,7 +119,7 @@ export default function TaskEditor({ initial, onClose }) {
       </div>
       <div className="flex gap-2">
         <input type="date" aria-label="תאריך" value={task.due || ''} onChange={(e) => set({ due: e.target.value || null })} className={input} />
-        <input type="time" aria-label="שעה" value={task.time || ''} onChange={(e) => set({ time: e.target.value || null, due: task.due || today, remind: !e.target.value && task.remind != null ? 0 : task.remind })} className={`${input} max-w-36`} />
+        <TimeInput aria-label="שעה" value={task.time || ''} onChange={(t) => set({ time: t || null, due: task.due || today, remind: !t && task.remind != null ? 0 : task.remind })} className={`${input} max-w-36`} />
       </div>
 
       <span className={label}>רמת חשיבות</span>
@@ -148,7 +148,7 @@ export default function TaskEditor({ initial, onClose }) {
               {[...(task.time ? REMIND_OPTIONS : MORNING_OPTIONS), CUSTOM].map((o) => <option key={String(o.value)} value={o.value ?? ''}>{o.label}</option>)}
             </select>
             {task.remindTime && task.remind != null && (
-              <input type="time" aria-label="שעת התזכורת" value={task.remindTime} onChange={(e) => e.target.value && set({ remindTime: e.target.value })} className={`${input} max-w-36`} />
+              <TimeInput aria-label="שעת התזכורת" value={task.remindTime} onChange={(t) => t && set({ remindTime: t })} className={`${input} max-w-36`} />
             )}
           </div>
           {task.remind != null && <p className="mt-1 text-xs text-stone-500">ההתראה מגיעה לטלפון בזמן, גם כשהאפליקציה סגורה – אחרי "הפעלת התראות" בהגדרות (פעם אחת בכל מכשיר).</p>}
