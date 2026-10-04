@@ -1,5 +1,5 @@
 // מבנה הנתונים ושמירה במכשיר (localStorage). הכול פונקציות טהורות – קל לבדוק ולהחליף בעתיד בשרת.
-import { addDays, dueDate, fromKey, todayKey } from './dates';
+import { DAY_NAMES, addDays, addMonths, dueDate, fromKey, todayKey } from './dates';
 
 const KEY = 'seder_v1';
 
@@ -36,6 +36,24 @@ export const REMIND_OPTIONS = [
   { value: 180, label: '3 שעות לפני' },
   { value: 1440, label: 'יום לפני' },
 ];
+
+// משימה / תזכורת חוזרת (repeat במשימה). משימות ישנות בלי השדה = לא חוזרות
+export const REPEATS = {
+  daily: { label: 'כל יום' },
+  weekly: { label: 'כל שבוע' },
+  monthly: { label: 'כל חודש' },
+};
+
+// סוג התחום (kind): רגיל – משימות; 'list' – רשימה פשוטה לסימון (מה לארוז, קניות, תווי קניה...).
+// תחומים ישנים בלי השדה = משימות. הפריטים ברשימה הם משימות רגילות בתוך התחום, כך ששום דבר לא הולך לאיבוד
+export const CATEGORY_KINDS = {
+  tasks: { label: 'משימות', hint: 'עם תאריכים, תזכורות וחשיבות' },
+  list: { label: 'רשימה', hint: 'פריטים לסימון – מה לארוז, קניות, תווי קניה' },
+};
+
+export function isList(category) {
+  return category?.kind === 'list';
+}
 
 export function newId() {
   return (crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`).replace(/-/g, '').slice(0, 16);
@@ -140,11 +158,46 @@ export function setName(state, name) {
   return { ...state, profile: { id: 'profile', name: clean, updatedAt: Date.now() } };
 }
 
-export function toggleDone(state, id) {
+export function toggleDone(state, id, now = new Date()) {
   const task = state.tasks.find((t) => t.id === id);
   if (!task) return state;
+  // משימה חוזרת שבוצעה – לא נסגרת אלא עוברת לפעם הבאה (אחרי היום), ותתי המשימות מתאפסות
+  if (!task.done && isRepeating(task)) {
+    const next = nextOccurrence(task, todayKey(now));
+    let s = updateTask(state, id, { due: next, lastDoneAt: now.getTime() });
+    for (const sub of subtasksOf(s.tasks, id)) if (sub.done) s = updateTask(s, sub.id, { done: false, doneAt: null });
+    return s;
+  }
   const done = !task.done;
   return updateTask(state, id, { done, doneAt: done ? Date.now() : null });
+}
+
+// ---- משימות חוזרות ----
+
+export function isRepeating(task) {
+  return !!(task?.due && REPEATS[task.repeat]);
+}
+
+// הפעם ה-k אחרי due (0 = due עצמו). אותו כלל בשרת: seder/api/reminders.js → occurrenceKey
+export function occurrenceKey(due, repeat, k) {
+  if (repeat === 'monthly') return addMonths(due, k);
+  return addDays(due, k * (repeat === 'weekly' ? 7 : 1));
+}
+
+// הפעם הבאה שאחרי היום (ואחרי due)
+export function nextOccurrence(task, today = todayKey()) {
+  let k = 1;
+  while (occurrenceKey(task.due, task.repeat, k) <= today) k += 1;
+  return occurrenceKey(task.due, task.repeat, k);
+}
+
+// "כל יום" / "כל שבוע ביום שלישי" / "כל חודש ב-15"
+export function repeatLabel(task) {
+  if (!isRepeating(task)) return '';
+  const d = fromKey(task.due);
+  if (task.repeat === 'weekly') return `כל שבוע ביום ${DAY_NAMES[d.getDay()]}`;
+  if (task.repeat === 'monthly') return `כל חודש ב-${d.getDate()}`;
+  return REPEATS.daily.label;
 }
 
 export function removeTask(state, id) {
@@ -204,12 +257,30 @@ export function moveCategory(state, id, delta) {
   return { ...state, categories: next.map((c, i) => (c.order === i ? c : { ...c, order: i, updatedAt: now })) };
 }
 
-export function removeCategory(state, id) {
+// מחיקת תחום: המשימות שבו נשארות בלי תחום, או (withTasks) נמחקות יחד איתו – כולל תתי המשימות
+export function removeCategory(state, id, withTasks = false) {
+  let next = state;
+  if (withTasks) for (const t of state.tasks.filter((x) => x.categoryId === id && !x.parentId)) next = removeTask(next, t.id);
   return {
-    ...state,
-    categories: state.categories.filter((c) => c.id !== id),
-    tasks: state.tasks.map((t) => (t.categoryId === id ? { ...t, categoryId: null, updatedAt: Date.now() } : t)),
+    ...next,
+    categories: next.categories.filter((c) => c.id !== id),
+    tasks: next.tasks.map((t) => (t.categoryId === id ? { ...t, categoryId: null, updatedAt: Date.now() } : t)),
   };
+}
+
+// ---- רשימות (תחום מסוג list) ----
+
+// "ניקוי מה שסומן": הפריטים שסומנו יוצאים מהרשימה
+export function clearChecked(state, categoryId) {
+  let next = state;
+  for (const t of state.tasks.filter((x) => x.categoryId === categoryId && !x.parentId && x.done)) next = removeTask(next, t.id);
+  return next;
+}
+
+// "הכול מחדש": מורידים את כל הסימונים – לרשימה שחוזרת על עצמה (מה לארוז לכל טיול)
+export function uncheckAll(state, categoryId) {
+  const now = Date.now();
+  return { ...state, tasks: state.tasks.map((t) => (t.categoryId === categoryId && t.done ? { ...t, done: false, doneAt: null, updatedAt: now } : t)) };
 }
 
 // ---- שאילתות ----
@@ -274,6 +345,7 @@ export function forDay(tasks, key) {
 export function dashboard(state, now = new Date()) {
   const today = todayKey(now);
   const weekEnd = addDays(today, 7);
+  const lists = new Set(state.categories.filter(isList).map((c) => c.id));
   const open = state.tasks.filter((t) => !t.done);
   const todays = state.tasks.filter((t) => t.due === today);
   const doneThisWeek = state.tasks.filter((t) => t.done && t.doneAt && now - t.doneAt < 7 * 86400000).length;
@@ -286,7 +358,8 @@ export function dashboard(state, now = new Date()) {
     important: sortTasks(open.filter((t) => t.priority === 3 && !t.parentId)).slice(0, 6),
     waiting: sortTasks(open.filter((t) => t.type === 'followup')),
     later: open.filter((t) => t.type === 'later').length,
-    noDate: open.filter((t) => !t.due && !t.parentId && t.type !== 'later').length,
+    // פריטים ברשימות (קניות, אריזה...) הם לא "משימות בלי תאריך"
+    noDate: open.filter((t) => !t.due && !t.parentId && t.type !== 'later' && !lists.has(t.categoryId)).length,
     doneThisWeek,
     byCategory: state.categories.map((c) => {
       const mine = state.tasks.filter((t) => t.categoryId === c.id && t.type !== 'later' && !t.parentId);
@@ -299,6 +372,7 @@ export function dashboard(state, now = new Date()) {
 //   remindTime ("HH:MM") – בשעה שנבחרה, ביום של המשימה
 //   בלי שעה למשימה – 9:00 בבוקר של אותו יום
 //   עם שעה – remind דקות לפני
+// (במשימה חוזרת – זו התזכורת של הפעם הנוכחית, due; הפעמים הבאות: currentReminderAt)
 export function reminderAt(task) {
   if (task.remind == null || !task.due) return null;
   if (task.remindTime) {
@@ -313,11 +387,27 @@ export function reminderAt(task) {
   return at;
 }
 
+// במשימה חוזרת: התזכורת של הפעם האחרונה שכבר הגיעה (או של הפעם הראשונה, אם עוד לא הגיעה)
+export function currentReminderAt(task, now = new Date()) {
+  const first = reminderAt(task);
+  if (!first || !isRepeating(task)) return first;
+  const at = (k) => reminderAt({ ...task, due: occurrenceKey(task.due, task.repeat, k) });
+  // קפיצה קרובה למקום (בלי לעבור על שנים של ימים אחד־אחד)
+  const days = Math.floor((now - first) / 86400000);
+  let k = Math.max(0, task.repeat === 'monthly' ? Math.floor(days / 31) - 1 : Math.floor(days / (task.repeat === 'weekly' ? 7 : 1)) - 1);
+  while (k > 0 && at(k) > now) k -= 1;
+  while (at(k + 1) <= now) k += 1;
+  return at(k);
+}
+
 // תזכורות שהגיע זמנן ועוד לא הוצגו
 export function dueReminders(state, now = new Date()) {
   return state.tasks.filter((t) => {
-    if (t.done || state.notified[t.id]) return false;
-    const at = reminderAt(t);
+    const seen = state.notified[t.id];
+    // משימה חוזרת: כל פעם חדשה מזכירה שוב (notified = מתי הוצגה הקודמת)
+    if (t.done || (seen && !isRepeating(t))) return false;
+    const at = currentReminderAt(t, now);
+    if (seen && at && seen >= at.getTime()) return false;
     // לא מתריעים על דברים שעברו מזמן (למשל אחרי שבוע שהאפליקציה לא נפתחה)
     return at && at <= now && now - at < 12 * 3600000;
   });

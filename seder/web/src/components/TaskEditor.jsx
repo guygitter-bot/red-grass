@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { CalendarPlus, Download, ExternalLink, Phone, Plus, Share2, Trash2, User, X } from 'lucide-react';
 import { useStore } from '../App';
-import { PRIORITIES, REMIND_OPTIONS, TYPES, cleanContact, knownContacts, makeTask, newId, removeTask, saveTree, subtasksOf, telUrl } from '../lib/store';
+import { PRIORITIES, REMIND_OPTIONS, REPEATS, TYPES, cleanContact, isRepeating, knownContacts, makeTask, newId, removeTask, repeatLabel, saveTree, subtasksOf, telUrl } from '../lib/store';
 import { addDays, shortDate, todayKey } from '../lib/dates';
 import { extractLinks, linkKind } from '../lib/parse';
 import { downloadIcs, googleCalendarUrl } from '../lib/calendar';
@@ -115,7 +115,7 @@ export default function TaskEditor({ initial, onClose }) {
         <Chip active={task.due === today} onClick={() => set({ due: today })}>היום</Chip>
         <Chip active={task.due === addDays(today, 1)} onClick={() => set({ due: addDays(today, 1) })}>מחר</Chip>
         <Chip active={task.due === addDays(today, 7)} onClick={() => set({ due: addDays(today, 7) })}>בעוד שבוע</Chip>
-        <Chip active={!task.due} onClick={() => set({ due: null, time: null })}>בלי תאריך</Chip>
+        <Chip active={!task.due} onClick={() => set({ due: null, time: null, repeat: null })}>בלי תאריך</Chip>
       </div>
       <div className="flex gap-2">
         <input type="date" aria-label="תאריך" value={task.due || ''} onChange={(e) => set({ due: e.target.value || null })} className={input} />
@@ -152,6 +152,18 @@ export default function TaskEditor({ initial, onClose }) {
             )}
           </div>
           {task.remind != null && <p className="mt-1 text-xs text-stone-500">ההתראה מגיעה לטלפון בזמן, גם כשהאפליקציה סגורה – אחרי "הפעלת התראות" בהגדרות (פעם אחת בכל מכשיר).</p>}
+
+          {/* משימה / תזכורת חוזרת: כשמסמנים ✓ היא עוברת לפעם הבאה, והתזכורת מגיעה בכל פעם */}
+          <span className={label}>חוזר</span>
+          <div className="flex gap-2 overflow-x-auto no-scrollbar lg:flex-wrap lg:overflow-visible">
+            <Chip active={!REPEATS[task.repeat]} onClick={() => set({ repeat: null })}>פעם אחת</Chip>
+            {Object.entries(REPEATS).map(([id, r]) => <Chip key={id} active={task.repeat === id} onClick={() => set({ repeat: id })}>🔁 {r.label}</Chip>)}
+          </div>
+          {isRepeating(task) && (
+            <p className="mt-1 text-xs text-stone-500">
+              {repeatLabel(task)}{task.remind != null ? ', עם תזכורת בכל פעם' : ''}. כשמסמנים ✓ המשימה עוברת לפעם הבאה.
+            </p>
+          )}
         </>
       )}
 

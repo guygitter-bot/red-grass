@@ -30,6 +30,13 @@ export function addDays(key, days) {
   return toKey(d);
 }
 
+// אותו יום בחודש, n חודשים אחר כך. כשאין יום כזה (31 בפברואר) – היום האחרון בחודש
+export function addMonths(key, months) {
+  const [y, m, d] = key.split('-').map(Number);
+  const last = new Date(y, m - 1 + months + 1, 0);
+  return toKey(new Date(last.getFullYear(), last.getMonth(), Math.min(d, last.getDate())));
+}
+
 export function diffDays(a, b) {
   return Math.round((fromKey(b) - fromKey(a)) / 86400000);
 }
