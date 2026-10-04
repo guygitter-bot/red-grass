@@ -4,7 +4,7 @@ import { formatDisplayDate, today } from '../lib/dates';
 import { formatPoints, qtyPrefix } from '../lib/points';
 
 export default function Dashboard({
-  user, selectedDate, setSelectedDate, changeDate, dayLogs, dailyUsed, weeklyLeft,
+  user, selectedDate, setSelectedDate, changeDate, dayLogs, dailyUsed,
   water, addWater, removeWater, removeLog, openAdd,
 }) {
   const pointsLeft = user.dailyTarget - dailyUsed;
@@ -44,12 +44,6 @@ export default function Dashboard({
             </svg>
             <div className="absolute font-bold text-lg">{Math.round(progress)}%</div>
           </div>
-        </div>
-        <div className="mt-3 pt-3 border-t border-white/20 text-sm flex justify-between">
-          <span className="text-emerald-100">נקודות שבועיות שנותרו</span>
-          <span className="font-bold">
-            {formatPoints(weeklyLeft)} / {user.weeklyTarget}
-          </span>
         </div>
       </Card>
 

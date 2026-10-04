@@ -85,7 +85,6 @@ export default function SettingsView({
         </div>
         <div className="grid grid-cols-2 gap-3">
           <NumberField label="תקציב יומי" value={user.dailyTarget} onChange={(v) => setUser({ ...user, dailyTarget: v })} />
-          <NumberField label="תקציב שבועי" value={user.weeklyTarget} onChange={(v) => setUser({ ...user, weeklyTarget: v })} />
           <NumberField label="משקל התחלתי" value={user.startWeight} onChange={(v) => setUser({ ...user, startWeight: v })} />
           <NumberField label="משקל יעד" value={user.goalWeight} onChange={(v) => setUser({ ...user, goalWeight: v })} />
         </div>

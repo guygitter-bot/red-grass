@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, Globe, MessageSquareText, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
+import { Camera, Check, Globe, Pencil, Star, X, MessageSquareText, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
 import { Button, ErrorBox, Input, MealPicker, Sheet, Spinner, Tabs } from './ui';
 import PortionPicker from './PortionPicker';
 import MeasurePicker from './MeasurePicker';
@@ -41,18 +41,60 @@ function MeasuredFood({ item, onAdd, onDone }) {
   );
 }
 
-function FoodRow({ item, onAdd }) {
+function FoodRow({ item, onAdd, fav, onRename }) {
   const [open, setOpen] = useState(false);
   const [qty, setQty] = useState(1);
+  const [renaming, setRenaming] = useState(false);
+  const [newName, setNewName] = useState(item.name);
+  const isFav = fav?.has(item.name);
   return (
     <div className="border border-slate-100 rounded-xl hover:border-emerald-200">
-      <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between p-3 text-right">
-        <span className="flex-1 text-slate-700 font-medium">
-          {item.name}
-          {item.source === 'agent' && <Sparkles size={12} className="inline mr-1 text-violet-400" />}
-        </span>
-        <span className="font-bold text-emerald-600 mr-2">{formatPoints(item.points)}</span>
-      </button>
+      <div className="flex items-center">
+        {fav && (
+          <button
+            onClick={() => fav.toggle(item.name)}
+            className={`p-3 pl-1 ${isFav ? 'text-amber-400' : 'text-slate-300'}`}
+            aria-label={isFav ? 'הסר ממועדפים' : 'הוסף למועדפים'}
+          >
+            <Star size={18} fill={isFav ? 'currentColor' : 'none'} />
+          </button>
+        )}
+        <button onClick={() => setOpen(!open)} className="flex-1 flex items-center justify-between p-3 pr-1 text-right">
+          <span className="flex-1 text-slate-700 font-medium">
+            {item.name}
+            {item.source === 'agent' && <Sparkles size={12} className="inline mr-1 text-violet-400" />}
+          </span>
+          <span className="font-bold text-emerald-600 mr-2">{formatPoints(item.points)}</span>
+        </button>
+      </div>
+      {open && onRename && (
+        <div className="px-3 pb-1">
+          {renaming ? (
+            <div className="flex items-center gap-1">
+              <Input value={newName} onChange={(e) => setNewName(e.target.value)} className="py-1.5 text-sm" autoFocus />
+              <button
+                className="p-2 text-emerald-600 disabled:opacity-30"
+                disabled={!newName.trim()}
+                onClick={() => {
+                  onRename(item, newName);
+                  setRenaming(false);
+                  setOpen(false);
+                }}
+                aria-label="שמור שם"
+              >
+                <Check size={18} />
+              </button>
+              <button className="p-2 text-slate-400" onClick={() => setRenaming(false)} aria-label="ביטול">
+                <X size={18} />
+              </button>
+            </div>
+          ) : (
+            <button onClick={() => setRenaming(true)} className="text-xs text-slate-400 flex items-center gap-1">
+              <Pencil size={12} /> שנה שם (השם הקודם עדיין יימצא בחיפוש)
+            </button>
+          )}
+        </div>
+      )}
       {open && item.per100 && <MeasuredFood item={item} onAdd={onAdd} onDone={() => setOpen(false)} />}
       {open && !item.per100 && (
         <div className="px-3 pb-3 space-y-3">
@@ -86,7 +128,7 @@ function Sources({ urls }) {
   );
 }
 
-export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, onSaveFood, onClose }) {
+export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, onSaveFood, onRename, fav, favorites = [], onClose }) {
   const [tab, setTab] = useState('search');
   const [meal, setMeal] = useState(defaultMeal);
   const [plate, setPlate] = useState([]);
@@ -161,9 +203,10 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
       setAnalysis(await analyzeFood(settings, db, input));
     });
 
-  const onAnalysisAdd = (item, saveToDb) => {
+  const onAnalysisAdd = (item, saveToDb, favorite) => {
     addToPlate(item);
-    if (saveToDb) onSaveFood({ name: item.name, points: item.points, source: 'ai' });
+    if (saveToDb || favorite) onSaveFood({ name: item.name, points: item.points, source: 'ai' });
+    if (favorite) fav?.add(item.name);
     setAnalysis(null);
     setImage(null);
     setDetails('');
@@ -213,6 +256,17 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
             />
           </div>
 
+          {!search && favorites.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs text-amber-500 flex items-center gap-1">
+                <Star size={12} fill="currentColor" /> מועדפים
+              </p>
+              {favorites.map((item) => (
+                <FoodRow key={item.name} item={item} onAdd={addToPlate} fav={fav} onRename={onRename} />
+              ))}
+            </div>
+          )}
+
           {!search && recent.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs text-slate-400">אכלת לאחרונה</p>
@@ -223,7 +277,7 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
           )}
 
           {results.map((item) => (
-            <FoodRow key={item.name} item={item} onAdd={addToPlate} />
+            <FoodRow key={item.name} item={item} onAdd={addToPlate} fav={fav} onRename={onRename} />
           ))}
 
           {search && (
@@ -236,7 +290,7 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
                   <p className="text-xs text-violet-700 font-medium flex items-center gap-1">
                     <Sparkles size={12} /> {keptManual ? 'כבר במאגר (הוספת ידנית, נשמר הערך שלך):' : 'הסוכן הוסיף למאגר:'}
                   </p>
-                  <FoodRow item={storedAgentFood} onAdd={addToPlate} />
+                  <FoodRow item={storedAgentFood} onAdd={addToPlate} fav={fav} onRename={onRename} />
                   {agentFood.food.published_points != null &&
                     Math.abs(agentFood.food.published_points - agentFood.food.points) >= 0.5 && (
                       <p className="text-xs text-slate-500">ערך שפורסם ברשת: {agentFood.food.published_points} נק'</p>
