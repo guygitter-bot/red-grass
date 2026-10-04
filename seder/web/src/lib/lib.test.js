@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, dayLabel, todayKey } from './dates';
+import { addDays, dayLabel, todayKey, weekdayShort } from './dates';
 import { findDate, findTime, parseMessage, parseQuick } from './parse';
 import { googleCalendarUrl, toIcs } from './calendar';
 import { addTask, dashboard, dueReminders, emptyState, removeTask, saveTree, subtasksOf, toggleDone, updateTask } from './store';
@@ -29,6 +29,11 @@ describe('dates', () => {
     expect(dayLabel(addDays(today, 1), NOW)).toBe('מחר');
     expect(dayLabel(addDays(today, 3), NOW)).toBe('יום שלישי');
     expect(dayLabel('2026-10-20', NOW)).toBe('20 באוקטובר');
+  });
+
+  it('short weekday letters', () => {
+    // 4.10.2026 is a Sunday
+    expect(['2026-10-04', '2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10'].map(weekdayShort)).toEqual(["א'", "ב'", "ג'", "ד'", "ה'", "ו'", "ש'"]);
   });
 });
 

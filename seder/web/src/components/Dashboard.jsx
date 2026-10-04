@@ -32,10 +32,11 @@ export default function Dashboard() {
   const pct = d.todayTotal ? Math.round((d.todayDone / d.todayTotal) * 100) : 0;
 
   return (
-    <div>
+    <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] lg:gap-10 lg:items-start">
+      <div>
       <div className="mt-1">
         <div className="text-stone-500 text-sm">יום {DAY_NAMES[now.getDay()]}, {now.getDate()}.{now.getMonth() + 1}</div>
-        <div className="text-xl font-bold">{greeting(now.getHours())} ✨</div>
+        <div className="text-xl font-bold lg:text-3xl">{greeting(now.getHours())} ✨</div>
       </div>
 
       <div className="mt-4 rounded-3xl bg-gradient-to-l from-violet-600 to-fuchsia-500 text-white p-4 shadow-lg shadow-violet-200">
@@ -75,15 +76,19 @@ export default function Dashboard() {
         {todays.length ? <TaskList tasks={todays} showDate={false} /> : <Empty>אין משימות להיום. אפשר לרשום למעלה ✍️</Empty>}
       </Section>
 
-      {d.upcoming.length > 0 && (
-        <Section title="🗓️ בשבוע הקרוב">
-          <TaskList tasks={d.upcoming} />
-        </Section>
-      )}
-
       {d.important.length > 0 && (
         <Section title="❗ חשוב">
           <TaskList tasks={d.important} />
+        </Section>
+      )}
+
+      </div>
+
+      {/* במחשב: עמודה שנייה */}
+      <div className="lg:pt-1">
+      {d.upcoming.length > 0 && (
+        <Section title="🗓️ בשבוע הקרוב">
+          <TaskList tasks={d.upcoming} />
         </Section>
       )}
 
@@ -114,6 +119,7 @@ export default function Dashboard() {
       </Section>
 
       {d.noDate > 0 && <p className="text-xs text-stone-400 text-center mt-6">{d.noDate} משימות בלי תאריך – נמצאות בתוך התחומים</p>}
+      </div>
     </div>
   );
 }

@@ -39,7 +39,7 @@ export default function LaterView({ seg, setSeg }) {
 
   return (
     <div>
-      <div className="grid grid-cols-2 gap-1 rounded-2xl bg-violet-100 p-1 mt-1">
+      <div className="grid grid-cols-2 gap-1 rounded-2xl bg-violet-100 p-1 mt-1 lg:max-w-xl">
         <button onClick={() => setSeg('later')} className={`rounded-xl py-2 text-sm font-medium ${seg === 'later' ? 'bg-white shadow text-violet-700' : 'text-violet-900/60'}`}>💡 לבדוק בהמשך</button>
         <button onClick={() => setSeg('followup')} className={`rounded-xl py-2 text-sm font-medium ${seg === 'followup' ? 'bg-white shadow text-violet-700' : 'text-violet-900/60'}`}>⏳ מעקבים ותשובות</button>
       </div>
@@ -50,13 +50,13 @@ export default function LaterView({ seg, setSeg }) {
         <QuickAdd placeholder={seg === 'later' ? 'רעיון, המלצה או קישור...' : 'ממי מחכים לתשובה? (אפשר עם "ביום שלישי")'} defaults={{ type: seg, categoryId: cat }} />
         {seg === 'later' && <button onClick={() => importText('')} className="text-sm text-emerald-700 underline">הדבקת הודעה מווטסאפ</button>}
       </div>
-      <div className="flex gap-2 overflow-x-auto no-scrollbar mt-3">
+      <div className="flex gap-2 overflow-x-auto no-scrollbar lg:flex-wrap lg:overflow-visible mt-3">
         <Chip active={!cat} onClick={() => setCat(null)}>הכול</Chip>
         {state.categories.map((c) => <Chip key={c.id} active={cat === c.id} onClick={() => setCat(c.id)}>{c.emoji} {c.name}</Chip>)}
       </div>
       <div className="mt-3 space-y-2">
         {items.length === 0 && <Empty>{seg === 'later' ? 'עוד אין כאן כלום. שומרים פה כל מה ש"צריך לבדוק פעם"' : 'לא מחכים לאף אחד כרגע 🙌'}</Empty>}
-        {seg === 'later' ? items.map((t) => <LaterCard key={t.id} item={t} />) : <TaskList tasks={items} />}
+        {seg === 'later' ? <div className="grid gap-2 lg:grid-cols-2 lg:gap-3">{items.map((t) => <LaterCard key={t.id} item={t} />)}</div> : <TaskList tasks={items} />}
       </div>
       <label className="flex items-center gap-2 text-sm text-stone-500 mt-4">
         <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} className="accent-violet-600" />

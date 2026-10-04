@@ -44,8 +44,9 @@ export function shortDate(key) {
   return `${d.getDate()}.${d.getMonth() + 1}`;
 }
 
+// א' ב' ג' ד' ה' ו' ש'
 export function weekdayShort(key) {
-  return DAY_NAMES[fromKey(key).getDay()].slice(0, 1) + "'";
+  return `${'אבגדהוש'[fromKey(key).getDay()]}'`;
 }
 
 // מועד מלא של משימה (תאריך + שעה, או סוף היום כשאין שעה)

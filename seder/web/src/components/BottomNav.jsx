@@ -10,7 +10,7 @@ const TABS = [
 
 export default function BottomNav({ tab, setTab, onAdd }) {
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t border-violet-100 pb-safe">
+    <nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t border-violet-100 pb-safe">
       <div className="max-w-xl mx-auto grid grid-cols-5 items-end">
         {TABS.map((t) => {
           if (!t) {
@@ -35,3 +35,30 @@ export default function BottomNav({ tab, setTab, onAdd }) {
     </nav>
   );
 }
+
+// במחשב: תפריט צד קבוע במקום הסרגל התחתון
+export function SideNav({ tab, setTab, onAdd, children }) {
+  return (
+    <aside className="hidden lg:flex fixed inset-y-0 right-0 z-30 w-64 flex-col border-l border-violet-100 bg-white px-4 py-6">
+      <div className="px-3 text-3xl font-black text-violet-700 tracking-tight">סדר</div>
+      <button onClick={onAdd} className="mt-6 flex items-center justify-center gap-2 rounded-2xl bg-violet-600 text-white font-bold py-3 shadow-lg shadow-violet-200 hover:bg-violet-700 transition">
+        <Plus size={20} strokeWidth={2.5} />משימה חדשה
+      </button>
+      <nav className="mt-6 space-y-1">
+        {TABS.filter(Boolean).map((t) => {
+          const Icon = t.icon;
+          const active = tab === t.id;
+          return (
+            <button key={t.id} onClick={() => setTab(t.id)} className={`w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-right transition ${active ? 'bg-violet-100 text-violet-800 font-bold' : 'text-stone-600 hover:bg-stone-100'}`}>
+              <Icon size={22} strokeWidth={active ? 2.5 : 2} />
+              {SIDE_LABELS[t.id]}
+            </button>
+          );
+        })}
+      </nav>
+      <div className="mt-auto flex items-center justify-center gap-1 border-t border-stone-100 pt-4">{children}</div>
+    </aside>
+  );
+}
+
+const SIDE_LABELS = { home: 'לוח משימות', day: 'תצוגה יומית', areas: 'תחומי חיים', later: 'לבדוק ומעקבים' };
