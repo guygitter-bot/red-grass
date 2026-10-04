@@ -48,6 +48,27 @@
 
 אחרי שינוי הסיסמה: Actions → seder → Run workflow (כדי שהשרת יקבל אותה).
 
+## בקשות לשינוי מתוך האפליקציה
+
+בהגדרות (ובמחשב גם בתפריט הצד) יש **"בקשה לשינוי באפליקציה"**: כותבים מה לשנות ושולחים.
+1. השרת פותח issue במאגר עם התווית `seder-request`.
+2. `.github/workflows/seder-requests.yml` מפעיל את Claude על הבקשה, מריץ את הבדיקות, ופותח PR לאישור
+   (ענף `seder/request-<מספר>`). רק issues שנפתחו בשם בעל/ת המאגר מופעלים.
+3. מיזוג ה-PR סוגר את הבקשה והשינוי עולה לאפליקציה.
+
+באפליקציה רואים לכל בקשה את המצב: התקבלה / בעבודה / מוכן לאישור (עם קישור) / בוצע / לא הצליח.
+בקשה שנכשלה: מוסיפים לה ב-GitHub את התווית `seder-retry` כדי לנסות שוב.
+
+### הגדרה (פעם אחת)
+
+צריך מפתח גישה אישי של GitHub (fine-grained), **מהחשבון שהוא בעל המאגר**:
+GitHub → Settings → Developer settings → Fine-grained tokens → Generate new token
+- Repository access: רק `red-grass`
+- Permissions: **Contents** – Read and write, **Issues** – Read and write, **Pull requests** – Read and write
+
+שומרים אותו כסוד במאגר בשם `SEDER_GITHUB_TOKEN`, ומריצים Actions → seder → Run workflow (כדי שהשרת יקבל אותו).
+העבודה של Claude משתמשת בסוד הקיים `ANTHROPIC_API_KEY` (עולה כסף לפי שימוש).
+
 ## השלבים הבאים
 
 - שיתוף רשימה עם אדם נוסף (חשבון לכל אחד).

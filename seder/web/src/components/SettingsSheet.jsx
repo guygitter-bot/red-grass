@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bell, CalendarPlus, Cloud, CloudOff, Download, Lock, Upload } from 'lucide-react';
+import { Bell, CalendarPlus, Cloud, CloudOff, Download, Lock, MessageSquarePlus, Upload } from 'lucide-react';
 import { useStore } from '../App';
 import { normalize } from '../lib/store';
 import { todayKey } from '../lib/dates';
@@ -10,7 +10,7 @@ import { Sheet } from './ui';
 const row = 'w-full flex items-center gap-3 rounded-2xl bg-stone-50 p-3 text-right';
 
 export default function SettingsSheet({ onClose }) {
-  const { state, act, syncStatus, syncNow, lock } = useStore();
+  const { state, act, syncStatus, syncNow, lock, openRequests } = useStore();
   const [perm, setPerm] = useState(() => (notificationsSupported() ? Notification.permission : 'unsupported'));
   const upcoming = state.tasks.filter((t) => !t.done && t.due && t.due >= todayKey());
 
@@ -62,6 +62,12 @@ export default function SettingsSheet({ onClose }) {
         <button onClick={() => { onClose(); lock(); }} className={row}>
           <Lock size={20} className="text-violet-600" />
           <span>נעילה עכשיו<span className="block text-xs text-stone-500">האפליקציה ננעלת בכל פתיחה, ואחרי 5 דקות ברקע</span></span>
+        </button>
+
+        <h3 className="text-sm font-bold text-stone-500 pt-3">שיפור האפליקציה</h3>
+        <button onClick={() => { onClose(); openRequests(); }} className={row}>
+          <MessageSquarePlus size={20} className="text-violet-600" />
+          <span>בקשה לשינוי באפליקציה<span className="block text-xs text-stone-500">כותבים מה לשנות – Claude מכין את זה לאישור</span></span>
         </button>
 
         <h3 className="text-sm font-bold text-stone-500 pt-3">תזכורות</h3>

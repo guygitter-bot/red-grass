@@ -1,8 +1,11 @@
 // השרת של סדר (Cloudflare Worker): שומר את המשימות כדי שיהיו זהות בטלפון ובמחשב.
 //   POST /login {password}            -> {token}   (פעם אחת בכל מכשיר)
 //   POST /sync  {since, changes}      -> {cursor, more, records}   (Authorization: Bearer <token>)
+//   POST /requests {text}             -> בקשה לשינוי באפליקציה: נפתחת כ-issue ב-GitHub (ו-Claude מטפל בה)
+//   POST /requests/list               -> הבקשות והמצב של כל אחת
 // הסיסמה (SEDER_PASSWORD) היא סוד של השרת. בלי סיסמה מוגדרת השרת סגור לגמרי.
 import { Vault, safeEqual, sessionToken } from './vault.js';
+import { createRequest, listRequests } from './requests.js';
 
 export { Vault };
 
@@ -30,14 +33,25 @@ export default {
     const { pathname } = new URL(request.url);
     if (pathname === '/' || pathname === '/health') return reply(200, { ok: true });
     if (!env.SEDER_PASSWORD || env.SEDER_PASSWORD === 'none' || !env.VAULT) return reply(503, { error: 'השרת לא מוגדר (חסרה סיסמה)' });
-    if (request.method !== 'POST' || !['/login', '/sync'].includes(pathname)) return reply(404, { error: 'לא נמצא' });
+    if (request.method !== 'POST' || !['/login', '/sync', '/requests', '/requests/list'].includes(pathname)) return reply(404, { error: 'לא נמצא' });
 
     const text = await request.text();
     if (text.length > MAX_BODY_BYTES) return reply(413, { error: 'גדול מדי' });
 
-    if (pathname === '/sync') {
+    if (pathname !== '/login') {
       const auth = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
       if (!safeEqual(auth, await sessionToken(env.SEDER_PASSWORD))) return reply(401, { error: 'צריך להתחבר מחדש' });
+    }
+
+    if (pathname.startsWith('/requests')) {
+      if (!env.SEDER_GITHUB_TOKEN || env.SEDER_GITHUB_TOKEN === 'none' || !env.GITHUB_REPO) return reply(503, { error: 'בקשות לשינוי עוד לא הוגדרו (חסר SEDER_GITHUB_TOKEN)' });
+      try {
+        if (pathname === '/requests/list') return reply(200, { requests: await listRequests(env) });
+        const body = JSON.parse(text || '{}');
+        return reply(200, { request: await createRequest(env, body.text, body.context) });
+      } catch (e) {
+        return reply(e.status || 502, { error: e.message || 'GitHub לא זמין' });
+      }
     }
 
     const stub = env.VAULT.get(env.VAULT.idFromName('main'));

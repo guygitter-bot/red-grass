@@ -6,6 +6,8 @@ workers_dev = true
 [vars]
 # האתרים שמותר להם לפנות לשרת (האפליקציה ב-Cloudflare Pages ופיתוח מקומי)
 ALLOWED_ORIGINS = "https://seder-tasks.pages.dev,http://localhost:5173,http://localhost:4173"
+# המאגר שבו נפתחות בקשות לשינוי מתוך האפליקציה
+GITHUB_REPO = "guygitter-bot/red-grass"
 
 # כל המשימות והתחומים של בעלת האפליקציה – אובייקט אחד ("main")
 [[durable_objects.bindings]]
@@ -16,4 +18,6 @@ class_name = "Vault"
 tag = "v1"
 new_sqlite_classes = ["Vault"]
 
-# הסיסמה היא סוד, לא כאן: SEDER_PASSWORD (נקבע אוטומטית מ-GitHub, ראו .github/workflows/seder.yml)
+# סודות, לא כאן (נקבעים אוטומטית מ-GitHub, ראו .github/workflows/seder.yml):
+#   SEDER_PASSWORD      – הסיסמה לכניסה
+#   SEDER_GITHUB_TOKEN  – מפתח GitHub לפתיחת בקשות לשינוי (לא חובה)

@@ -118,3 +118,59 @@ test('pages through many changes', async () => {
   assert.equal(second.data.records.length, 5);
   assert.equal(second.data.more, false);
 });
+
+// GitHub מדומה לבקשות לשינוי
+function fakeGitHub() {
+  const issues = [];
+  const pulls = [];
+  const calls = [];
+  const real = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    calls.push({ url, init });
+    const u = new URL(url);
+    assert.equal(init.headers.authorization, 'Bearer gh-token');
+    if (u.pathname === '/repos/o/r/issues' && init.method === 'POST') {
+      const b = JSON.parse(init.body);
+      const issue = { number: issues.length + 1, title: b.title, body: b.body, labels: b.labels.map((name) => ({ name })), state: 'open', created_at: '2026-10-04T12:00:00Z', html_url: `https://github.com/o/r/issues/${issues.length + 1}` };
+      issues.unshift(issue);
+      return Response.json(issue, { status: 201 });
+    }
+    if (u.pathname === '/repos/o/r/issues') return Response.json(issues);
+    if (u.pathname === '/repos/o/r/pulls') return Response.json(pulls);
+    return new Response('nope', { status: 404 });
+  };
+  return { issues, pulls, calls, restore: () => { globalThis.fetch = real; } };
+}
+
+test('change requests open GitHub issues and report their status', async () => {
+  const env = fakeEnv({ SEDER_GITHUB_TOKEN: 'gh-token', GITHUB_REPO: 'o/r' });
+  const token = await login(env);
+  const gh = fakeGitHub();
+  try {
+    assert.equal((await call(env, '/requests', { text: 'שינוי' })).status, 401);
+    assert.equal((await call(env, '/requests', { text: ' ' }, token)).status, 400);
+    const sent = await call(env, '/requests', { text: 'להוסיף כפתור להעתקת משימה\nעם אישור', context: 'Android' }, token);
+    assert.equal(sent.status, 200);
+    assert.equal(gh.issues[0].title, 'סדר: להוסיף כפתור להעתקת משימה');
+    assert.match(gh.issues[0].body, /^להוסיף כפתור להעתקת משימה\nעם אישור\n\n---\nנשלח מתוך אפליקציית סדר · Android$/);
+    assert.deepEqual(gh.issues[0].labels, [{ name: 'seder-request' }]);
+
+    await call(env, '/requests', { text: 'בקשה שנייה' }, token);
+    await call(env, '/requests', { text: 'בקשה שלישית' }, token);
+    // 1: בעבודה, 2: PR פתוח, 3: נסגרה
+    gh.issues.find((i) => i.number === 1).labels.push({ name: 'seder-working' });
+    gh.pulls.push({ head: { ref: 'seder/request-2' }, html_url: 'https://github.com/o/r/pull/9' });
+    Object.assign(gh.issues.find((i) => i.number === 3), { state: 'closed', state_reason: 'completed' });
+    const list = await call(env, '/requests/list', {}, token);
+    assert.deepEqual(list.data.requests.map((r) => [r.number, r.status, r.prUrl]), [[3, 'done', null], [2, 'ready', 'https://github.com/o/r/pull/9'], [1, 'working', null]]);
+    assert.equal(list.data.requests[2].text, 'להוסיף כפתור להעתקת משימה\nעם אישור');
+  } finally {
+    gh.restore();
+  }
+});
+
+test('change requests are off until a GitHub token is set', async () => {
+  const env = fakeEnv({ SEDER_GITHUB_TOKEN: 'none', GITHUB_REPO: 'o/r' });
+  const token = await login(env);
+  assert.equal((await call(env, '/requests', { text: 'שינוי' }, token)).status, 503);
+});

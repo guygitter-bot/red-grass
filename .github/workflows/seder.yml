@@ -63,6 +63,8 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         env:
           SEDER_PASSWORD: ${{ secrets.SEDER_PASSWORD }}
+          # בקשות לשינוי מתוך האפליקציה (לא חובה; בלי זה הכפתור מודיע שזה לא מוגדר)
+          SEDER_GITHUB_TOKEN: ${{ secrets.SEDER_GITHUB_TOKEN || 'none' }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -70,6 +72,7 @@ jobs:
           wranglerVersion: "4.146.0"
           secrets: |
             SEDER_PASSWORD
+            SEDER_GITHUB_TOKEN
       - name: Summary
         env:
           URL: ${{ steps.deploy.outputs.deployment-url }}
