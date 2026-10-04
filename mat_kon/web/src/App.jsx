@@ -299,16 +299,17 @@ export default function App() {
     };
     const poll = async () => {
       for (const item of pendingRef.current.filter((x) => x.jobId && !x.error)) {
-        // מעל 10 דקות בלי תשובה – מציגים שגיאה (אפשר לנסות שוב או לסגור)
-        if (Date.now() - Number(String(item.key).split('-')[0]) > 10 * 60 * 1000) {
-          setPending((p) => p.map((x) => (x.key === item.key ? { ...x, error: 'זה לוקח יותר מדי זמן. נסו שוב.' } : x)));
-          continue;
-        }
         let job;
         try {
           job = await getJob(session, item.jobId);
         } catch (e) {
           if (e.status === 404) setPending((p) => p.map((x) => (x.key === item.key ? { ...x, error: 'העבודה לא נמצאה. נסו שוב.' } : x)));
+          continue;
+        }
+        // מעל 10 דקות מאז שהעבודה התחילה לרוץ – מציגים שגיאה (עבודה שמחכה בתור אחרי אחרות לא נחשבת)
+        const started = Date.parse(job.startedAt || '') || (job.status === 'pending' ? Date.now() : Number(String(item.key).split('-')[0]));
+        if (job.status !== 'done' && job.status !== 'error' && Date.now() - started > 10 * 60 * 1000) {
+          setPending((p) => p.map((x) => (x.key === item.key ? { ...x, error: 'זה לוקח יותר מדי זמן. נסו שוב.' } : x)));
           continue;
         }
         if (job.status === 'done') {
@@ -474,6 +475,11 @@ export default function App() {
           plan={plan}
           pantry={pantry}
           onRestored={reload}
+          onAddLinks={(links) => {
+            links.forEach((link) => add(link));
+            setToast(`${links.length} מתכונים מושלמים מהמקור ברקע`);
+            open(null);
+          }}
           onSignedOut={signOut}
           onBack={() => open(null)}
           onToast={setToast}
