@@ -28,17 +28,18 @@ class FixbotTests(unittest.TestCase):
         text = fixbot.conversation(issue, comments)
         self.assertNotIn("workers.dev", text)
         self.assertIn("Claude (earlier run):\n❓ איזה כפתור?", text)
-        self.assertIn("App owner:\nשל המועדפים", text)
+        self.assertIn("App user:\nשל המועדפים", text)
 
     def test_messages(self):
-        text, close = fixbot.message("fixed", {"summary_he": "הוגדל הכפתור"}, "success", "success", "PR", "RUN")
-        self.assertTrue(close)
-        self.assertIn("staging.bis-app.pages.dev", text)
-        text, close = fixbot.message("fixed", {}, "failure", "skipped", "", "RUN")
-        self.assertFalse(close)
+        text, label = fixbot.message("fixed", {"summary_he": "הוגדל הכפתור"}, "success", "success", "RUN")
+        self.assertEqual((text, label), ("✅ הוגדל הכפתור", "bis-ready"))
+        text, label = fixbot.message("fixed", {}, "failure", "skipped", "RUN")
+        self.assertEqual(label, "bis-failed")
         self.assertIn("הבדיקות נכשלו", text)
-        text, close = fixbot.message("question", {"question_he": "איזה כפתור?"}, "skipped", "skipped", "", "RUN")
-        self.assertIn("איזה כפתור?", text)
+        text, label = fixbot.message("question", {"question_he": "איזה כפתור?"}, "skipped", "skipped", "RUN")
+        self.assertEqual((text, label), ("איזה כפתור?", "bis-question"))
+        self.assertEqual(fixbot.message("too_big", {"plan_he": "תוכנית"}, "", "", "RUN")[1], "bis-question")
+        self.assertEqual(fixbot.message("error", {}, "", "", "RUN")[1], "bis-failed")
 
     def test_prompt_template_formats(self):
         text = fixbot.PROMPT.read_text(encoding="utf-8").format(issue=5, request="x", screenshot="y")

@@ -1,8 +1,11 @@
 """Helper for .github/workflows/bis-fix.yml ("send a fix" requests from the app).
 
+  start    mark the request as "working" (labels are what the app shows)
   prepare  read the issue and its comments, download the screenshot, write .fix/prompt.txt
   check    read .fix/result.json and the changed files, decide what to publish
-  report   comment on the issue, close it when published, and send the owner a WhatsApp message
+  report   comment on the issue (the app shows the last comment) and set the status label
+
+The app user approves the PR from inside the app (proxy/feedback.js merges it).
 
 Uses only the standard library. GitHub calls use GH_TOKEN; the screenshot needs ADMIN_CODE.
 """
@@ -21,7 +24,6 @@ from pathlib import Path
 FIX = Path(".fix")
 PROMPT = Path(__file__).with_name("prompt.md")
 SHOT_RE = re.compile(r"<!-- bis-fix-screenshot: (\S+) -->")
-STAGING_URL = "https://staging.bis-app.pages.dev"
 BOT_LOGIN = "github-actions[bot]"
 
 
@@ -66,9 +68,17 @@ def screenshot_url(body: str) -> str | None:
 def conversation(issue: dict, comments: list[dict]) -> str:
     parts = [f"Title: {issue['title']}\n\n{SHOT_RE.sub('', issue.get('body') or '').strip()}"]
     for c in comments:
-        who = "Claude (earlier run)" if c["user"]["login"] == BOT_LOGIN else "App owner"
+        who = "Claude (earlier run)" if c["user"]["login"] == BOT_LOGIN else "App user"
         parts.append(f"--- {who}:\n{c['body'].strip()}")
     return "\n\n".join(parts)
+
+
+def set_status(number: str, label: str) -> None:
+    github(f"/issues/{number}/labels", {"labels": ["bis-fix", label]}, method="PUT")
+
+
+def start() -> None:
+    set_status(env("ISSUE"), "bis-working")
 
 
 def prepare() -> None:
@@ -131,7 +141,8 @@ def check() -> None:
         title = (result.get("title") or "Fix from the app").strip().splitlines()[0][:72]
         (FIX / "commit.txt").write_text(f"{title} (#{env('ISSUE')})\n\n{result.get('summary_he', '')}\n", encoding="utf-8")
         (FIX / "pr.md").write_text(
-            f"תיקון אוטומטי לבקשה #{env('ISSUE')} מהאפליקציה.\n\n{result.get('summary_he', '')}\n\n"
+            f"תיקון לבקשה #{env('ISSUE')} מהאפליקציה. מאשרים מתוך האפליקציה (\"לאשר ולהעלות\").\n\n"
+            f"{result.get('summary_he', '')}\n\n"
             f"קבצים: {', '.join(files)}\n",
             encoding="utf-8",
         )
@@ -146,53 +157,34 @@ def cost() -> str:
     return f" (עלות משוערת: ${value:.2f})" if isinstance(value, (int, float)) else ""
 
 
-def message(status: str, result: dict, tests: str, publish: str, pr: str, run_url: str) -> tuple[str, bool]:
-    """Returns (Hebrew text, close the issue)."""
+def message(status: str, result: dict, tests: str, publish: str, run_url: str) -> tuple[str, str]:
+    """Returns (Hebrew text for the app, status label)."""
     if status == "fixed" and tests == "success" and publish == "success":
-        return (
-            f"✅ התיקון מוכן לבדיקה ב-{STAGING_URL}\n\n{result.get('summary_he', '')}\n\n"
-            f"השינוי: {pr}\nאם משהו לא בסדר, כתבו כאן תגובה ו-Claude ימשיך.",
-            True,
-        )
+        return f"✅ {result.get('summary_he', '') or 'השינוי מוכן.'}", "bis-ready"
     if status == "fixed" and tests == "failure":
-        return f"⚠️ Claude ניסה לתקן, אבל הבדיקות נכשלו, אז שום דבר לא עלה.\nפרטים: {run_url}", False
+        return f"Claude ניסה לתקן, אבל הבדיקות נכשלו, אז שום דבר לא השתנה. אפשר לנסות שוב.\n{run_url}", "bis-failed"
     if status == "fixed":
-        return f"⚠️ התיקון מוכן, אבל ההעלאה ל-staging נכשלה.\nפרטים: {run_url}", False
+        return f"השינוי מוכן, אבל לא הצלחתי לשמור אותו. אפשר לנסות שוב.\n{run_url}", "bis-failed"
     if status == "question":
-        return f"❓ Claude צריך הבהרה:\n{result.get('question_he', '')}\n\nכתבו את התשובה בתגובה כאן.", False
+        return result.get("question_he", "") or "מה בדיוק לשנות?", "bis-question"
     if status == "too_big":
-        return f"📋 זה שינוי גדול, אז Claude מציע תוכנית לפני שמתחילים:\n{result.get('plan_he', '')}\n\nכדי לאשר, כתבו כאן תגובה (למשל \"מאושר\").", False
+        plan = result.get("plan_he", "")
+        return f"זה שינוי גדול, אז לפני שמתחילים, זו התוכנית:\n{plan}\n\nכדי לאשר, כתבו \"מאושר\".", "bis-question"
     if status == "nochange":
-        return "ℹ️ Claude לא מצא מה לשנות בקוד. אפשר להוסיף פרטים בתגובה כאן.", False
+        return "לא מצאתי מה לשנות. אפשר לכתוב עוד פרטים?", "bis-question"
     if status == "outside":
-        return f"⚠️ התיקון נגע בקבצים מחוץ לאפליקציה, אז הוא לא הועלה.\nפרטים: {run_url}", False
-    return f"⚠️ משהו השתבש בטיפול בבקשה.\nפרטים: {run_url}", False
-
-
-def send_whatsapp(text: str) -> None:
-    phone, apikey = env("CALLMEBOT_PHONE"), env("CALLMEBOT_APIKEY")
-    if not phone or not apikey:
-        print("CallMeBot is not configured; skipping WhatsApp")
-        return
-    query = urllib.parse.urlencode({"phone": phone, "text": text, "apikey": apikey})
-    try:
-        with urllib.request.urlopen(f"https://api.callmebot.com/whatsapp.php?{query}", timeout=30) as resp:
-            resp.read()
-    except Exception as err:  # noqa: BLE001 - the GitHub comment is enough
-        print(f"::warning::WhatsApp failed: {err}")
+        return f"התיקון נגע בקבצים מחוץ לאפליקציה, אז הוא לא נשמר. אפשר לנסות שוב.\n{run_url}", "bis-failed"
+    return f"משהו השתבש בטיפול בבקשה. אפשר לנסות שוב.\n{run_url}", "bis-failed"
 
 
 def report() -> None:
     number = env("ISSUE")
     status = env("STATUS") or "error"
     run_url = f"{env('GITHUB_SERVER_URL')}/{env('GITHUB_REPOSITORY')}/actions/runs/{env('GITHUB_RUN_ID')}"
-    text, close = message(status, read_result(), env("TESTS"), env("PUBLISH"), env("PR"), run_url)
-    issue_url = f"{env('GITHUB_SERVER_URL')}/{env('GITHUB_REPOSITORY')}/issues/{number}"
+    text, label = message(status, read_result(), env("TESTS"), env("PUBLISH"), run_url)
     github(f"/issues/{number}/comments", {"body": text + cost()})
-    if close:
-        github(f"/issues/{number}", {"state": "closed", "state_reason": "completed"}, method="PATCH")
-    send_whatsapp(f"ביס – בקשה #{number}\n{text}\n{issue_url}")
+    set_status(number, label)
 
 
 if __name__ == "__main__":
-    {"prepare": prepare, "check": check, "report": report}[sys.argv[1]]()
+    {"start": start, "prepare": prepare, "check": check, "report": report}[sys.argv[1]]()
