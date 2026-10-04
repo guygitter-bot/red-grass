@@ -38,6 +38,26 @@ self.addEventListener('fetch', (event) => {
   })));
 });
 
+// תזכורת מהשרת (גם כשהאפליקציה סגורה)
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: '🔔 תזכורת' };
+  }
+  event.waitUntil(self.registration.showNotification(data.title || '🔔 תזכורת', {
+    body: data.body || '',
+    tag: data.id || 'seder',
+    data: { id: data.id || '' },
+    icon: 'icon.svg',
+    badge: 'icon.svg',
+    dir: 'rtl',
+    lang: 'he',
+    renotify: true,
+  }));
+});
+
 // לחיצה על התראה פותחת את האפליקציה על המשימה
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();

@@ -1,5 +1,5 @@
 // מבנה הנתונים ושמירה במכשיר (localStorage). הכול פונקציות טהורות – קל לבדוק ולהחליף בעתיד בשרת.
-import { addDays, dueDate, todayKey } from './dates';
+import { addDays, dueDate, fromKey, todayKey } from './dates';
 
 const KEY = 'seder_v1';
 
@@ -107,6 +107,7 @@ export function makeTask(fields) {
     priority: 2,
     remind: null,
     links: [],
+    contacts: [],
     done: false,
     doneAt: null,
     createdAt: now,
@@ -125,7 +126,7 @@ export function addTask(state, fields) {
 export function updateTask(state, id, patch) {
   const notified = { ...state.notified };
   // שינוי מועד או תזכורת -> תזכורת חדשה תצא שוב
-  if ('due' in patch || 'time' in patch || 'remind' in patch) delete notified[id];
+  if ('due' in patch || 'time' in patch || 'remind' in patch || 'remindTime' in patch) delete notified[id];
   return { ...state, notified, tasks: state.tasks.map((t) => (t.id === id ? { ...t, ...patch, updatedAt: Date.now() } : t)) };
 }
 
@@ -234,22 +235,76 @@ export function dashboard(state, now = new Date()) {
   };
 }
 
+// מתי התזכורת יוצאת:
+//   remindTime ("HH:MM") – בשעה שנבחרה, ביום של המשימה
+//   בלי שעה למשימה – 9:00 בבוקר של אותו יום
+//   עם שעה – remind דקות לפני
+export function reminderAt(task) {
+  if (task.remind == null || !task.due) return null;
+  if (task.remindTime) {
+    const [h, m] = task.remindTime.split(':').map(Number);
+    const at = fromKey(task.due);
+    at.setHours(h, m, 0, 0);
+    return at;
+  }
+  const at = dueDate(task);
+  if (!task.time) at.setHours(9, 0, 0, 0);
+  else at.setMinutes(at.getMinutes() - task.remind);
+  return at;
+}
+
 // תזכורות שהגיע זמנן ועוד לא הוצגו
 export function dueReminders(state, now = new Date()) {
   return state.tasks.filter((t) => {
-    if (t.done || t.remind == null || !t.due || state.notified[t.id]) return false;
-    const at = dueDate(t);
-    if (!t.time) at.setHours(9, 0, 0, 0);
-    else at.setMinutes(at.getMinutes() - t.remind);
+    if (t.done || state.notified[t.id]) return false;
+    const at = reminderAt(t);
     // לא מתריעים על דברים שעברו מזמן (למשל אחרי שבוע שהאפליקציה לא נפתחה)
-    return at <= now && now - dueDate(t) < 12 * 3600000;
+    return at && at <= now && now - at < 12 * 3600000;
   });
 }
 
 export function search(tasks, query) {
   const q = query.trim().toLowerCase();
   if (!q) return [];
-  return tasks.filter((t) => `${t.title} ${t.notes} ${(t.links || []).map((l) => l.url).join(' ')}`.toLowerCase().includes(q));
+  return tasks.filter((t) => `${t.title} ${t.notes} ${(t.links || []).map((l) => l.url).join(' ')} ${contactsOf(t).map((c) => `${c.name} ${c.phone}`).join(' ')}`.toLowerCase().includes(q));
+}
+
+// ---- אנשים / גורמים לבירור ----
+// בכל משימה: contacts = [{ name, phone }]. משימות ישנות בלי השדה נחשבות כמשימות בלי אנשים
+
+export function cleanContact(c) {
+  return {
+    name: String(c?.name || '').replace(/\s+/g, ' ').trim().slice(0, 60),
+    phone: String(c?.phone || '').replace(/[^\d+*#\-\s]/g, '').replace(/\s+/g, ' ').trim().slice(0, 20),
+  };
+}
+
+export function contactsOf(task) {
+  return (Array.isArray(task?.contacts) ? task.contacts : []).map(cleanContact).filter((c) => c.name || c.phone);
+}
+
+// קישור לחיוג (בלי מספר סביר – אין כפתור חיוג)
+export function telUrl(phone) {
+  const dial = String(phone || '').replace(/[^\d+*#]/g, '');
+  return dial.replace(/\D/g, '').length >= 3 ? `tel:${dial}` : null;
+}
+
+// כל האנשים שכבר נכתבו במשימות (להשלמה אוטומטית). שם שחוזר – פעם אחת, עם הטלפון האחרון שנכתב לו
+export function knownContacts(tasks) {
+  const byName = new Map();
+  for (const t of [...tasks].sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0))) {
+    for (const c of contactsOf(t)) {
+      if (!c.name) continue;
+      const key = c.name.toLowerCase();
+      byName.set(key, { name: c.name, phone: c.phone || byName.get(key)?.phone || '' });
+    }
+  }
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name, 'he'));
+}
+
+// "רופאת המשפחה · 03-1234567, ביטוח לאומי" – לשיתוף וליומן
+export function contactsText(task) {
+  return contactsOf(task).map((c) => [c.name, c.phone].filter(Boolean).join(' · ')).join(', ');
 }
 
 // שמירה מהעורך: המשימה ותתי המשימות שלה בבת אחת (חדשות נוספות, שנמחקו יוצאות, השאר מתעדכנות)

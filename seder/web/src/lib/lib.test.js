@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { addDays, dayLabel, greeting, todayKey, weekdayShort } from './dates';
 import { findDate, findTime, parseMessage, parseQuick } from './parse';
 import { googleCalendarUrl, toIcs } from './calendar';
-import { addTask, dashboard, dueReminders, emptyState, normalize, removeTask, saveTree, setName, subtasksOf, toggleDone, updateTask } from './store';
+import { addTask, contactsOf, dashboard, dueReminders, emptyState, knownContacts, normalize, reminderAt, removeTask, saveTree, search, setName, subtasksOf, telUrl, toggleDone, updateTask } from './store';
 import { taskText } from './share';
 
 // שבת, 3 באוקטובר 2026, 10:00
@@ -153,6 +153,25 @@ describe('store', () => {
     expect(dueReminders(s, NOW)).toHaveLength(1);
   });
 
+  it('reminds at a chosen time', () => {
+    const at = (t) => { const d = reminderAt(t); return d && `${d.getDate()}/${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
+    expect(at({ due: '2026-10-05', remind: null })).toBeNull();
+    expect(at({ due: '2026-10-05', remind: 0 })).toBe('5/9:00');
+    expect(at({ due: '2026-10-05', time: '20:00', remind: 30 })).toBe('5/19:30');
+    expect(at({ due: '2026-10-05', remind: 0, remindTime: '07:15' })).toBe('5/7:15');
+    expect(at({ due: '2026-10-05', time: '20:00', remind: 0, remindTime: '12:00' })).toBe('5/12:00');
+
+    let s = addTask(emptyState(), { title: 'התייבות', due: '2026-10-03', remind: 0, remindTime: '10:30' });
+    expect(dueReminders(s, NOW)).toHaveLength(0);
+    expect(dueReminders(s, new Date(2026, 9, 3, 10, 31))).toHaveLength(1);
+    // שינוי השעה -> התזכורת תצא שוב
+    const id = s.tasks[0].id;
+    s = { ...s, notified: { [id]: 1 } };
+    s = updateTask(s, id, { remindTime: '11:00' });
+    expect(s.notified[id]).toBeUndefined();
+    expect(toIcs([{ ...s.tasks[0], time: null }], NOW)).toContain('TRIGGER:PT660M');
+  });
+
   it('saves the name for the greeting, and keeps old data without one', () => {
     expect(normalize({ tasks: [] }).profile).toEqual({ id: 'profile', name: '', updatedAt: 0 });
     let s = setName(emptyState(), '  נועה   כהן ');
@@ -178,5 +197,39 @@ describe('share', () => {
   it('formats a task for WhatsApp', () => {
     const text = taskText({ title: 'מעבר דירה', due: '2026-10-04', time: '09:00', priority: 3, notes: '', links: [] }, [{ title: 'קרטונים', done: true }, { title: 'מוביל', done: false }], NOW);
     expect(text).toBe('*מעבר דירה*\n🗓️ מחר ב-09:00\n❗ חשוב מאוד\n\n✅ קרטונים\n⬜ מוביל');
+  });
+});
+
+describe('contacts', () => {
+  it('old tasks without contacts still work', () => {
+    expect(contactsOf({ id: 'a', title: 'ישנה' })).toEqual([]);
+    expect(contactsOf({ contacts: [{ name: '  דנה   כהן ', phone: '050-123 4567' }, { name: '', phone: '' }] })).toEqual([{ name: 'דנה כהן', phone: '050-123 4567' }]);
+  });
+
+  it('dial link only for real numbers', () => {
+    expect(telUrl('050-123 4567')).toBe('tel:0501234567');
+    expect(telUrl('+972 50 1234567')).toBe('tel:+972501234567');
+    expect(telUrl('')).toBe(null);
+  });
+
+  it('remembers names across tasks with the latest phone', () => {
+    const tasks = [
+      { id: '1', title: 'א', updatedAt: 1, contacts: [{ name: 'קופת חולים', phone: '*2700' }, { name: 'דנה', phone: '' }] },
+      { id: '2', title: 'ב', updatedAt: 2, contacts: [{ name: 'דנה', phone: '0501111111' }] },
+      { id: '3', title: 'ג', updatedAt: 3, contacts: [{ name: 'קופת חולים', phone: '' }] },
+    ];
+    expect(knownContacts(tasks)).toEqual([{ name: 'דנה', phone: '0501111111' }, { name: 'קופת חולים', phone: '*2700' }]);
+  });
+
+  it('search, share and calendar include the people', () => {
+    let s = addTask(emptyState(), { title: 'לברר על החזר', due: '2026-10-04', contacts: [{ name: 'ביטוח לאומי', phone: '*6050' }] });
+    expect(search(s.tasks, 'לאומי')).toHaveLength(1);
+    expect(search(s.tasks, '6050')).toHaveLength(1);
+    const task = s.tasks[0];
+    expect(taskText(task, [], NOW)).toContain('👤 לבירור עם: ביטוח לאומי · *6050');
+    expect(toIcs([task], NOW).replace(/\r\n /g, '')).toContain('לבירור עם: ביטוח לאומי · *6050');
+    // השדה נשמר (ומתרוקן) בשמירה מהעורך
+    s = saveTree(s, { ...task, contacts: [] }, []);
+    expect(contactsOf(s.tasks[0])).toEqual([]);
   });
 });

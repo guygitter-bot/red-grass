@@ -5,6 +5,7 @@ import { normalize, setName } from '../lib/store';
 import { greeting, todayKey } from '../lib/dates';
 import { downloadIcs } from '../lib/calendar';
 import { askPermission, notificationsSupported } from '../lib/notify';
+import { enablePush, pushActive, pushSupported, sendTestPush } from '../lib/push';
 import { THEME_OPTIONS, setTheme, useTheme } from '../lib/theme';
 import { Chip, Sheet } from './ui';
 
@@ -13,7 +14,28 @@ const row = 'w-full flex items-center gap-3 rounded-2xl bg-stone-50 p-3 text-rig
 export default function SettingsSheet({ onClose }) {
   const { state, act, syncStatus, syncNow, lock, openRequests } = useStore();
   const theme = useTheme();
-  const [perm, setPerm] =useState(() => (notificationsSupported() ? Notification.permission : 'unsupported'));
+  const [perm, setPerm] = useState(() => (notificationsSupported() ? Notification.permission : 'unsupported'));
+  const [push, setPush] = useState(() => pushActive());
+  const [pushMsg, setPushMsg] = useState('');
+  const turnOn = async () => {
+    const p = await askPermission();
+    setPerm(p);
+    if (p === 'granted') setPush(await enablePush());
+  };
+  const test = async () => {
+    setPushMsg('שולח...');
+    try {
+      const r = await sendTestPush();
+      if (r.sent) setPushMsg('נשלחה! אמורה להופיע תוך כמה שניות (אפשר גם לסגור את האפליקציה ולבדוק).');
+      else if (r.devices) setPushMsg('השליחה לא הצליחה כרגע – נסי שוב בעוד דקה.');
+      else {
+        setPush(await enablePush());
+        setPushMsg('המכשיר נרשם מחדש – לחצי שוב על "התראת בדיקה".');
+      }
+    } catch (e) {
+      setPushMsg(e.message || 'השליחה נכשלה');
+    }
+  };
   const upcoming = state.tasks.filter((t) => !t.done && t.due && t.due >= todayKey());
   // השם נשמר כשיוצאים מהשדה (או בסגירת ההגדרות), לא בכל אות
   const [name, setNameDraft] = useState(state.profile?.name || '');
@@ -115,14 +137,19 @@ export default function SettingsSheet({ onClose }) {
         </button>
 
         <h3 className="text-sm font-bold text-stone-500 pt-3">תזכורות</h3>
-        {perm === 'granted' ? (
-          <div className={row}><Bell size={20} className="text-emerald-600" /><span>התראות מופעלות ✓<span className="block text-xs text-stone-500">מגיעות כשהאפליקציה פתוחה או ברקע</span></span></div>
-        ) : perm === 'unsupported' ? (
+        {perm === 'granted' && push ? (
+          <div className={row}>
+            <Bell size={20} className="text-emerald-600" />
+            <span className="flex-1">התראות מופעלות ✓<span className="block text-xs text-stone-500">מגיעות לטלפון בזמן – גם כשהאפליקציה סגורה</span></span>
+            <button onClick={test} className="text-xs rounded-lg bg-card border border-stone-200 px-2 py-1">התראת בדיקה</button>
+          </div>
+        ) : perm === 'unsupported' || !pushSupported() ? (
           <div className={`${row} text-sm text-stone-600`}><Bell size={20} />בדפדפן הזה אין התראות. באייפון: "הוספה למסך הבית" ופתיחה משם.</div>
         ) : (
-          <button onClick={async () => setPerm(await askPermission())} className={row}><Bell size={20} className="text-violet-600" /><span>הפעלת התראות<span className="block text-xs text-stone-500">{perm === 'denied' ? 'נחסם – אפשר לאשר בהגדרות הדפדפן' : 'כדי לקבל תזכורת על המסך'}</span></span></button>
+          <button onClick={turnOn} className={row}><Bell size={20} className="text-violet-600" /><span>הפעלת התראות<span className="block text-xs text-stone-500">{perm === 'denied' ? 'נחסם – צריך לאשר התראות לאתר בהגדרות הדפדפן' : 'תזכורות לטלפון בזמן – גם כשהאפליקציה סגורה'}</span></span></button>
         )}
-        <p className="text-xs text-stone-500 leading-relaxed">💡 הכי בטוח: לשמור אירועים חשובים גם ביומן (כפתור "ליומן" בכל משימה) – כך התזכורת מגיעה מהיומן של הטלפון גם כשהאפליקציה סגורה.</p>
+        {pushMsg && <p className="text-xs text-violet-700">{pushMsg}</p>}
+        <p className="text-xs text-stone-500 leading-relaxed">💡 צריך להפעיל פעם אחת בכל מכשיר (טלפון, מחשב). אפשר גם לשמור אירוע חשוב ביומן (כפתור "ליומן" בכל משימה).</p>
 
         <h3 className="text-sm font-bold text-stone-500 pt-3">יומן</h3>
         <button disabled={!upcoming.length} onClick={() => downloadIcs(upcoming, 'seder-upcoming')} className={`${row} disabled:opacity-50`}>

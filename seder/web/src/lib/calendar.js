@@ -1,6 +1,7 @@
 // סנכרון ליומן: קישור "הוסף ליומן גוגל" לכל משימה, וקובץ ‎.ics‎ (יומן אפל / אאוטלוק / גוגל)
 // עם תזכורת מובנית – כך שההתראה מגיעה מהיומן של הטלפון גם כשהאפליקציה סגורה.
-import { addDays, dueDate } from './dates';
+import { addDays, dueDate, fromKey } from './dates';
+import { contactsText, reminderAt } from './store';
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -42,6 +43,8 @@ function description(task) {
   const lines = [];
   if (task.notes) lines.push(task.notes);
   for (const link of task.links || []) if (!task.notes?.includes(link.url)) lines.push(link.url);
+  const people = contactsText(task);
+  if (people) lines.push(`לבירור עם: ${people}`);
   return lines.join('\n');
 }
 
@@ -62,9 +65,11 @@ function eventLines(task, now) {
   const desc = description(task);
   if (desc) lines.push(`DESCRIPTION:${escapeIcs(desc)}`);
   if (task.links?.[0]) lines.push(`URL:${task.links[0].url}`);
-  if (task.remind != null) {
-    // בלי שעה: תזכורת ב-9 בבוקר של אותו יום
-    const trigger = task.time ? `-PT${task.remind}M` : 'PT9H';
+  const remindAt = reminderAt(task);
+  if (remindAt) {
+    // ביחס לתחילת האירוע (בלי שעה: חצות של אותו יום)
+    const diff = Math.round((remindAt - (task.time ? start : fromKey(task.due))) / 60000);
+    const trigger = diff < 0 ? `-PT${-diff}M` : `PT${diff}M`;
     lines.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${escapeIcs(task.title)}`, `TRIGGER:${trigger}`, 'END:VALARM');
   }
   lines.push('END:VEVENT');
