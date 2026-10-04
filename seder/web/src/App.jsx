@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Settings } from 'lucide-react';
+import { Cloud, CloudOff, RefreshCw, Search, Settings } from 'lucide-react';
 import { dueReminders, load, save } from './lib/store';
 import { todayKey } from './lib/dates';
 import BottomNav from './components/BottomNav';
@@ -12,6 +12,17 @@ import ImportSheet from './components/ImportSheet';
 import SettingsSheet from './components/SettingsSheet';
 import SearchSheet from './components/SearchSheet';
 import { notify } from './lib/notify';
+import { AuthError, collectChanges, getToken, logout, resetSync, runSync } from './lib/sync';
+import LoginSheet from './components/LoginSheet';
+
+const SKIP_LOGIN_KEY = 'seder_login_skipped';
+function loginSkipped() {
+  try {
+    return localStorage.getItem(SKIP_LOGIN_KEY) === '1';
+  } catch {
+    return true;
+  }
+}
 
 const Store = createContext(null);
 export const useStore = () => useContext(Store);
@@ -35,6 +46,9 @@ export default function App() {
   const [importing, setImporting] = useState(sharedText);
   const [sheet, setSheet] = useState(null);
   const [toast, setToast] = useState(null);
+  // סנכרון: off (לא מחובר) / syncing / ok / offline / error
+  const [syncStatus, setSyncStatus] = useState(() => (getToken() ? 'ok' : 'off'));
+  const [loginOpen, setLoginOpen] = useState(() => !getToken() && !loginSkipped());
 
   const latest = useRef(state);
   useEffect(() => {
@@ -43,6 +57,66 @@ export default function App() {
   }, [state]);
 
   const act = useCallback((fn, ...args) => setState((s) => fn(s, ...args)), []);
+
+  const syncing = useRef(false);
+  const again = useRef(false);
+  const sync = useCallback(async () => {
+    if (!getToken()) return;
+    if (syncing.current) {
+      again.current = true;
+      return;
+    }
+    if (!navigator.onLine) {
+      setSyncStatus('offline');
+      return;
+    }
+    syncing.current = true;
+    setSyncStatus('syncing');
+    try {
+      await runSync(() => latest.current, (fn) => setState((s) => {
+        const next = fn(s);
+        latest.current = next;
+        return next;
+      }));
+      setSyncStatus('ok');
+    } catch (e) {
+      if (e instanceof AuthError) {
+        logout();
+        setState(resetSync);
+        setSyncStatus('off');
+        setLoginOpen(true);
+      } else {
+        setSyncStatus(navigator.onLine ? 'error' : 'offline');
+      }
+    } finally {
+      syncing.current = false;
+      if (again.current) {
+        again.current = false;
+        setTimeout(sync, 300);
+      }
+    }
+  }, []);
+
+  // סנכרון: בפתיחה, כשחוזרים לאפליקציה, כשהרשת חוזרת, ופעם בדקה
+  useEffect(() => {
+    sync();
+    const onVisible = () => document.visibilityState === 'visible' && sync();
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', sync);
+    const timer = setInterval(() => document.visibilityState === 'visible' && sync(), 60000);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', sync);
+      clearInterval(timer);
+    };
+  }, [sync]);
+
+  // שינוי במכשיר -> נשלח לשרת אחרי שנייה וחצי של שקט
+  useEffect(() => {
+    if (!getToken() || !collectChanges(state).length) return undefined;
+    const t = setTimeout(sync, 1500);
+    return () => clearTimeout(t);
+  }, [state, sync]);
 
   // תזכורות: בודקים כל חצי דקה כשהאפליקציה פתוחה (התראה מהיומן מגיעה גם כשהיא סגורה)
   useEffect(() => {
@@ -97,7 +171,15 @@ export default function App() {
       setTab('later');
     },
     importText: (text) => setImporting(text ?? ''),
-  }), [state, act]);
+    syncStatus,
+    syncNow: sync,
+    openLogin: () => setLoginOpen(true),
+    disconnect: () => {
+      logout();
+      setState(resetSync);
+      setSyncStatus('off');
+    },
+  }), [state, act, syncStatus, sync]);
 
   return (
     <Store.Provider value={ctx}>
@@ -105,6 +187,7 @@ export default function App() {
         <header className="sticky top-0 z-20 bg-[#faf8ff]/90 backdrop-blur px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-2 flex items-center justify-between">
           <h1 className="text-2xl font-black text-violet-700 tracking-tight">סדר</h1>
           <div className="flex gap-1">
+            <SyncButton status={syncStatus} onClick={() => (syncStatus === 'off' ? setLoginOpen(true) : sync())} />
             <button aria-label="חיפוש" onClick={() => setSheet('search')} className="p-2 rounded-full hover:bg-violet-100 text-stone-600"><Search size={22} /></button>
             <button aria-label="הגדרות" onClick={() => setSheet('settings')} className="p-2 rounded-full hover:bg-violet-100 text-stone-600"><Settings size={22} /></button>
           </div>
@@ -124,6 +207,23 @@ export default function App() {
       {importing != null && <ImportSheet text={importing} onClose={() => setImporting(null)} />}
       {sheet === 'settings' && <SettingsSheet onClose={() => setSheet(null)} />}
       {sheet === 'search' && <SearchSheet onClose={() => setSheet(null)} />}
+      {loginOpen && (
+        <LoginSheet
+          firstRun={!loginSkipped()}
+          onClose={() => {
+            try {
+              localStorage.setItem(SKIP_LOGIN_KEY, '1');
+            } catch {
+              // אחסון חסום
+            }
+            setLoginOpen(false);
+          }}
+          onLoggedIn={() => {
+            setLoginOpen(false);
+            sync();
+          }}
+        />
+      )}
 
       {toast && (
         <button
@@ -136,5 +236,23 @@ export default function App() {
         </button>
       )}
     </Store.Provider>
+  );
+}
+
+const SYNC_LOOK = {
+  off: { icon: CloudOff, label: 'לא מסונכרן – לחצי לחיבור', className: 'text-stone-400' },
+  syncing: { icon: RefreshCw, label: 'מסנכרן...', className: 'text-violet-500 animate-spin' },
+  ok: { icon: Cloud, label: 'מסונכרן', className: 'text-emerald-600' },
+  offline: { icon: CloudOff, label: 'אין אינטרנט – יסונכרן כשהרשת תחזור', className: 'text-amber-500' },
+  error: { icon: CloudOff, label: 'הסנכרון נכשל – לחצי לנסות שוב', className: 'text-rose-500' },
+};
+
+function SyncButton({ status, onClick }) {
+  const look = SYNC_LOOK[status] || SYNC_LOOK.off;
+  const Icon = look.icon;
+  return (
+    <button aria-label={look.label} title={look.label} onClick={onClick} className="p-2 rounded-full hover:bg-violet-100">
+      <Icon size={22} className={look.className} />
+    </button>
   );
 }

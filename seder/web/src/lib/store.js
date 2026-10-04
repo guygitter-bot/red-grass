@@ -41,8 +41,13 @@ export function newId() {
   return (crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`).replace(/-/g, '').slice(0, 16);
 }
 
+// sync: מה כבר מסונכרן עם השרת (cursor = עד איזה שינוי קיבלנו, known = גרסת כל רשומה בשרת)
+export function emptySync() {
+  return { cursor: 0, known: {} };
+}
+
 export function emptyState() {
-  return { categories: DEFAULT_CATEGORIES, tasks: [], notified: {} };
+  return { categories: DEFAULT_CATEGORIES, tasks: [], notified: {}, sync: emptySync() };
 }
 
 export function load() {
@@ -69,10 +74,12 @@ export function normalize(data) {
     categories: Array.isArray(data?.categories) && data.categories.length ? data.categories : DEFAULT_CATEGORIES,
     tasks: Array.isArray(data?.tasks) ? data.tasks.filter((t) => t && t.id && typeof t.title === 'string') : [],
     notified: data?.notified && typeof data.notified === 'object' ? data.notified : {},
+    sync: data?.sync && Number.isInteger(data.sync.cursor) && data.sync.known && typeof data.sync.known === 'object' ? data.sync : emptySync(),
   };
 }
 
 export function makeTask(fields) {
+  const now = Date.now();
   return {
     id: newId(),
     title: '',
@@ -87,8 +94,9 @@ export function makeTask(fields) {
     links: [],
     done: false,
     doneAt: null,
-    createdAt: Date.now(),
+    createdAt: now,
     ...fields,
+    updatedAt: now,
   };
 }
 
@@ -103,7 +111,7 @@ export function updateTask(state, id, patch) {
   const notified = { ...state.notified };
   // שינוי מועד או תזכורת -> תזכורת חדשה תצא שוב
   if ('due' in patch || 'time' in patch || 'remind' in patch) delete notified[id];
-  return { ...state, notified, tasks: state.tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)) };
+  return { ...state, notified, tasks: state.tasks.map((t) => (t.id === id ? { ...t, ...patch, updatedAt: Date.now() } : t)) };
 }
 
 export function toggleDone(state, id) {
@@ -129,7 +137,8 @@ export function removeTask(state, id) {
   return { ...state, tasks: state.tasks.filter((t) => !ids.has(t.id)) };
 }
 
-export function upsertCategory(state, cat) {
+export function upsertCategory(state, fields) {
+  const cat = { ...fields, updatedAt: Date.now() };
   const exists = state.categories.some((c) => c.id === cat.id);
   return {
     ...state,
@@ -141,7 +150,7 @@ export function removeCategory(state, id) {
   return {
     ...state,
     categories: state.categories.filter((c) => c.id !== id),
-    tasks: state.tasks.map((t) => (t.categoryId === id ? { ...t, categoryId: null } : t)),
+    tasks: state.tasks.map((t) => (t.categoryId === id ? { ...t, categoryId: null, updatedAt: Date.now() } : t)),
   };
 }
 

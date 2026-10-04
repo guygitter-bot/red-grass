@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bell, CalendarPlus, Download, Upload } from 'lucide-react';
+import { Bell, CalendarPlus, Cloud, CloudOff, Download, Upload } from 'lucide-react';
 import { useStore } from '../App';
 import { normalize } from '../lib/store';
 import { todayKey } from '../lib/dates';
@@ -10,7 +10,7 @@ import { Sheet } from './ui';
 const row = 'w-full flex items-center gap-3 rounded-2xl bg-stone-50 p-3 text-right';
 
 export default function SettingsSheet({ onClose }) {
-  const { state, act } = useStore();
+  const { state, act, syncStatus, syncNow, openLogin, disconnect } = useStore();
   const [perm, setPerm] = useState(() => (notificationsSupported() ? Notification.permission : 'unsupported'));
   const upcoming = state.tasks.filter((t) => !t.done && t.due && t.due >= todayKey());
 
@@ -28,8 +28,15 @@ export default function SettingsSheet({ onClose }) {
     if (!file) return;
     try {
       const data = normalize(JSON.parse(await file.text()));
-      if (!window.confirm(`לשחזר ${data.tasks.length} משימות מהגיבוי? מה שיש עכשיו יוחלף.`)) return;
-      act(() => data);
+      if (!window.confirm(`לשחזר ${data.tasks.length} משימות מהגיבוי? מה שיש עכשיו יוחלף${syncStatus === 'off' ? '' : ' – גם במכשירים האחרים'}.`)) return;
+      // השחזור נחשב לעריכה חדשה, כדי שיגבר על מה שבשרת
+      const now = Date.now();
+      act((s) => ({
+        ...data,
+        tasks: data.tasks.map((t) => ({ ...t, updatedAt: now })),
+        categories: data.categories.map((c) => ({ ...c, updatedAt: now })),
+        sync: s.sync,
+      }));
       onClose();
     } catch {
       window.alert('הקובץ לא נראה כמו גיבוי של סדר');
@@ -39,7 +46,24 @@ export default function SettingsSheet({ onClose }) {
   return (
     <Sheet title="הגדרות" onClose={onClose}>
       <div className="space-y-2">
-        <h3 className="text-sm font-bold text-stone-500 mt-1">תזכורות</h3>
+        <h3 className="text-sm font-bold text-stone-500 mt-1">סנכרון בין מכשירים</h3>
+        {syncStatus === 'off' ? (
+          <button onClick={() => { onClose(); openLogin(); }} className={row}>
+            <CloudOff size={20} className="text-stone-400" />
+            <span>חיבור לסנכרון<span className="block text-xs text-stone-500">כדי שהמשימות יהיו זהות בטלפון ובמחשב</span></span>
+          </button>
+        ) : (
+          <div className={row}>
+            <Cloud size={20} className="text-emerald-600" />
+            <span className="flex-1">מחובר – המשימות מסתנכרנות<span className="block text-xs text-stone-500">{syncStatus === 'offline' ? 'אין אינטרנט כרגע – יסונכרן כשהרשת תחזור' : syncStatus === 'error' ? 'הסנכרון האחרון נכשל' : 'בטלפון ובמחשב, אוטומטית'}</span></span>
+            <button onClick={syncNow} className="text-xs rounded-lg bg-white border border-stone-200 px-2 py-1">סנכרון עכשיו</button>
+          </div>
+        )}
+        {syncStatus !== 'off' && (
+          <button onClick={() => window.confirm('לנתק את המכשיר הזה מהסנכרון? המשימות יישארו גם כאן וגם בשרת.') && disconnect()} className="text-xs text-stone-500 underline">ניתוק המכשיר הזה</button>
+        )}
+
+        <h3 className="text-sm font-bold text-stone-500 pt-3">תזכורות</h3>
         {perm === 'granted' ? (
           <div className={row}><Bell size={20} className="text-emerald-600" /><span>התראות מופעלות ✓<span className="block text-xs text-stone-500">מגיעות כשהאפליקציה פתוחה או ברקע</span></span></div>
         ) : perm === 'unsupported' ? (
@@ -62,7 +86,7 @@ export default function SettingsSheet({ onClose }) {
         </div>
 
         <h3 className="text-sm font-bold text-stone-500 pt-3">גיבוי</h3>
-        <p className="text-xs text-stone-500">הכול נשמר במכשיר הזה בלבד. מומלץ לגבות מדי פעם, ולהעביר כך למכשיר אחר.</p>
+        <p className="text-xs text-stone-500">{syncStatus === 'off' ? 'בלי סנכרון הכול נשמר במכשיר הזה בלבד – מומלץ לגבות מדי פעם.' : 'גיבוי לקובץ, ליתר ביטחון.'}</p>
         <button onClick={backup} className={row}><Download size={20} className="text-violet-600" />הורדת גיבוי ({state.tasks.length} משימות)</button>
         <label className={`${row} cursor-pointer`}>
           <Upload size={20} className="text-violet-600" />שחזור מגיבוי
