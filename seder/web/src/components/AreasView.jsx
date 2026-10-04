@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { ChevronRight, Pencil, Plus, Share2 } from 'lucide-react';
+import { ArrowUpDown, ChevronDown, ChevronRight, ChevronUp, Pencil, Plus, Share2 } from 'lucide-react';
 import { useStore } from '../App';
-import { COLORS, removeCategory, sortTasks, topLevel, upsertCategory } from '../lib/store';
+import { COLORS, moveCategory, removeCategory, sortTasks, topLevel, upsertCategory } from '../lib/store';
 import { colorOf } from '../lib/colors';
 import { listText, shareText } from '../lib/share';
 import { TaskList } from './TaskItem';
@@ -85,34 +85,66 @@ function CategoryDetail({ id, back }) {
   );
 }
 
+// שינוי סדר התחומים: רשימה אחת עם חצים למעלה / למטה. הסדר הזה הוא הסדר בכל האפליקציה
+// (כאן, בלוח, ובבחירת תחום במשימה), ומסתנכרן לכל המכשירים
+function CategoryOrder({ done }) {
+  const { state, act } = useStore();
+  const last = state.categories.length - 1;
+  const arrow = 'p-2 rounded-xl bg-stone-100 text-stone-600 disabled:opacity-30';
+  return (
+    <div className="mt-3 lg:max-w-xl">
+      <p className="text-sm text-stone-500 mb-2">החצים מזיזים תחום למעלה או למטה. הסדר נשמר מיד, בכל המכשירים.</p>
+      <div className="space-y-2">
+        {state.categories.map((c, i) => (
+          <div key={c.id} className="flex items-center gap-3 rounded-2xl bg-card border border-stone-200 p-2 pr-3 shadow-sm">
+            <span className={`w-9 h-9 shrink-0 rounded-xl flex items-center justify-center text-lg ${colorOf(c.color).soft}`}>{c.emoji}</span>
+            <span className="flex-1 min-w-0 font-medium truncate">{c.name}</span>
+            <button aria-label={`להזיז את ${c.name} למעלה`} disabled={i === 0} onClick={() => act(moveCategory, c.id, -1)} className={arrow}><ChevronUp size={20} /></button>
+            <button aria-label={`להזיז את ${c.name} למטה`} disabled={i === last} onClick={() => act(moveCategory, c.id, 1)} className={arrow}><ChevronDown size={20} /></button>
+          </div>
+        ))}
+      </div>
+      <button onClick={done} className="mt-3 w-full rounded-2xl bg-violet-600 text-white font-bold py-3">סיום</button>
+    </div>
+  );
+}
+
 export default function AreasView({ area, setArea }) {
   const { state } = useStore();
   const [adding, setAdding] = useState(false);
+  const [ordering, setOrdering] = useState(false);
   if (area) return <CategoryDetail id={area} back={() => setArea(null)} />;
 
   const uncategorized = sortTasks(topLevel(state.tasks).filter((t) => !t.categoryId && !t.done && t.type !== 'later'));
   return (
     <div>
-      <h2 className="text-xl font-bold mt-1">תחומי חיים</h2>
-      <div className="grid grid-cols-2 gap-2 mt-3 sm:grid-cols-3 xl:grid-cols-4 lg:gap-3">
-        {state.categories.map((c) => {
-          const open = topLevel(state.tasks).filter((t) => t.categoryId === c.id && !t.done && t.type !== 'later').length;
-          return (
-            <button key={c.id} onClick={() => setArea(c.id)} className="flex items-center gap-3 rounded-2xl bg-card border border-stone-200 p-3 shadow-sm text-right">
-              <span className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center text-xl ${colorOf(c.color).soft}`}>{c.emoji}</span>
-              <span className="min-w-0">
-                <span className="block font-medium truncate">{c.name}</span>
-                <span className="block text-xs text-stone-500">{open ? `${open} פתוחות` : 'הכול מסודר'}</span>
-              </span>
-            </button>
-          );
-        })}
-        <button onClick={() => setAdding(true)} className="flex items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-violet-200 text-violet-700 p-3">
-          <Plus size={20} />תחום חדש
-        </button>
+      <div className="flex items-center justify-between mt-1">
+        <h2 className="text-xl font-bold">תחומי חיים</h2>
+        {!ordering && state.categories.length > 1 && (
+          <button onClick={() => setOrdering(true)} className="flex items-center gap-1.5 rounded-xl bg-stone-100 text-stone-600 px-3 py-1.5 text-sm"><ArrowUpDown size={16} />שינוי סדר</button>
+        )}
       </div>
+      {ordering ? <CategoryOrder done={() => setOrdering(false)} /> : (
+        <div className="grid grid-cols-2 gap-2 mt-3 sm:grid-cols-3 xl:grid-cols-4 lg:gap-3">
+          {state.categories.map((c) => {
+            const open = topLevel(state.tasks).filter((t) => t.categoryId === c.id && !t.done && t.type !== 'later').length;
+            return (
+              <button key={c.id} onClick={() => setArea(c.id)} className="flex items-center gap-3 rounded-2xl bg-card border border-stone-200 p-3 shadow-sm text-right">
+                <span className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center text-xl ${colorOf(c.color).soft}`}>{c.emoji}</span>
+                <span className="min-w-0">
+                  <span className="block font-medium truncate">{c.name}</span>
+                  <span className="block text-xs text-stone-500">{open ? `${open} פתוחות` : 'הכול מסודר'}</span>
+                </span>
+              </button>
+            );
+          })}
+          <button onClick={() => setAdding(true)} className="flex items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-violet-200 text-violet-700 p-3">
+            <Plus size={20} />תחום חדש
+          </button>
+        </div>
+      )}
 
-      {uncategorized.length > 0 && (
+      {!ordering && uncategorized.length > 0 && (
         <Section title="בלי תחום">
           <TaskList tasks={uncategorized} />
         </Section>

@@ -10,6 +10,11 @@
   --color-ink: #1c1917;
 }
 
+/* גודל הטקסט מההגדרות (src/lib/fontsize.js): 1 / 1.125 / 1.25. כל הגדלים של Tailwind יחסיים אליו */
+html {
+  font-size: calc(16px * var(--font-scale, 1));
+}
+
 html,
 body {
   font-family: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -122,6 +127,6 @@ body {
 /* במחשב: הכול קצת יותר גדול (הגדלים של Tailwind יחסיים לגודל הזה) */
 @media (min-width: 1024px) {
   html {
-    font-size: 17.5px;
+    font-size: calc(17.5px * var(--font-scale, 1));
   }
 }

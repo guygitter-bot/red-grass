@@ -8,6 +8,7 @@ import { downloadIcs, googleCalendarUrl } from '../lib/calendar';
 import { shareText, taskText } from '../lib/share';
 import { colorOf } from '../lib/colors';
 import { Chip, Sheet } from './ui';
+import Attachments from './Attachments';
 
 // בלי שעה: התזכורת יוצאת ב-9 בבוקר של אותו יום
 const MORNING_OPTIONS = [REMIND_OPTIONS[0], { value: 0, label: 'בבוקר של אותו יום (9:00)' }];
@@ -230,6 +231,9 @@ export default function TaskEditor({ initial, onClose }) {
           <button type="button" aria-label="הוספת קישור" onClick={addLink} className="rounded-xl bg-violet-100 text-violet-700 px-3"><Plus size={20} /></button>
         </div>
       </div>
+
+      <span className={label}>תמונות וקבצים</span>
+      <Attachments files={task.attachments} onChange={(fn) => setTask((t) => ({ ...t, attachments: fn(t.attachments) }))} />
 
       <span className={label}>הערות</span>
       <textarea value={task.notes} onChange={(e) => set({ notes: e.target.value })} rows={4} placeholder="פרטים, מחשבות, ממי מחכים לתשובה..." className={`${input} resize-y`} />

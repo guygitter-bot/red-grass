@@ -85,7 +85,7 @@ export function save(state) {
 
 export function normalize(data) {
   return {
-    categories: Array.isArray(data?.categories) && data.categories.length ? data.categories : DEFAULT_CATEGORIES,
+    categories: Array.isArray(data?.categories) && data.categories.length ? sortCategories(data.categories) : DEFAULT_CATEGORIES,
     tasks: Array.isArray(data?.tasks) ? data.tasks.filter((t) => t && t.id && typeof t.title === 'string') : [],
     notified: data?.notified && typeof data.notified === 'object' ? data.notified : {},
     profile: normalizeProfile(data?.profile),
@@ -108,6 +108,7 @@ export function makeTask(fields) {
     remind: null,
     links: [],
     contacts: [],
+    attachments: [],
     done: false,
     doneAt: null,
     createdAt: now,
@@ -163,10 +164,35 @@ export function removeTask(state, id) {
 export function upsertCategory(state, fields) {
   const cat = { ...fields, updatedAt: Date.now() };
   const exists = state.categories.some((c) => c.id === cat.id);
+  // תחום חדש נכנס בסוף הרשימה
+  const last = state.categories.reduce((max, c, i) => Math.max(max, Number.isFinite(c.order) ? c.order : i), -1);
   return {
     ...state,
-    categories: exists ? state.categories.map((c) => (c.id === cat.id ? cat : c)) : [...state.categories, { ...cat, id: cat.id || newId() }],
+    categories: exists ? state.categories.map((c) => (c.id === cat.id ? cat : c)) : [...state.categories, { ...cat, id: cat.id || newId(), order: last + 1 }],
   };
+}
+
+// ---- סדר התחומים ----
+// לכל תחום order (מספר). תחומים ישנים בלי order נשארים לפי המקום שלהם ברשימה.
+// הסדר נשמר בתוך כל תחום, כדי שיסתנכרן בין המכשירים כמו כל עריכה אחרת
+
+export function sortCategories(categories) {
+  return categories
+    .map((c, i) => ({ c, key: Number.isFinite(c.order) ? c.order : i, i }))
+    .sort((a, b) => a.key - b.key || a.i - b.i)
+    .map((x) => x.c);
+}
+
+// הזזת תחום מקום אחד למעלה (-1) או למטה (+1). כל התחומים מקבלים מספור חדש 0,1,2...
+export function moveCategory(state, id, delta) {
+  const list = sortCategories(state.categories);
+  const from = list.findIndex((c) => c.id === id);
+  const to = from + delta;
+  if (from < 0 || to < 0 || to >= list.length) return state;
+  const next = [...list];
+  [next[from], next[to]] = [next[to], next[from]];
+  const now = Date.now();
+  return { ...state, categories: next.map((c, i) => (c.order === i ? c : { ...c, order: i, updatedAt: now })) };
 }
 
 export function removeCategory(state, id) {
@@ -266,7 +292,28 @@ export function dueReminders(state, now = new Date()) {
 export function search(tasks, query) {
   const q = query.trim().toLowerCase();
   if (!q) return [];
-  return tasks.filter((t) => `${t.title} ${t.notes} ${(t.links || []).map((l) => l.url).join(' ')} ${contactsOf(t).map((c) => `${c.name} ${c.phone}`).join(' ')}`.toLowerCase().includes(q));
+  return tasks.filter((t) => `${t.title} ${t.notes} ${(t.links || []).map((l) => l.url).join(' ')} ${contactsOf(t).map((c) => `${c.name} ${c.phone}`).join(' ')} ${attachmentsOf(t).map((a) => a.name).join(' ')}`.toLowerCase().includes(q));
+}
+
+// ---- קבצים ותמונות ----
+// בכל משימה: attachments = [{ id, name, type, size }]. הקובץ עצמו נשמר בשרת (seder/api/files.js),
+// ובמשימה רק הפרטים – כך שהמשימות נשארות קטנות ומסתנכרנות מהר. משימות ישנות בלי השדה = בלי קבצים
+
+export const MAX_FILE_BYTES = 4 * 1024 * 1024;
+
+export function attachmentsOf(task) {
+  return (Array.isArray(task?.attachments) ? task.attachments : []).filter((a) => a && typeof a.id === 'string' && a.id);
+}
+
+export function isImage(attachment) {
+  return /^image\//.test(attachment?.type || '');
+}
+
+// "1.2MB" / "350KB"
+export function fileSize(bytes) {
+  const n = Number(bytes) || 0;
+  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1).replace(/\.0$/, '')}MB`;
+  return `${Math.max(1, Math.round(n / 1024))}KB`;
 }
 
 // ---- אנשים / גורמים לבירור ----

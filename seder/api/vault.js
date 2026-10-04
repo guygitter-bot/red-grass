@@ -13,6 +13,7 @@
 //   subs           -> { <id>: { endpoint, keys } }  המכשירים שהפעילו התראות
 //   tz             -> אזור הזמן של המשתמשת (לחישוב שעות התזכורות)
 //   sent           -> { <taskId>: <זמן התזכורת> }  מה כבר נשלח (שינוי שעה = תזכורת חדשה)
+//   fm:<id>, fc:<id>:<n> -> קבצים ותמונות שמצורפים למשימות (ראו files.js)
 //
 // התזכורות: אחרי כל שינוי במשימות מחושבת התזכורת הקרובה, ו-Durable Object alarm "מעיר" את הכספת
 // בדיוק בזמן – והיא שולחת התראה לכל המכשירים, גם כשהאפליקציה סגורה.
@@ -28,6 +29,7 @@ const FAIL_WINDOW_MS = 15 * 60 * 1000;
 
 import { createVapidKeys, sendPush, validSubscription } from './push.js';
 import { reminderUtc, validTimeZone } from './reminders.js';
+import { cleanFile, cleanupFiles, getFile, putFile } from './files.js';
 
 // תזכורת שהזמן שלה עבר לפני יותר מזה – כבר לא נשלחת (למשל משימה שנוספה עם תזכורת בעבר)
 export const LATE_WINDOW_MS = 2 * 3600 * 1000;
@@ -122,6 +124,20 @@ export class Vault {
       const result = await sync(this.storage, since, changes);
       if (result.accepted) await this.schedule();
       return json(200, result);
+    }
+
+    if (url.pathname === '/files/put') {
+      const { file, error } = cleanFile(body);
+      if (error) return json(400, { error });
+      const saved = await putFile(this.storage, file);
+      // הזדמנות לנקות קבצים שכבר לא שייכים לאף משימה
+      await cleanupFiles(this.storage);
+      return json(200, { file: saved });
+    }
+
+    if (url.pathname === '/files/get') {
+      const file = await getFile(this.storage, body.id);
+      return file ? json(200, { file }) : json(404, { error: 'הקובץ לא נמצא' });
     }
 
     if (url.pathname === '/push/key') return json(200, { publicKey: (await this.vapid()).publicKey });

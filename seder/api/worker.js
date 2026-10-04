@@ -3,7 +3,9 @@
 //   POST /sync  {since, changes}      -> {cursor, more, records}   (Authorization: Bearer <token>)
 //   POST /push/key | /push/subscribe {subscription, tz} | /push/unsubscribe | /push/test
 //                                     -> התראות לטלפון גם כשהאפליקציה סגורה (ראו vault.js, push.js)
-//   POST /requests {text}             -> בקשה לשינוי באפליקציה: נפתחת כ-issue ב-GitHub (ו-Claude מטפל בה)
+//   POST /files/put {id, name, type, data} -> {file}   קובץ / תמונה למשימה (data = base64, עד 4MB)
+//   POST /files/get {id}              -> {file: {id, name, type, size, data}}
+//   POST /requests {text}            -> בקשה לשינוי באפליקציה: נפתחת כ-issue ב-GitHub (ו-Claude מטפל בה)
 //   POST /requests/list               -> הבקשות והמצב של כל אחת
 //   POST /requests/approve {number}   -> אישור השינוי: מיזוג ה-PR (בלי להיכנס ל-GitHub)
 //   POST /requests/reject  {number}   -> לא מתאים: סגירת הבקשה
@@ -15,6 +17,8 @@ import { approveRequest, createRequest, listRequests, rejectRequest, retryReques
 export { Vault };
 
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
+// קובץ מצורף מגיע כ-base64 (גדול בשליש מהקובץ עצמו)
+const MAX_FILE_BODY_BYTES = 6 * 1024 * 1024;
 
 function corsHeaders(request, env) {
   const origin = request.headers.get('origin') || '';
@@ -38,11 +42,11 @@ export default {
     const { pathname } = new URL(request.url);
     if (pathname === '/' || pathname === '/health') return reply(200, { ok: true });
     if (!env.SEDER_PASSWORD || env.SEDER_PASSWORD === 'none' || !env.VAULT) return reply(503, { error: 'השרת לא מוגדר (חסרה סיסמה)' });
-    const ROUTES = ['/login', '/sync', '/push/key', '/push/subscribe', '/push/unsubscribe', '/push/test', '/requests', '/requests/list', '/requests/approve', '/requests/reject', '/requests/retry'];
+    const ROUTES = ['/login', '/sync', '/push/key', '/push/subscribe', '/push/unsubscribe', '/push/test', '/files/put', '/files/get', '/requests', '/requests/list', '/requests/approve', '/requests/reject', '/requests/retry'];
     if (request.method !== 'POST' || !ROUTES.includes(pathname)) return reply(404, { error: 'לא נמצא' });
 
     const text = await request.text();
-    if (text.length > MAX_BODY_BYTES) return reply(413, { error: 'גדול מדי' });
+    if (text.length > (pathname === '/files/put' ? MAX_FILE_BODY_BYTES : MAX_BODY_BYTES)) return reply(413, { error: 'גדול מדי' });
 
     if (pathname !== '/login') {
       const auth = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
