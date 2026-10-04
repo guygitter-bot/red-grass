@@ -136,7 +136,7 @@ export default function TaskEditor({ initial, onClose }) {
               <input type="time" aria-label="שעת התזכורת" value={task.remindTime} onChange={(e) => e.target.value && set({ remindTime: e.target.value })} className={`${input} max-w-36`} />
             )}
           </div>
-          {task.remind != null && <p className="mt-1 text-xs text-stone-500">ההתראה מגיעה כשהאפליקציה פתוחה או ברקע. כדי לקבל אותה גם כשהיא סגורה – לשמור גם ביומן (הכפתור למטה).</p>}
+          {task.remind != null && <p className="mt-1 text-xs text-stone-500">ההתראה מגיעה לטלפון בזמן, גם כשהאפליקציה סגורה – אחרי "הפעלת התראות" בהגדרות (פעם אחת בכל מכשיר).</p>}
         </>
       )}
 

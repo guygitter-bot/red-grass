@@ -9,6 +9,13 @@
 //   s:<seq>        -> "r:<kind>:<id>"   (אינדקס לפי סדר השינויים)
 //   seq            -> המספר הרץ האחרון
 //   fails          -> { count, since }  (ניסיונות כניסה שגויים)
+//   vapid          -> מפתחות ההתראות של השרת (נוצרים פעם אחת)
+//   subs           -> { <id>: { endpoint, keys } }  המכשירים שהפעילו התראות
+//   tz             -> אזור הזמן של המשתמשת (לחישוב שעות התזכורות)
+//   sent           -> { <taskId>: <זמן התזכורת> }  מה כבר נשלח (שינוי שעה = תזכורת חדשה)
+//
+// התזכורות: אחרי כל שינוי במשימות מחושבת התזכורת הקרובה, ו-Durable Object alarm "מעיר" את הכספת
+// בדיוק בזמן – והיא שולחת התראה לכל המכשירים, גם כשהאפליקציה סגורה.
 
 // setting – הגדרות אישיות שמסתנכרנות (למשל השם לברכה בלוח)
 export const KINDS = new Set(['task', 'category', 'setting']);
@@ -18,6 +25,14 @@ export const MAX_CHANGES = 2000;
 export const PAGE = 1000;
 const MAX_FAILS = 10;
 const FAIL_WINDOW_MS = 15 * 60 * 1000;
+
+import { createVapidKeys, sendPush, validSubscription } from './push.js';
+import { reminderUtc, validTimeZone } from './reminders.js';
+
+// תזכורת שהזמן שלה עבר לפני יותר מזה – כבר לא נשלחת (למשל משימה שנוספה עם תזכורת בעבר)
+export const LATE_WINDOW_MS = 2 * 3600 * 1000;
+const PUSH_SUBJECT = 'https://seder-tasks.pages.dev';
+const MAX_SUBS = 10;
 
 const seqKey = (n) => `s:${String(n).padStart(12, '0')}`;
 const recKey = (kind, id) => `r:${kind}:${id}`;
@@ -104,8 +119,117 @@ export class Vault {
     if (url.pathname === '/sync') {
       const since = Number.isInteger(body.since) && body.since >= 0 ? body.since : 0;
       const changes = Array.isArray(body.changes) ? body.changes.slice(0, MAX_CHANGES) : [];
-      return json(200, await sync(this.storage, since, changes));
+      const result = await sync(this.storage, since, changes);
+      if (result.accepted) await this.schedule();
+      return json(200, result);
     }
+
+    if (url.pathname === '/push/key') return json(200, { publicKey: (await this.vapid()).publicKey });
+
+    if (url.pathname === '/push/subscribe') {
+      const sub = body.subscription;
+      if (!sub || !validSubscription(sub)) return json(400, { error: 'מכשיר לא נתמך להתראות' });
+      const subs = (await this.storage.get('subs')) || {};
+      const id = await subId(sub.endpoint);
+      subs[id] = { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth }, createdAt: subs[id]?.createdAt || Date.now() };
+      // שומרים רק את המכשירים האחרונים
+      const keep = Object.entries(subs).sort((a, b) => b[1].createdAt - a[1].createdAt).slice(0, MAX_SUBS);
+      await this.storage.put('subs', Object.fromEntries(keep));
+      if (validTimeZone(body.tz)) await this.storage.put('tz', body.tz);
+      await this.schedule();
+      return json(200, { ok: true, devices: keep.length });
+    }
+
+    if (url.pathname === '/push/unsubscribe') {
+      const subs = (await this.storage.get('subs')) || {};
+      if (typeof body.endpoint === 'string') delete subs[await subId(body.endpoint)];
+      await this.storage.put('subs', subs);
+      return json(200, { ok: true });
+    }
+
+    if (url.pathname === '/push/test') {
+      const result = await this.pushAll({ id: '', title: '🔔 התראת בדיקה', body: 'מעולה! ככה ייראו התזכורות – גם כשהאפליקציה סגורה.' });
+      return json(200, result);
+    }
+
     return json(404, { error: 'לא נמצא' });
   }
+
+  async vapid() {
+    let vapid = await this.storage.get('vapid');
+    if (!vapid) {
+      vapid = await createVapidKeys();
+      await this.storage.put('vapid', vapid);
+    }
+    return vapid;
+  }
+
+  async reminders() {
+    const tz = (await this.storage.get('tz')) || 'Asia/Jerusalem';
+    const recs = await this.storage.list({ prefix: 'r:task:' });
+    const out = [];
+    for (const rec of recs.values()) {
+      if (rec.deleted) continue;
+      const at = reminderUtc(rec.data, tz);
+      if (at != null) out.push({ task: rec.data, at });
+    }
+    return out;
+  }
+
+  // קובע את ה"השכמה" הבאה לפי התזכורת הקרובה שעוד לא נשלחה
+  async schedule(now = Date.now()) {
+    const subs = (await this.storage.get('subs')) || {};
+    if (!Object.keys(subs).length) return null;
+    const sent = (await this.storage.get('sent')) || {};
+    let next = null;
+    for (const { task, at } of await this.reminders()) {
+      if (sent[task.id] === at || now - at > LATE_WINDOW_MS) continue;
+      if (next == null || at < next) next = at;
+    }
+    if (next == null) {
+      await this.storage.deleteAlarm?.();
+      return null;
+    }
+    const when = Math.max(next, now + 1000);
+    await this.storage.setAlarm(when);
+    return when;
+  }
+
+  async alarm() {
+    const now = Date.now();
+    const sent = (await this.storage.get('sent')) || {};
+    const live = new Set();
+    for (const { task, at } of await this.reminders()) {
+      live.add(task.id);
+      if (sent[task.id] === at || at > now || now - at > LATE_WINDOW_MS) continue;
+      await this.pushAll({ id: task.id, title: `🔔 ${task.title}`, body: task.time ? `היום ב-${task.time}` : 'תזכורת להיום' });
+      sent[task.id] = at;
+    }
+    // ניקוי: משימות שנמחקו
+    for (const id of Object.keys(sent)) if (!live.has(id)) delete sent[id];
+    await this.storage.put('sent', sent);
+    await this.schedule(now);
+  }
+
+  async pushAll(payload) {
+    const subs = (await this.storage.get('subs')) || {};
+    const vapid = await this.vapid();
+    let sent = 0;
+    let changed = false;
+    for (const [id, sub] of Object.entries(subs)) {
+      const result = await sendPush(sub, payload, vapid, PUSH_SUBJECT).catch(() => 'error');
+      if (result === 'ok') sent += 1;
+      if (result === 'gone') {
+        delete subs[id];
+        changed = true;
+      }
+    }
+    if (changed) await this.storage.put('subs', subs);
+    return { sent, devices: Object.keys(subs).length };
+  }
+}
+
+async function subId(endpoint) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(endpoint));
+  return [...new Uint8Array(digest).slice(0, 12)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }

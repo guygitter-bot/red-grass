@@ -15,6 +15,7 @@ import RequestsSheet from './components/RequestsSheet';
 import { notify } from './lib/notify';
 import { AuthError, collectChanges, getToken, logout, resetSync, runSync } from './lib/sync';
 import { RELOCK_AFTER_MS } from './lib/lock';
+import { enablePush } from './lib/push';
 import LockScreen from './components/LockScreen';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -194,6 +195,8 @@ export default function App() {
           setLocked(false);
           setSyncStatus(online ? 'ok' : 'offline');
           sync();
+          // המכשיר נרשם מחדש להתראות (אם הן מופעלות) – כדי שהשרת תמיד יוכל לשלוח אליו
+          if (online) enablePush();
         }}
       />
     );
