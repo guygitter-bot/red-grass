@@ -1,7 +1,7 @@
 // סנכרון ליומן: קישור "הוסף ליומן גוגל" לכל משימה, וקובץ ‎.ics‎ (יומן אפל / אאוטלוק / גוגל)
 // עם תזכורת מובנית – כך שההתראה מגיעה מהיומן של הטלפון גם כשהאפליקציה סגורה.
 import { addDays, dueDate, fromKey } from './dates';
-import { contactsText, reminderAt } from './store';
+import { contactsText, isRepeating, reminderAt } from './store';
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -39,6 +39,11 @@ function fold(line) {
   return parts.join('\r\n ');
 }
 
+// משימה חוזרת -> אירוע חוזר ביומן (RRULE:FREQ=DAILY / WEEKLY / MONTHLY)
+function rrule(task) {
+  return isRepeating(task) ? `RRULE:FREQ=${task.repeat.toUpperCase()}` : null;
+}
+
 function description(task) {
   const lines = [];
   if (task.notes) lines.push(task.notes);
@@ -62,6 +67,7 @@ function eventLines(task, now) {
   } else {
     lines.push(`DTSTART;VALUE=DATE:${dateOnly(task.due)}`, `DTEND;VALUE=DATE:${dateOnly(addDays(task.due, 1))}`);
   }
+  if (rrule(task)) lines.push(rrule(task));
   const desc = description(task);
   if (desc) lines.push(`DESCRIPTION:${escapeIcs(desc)}`);
   if (task.links?.[0]) lines.push(`URL:${task.links[0].url}`);
@@ -92,6 +98,7 @@ export function googleCalendarUrl(task) {
   } else if (task.due) {
     params.set('dates', `${dateOnly(task.due)}/${dateOnly(addDays(task.due, 1))}`);
   }
+  if (rrule(task)) params.set('recur', rrule(task));
   const desc = description(task);
   if (desc) params.set('details', desc);
   return `https://calendar.google.com/calendar/render?${params}`;

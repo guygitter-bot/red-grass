@@ -28,7 +28,7 @@ const MAX_FAILS = 10;
 const FAIL_WINDOW_MS = 15 * 60 * 1000;
 
 import { createVapidKeys, sendPush, validSubscription } from './push.js';
-import { reminderUtc, validTimeZone } from './reminders.js';
+import { reminderTimes, validTimeZone } from './reminders.js';
 import { cleanFile, cleanupFiles, getFile, putFile } from './files.js';
 
 // תזכורת שהזמן שלה עבר לפני יותר מזה – כבר לא נשלחת (למשל משימה שנוספה עם תזכורת בעבר)
@@ -180,14 +180,14 @@ export class Vault {
     return vapid;
   }
 
-  async reminders() {
+  async reminders(now = Date.now()) {
     const tz = (await this.storage.get('tz')) || 'Asia/Jerusalem';
     const recs = await this.storage.list({ prefix: 'r:task:' });
     const out = [];
     for (const rec of recs.values()) {
       if (rec.deleted) continue;
-      const at = reminderUtc(rec.data, tz);
-      if (at != null) out.push({ task: rec.data, at });
+      // תזכורת חוזרת: גם הפעם האחרונה שהגיעה וגם הבאה (כל פעם חדשה נשלחת שוב)
+      for (const at of reminderTimes(rec.data, tz, now)) out.push({ task: rec.data, at });
     }
     return out;
   }
@@ -198,7 +198,7 @@ export class Vault {
     if (!Object.keys(subs).length) return null;
     const sent = (await this.storage.get('sent')) || {};
     let next = null;
-    for (const { task, at } of await this.reminders()) {
+    for (const { task, at } of await this.reminders(now)) {
       if (sent[task.id] === at || now - at > LATE_WINDOW_MS) continue;
       if (next == null || at < next) next = at;
     }
@@ -215,7 +215,7 @@ export class Vault {
     const now = Date.now();
     const sent = (await this.storage.get('sent')) || {};
     const live = new Set();
-    for (const { task, at } of await this.reminders()) {
+    for (const { task, at } of await this.reminders(now)) {
       live.add(task.id);
       if (sent[task.id] === at || at > now || now - at > LATE_WINDOW_MS) continue;
       await this.pushAll({ id: task.id, title: `🔔 ${task.title}`, body: task.time ? `היום ב-${task.time}` : 'תזכורת להיום' });

@@ -1,6 +1,6 @@
-import { Bell, Check, Clock, Link2, ListChecks, Paperclip, PlayCircle, User } from 'lucide-react';
+import { Bell, Check, Clock, Link2, ListChecks, Paperclip, PlayCircle, Repeat, User } from 'lucide-react';
 import { useStore } from '../App';
-import { PRIORITIES, TYPES, attachmentsOf, contactsOf, isOverdue, progress, reminderAt, toggleDone } from '../lib/store';
+import { PRIORITIES, REPEATS, TYPES, attachmentsOf, contactsOf, isOverdue, isRepeating, progress, reminderAt, repeatLabel, toggleDone } from '../lib/store';
 import { dayLabel } from '../lib/dates';
 import { colorOf } from '../lib/colors';
 
@@ -42,6 +42,7 @@ export default function TaskItem({ task, showDate = true, showCategory = true })
           {remindAt && !task.done && (
             <span className="flex items-center gap-0.5" title="תזכורת"><Bell size={12} />{`${String(remindAt.getHours()).padStart(2, '0')}:${String(remindAt.getMinutes()).padStart(2, '0')}`}</span>
           )}
+          {isRepeating(task) && !task.done && <span className="flex items-center gap-0.5" title={repeatLabel(task)}><Repeat size={12} />{REPEATS[task.repeat].label}</span>}
           {total > 0 && <span className="flex items-center gap-0.5"><ListChecks size={12} />{done}/{total}</span>}
           {task.links?.length > 0 && (video ? <PlayCircle size={12} /> : <Link2 size={12} />)}
           {files > 0 && <span className="flex items-center gap-0.5" title="תמונות וקבצים"><Paperclip size={12} />{files > 1 ? files : ''}</span>}

@@ -1,6 +1,6 @@
 import { ClipboardPaste } from 'lucide-react';
 import { useStore } from '../App';
-import { dashboard, forDay, sortTasks } from '../lib/store';
+import { dashboard, forDay, isList, sortTasks } from '../lib/store';
 import { DAY_NAMES, greeting, todayKey } from '../lib/dates';
 import { colorOf } from '../lib/colors';
 import { TaskList } from './TaskItem';
@@ -100,7 +100,7 @@ export default function Dashboard() {
                   <span className={`w-8 h-8 rounded-xl flex items-center justify-center ${colorOf(c.color).soft}`}>{c.emoji}</span>
                   <span className="font-medium truncate">{c.name}</span>
                 </div>
-                <div className="text-xs text-stone-500 mt-2">{c.open ? `${c.open} פתוחות` : 'אין משימות פתוחות'}</div>
+                <div className="text-xs text-stone-500 mt-2">{isList(c) ? `📝 ${c.open ? `${c.open} פריטים ברשימה` : 'הכול סומן'}` : c.open ? `${c.open} פתוחות` : 'אין משימות פתוחות'}</div>
                 <div className="mt-1.5 h-1.5 rounded-full bg-stone-100 overflow-hidden">
                   <div className={`h-full rounded-full ${colorOf(c.color).bar}`} style={{ width: `${total ? (c.done / total) * 100 : 0}%` }} />
                 </div>
