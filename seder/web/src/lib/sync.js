@@ -151,3 +151,16 @@ export async function sendChangeRequest(text) {
 export async function listChangeRequests() {
   return (await post('/requests/list', {}, getToken())).requests;
 }
+
+// אישור / דחייה / ניסיון חוזר של בקשה – השרת מבצע ב-GitHub מאחורי הקלעים
+export async function approveChangeRequest(number) {
+  return post('/requests/approve', { number }, getToken());
+}
+
+export async function rejectChangeRequest(number) {
+  return post('/requests/reject', { number }, getToken());
+}
+
+export async function retryChangeRequest(number) {
+  return post('/requests/retry', { number }, getToken());
+}

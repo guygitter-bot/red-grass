@@ -99,7 +99,7 @@ export default function SettingsSheet({ onClose }) {
         <h3 className="text-sm font-bold text-stone-500 pt-3">שיפור האפליקציה</h3>
         <button onClick={() => { onClose(); openRequests(); }} className={row}>
           <MessageSquarePlus size={20} className="text-violet-600" />
-          <span>בקשה לשינוי באפליקציה<span className="block text-xs text-stone-500">כותבים מה לשנות – Claude מכין את זה לאישור</span></span>
+          <span>בקשה לשינוי באפליקציה<span className="block text-xs text-stone-500">כותבים מה לשנות – Claude מכין, ומאשרים כאן</span></span>
         </button>
 
         <h3 className="text-sm font-bold text-stone-500 pt-3">תזכורות</h3>
