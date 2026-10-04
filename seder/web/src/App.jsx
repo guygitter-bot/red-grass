@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Cloud, CloudOff, MessageSquarePlus, RefreshCw, Search, Settings } from 'lucide-react';
+import { Cloud, CloudOff, MessageSquarePlus, Moon, RefreshCw, Search, Settings, Sun } from 'lucide-react';
 import { dueReminders, load, save } from './lib/store';
 import { todayKey } from './lib/dates';
 import BottomNav, { SideNav } from './components/BottomNav';
@@ -16,6 +16,7 @@ import { notify } from './lib/notify';
 import { AuthError, collectChanges, getToken, logout, resetSync, runSync } from './lib/sync';
 import { RELOCK_AFTER_MS } from './lib/lock';
 import { enablePush } from './lib/push';
+import { setTheme, systemDark, toggledTheme, useTheme } from './lib/theme';
 import LockScreen from './components/LockScreen';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -205,10 +206,11 @@ export default function App() {
   return (
     <Store.Provider value={ctx}>
       <div className="min-h-screen max-w-xl mx-auto pb-28 lg:max-w-none lg:mr-64 lg:pb-12" dir="rtl">
-        <header className="lg:hidden sticky top-0 z-20 bg-[#faf8ff]/90 backdrop-blur px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-2 flex items-center justify-between">
+        <header className="lg:hidden sticky top-0 z-20 bg-page/90 backdrop-blur px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-2 flex items-center justify-between">
           <h1 className="text-2xl font-black text-violet-700 tracking-tight whitespace-nowrap">יהיה בסדר</h1>
           <div className="flex gap-1">
             <SyncButton status={syncStatus} onClick={() => (syncStatus === 'off' ? setLocked(true) : sync())} />
+            <ThemeButton />
             <button aria-label="חיפוש" onClick={() => setSheet('search')} className="p-2 rounded-full hover:bg-violet-100 text-stone-600"><Search size={22} /></button>
             <button aria-label="הגדרות" onClick={() => setSheet('settings')} className="p-2 rounded-full hover:bg-violet-100 text-stone-600"><Settings size={22} /></button>
           </div>
@@ -228,6 +230,7 @@ export default function App() {
       <BottomNav tab={tab} setTab={(t) => { setTab(t); if (t === 'areas') setArea(null); if (t === 'day') setDay(todayKey()); }} onAdd={() => setEditing({ due: tab === 'day' ? day : null, categoryId: tab === 'areas' ? area : null, type: tab === 'later' ? laterSeg : 'task' })} />
       <SideNav tab={tab} setTab={(t) => { setTab(t); if (t === 'areas') setArea(null); if (t === 'day') setDay(todayKey()); }} onAdd={() => setEditing({ due: tab === 'day' ? day : null, categoryId: tab === 'areas' ? area : null, type: tab === 'later' ? laterSeg : 'task' })}>
         <SyncButton status={syncStatus} onClick={() => (syncStatus === 'off' ? setLocked(true) : sync())} />
+        <ThemeButton />
         <button aria-label="חיפוש" onClick={() => setSheet('search')} className="p-2 rounded-full hover:bg-violet-100 text-stone-600"><Search size={22} /></button>
         <button aria-label="הגדרות" onClick={() => setSheet('settings')} className="p-2 rounded-full hover:bg-violet-100 text-stone-600"><Settings size={22} /></button>
         <button aria-label="בקשה לשינוי באפליקציה" title="בקשה לשינוי באפליקציה" onClick={() => setSheet('requests')} className="p-2 rounded-full hover:bg-violet-100 text-stone-600"><MessageSquarePlus size={22} /></button>
@@ -242,7 +245,7 @@ export default function App() {
       {toast && (
         <button
           onClick={() => { setEditing(toast); setToast(null); }}
-          className="fixed top-3 inset-x-3 z-50 max-w-xl mx-auto rounded-2xl bg-violet-700 text-white shadow-xl p-4 text-right"
+          className="fixed top-3 inset-x-3 z-50 max-w-xl mx-auto rounded-2xl bg-violet-600 text-white shadow-xl p-4 text-right"
         >
           <div className="text-xs opacity-80">🔔 תזכורת{toast.time ? ` · ${toast.time}` : ''}</div>
           <div className="font-bold">{toast.title}</div>
@@ -260,6 +263,17 @@ const SYNC_LOOK = {
   offline: { icon: CloudOff, label: 'אין אינטרנט – יסונכרן כשהרשת תחזור', className: 'text-amber-500' },
   error: { icon: CloudOff, label: 'הסנכרון נכשל – לחצי לנסות שוב', className: 'text-rose-500' },
 };
+
+// מעבר מהיר בין יום ללילה (בהגדרות אפשר גם "אוטומטי")
+function ThemeButton() {
+  const { pref, dark } = useTheme();
+  const label = dark ? 'מעבר למצב יום' : 'מעבר למצב לילה';
+  return (
+    <button aria-label={label} title={label} onClick={() => setTheme(toggledTheme(pref, systemDark()))} className="p-2 rounded-full hover:bg-violet-100 text-stone-600">
+      {dark ? <Sun size={22} /> : <Moon size={22} />}
+    </button>
+  );
+}
 
 function SyncButton({ status, onClick }) {
   const look = SYNC_LOOK[status] || SYNC_LOOK.off;

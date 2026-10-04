@@ -45,7 +45,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-4 gap-2 mt-3">
-        <Stat value={d.overdue.length} label="באיחור" tone={d.overdue.length ? 'bg-rose-100 text-rose-700' : 'bg-white text-stone-500 border border-stone-200'} onClick={() => openDay(today)} />
+        <Stat value={d.overdue.length} label="באיחור" tone={d.overdue.length ? 'bg-rose-100 text-rose-700' : 'bg-card text-stone-500 border border-stone-200'} onClick={() => openDay(today)} />
         <Stat value={d.waiting.length} label="מעקבים" tone="bg-amber-100 text-amber-800" onClick={() => openLater('followup')} />
         <Stat value={d.later} label="לבדוק" tone="bg-sky-100 text-sky-800" onClick={() => openLater('later')} />
         <Stat value={d.doneThisWeek} label="בוצעו השבוע" tone="bg-emerald-100 text-emerald-800" />
@@ -95,7 +95,7 @@ export default function Dashboard() {
           {d.byCategory.map((c) => {
             const total = c.open + c.done;
             return (
-              <button key={c.id} onClick={() => openArea(c.id)} className="rounded-2xl bg-white border border-stone-200 p-3 text-right shadow-sm">
+              <button key={c.id} onClick={() => openArea(c.id)} className="rounded-2xl bg-card border border-stone-200 p-3 text-right shadow-sm">
                 <div className="flex items-center gap-2">
                   <span className={`w-8 h-8 rounded-xl flex items-center justify-center ${colorOf(c.color).soft}`}>{c.emoji}</span>
                   <span className="font-medium truncate">{c.name}</span>

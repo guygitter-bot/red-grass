@@ -98,7 +98,7 @@ export default function AreasView({ area, setArea }) {
         {state.categories.map((c) => {
           const open = topLevel(state.tasks).filter((t) => t.categoryId === c.id && !t.done && t.type !== 'later').length;
           return (
-            <button key={c.id} onClick={() => setArea(c.id)} className="flex items-center gap-3 rounded-2xl bg-white border border-stone-200 p-3 shadow-sm text-right">
+            <button key={c.id} onClick={() => setArea(c.id)} className="flex items-center gap-3 rounded-2xl bg-card border border-stone-200 p-3 shadow-sm text-right">
               <span className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center text-xl ${colorOf(c.color).soft}`}>{c.emoji}</span>
               <span className="min-w-0">
                 <span className="block font-medium truncate">{c.name}</span>

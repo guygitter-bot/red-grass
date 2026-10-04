@@ -14,7 +14,7 @@ const MORNING_OPTIONS = [REMIND_OPTIONS[0], { value: 0, label: 'בבוקר של 
 // תזכורת בשעה מדויקת שבוחרים (ביום של המשימה)
 const CUSTOM = { value: 'custom', label: 'בשעה שאבחר...' };
 const label = 'block text-xs font-bold text-stone-500 mb-1.5 mt-4';
-const input = 'w-full rounded-xl border border-stone-200 bg-white px-3 py-2 outline-none focus:border-violet-500';
+const input = 'w-full rounded-xl border border-stone-200 bg-card px-3 py-2 outline-none focus:border-violet-500';
 
 export default function TaskEditor({ initial, onClose }) {
   const { state, act } = useStore();
