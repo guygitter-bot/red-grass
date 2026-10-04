@@ -152,6 +152,11 @@ function fakeGitHub() {
       issue.labels.push(...JSON.parse(init.body).labels.map((name) => ({ name })));
       return Response.json(issue.labels);
     }
+    if ((m = u.pathname.match(/^\/repos\/o\/r\/issues\/(\d+)\/labels\/(.+)$/)) && init.method === 'DELETE') {
+      const issue = issues.find((i) => i.number === Number(m[1]));
+      issue.labels = issue.labels.filter((l) => l.name !== decodeURIComponent(m[2]));
+      return Response.json(issue.labels);
+    }
     if ((m = u.pathname.match(/^\/repos\/o\/r\/pulls\/(\d+)\/merge$/))) {
       const pr = pulls.find((p) => p.number === Number(m[1]));
       if (pr.conflict) return new Response('{}', { status: 405 });
@@ -233,6 +238,54 @@ test('approve reports a conflict, and retry asks Claude again', async () => {
     assert.match(res.data.error, /מתנגש/);
     assert.equal((await call(env, '/requests/retry', { number: 1 }, token)).status, 200);
     assert.ok(gh.issues[0].labels.some((l) => l.name === 'seder-retry'));
+  } finally {
+    gh.restore();
+  }
+});
+
+test('a request waits for the price to be approved, and the balance goes down by what was spent', async () => {
+  const env = fakeEnv({ SEDER_GITHUB_TOKEN: 'gh-token', GITHUB_REPO: 'o/r' });
+  const token = await login(env);
+  const gh = fakeGitHub();
+  try {
+    // היתרה: עוד לא הוקלדה, סכום לא תקין נדחה
+    assert.equal((await call(env, '/requests/list', {}, token)).data.credits, null);
+    assert.equal((await call(env, '/credits', { amount: 'הרבה' }, token)).status, 400);
+    assert.equal((await call(env, '/credits', { amount: '20' })).status, 401);
+    const set = await call(env, '/credits', { amount: '20,5' }, token);
+    assert.equal(set.data.credits.amount, 20.5);
+    const setAt = Date.parse(set.data.credits.setAt);
+    const later = new Date(setAt + 60000).toISOString();
+    const before = new Date(setAt - 60000).toISOString();
+
+    await call(env, '/requests', { text: 'כפתור חדש' }, token);
+    const issue = gh.issues[0];
+    // אי אפשר לבצע לפני שיש מחיר
+    assert.equal((await call(env, '/requests/go', { number: 1 }, token)).status, 409);
+    issue.labels.push({ name: 'seder-estimating' });
+    assert.equal((await call(env, '/requests/list', {}, token)).data.requests[0].status, 'estimating');
+
+    // ה-workflow כתב הערכה (והעלות שלה), ועלות ישנה מלפני שהוקלדה היתרה לא נספרת
+    issue.body += '\n<!-- seder-estimate {"size":"small","usd":0.4,"note":"שינוי קטן"} -->'
+      + `\n<!-- seder-cost {"kind":"estimate","usd":0.01,"at":"${later}"} -->`
+      + `\n<!-- seder-cost {"kind":"work","usd":5,"at":"${before}"} -->`;
+    issue.labels = [{ name: 'seder-request' }, { name: 'seder-quote' }];
+    let list = await call(env, '/requests/list', {}, token);
+    const r = list.data.requests[0];
+    assert.equal(r.status, 'quote');
+    assert.deepEqual(r.estimate, { size: 'small', usd: 0.4, note: 'שינוי קטן' });
+    assert.equal(r.text, 'כפתור חדש');
+    assert.equal(list.data.credits.balance, 20.49);
+
+    // לבצע: Claude מתחיל
+    assert.equal((await call(env, '/requests/go', { number: 1 }, token)).status, 200);
+    assert.deepEqual(issue.labels.map((l) => l.name), ['seder-request', 'seder-go']);
+    assert.equal((await call(env, '/requests/go', { number: 1 }, token)).status, 409);
+    issue.body += `\n<!-- seder-cost {"kind":"work","usd":0.35,"at":"${later}"} -->`;
+    list = await call(env, '/requests/list', {}, token);
+    assert.equal(list.data.requests[0].status, 'working');
+    assert.equal(list.data.requests[0].cost, 5.36);
+    assert.equal(list.data.credits.balance, 20.14);
   } finally {
     gh.restore();
   }

@@ -30,6 +30,7 @@ const FAIL_WINDOW_MS = 15 * 60 * 1000;
 import { createVapidKeys, sendPush, validSubscription } from './push.js';
 import { reminderTimes, validTimeZone } from './reminders.js';
 import { cleanFile, cleanupFiles, getFile, putFile } from './files.js';
+import { cleanAmount } from './costs.js';
 
 // תזכורת שהזמן שלה עבר לפני יותר מזה – כבר לא נשלחת (למשל משימה שנוספה עם תזכורת בעבר)
 export const LATE_WINDOW_MS = 2 * 3600 * 1000;
@@ -138,6 +139,16 @@ export class Vault {
     if (url.pathname === '/files/get') {
       const file = await getFile(this.storage, body.id);
       return file ? json(200, { file }) : json(404, { error: 'הקובץ לא נמצא' });
+    }
+
+    // היתרה בחשבון הקרדיטים: בלי amount – רק קוראים; עם amount – שומרים, והחישוב מתחיל מעכשיו
+    if (url.pathname === '/credits') {
+      if (body.amount !== undefined) {
+        const amount = cleanAmount(body.amount);
+        if (amount === null) return json(400, { error: 'צריך לכתוב סכום בדולרים' });
+        await this.storage.put('credits', { amount, setAt: new Date().toISOString() });
+      }
+      return json(200, { credits: (await this.storage.get('credits')) || null });
     }
 
     if (url.pathname === '/push/key') return json(200, { publicKey: (await this.vapid()).publicKey });
