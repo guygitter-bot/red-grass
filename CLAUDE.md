@@ -37,3 +37,22 @@
 ### אחרי שה-PR מוכן
 - לתת למשתמשת **קישור למיזוג** ולהסביר במשפט מה לבדוק אחרי העלייה (בדרך כלל: לסגור ולפתוח את האפליקציה).
 - PR שנפתח בשיחה ממוזג ב-GitHub. בקשות שנשלחו מתוך האפליקציה מאושרות מתוך האפליקציה.
+
+## שאר האפליקציות במאגר
+לכל אחת: לקרוא קודם את ה-README שלה. כללים מיוחדים שנקבעו בשיחות אחרות – לבקש מאותה שיחה להוסיף כאן.
+
+### ביס – ניקוד אוכל (`points_tracker/`)
+- תיאור: `points_tracker/README.md`. האפליקציה ב-`points_tracker/web`, השרת ב-`points_tracker/proxy`.
+- עלייה: `bis-deploy.yml` – **staging** (ענף `staging` → https://staging.bis-app.pages.dev) לפני **production**
+  (main → https://bis-app.pages.dev). בקשות תיקון מתוך האפליקציה: `bis-fix.yml` (ענפים `bis-fix/*`).
+- סוכן המאכלים: `points-agent.yml`. הנוסחה זהה ב-`web/src/lib/points.js` וב-`points.py` – לשנות בשניהם.
+
+### mat-kon – מתכונים (`mat_kon/`)
+- תיאור: `mat_kon/README.md`. האפליקציה ב-`mat_kon/web`, השרת ב-`mat_kon/api`.
+- עלייה: `mat-kon.yml` אחרי מיזוג ל-main → https://mat-kon.pages.dev.
+
+### טוטו (`toto_predictor/`)
+- תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).
+
+### חשבוניות סקאלה (`scala_invoices/`)
+- תיאור: `scala_invoices/README.md`. רץ פעם בחודש (`scala-invoices.yml`).
