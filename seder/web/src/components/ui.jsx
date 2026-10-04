@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { ArrowUp, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ArrowUp, GripVertical, X } from 'lucide-react';
 import { useStore } from '../App';
 import { addTask } from '../lib/store';
 import { parseQuick } from '../lib/parse';
@@ -71,6 +71,119 @@ export function QuickAdd({ placeholder, defaults = {} }) {
         <ArrowUp size={20} />
       </button>
     </form>
+  );
+}
+
+// רשימה שמשנים את הסדר שלה במשיכה: בטלפון – מושכים בידית (שש הנקודות), במחשב – גוררים את כל השורה בעכבר.
+// במקלדת: חץ למעלה / למטה על הידית. onMove(from, to) נקרא רק כשעוזבים את הפריט במקום חדש
+export function Sortable({ items, getKey, getLabel, onMove, render }) {
+  const rows = useRef([]);
+  const drag = useRef(null);
+  const [view, setView] = useState(null); // { from, to, dy, step }
+
+  // החישוב: איפה מרכז הפריט שנגרר ביחס למרכזי השאר (בקואורדינטות של הדף, כדי שגלילה לא תבלבל)
+  const update = () => {
+    const d = drag.current;
+    if (!d) return;
+    const y = d.clientY + window.scrollY;
+    const first = d.mids[0];
+    const last = d.mids[d.mids.length - 1];
+    const center = Math.min(last, Math.max(first, d.mids[d.from] + y - d.startY));
+    const to = d.mids.filter((m, j) => j !== d.from && m < center).length;
+    d.to = to;
+    setView({ from: d.from, to, dy: center - d.mids[d.from], step: d.step });
+  };
+
+  // גלילה אוטומטית כשהאצבע קרובה לקצה המסך
+  const tick = () => {
+    const d = drag.current;
+    if (!d) return;
+    const edge = d.clientY < 80 ? -1 : d.clientY > window.innerHeight - 110 ? 1 : 0;
+    if (edge) {
+      window.scrollBy(0, edge * 10);
+      update();
+    }
+    d.raf = requestAnimationFrame(tick);
+  };
+
+  useEffect(() => () => drag.current && cancelAnimationFrame(drag.current.raf), []);
+
+  const start = (e, i) => {
+    if (e.button > 0 || items.length < 2) return;
+    if (e.pointerType !== 'mouse' && !e.target.closest('[data-grip]')) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const rects = items.map((_, j) => rows.current[j].getBoundingClientRect());
+    const gap = rects[1].top - rects[0].bottom;
+    drag.current = {
+      from: i,
+      clientY: e.clientY,
+      startY: e.clientY + window.scrollY,
+      mids: rects.map((r) => r.top + window.scrollY + r.height / 2),
+      step: rects[i].height + gap,
+    };
+    drag.current.raf = requestAnimationFrame(tick);
+    update();
+  };
+  const move = (e) => {
+    if (!drag.current) return;
+    drag.current.clientY = e.clientY;
+    update();
+  };
+  const end = (drop) => {
+    const d = drag.current;
+    if (!d) return;
+    cancelAnimationFrame(d.raf);
+    drag.current = null;
+    if (drop && d.to !== undefined && d.to !== d.from) onMove(d.from, d.to);
+    setView(null);
+  };
+  const key = (e, i) => {
+    const to = e.key === 'ArrowUp' ? i - 1 : e.key === 'ArrowDown' ? i + 1 : null;
+    if (to === null || to < 0 || to >= items.length) return;
+    e.preventDefault();
+    onMove(i, to);
+  };
+
+  const shift = (i) => {
+    if (!view) return 0;
+    if (i === view.from) return view.dy;
+    if (view.from < i && i <= view.to) return -view.step;
+    if (view.to <= i && i < view.from) return view.step;
+    return 0;
+  };
+
+  return (
+    <div className="space-y-2">
+      {items.map((item, i) => {
+        const lifted = view?.from === i;
+        const grip = (
+          <button
+            type="button"
+            data-grip
+            aria-label={`להזיז את ${getLabel(item)} (משיכה, או חצים במקלדת)`}
+            onKeyDown={(e) => key(e, i)}
+            className="shrink-0 w-10 h-10 -my-1 rounded-xl flex items-center justify-center text-stone-400 touch-none cursor-grab active:cursor-grabbing"
+          >
+            <GripVertical size={22} />
+          </button>
+        );
+        return (
+          <div
+            key={getKey(item)}
+            ref={(el) => { rows.current[i] = el; }}
+            onPointerDown={(e) => start(e, i)}
+            onPointerMove={move}
+            onPointerUp={() => end(true)}
+            onPointerCancel={() => end(false)}
+            style={{ transform: `translateY(${shift(i)}px)` }}
+            className={`relative select-none lg:cursor-grab ${view ? (lifted ? 'z-10' : 'transition-transform duration-150') : ''}`}
+          >
+            <div className={lifted ? 'rounded-2xl shadow-lg ring-2 ring-violet-400 scale-[1.02]' : ''}>{render(item, grip)}</div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

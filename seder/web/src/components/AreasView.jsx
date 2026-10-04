@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { ArrowUpDown, ChevronDown, ChevronRight, ChevronUp, Pencil, Plus, Share2 } from 'lucide-react';
+import { ArrowUpDown, ChevronRight, Pencil, Plus, Share2 } from 'lucide-react';
 import { useStore } from '../App';
-import { COLORS, moveCategory, removeCategory, sortTasks, topLevel, upsertCategory } from '../lib/store';
+import { COLORS, PRIORITIES, TYPES, moveCategory, moveTask, removeCategory, sortCategories, sortManual, sortTasks, topLevel, upsertCategory } from '../lib/store';
 import { colorOf } from '../lib/colors';
+import { dayLabel } from '../lib/dates';
 import { listText, shareText } from '../lib/share';
 import { TaskList } from './TaskItem';
-import { Chip, Empty, QuickAdd, Section, Sheet } from './ui';
+import { Chip, Empty, QuickAdd, Section, Sheet, Sortable } from './ui';
 
 const EMOJIS = ['💅', '🧹', '💼', '🛒', '🧸', '❤️', '🏠', '💰', '🩺', '🏃‍♀️', '🎓', '✈️', '🎉', '🐶', '🚗', '📚', '🍳', '🙏', '🎨', '📞'];
 
@@ -55,9 +56,11 @@ function CategoryDetail({ id, back }) {
   const { state } = useStore();
   const [filter, setFilter] = useState('open');
   const [editing, setEditing] = useState(false);
+  const [ordering, setOrdering] = useState(false);
   const cat = state.categories.find((c) => c.id === id);
   if (!cat) return null;
-  const all = sortTasks(topLevel(state.tasks).filter((t) => t.categoryId === id));
+  // בתוך תחום: הסדר הידני (אם הזיזו משימות), אחרת הסדר הרגיל
+  const all = sortManual(topLevel(state.tasks).filter((t) => t.categoryId === id));
   const shown = all.filter((t) => (filter === 'open' ? !t.done && t.type !== 'later' : filter === 'later' ? t.type === 'later' && !t.done : t.done));
 
   return (
@@ -69,41 +72,79 @@ function CategoryDetail({ id, back }) {
         <button aria-label="שיתוף" onClick={() => shareText(listText(cat.name, all.filter((t) => !t.done)))} className="p-2 rounded-xl bg-emerald-50 text-emerald-700"><Share2 size={18} /></button>
         <button aria-label="עריכת תחום" onClick={() => setEditing(true)} className="p-2 rounded-xl bg-stone-100 text-stone-600"><Pencil size={18} /></button>
       </div>
-      <div className="mt-4">
-        <QuickAdd placeholder={`משימה ב${cat.name}...`} defaults={{ categoryId: id, type: filter === 'later' ? 'later' : 'task' }} />
-      </div>
-      <div className="flex gap-2 mt-4">
-        <Chip active={filter === 'open'} onClick={() => setFilter('open')}>פתוחות</Chip>
-        <Chip active={filter === 'later'} onClick={() => setFilter('later')}>💡 לבדוק</Chip>
-        <Chip active={filter === 'done'} onClick={() => setFilter('done')}>בוצעו</Chip>
+      {!ordering && (
+        <div className="mt-4">
+          <QuickAdd placeholder={`משימה ב${cat.name}...`} defaults={{ categoryId: id, type: filter === 'later' ? 'later' : 'task' }} />
+        </div>
+      )}
+      <div className="flex items-center gap-2 mt-4">
+        <Chip active={filter === 'open'} onClick={() => { setFilter('open'); setOrdering(false); }}>פתוחות</Chip>
+        <Chip active={filter === 'later'} onClick={() => { setFilter('later'); setOrdering(false); }}>💡 לבדוק</Chip>
+        <Chip active={filter === 'done'} onClick={() => { setFilter('done'); setOrdering(false); }}>בוצעו</Chip>
+        {!ordering && filter !== 'done' && shown.length > 1 && (
+          <button aria-label="שינוי סדר המשימות" onClick={() => setOrdering(true)} className="mr-auto shrink-0 flex items-center gap-1.5 rounded-xl bg-stone-100 text-stone-600 px-2.5 py-1.5 text-sm"><ArrowUpDown size={16} /><span className="hidden sm:inline">שינוי סדר</span><span className="sm:hidden">סדר</span></button>
+        )}
       </div>
       <div className="mt-3">
-        {shown.length ? <TaskList tasks={shown} showCategory={false} /> : <Empty>{filter === 'done' ? 'עוד לא סומן כלום כבוצע' : 'אין כאן כלום עדיין'}</Empty>}
+        {ordering && shown.length > 1 ? <TaskOrder tasks={shown} done={() => setOrdering(false)} />
+          : shown.length ? <TaskList tasks={shown} showCategory={false} /> : <Empty>{filter === 'done' ? 'עוד לא סומן כלום כבוצע' : 'אין כאן כלום עדיין'}</Empty>}
       </div>
       {editing && <CategoryForm initial={cat} onClose={(deleted) => { setEditing(false); if (deleted) back(); }} />}
     </div>
   );
 }
 
-// שינוי סדר התחומים: רשימה אחת עם חצים למעלה / למטה. הסדר הזה הוא הסדר בכל האפליקציה
+const ORDER_HINT = 'מושכים בשש הנקודות למעלה או למטה (במחשב אפשר לגרור את כל השורה). הסדר נשמר מיד, בכל המכשירים.';
+
+// שינוי סדר התחומים: משיכה באצבע. הסדר הזה הוא הסדר בכל האפליקציה
 // (כאן, בלוח, ובבחירת תחום במשימה), ומסתנכרן לכל המכשירים
 function CategoryOrder({ done }) {
   const { state, act } = useStore();
-  const last = state.categories.length - 1;
-  const arrow = 'p-2 rounded-xl bg-stone-100 text-stone-600 disabled:opacity-30';
+  const list = sortCategories(state.categories);
   return (
     <div className="mt-3 lg:max-w-xl">
-      <p className="text-sm text-stone-500 mb-2">החצים מזיזים תחום למעלה או למטה. הסדר נשמר מיד, בכל המכשירים.</p>
-      <div className="space-y-2">
-        {state.categories.map((c, i) => (
-          <div key={c.id} className="flex items-center gap-3 rounded-2xl bg-card border border-stone-200 p-2 pr-3 shadow-sm">
+      <p className="text-sm text-stone-500 mb-2">{ORDER_HINT}</p>
+      <Sortable
+        items={list}
+        getKey={(c) => c.id}
+        getLabel={(c) => c.name}
+        onMove={(from, to) => act(moveCategory, list[from].id, to - from)}
+        render={(c, grip) => (
+          <div className="flex items-center gap-3 rounded-2xl bg-card border border-stone-200 p-2 pr-3 shadow-sm">
             <span className={`w-9 h-9 shrink-0 rounded-xl flex items-center justify-center text-lg ${colorOf(c.color).soft}`}>{c.emoji}</span>
             <span className="flex-1 min-w-0 font-medium truncate">{c.name}</span>
-            <button aria-label={`להזיז את ${c.name} למעלה`} disabled={i === 0} onClick={() => act(moveCategory, c.id, -1)} className={arrow}><ChevronUp size={20} /></button>
-            <button aria-label={`להזיז את ${c.name} למטה`} disabled={i === last} onClick={() => act(moveCategory, c.id, 1)} className={arrow}><ChevronDown size={20} /></button>
+            {grip}
           </div>
-        ))}
-      </div>
+        )}
+      />
+      <button onClick={done} className="mt-3 w-full rounded-2xl bg-violet-600 text-white font-bold py-3">סיום</button>
+    </div>
+  );
+}
+
+// שינוי סדר המשימות בתוך תחום (הפתוחות, או "לבדוק"). משימות חדשות נכנסות למעלה עד שמזיזים אותן
+function TaskOrder({ tasks, done }) {
+  const { act } = useStore();
+  const ids = tasks.map((t) => t.id);
+  return (
+    <div>
+      <p className="text-sm text-stone-500 mb-2">{ORDER_HINT}</p>
+      <Sortable
+        items={tasks}
+        getKey={(t) => t.id}
+        getLabel={(t) => t.title}
+        onMove={(from, to) => act(moveTask, ids, from, to)}
+        render={(t, grip) => (
+          <div className="flex items-center gap-3 rounded-2xl bg-card border border-stone-200 p-2 pr-3 shadow-sm">
+            <span className={`w-2.5 h-2.5 shrink-0 rounded-full ${(PRIORITIES[t.priority] || PRIORITIES[2]).dot}`} />
+            <span className="flex-1 min-w-0">
+              <span className="block font-medium truncate">{t.type !== 'task' && <span className="ml-1">{TYPES[t.type]?.emoji}</span>}{t.title}</span>
+              {t.due && <span className="block text-xs text-stone-500">{dayLabel(t.due)}{t.time ? ` · ${t.time}` : ''}</span>}
+            </span>
+            {grip}
+          </div>
+        )}
+      />
       <button onClick={done} className="mt-3 w-full rounded-2xl bg-violet-600 text-white font-bold py-3">סיום</button>
     </div>
   );
