@@ -87,3 +87,6 @@ export const isIos = () =>
   /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 export const isStandalone = () =>
   window.navigator.standalone === true || Boolean(window.matchMedia?.('(display-mode: standalone)').matches);
+
+// "שלח תיקון": נפתח כבקשה (issue) ב-GitHub.
+export const sendFeedback = (s, { text, image, context }) => request(s, 'POST', '/feedback', { text, image, context });

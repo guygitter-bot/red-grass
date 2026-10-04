@@ -5,6 +5,7 @@ import { MODELS, aiReady, describeError, testApiKey } from '../lib/ai';
 import InviteManager from './InviteManager';
 import { parseInviteToken } from '../lib/proxy';
 import FoodDbManager from './FoodDbManager';
+import FeedbackCard from './FeedbackCard';
 
 function NumberField({ label, value, onChange }) {
   const [text, setText] = useState(String(value ?? ''));
@@ -210,6 +211,8 @@ export default function SettingsView({
           <ErrorBox>{keyError}</ErrorBox>
         </Card>
       )}
+
+      {proxyUrl && (owner || invited) && <FeedbackCard settings={ai} />}
 
       <FoodDbManager
         foodDb={foodDb}

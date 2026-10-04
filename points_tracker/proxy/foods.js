@@ -3,6 +3,7 @@
 // עריכה ומחיקה לכולם: רק עם קוד מנהל.
 
 import { handleAccess } from './access.js';
+import { handleFeedback } from './feedback.js';
 
 const MAX_FOODS = 5000;
 const SOURCES = new Set(['user', 'ai', 'agent']);
@@ -63,6 +64,7 @@ export class SharedFoods {
   async fetch(request) {
     const url = new URL(request.url);
     if (url.pathname.startsWith('/access/')) return handleAccess(this.storage, url.pathname, request);
+    if (url.pathname.startsWith('/feedback/')) return handleFeedback(this.storage, url.pathname, request);
     const isAdmin = request.headers.get('x-is-admin') === '1';
 
     if (request.method === 'GET') {

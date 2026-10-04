@@ -6,6 +6,8 @@ workers_dev = true
 [vars]
 # האתרים שמותר להם לפנות לשרת (האפליקציה ב-Cloudflare Pages ופיתוח מקומי)
 ALLOWED_ORIGINS = "https://bis-app.pages.dev,http://localhost:5173,http://localhost:4173"
+# בקשות "שלח תיקון" נפתחות כאן כ-issue
+GITHUB_REPO = "guygitter-bot/red-grass"
 
 # המאגר המשותף של המאכלים (Durable Object עם SQLite, כלול בתוכנית החינמית)
 [[durable_objects.bindings]]
@@ -18,6 +20,7 @@ new_sqlite_classes = ["SharedFoods"]
 
 # המפתח, קוד הגישה וקוד המנהל הם סודות, לא כאן:
 #   ANTHROPIC_API_KEY, ACCESS_CODE, ADMIN_CODE  (נקבעים אוטומטית מ-GitHub, ראו .github/workflows/points-proxy.yml)
+#   GITHUB_TOKEN  (לא חובה: ל"שלח תיקון", מהסוד POINTS_GITHUB_TOKEN)
 
 # ---- סביבת בדיקות: שרת נפרד עם מאגר ומכשירים נפרדים (wrangler deploy --env staging) ----
 [env.staging]
@@ -26,6 +29,7 @@ workers_dev = true
 
 [env.staging.vars]
 ALLOWED_ORIGINS = "https://staging.bis-app.pages.dev,http://localhost:5173,http://localhost:4173"
+GITHUB_REPO = "guygitter-bot/red-grass"
 
 [[env.staging.durable_objects.bindings]]
 name = "FOODS"

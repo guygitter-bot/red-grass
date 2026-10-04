@@ -3,7 +3,8 @@
 // כך המפתח לא נמצא באף טלפון ולא בקוד הציבורי של האתר.
 
 import { SharedFoods } from './foods.js';
-import { sha256 } from './access.js';
+import { randomToken, sha256 } from './access.js';
+import { cleanFeedback, createIssue, issueBody, issueTitle } from './feedback.js';
 
 export { SharedFoods };
 
@@ -11,6 +12,7 @@ const UPSTREAM = 'https://api.anthropic.com';
 const ALLOWED_MODELS = new Set(['claude-opus-5-5', 'claude-sonnet-5-5']);
 const MAX_TOKENS = 16000;
 const MAX_BODY_BYTES = 8 * 1024 * 1024; // תמונה מוקטנת + טקסט
+const MAX_FEEDBACK_BYTES = 2 * 1024 * 1024;
 
 function corsHeaders(request, env) {
   const origin = request.headers.get('origin') || '';
@@ -75,14 +77,56 @@ export default {
       return pass(await internal('/access/redeem', 'POST', { token: body.token, deviceName: body.deviceName }));
     }
 
+    const isAdmin = () => env.ADMIN_CODE && sameCode(request.headers.get('x-admin-code') || '', env.ADMIN_CODE);
+
+    // צילום מסך של בקשת תיקון: רק לתהליך התיקון ב-GitHub (עם קוד המנהל)
+    if (url.pathname === '/feedback/image' && request.method === 'GET') {
+      if (!isAdmin()) return json(401, 'Admin only', cors);
+      const res = await internal(`/feedback/shot?id=${encodeURIComponent(url.searchParams.get('id') || '')}`, 'GET');
+      if (!res.ok) return json(404, 'Not found', cors);
+      const { data } = await res.json();
+      const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+      return new Response(bytes, { headers: { 'content-type': 'image/jpeg' } });
+    }
+
     // בעל האפליקציה (קוד גישה) או מכשיר שהוזמן (מפתח מכשיר)
     const isOwner = sameCode(request.headers.get('x-access-code') || '', env.ACCESS_CODE);
     let allowed = isOwner;
+    let deviceName = isOwner ? 'בעל האפליקציה' : '';
     const deviceKey = request.headers.get('x-device-key') || '';
     if (!allowed && env.FOODS && deviceKey && deviceKey.length <= 100) {
-      allowed = (await internal('/access/auth', 'POST', { hash: await sha256(deviceKey) })).ok;
+      const res = await internal('/access/auth', 'POST', { hash: await sha256(deviceKey) });
+      allowed = res.ok;
+      if (allowed) deviceName = (await res.json()).name || '';
     }
     if (!allowed) return json(401, 'Wrong access code', cors);
+
+    // "שלח תיקון": נפתח issue ב-GitHub
+    if (url.pathname === '/feedback' && request.method === 'POST') {
+      if (!env.FOODS || !env.GITHUB_TOKEN || !env.GITHUB_REPO) return json(500, 'Feedback is not configured', cors);
+      const text = await request.text();
+      if (text.length > MAX_FEEDBACK_BYTES) return json(413, 'Request too large', cors);
+      let feedback;
+      try {
+        feedback = cleanFeedback(JSON.parse(text));
+      } catch {
+        feedback = null;
+      }
+      if (!feedback) return json(400, 'Empty request', cors);
+      if (!(await internal('/feedback/quota', 'POST', {})).ok) return json(429, 'Too many requests today', cors);
+      let shotUrl = '';
+      if (feedback.image) {
+        const id = randomToken(18);
+        await internal('/feedback/shot', 'POST', { id, data: feedback.image.data });
+        shotUrl = `${url.origin}/feedback/image?id=${id}`;
+      }
+      try {
+        const issue = await createIssue(env, issueTitle(feedback.text), issueBody(feedback, deviceName, shotUrl));
+        return new Response(JSON.stringify(issue), { status: 201, headers: { ...cors, 'content-type': 'application/json' } });
+      } catch (err) {
+        return json(502, `Could not open the request (${err.message})`, cors);
+      }
+    }
 
     // הזמנות ומכשירים: רק בעל האפליקציה
     if (url.pathname === '/invites' || url.pathname === '/devices') {
@@ -103,7 +147,7 @@ export default {
     // מאגר המאכלים המשותף
     if (url.pathname === '/foods') {
       if (!env.FOODS) return json(500, 'Shared foods storage is not configured', cors);
-      const admin = env.ADMIN_CODE && sameCode(request.headers.get('x-admin-code') || '', env.ADMIN_CODE);
+      const admin = isAdmin();
       const headers = new Headers({ 'content-type': 'application/json', 'x-is-admin': admin ? '1' : '0' });
       const body = ['POST', 'PUT'].includes(request.method) ? await request.text() : undefined;
       if (body && body.length > 20000) return json(413, 'Request too large', cors);
