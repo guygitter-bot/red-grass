@@ -1,5 +1,5 @@
 // מבנה הנתונים ושמירה במכשיר (localStorage). הכול פונקציות טהורות – קל לבדוק ולהחליף בעתיד בשרת.
-import { addDays, dueDate, todayKey } from './dates';
+import { addDays, dueDate, fromKey, todayKey } from './dates';
 
 const KEY = 'seder_v1';
 
@@ -125,7 +125,7 @@ export function addTask(state, fields) {
 export function updateTask(state, id, patch) {
   const notified = { ...state.notified };
   // שינוי מועד או תזכורת -> תזכורת חדשה תצא שוב
-  if ('due' in patch || 'time' in patch || 'remind' in patch) delete notified[id];
+  if ('due' in patch || 'time' in patch || 'remind' in patch || 'remindTime' in patch) delete notified[id];
   return { ...state, notified, tasks: state.tasks.map((t) => (t.id === id ? { ...t, ...patch, updatedAt: Date.now() } : t)) };
 }
 
@@ -234,15 +234,31 @@ export function dashboard(state, now = new Date()) {
   };
 }
 
+// מתי התזכורת יוצאת:
+//   remindTime ("HH:MM") – בשעה שנבחרה, ביום של המשימה
+//   בלי שעה למשימה – 9:00 בבוקר של אותו יום
+//   עם שעה – remind דקות לפני
+export function reminderAt(task) {
+  if (task.remind == null || !task.due) return null;
+  if (task.remindTime) {
+    const [h, m] = task.remindTime.split(':').map(Number);
+    const at = fromKey(task.due);
+    at.setHours(h, m, 0, 0);
+    return at;
+  }
+  const at = dueDate(task);
+  if (!task.time) at.setHours(9, 0, 0, 0);
+  else at.setMinutes(at.getMinutes() - task.remind);
+  return at;
+}
+
 // תזכורות שהגיע זמנן ועוד לא הוצגו
 export function dueReminders(state, now = new Date()) {
   return state.tasks.filter((t) => {
-    if (t.done || t.remind == null || !t.due || state.notified[t.id]) return false;
-    const at = dueDate(t);
-    if (!t.time) at.setHours(9, 0, 0, 0);
-    else at.setMinutes(at.getMinutes() - t.remind);
+    if (t.done || state.notified[t.id]) return false;
+    const at = reminderAt(t);
     // לא מתריעים על דברים שעברו מזמן (למשל אחרי שבוע שהאפליקציה לא נפתחה)
-    return at <= now && now - dueDate(t) < 12 * 3600000;
+    return at && at <= now && now - at < 12 * 3600000;
   });
 }
 
