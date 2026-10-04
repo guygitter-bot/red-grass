@@ -369,6 +369,13 @@ test('weekly plan: saved per book and cleaned', async () => {
 
 // ---------- קטגוריות משלי, חיפוש ברשת, דירוג ותגיות, גיבוי ושחזור ----------
 
+test('category prefs: order and favorites saved per book and returned by /me', async () => {
+  assert.deepEqual((await (await call('GET', '/me')).json()).categoryPrefs, { order: [], favorites: [] });
+  const res = await call('PUT', '/categories/prefs', { order: ['קינוחים', ' עוגות ', 'קינוחים', 5, ''], favorites: ['עוגות'] });
+  assert.equal(res.status, 200);
+  assert.deepEqual((await (await call('GET', '/me')).json()).categoryPrefs, { order: ['קינוחים', 'עוגות'], favorites: ['עוגות'] });
+});
+
 test('custom categories: added, offered to the agent, accepted on edit, removed to "other"', async () => {
   assert.equal((await call('POST', '/categories', { name: 'עוגות' })).status, 409);
   assert.deepEqual((await (await call('POST', '/categories', { name: '  מתכוני סבתא ' })).json()).custom, ['מתכוני סבתא']);

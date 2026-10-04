@@ -180,3 +180,14 @@ export const emojiOf = (category) => CATEGORY_EMOJI[category] || '🏷️';
 export function backupFile({ recipes, categories, shopping, plan, pantry }) {
   return JSON.stringify({ app: 'mat-kon', version: 2, exportedAt: new Date().toISOString(), categories, recipes, shopping, plan, pantry }, null, 1);
 }
+
+// סדר הקטגוריות לתצוגה: מועדפות קודם, וכל קבוצה לפי הסדר שנשמר (ומה שלא נשמר – בסדר הרגיל, בסוף)
+export function orderCategories(list, prefs = {}) {
+  const order = Array.isArray(prefs.order) ? prefs.order : [];
+  const fav = new Set(Array.isArray(prefs.favorites) ? prefs.favorites : []);
+  const rank = (c) => {
+    const i = order.indexOf(c);
+    return i < 0 ? order.length + list.indexOf(c) : i;
+  };
+  return [...list].sort((a, b) => (fav.has(b) - fav.has(a)) || rank(a) - rank(b));
+}
