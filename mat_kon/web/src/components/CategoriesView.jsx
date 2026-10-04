@@ -98,7 +98,7 @@ export default function CategoriesView({ categories, custom, favorites, counts, 
       <div className="max-w-3xl mx-auto px-4 mt-4">
         {editing && (
           <p className="mb-3 rounded-xl bg-orange-50 text-orange-900 text-sm p-2.5 leading-relaxed">
-            גוררים אריח בידית <GripVertical size={14} className="inline -mt-0.5" /> כדי להזיז אותו. ❤️ = מועדפת – מוצגת ראשונה.
+            גוררים אריח בידית <GripVertical size={14} className="inline -mt-0.5" /> כדי להזיז אותו. ❤️ = קטגוריה מועדפת – מוצגת ראשונה וגם כקיצור דרך במסך הבית.
             {custom.length > 0 && <> קטגוריה שלכם אפשר למחוק בפח.</>}
           </p>
         )}
@@ -196,7 +196,7 @@ export default function CategoriesView({ categories, custom, favorites, counts, 
         </ul>
         <p className="mt-4 text-sm text-stone-500 leading-relaxed">
           בקטגוריה משלכם הסוכן ישבץ מתכונים חדשים כשהם מתאימים. מתכון קיים מעבירים בדף המתכון, בבחירת הקטגוריה.
-          הסדר והמועדפות נשמרים לכל הספר (גם בספר משותף).
+          ❤️ על אריח = קטגוריה מועדפת: מוצגת ראשונה, וגם כקיצור דרך במסך הבית. הסדר והמועדפות נשמרים לכל הספר (גם בספר משותף).
         </p>
       </div>
     </div>

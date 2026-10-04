@@ -378,8 +378,8 @@ export default function App() {
   const allCategories = [...CATEGORIES.filter((c) => c !== 'אחר'), ...custom, 'אחר'];
   const orderedCategories = orderCategories(allCategories, categoryPrefs);
   const favoriteCategories = orderedCategories.filter((c) => categoryPrefs.favorites?.includes(c));
-  // קיצורי דרך במסך הבית: עד 2 קטגוריות מועדפות שיש בהן מתכונים
-  const shortcuts = favoriteCategories.filter((c) => counts[c]).slice(0, 2);
+  // קיצורי דרך במסך הבית: כל הקטגוריות המועדפות שיש בהן מתכונים (השורה יורדת שורה כשצריך)
+  const shortcuts = favoriteCategories.filter((c) => counts[c]);
   const saveCategoryPrefs = (next) => {
     const prev = categoryPrefs;
     setCategoryPrefsState(next);
@@ -813,7 +813,7 @@ export default function App() {
                 הכל <span className="opacity-60">{recipes.length}</span>
               </Chip>
               <Chip active={favorites} onClick={() => setFavorites((f) => !f)}>
-                <Heart size={14} className="inline -mt-0.5" fill={favorites ? 'currentColor' : 'none'} /> מועדפים
+                <Heart size={14} className="inline -mt-0.5" fill={favorites ? 'currentColor' : 'none'} /> מתכונים מועדפים
               </Chip>
               {shortcuts.map((c) => (
                 <Chip key={c} active={category === c} onClick={() => { setCategory(category === c ? null : c); setFavorites(false); }}>
