@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bell, CalendarPlus, Cloud, CloudOff, Download, Upload } from 'lucide-react';
+import { Bell, CalendarPlus, Cloud, CloudOff, Download, Lock, Upload } from 'lucide-react';
 import { useStore } from '../App';
 import { normalize } from '../lib/store';
 import { todayKey } from '../lib/dates';
@@ -10,7 +10,7 @@ import { Sheet } from './ui';
 const row = 'w-full flex items-center gap-3 rounded-2xl bg-stone-50 p-3 text-right';
 
 export default function SettingsSheet({ onClose }) {
-  const { state, act, syncStatus, syncNow, openLogin, disconnect } = useStore();
+  const { state, act, syncStatus, syncNow, lock } = useStore();
   const [perm, setPerm] = useState(() => (notificationsSupported() ? Notification.permission : 'unsupported'));
   const upcoming = state.tasks.filter((t) => !t.done && t.due && t.due >= todayKey());
 
@@ -48,9 +48,9 @@ export default function SettingsSheet({ onClose }) {
       <div className="space-y-2">
         <h3 className="text-sm font-bold text-stone-500 mt-1">סנכרון בין מכשירים</h3>
         {syncStatus === 'off' ? (
-          <button onClick={() => { onClose(); openLogin(); }} className={row}>
+          <button onClick={() => { onClose(); lock(); }} className={row}>
             <CloudOff size={20} className="text-stone-400" />
-            <span>חיבור לסנכרון<span className="block text-xs text-stone-500">כדי שהמשימות יהיו זהות בטלפון ובמחשב</span></span>
+            <span>לא מחובר<span className="block text-xs text-stone-500">לחצי כדי להיכנס שוב עם הסיסמה</span></span>
           </button>
         ) : (
           <div className={row}>
@@ -59,9 +59,10 @@ export default function SettingsSheet({ onClose }) {
             <button onClick={syncNow} className="text-xs rounded-lg bg-white border border-stone-200 px-2 py-1">סנכרון עכשיו</button>
           </div>
         )}
-        {syncStatus !== 'off' && (
-          <button onClick={() => window.confirm('לנתק את המכשיר הזה מהסנכרון? המשימות יישארו גם כאן וגם בשרת.') && disconnect()} className="text-xs text-stone-500 underline">ניתוק המכשיר הזה</button>
-        )}
+        <button onClick={() => { onClose(); lock(); }} className={row}>
+          <Lock size={20} className="text-violet-600" />
+          <span>נעילה עכשיו<span className="block text-xs text-stone-500">האפליקציה ננעלת בכל פתיחה, ואחרי 5 דקות ברקע</span></span>
+        </button>
 
         <h3 className="text-sm font-bold text-stone-500 pt-3">תזכורות</h3>
         {perm === 'granted' ? (

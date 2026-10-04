@@ -13,16 +13,8 @@ import SettingsSheet from './components/SettingsSheet';
 import SearchSheet from './components/SearchSheet';
 import { notify } from './lib/notify';
 import { AuthError, collectChanges, getToken, logout, resetSync, runSync } from './lib/sync';
-import LoginSheet from './components/LoginSheet';
-
-const SKIP_LOGIN_KEY = 'seder_login_skipped';
-function loginSkipped() {
-  try {
-    return localStorage.getItem(SKIP_LOGIN_KEY) === '1';
-  } catch {
-    return true;
-  }
-}
+import { RELOCK_AFTER_MS } from './lib/lock';
+import LockScreen from './components/LockScreen';
 
 const Store = createContext(null);
 export const useStore = () => useContext(Store);
@@ -48,7 +40,10 @@ export default function App() {
   const [toast, setToast] = useState(null);
   // סנכרון: off (לא מחובר) / syncing / ok / offline / error
   const [syncStatus, setSyncStatus] = useState(() => (getToken() ? 'ok' : 'off'));
-  const [loginOpen, setLoginOpen] = useState(() => !getToken() && !loginSkipped());
+  // נעול בכל פתיחה, ושוב אחרי RELOCK_AFTER_MS ברקע
+  const [locked, setLocked] = useState(true);
+  const lockedRef = useRef(true);
+  lockedRef.current = locked;
 
   const latest = useRef(state);
   useEffect(() => {
@@ -61,7 +56,7 @@ export default function App() {
   const syncing = useRef(false);
   const again = useRef(false);
   const sync = useCallback(async () => {
-    if (!getToken()) return;
+    if (!getToken() || lockedRef.current) return;
     if (syncing.current) {
       again.current = true;
       return;
@@ -81,10 +76,11 @@ export default function App() {
       setSyncStatus('ok');
     } catch (e) {
       if (e instanceof AuthError) {
+        // הסיסמה הוחלפה – נכנסים מחדש
         logout();
         setState(resetSync);
         setSyncStatus('off');
-        setLoginOpen(true);
+        setLocked(true);
       } else {
         setSyncStatus(navigator.onLine ? 'error' : 'offline');
       }
@@ -95,6 +91,17 @@ export default function App() {
         setTimeout(sync, 300);
       }
     }
+  }, []);
+
+  // נעילה מחדש אחרי זמן ברקע
+  useEffect(() => {
+    let hiddenAt = null;
+    const onChange = () => {
+      if (document.visibilityState === 'hidden') hiddenAt = Date.now();
+      else if (hiddenAt && Date.now() - hiddenAt > RELOCK_AFTER_MS) setLocked(true);
+    };
+    document.addEventListener('visibilitychange', onChange);
+    return () => document.removeEventListener('visibilitychange', onChange);
   }, []);
 
   // סנכרון: בפתיחה, כשחוזרים לאפליקציה, כשהרשת חוזרת, ופעם בדקה
@@ -173,13 +180,21 @@ export default function App() {
     importText: (text) => setImporting(text ?? ''),
     syncStatus,
     syncNow: sync,
-    openLogin: () => setLoginOpen(true),
-    disconnect: () => {
-      logout();
-      setState(resetSync);
-      setSyncStatus('off');
-    },
+    lock: () => setLocked(true),
   }), [state, act, syncStatus, sync]);
+
+  if (locked) {
+    return (
+      <LockScreen
+        onUnlock={({ online }) => {
+          lockedRef.current = false;
+          setLocked(false);
+          setSyncStatus(online ? 'ok' : 'offline');
+          sync();
+        }}
+      />
+    );
+  }
 
   return (
     <Store.Provider value={ctx}>
@@ -187,7 +202,7 @@ export default function App() {
         <header className="sticky top-0 z-20 bg-[#faf8ff]/90 backdrop-blur px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-2 flex items-center justify-between">
           <h1 className="text-2xl font-black text-violet-700 tracking-tight">סדר</h1>
           <div className="flex gap-1">
-            <SyncButton status={syncStatus} onClick={() => (syncStatus === 'off' ? setLoginOpen(true) : sync())} />
+            <SyncButton status={syncStatus} onClick={() => (syncStatus === 'off' ? setLocked(true) : sync())} />
             <button aria-label="חיפוש" onClick={() => setSheet('search')} className="p-2 rounded-full hover:bg-violet-100 text-stone-600"><Search size={22} /></button>
             <button aria-label="הגדרות" onClick={() => setSheet('settings')} className="p-2 rounded-full hover:bg-violet-100 text-stone-600"><Settings size={22} /></button>
           </div>
@@ -207,23 +222,6 @@ export default function App() {
       {importing != null && <ImportSheet text={importing} onClose={() => setImporting(null)} />}
       {sheet === 'settings' && <SettingsSheet onClose={() => setSheet(null)} />}
       {sheet === 'search' && <SearchSheet onClose={() => setSheet(null)} />}
-      {loginOpen && (
-        <LoginSheet
-          firstRun={!loginSkipped()}
-          onClose={() => {
-            try {
-              localStorage.setItem(SKIP_LOGIN_KEY, '1');
-            } catch {
-              // אחסון חסום
-            }
-            setLoginOpen(false);
-          }}
-          onLoggedIn={() => {
-            setLoginOpen(false);
-            sync();
-          }}
-        />
-      )}
 
       {toast && (
         <button
@@ -240,7 +238,7 @@ export default function App() {
 }
 
 const SYNC_LOOK = {
-  off: { icon: CloudOff, label: 'לא מסונכרן – לחצי לחיבור', className: 'text-stone-400' },
+  off: { icon: CloudOff, label: 'לא מסונכרן – לחצי להתחברות', className: 'text-stone-400' },
   syncing: { icon: RefreshCw, label: 'מסנכרן...', className: 'text-violet-500 animate-spin' },
   ok: { icon: Cloud, label: 'מסונכרן', className: 'text-emerald-600' },
   offline: { icon: CloudOff, label: 'אין אינטרנט – יסונכרן כשהרשת תחזור', className: 'text-amber-500' },

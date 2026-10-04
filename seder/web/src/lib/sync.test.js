@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import worker, { Vault } from '../../../api/worker.js';
 import { addTask, emptyState, removeCategory, removeTask, toggleDone, updateTask, upsertCategory } from './store';
-import { collectChanges, login, runSync } from './sync';
+import { collectChanges, getToken, login, runSync } from './sync';
+import { unlock } from './lock';
 
 // "שרת" אמיתי (הקוד של seder/api) עם אחסון בזיכרון, ושני מכשירים שמסתנכרנים דרכו
 function fakeStorage() {
@@ -116,5 +117,34 @@ describe('sync between phone and computer', () => {
     localStorage.setItem('seder_token', 'old-token');
     const phone = device();
     await expect(phone.sync()).rejects.toThrow('צריך להתחבר מחדש');
+  });
+});
+
+describe('lock screen password', () => {
+  it('opens with the right password and saves a local check', async () => {
+    localStorage.removeItem('seder_token');
+    expect(await unlock('nope')).toEqual({ ok: false, error: 'סיסמה שגויה' });
+    expect(await unlock('pw')).toEqual({ ok: true, online: true });
+    expect(getToken()).toBeTruthy();
+    expect(localStorage.getItem('seder_verifier')).not.toContain('pw');
+  });
+
+  it('opens without internet only after one online login, and still checks the password', async () => {
+    const offline = () => vi.stubGlobal('fetch', () => Promise.reject(new TypeError('Failed to fetch')));
+    localStorage.removeItem('seder_verifier');
+    offline();
+    expect((await unlock('pw')).ok).toBe(false);
+    vi.unstubAllGlobals();
+    // כניסה אחת עם רשת
+    const env = { SEDER_PASSWORD: 'pw', ALLOWED_ORIGINS: '' };
+    const vault = new Vault({ storage: fakeStorage() }, env);
+    env.VAULT = { idFromName: (n) => n, get: () => ({ fetch: (r) => vault.fetch(r) }) };
+    const ls = new Map();
+    vi.stubGlobal('localStorage', { getItem: (k) => ls.get(k) ?? null, setItem: (k, v) => ls.set(k, v), removeItem: (k) => ls.delete(k) });
+    vi.stubGlobal('fetch', (url, init) => worker.fetch(new Request(url, init), env));
+    expect((await unlock('pw')).ok).toBe(true);
+    offline();
+    expect(await unlock('pw')).toEqual({ ok: true, online: false });
+    expect((await unlock('wrong')).ok).toBe(false);
   });
 });

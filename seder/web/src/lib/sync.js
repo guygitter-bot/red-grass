@@ -25,15 +25,23 @@ function setToken(token) {
 }
 
 export class AuthError extends Error {}
+// אין רשת או שהשרת לא זמין – אפשר לפתוח את האפליקציה עם בדיקת הסיסמה במכשיר
+export class NetworkError extends Error {}
 
 async function post(path, body, token) {
-  const res = await fetch(`${API_URL}${path}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
-    body: JSON.stringify(body),
-  });
+  let res;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new NetworkError('אין חיבור לשרת');
+  }
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 && path === '/sync') throw new AuthError(data.error || 'צריך להתחבר מחדש');
+  if (res.status >= 500) throw new NetworkError(data.error || 'השרת לא זמין');
   if (!res.ok) throw new Error(data.error || `שגיאה ${res.status}`);
   return data;
 }
