@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import * as demo from './demo.mjs';
 
 const PW = process.env.PLAYWRIGHT_MODULE || '/opt/node22/lib/node_modules/playwright/index.mjs';
@@ -16,6 +17,8 @@ const DIST = join(HERE, '..', 'web', 'dist');
 const OUT = join(HERE, '..', 'web', 'public', 'tutorials');
 const TMP = join(HERE, '.rec');
 const API = 'https://mat-kon-api.guygitter.workers.dev';
+const VOICE = join(HERE, 'voice');
+const MUSIC = join(HERE, 'music.m4a');
 const W = 390;
 const H = 844;
 
@@ -218,6 +221,47 @@ async function samplePhotos(browser) {
   return dir;
 }
 
+// ---------- הקראה ----------
+// כל כתובית נקראת בקול. הקבצים: voice/<key>.mp3 (נוצרים ב-GitHub Actions עם Google TTS – mat-kon-voice.yml),
+// והטקסטים לרשימה voice/lines.json. משפט בלי קובץ עדיין נרשם לרשימה, והסרטון נבנה בינתיים בלי הקול שלו.
+const SAY_WORDS = [
+  [/mat-kon/gi, 'מַט-קוֹן'], [/YouTube/g, 'יוטיוב'], [/TikTok/g, 'טיקטוק'], [/Instagram/g, 'אינסטגרם'], [/Waze/g, 'וֵייז'],
+  [/Safari/g, 'ספארי'], [/Chrome/g, 'כרום'], [/PDF/g, 'פי-די-אף'], [/##/g, 'שתי סולמיות'], [/א-ב/g, 'אלף-בית'],
+  [/⋮/g, 'שלוש הנקודות'], [/✕/g, 'האיקס'], [/\s*←\s*/g, ', ואז '], [/\+\s*(?=קטגוריה|ליד|והכמויות)/g, 'פלוס '], [/על \+/g, 'על פלוס'],
+];
+export function speakable(html) {
+  let text = String(html).replace(/<br\s*\/?>/gi, '. ').replace(/<[^>]+>/g, '');
+  for (const [re, to] of SAY_WORDS) text = text.replace(re, to);
+  return text
+    .replace(/💡\s*טיפ:?/g, 'טיפ:')
+    .replace(/[\p{Extended_Pictographic}\ufe0f]+\s*\/\s*[\p{Extended_Pictographic}\ufe0f]+/gu, '')
+    .replace(/\p{Extended_Pictographic}|\u200d|\ufe0f/gu, '')
+    .replace(/…/g, '.')
+    .replace(/(?<=\p{L})\s*\/\s*(?=\p{L})/gu, ' או ')
+    .replace(/\s*\/\s*/g, ' ')
+    .replace(/"\s*(?=[֐-׿])/g, '" ')
+    .replace(/\.\s*\./g, '.')
+    .replace(/^[\s.,–-]+/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+const voiceKey = (text) => createHash('sha1').update(text).digest('hex').slice(0, 12);
+function voiceClip(text) {
+  if (!text) return null;
+  const key = voiceKey(text);
+  mkdirSync(VOICE, { recursive: true });
+  const listFile = join(VOICE, 'lines.json');
+  const lines = existsSync(listFile) ? JSON.parse(readFileSync(listFile, 'utf8')) : {};
+  if (lines[key] !== text) {
+    lines[key] = text;
+    writeFileSync(listFile, `${JSON.stringify(Object.fromEntries(Object.entries(lines).sort()), null, 1)}\n`);
+  }
+  const file = join(VOICE, `${key}.mp3`);
+  if (!existsSync(file)) return null;
+  const dur = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file]).toString().trim());
+  return { file, dur };
+}
+
 // הקלטה של סרטון אחד
 export async function record(name, script, opts = {}) {
   mkdirSync(TMP, { recursive: true });
@@ -290,6 +334,20 @@ export async function record(name, script, opts = {}) {
   await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 92, maxWidth: W * 2, maxHeight: H * 2, everyNthFrame: 1 });
 
   const wait = (ms) => page.waitForTimeout(ms);
+  // הקראה: משפט חדש מחכה שהקודם יסתיים, והכתובית נשארת לפחות עד סוף המשפט
+  const voice = [];
+  let voiceUntil = 0;
+  const waitVoice = async () => {
+    const left = voiceUntil - Date.now();
+    if (left > 0) await wait(left);
+  };
+  const speak = (text) => {
+    const clip = voiceClip(speakable(text));
+    if (!clip) return 0;
+    voice.push({ file: clip.file, t: Date.now() / 1000 });
+    voiceUntil = Date.now() + clip.dur * 1000 + 350;
+    return clip.dur * 1000 + 350;
+  };
   const center = async (loc) => {
     await loc.scrollIntoViewIfNeeded().catch(() => {});
     const box = await loc.boundingBox();
@@ -303,8 +361,10 @@ export async function record(name, script, opts = {}) {
     wait,
     // כתובית. top=true מציג אותה למעלה (כשהחלק התחתון של המסך חשוב)
     async say(html, ms = 2600, top = false) {
+      await waitVoice();
       await page.evaluate(([h, t]) => window.__tut.say(h, t), [html, top]);
-      if (ms) await wait(ms);
+      const spoken = speak(html);
+      if (ms) await wait(Math.max(ms, spoken));
     },
     async unsay() { await page.evaluate(() => window.__tut.say('')); },
     async point(loc, ms = 700) {
@@ -340,8 +400,10 @@ export async function record(name, script, opts = {}) {
     },
     async hideDot() { await page.evaluate(() => window.__tut.hide()); },
     async card(emoji, kicker, title, text, ms = 2800) {
+      await waitVoice();
       await page.evaluate(([a, b, c, d]) => window.__tut.card(a, b, c, d), [emoji, kicker, title, text]);
-      await wait(ms);
+      const spoken = speak([kicker, title, text].filter(Boolean).map((x) => String(x).replace(/[.!?]?$/, '.')).join(' '));
+      await wait(Math.max(ms, spoken + 300));
     },
     async uncard(ms = 600) { await page.evaluate(() => window.__tut.uncard()); await wait(ms); },
     async go(hash) { await page.evaluate((h) => { window.location.hash = h; }, hash); await wait(900); },
@@ -349,26 +411,54 @@ export async function record(name, script, opts = {}) {
 
   try {
     await script(helpers);
+    await waitVoice();
+    await wait(800);
   } finally {
     const end = Date.now() / 1000;
     await cdp.send('Page.stopScreencast').catch(() => {});
     await ctx.close();
     await browser.close();
     server.close();
-    encode(vdir, frames, end, name, opts.poster ?? 1.2);
+    encode(vdir, frames, end, name, opts.poster ?? 1.2, voice);
   }
 }
 
 // פריימים -> mp4 (H.264, נפתח בכל טלפון) + תמונת שער. כל פריים מוצג עד שמגיע הבא
-function encode(dir, frames, end, name, posterAt) {
+function encode(dir, frames, end, name, posterAt, voice = []) {
   if (!frames.length) throw new Error('no frames recorded');
   const mp4 = join(OUT, `${name}.mp4`);
   const jpg = join(OUT, `${name}.jpg`);
   const list = frames.map((f, i) => `file '${f.file}'\nduration ${Math.max(0.001, (frames[i + 1]?.t ?? end) - f.t).toFixed(3)}`);
   writeFileSync(join(dir, 'list.txt'), `${list.join('\n')}\nfile '${frames.at(-1).file}'\n`);
-  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', join(dir, 'list.txt'),
+  const length = end - frames[0].t;
+  // קול: כל משפט בזמן שלו. מוזיקה: ברקע, יורדת כשמדברים (sidechain), נכנסת ויוצאת בהדרגה
+  const inputs = ['-f', 'concat', '-safe', '0', '-i', join(dir, 'list.txt')];
+  const music = existsSync(MUSIC) && process.env.NO_MUSIC !== '1';
+  if (music) inputs.push('-stream_loop', '-1', '-i', MUSIC);
+  for (const v of voice) inputs.push('-i', v.file);
+  const first = music ? 2 : 1;
+  const parts = [];
+  const fadeOut = Math.max(0, length - 2.5).toFixed(2);
+  if (music) parts.push(`[1:a]atrim=0:${length.toFixed(2)},volume=0.30,afade=t=in:d=1.5,afade=t=out:st=${fadeOut}:d=2.5[m]`);
+  voice.forEach((v, i) => {
+    const ms = Math.max(0, Math.round((v.t - frames[0].t) * 1000));
+    parts.push(`[${first + i}:a]aresample=44100,aformat=channel_layouts=stereo,adelay=${ms}|${ms},volume=1.6[v${i}]`);
+  });
+  let audioMap = null;
+  if (voice.length) {
+    parts.push(`${voice.map((_, i) => `[v${i}]`).join('')}amix=inputs=${voice.length}:normalize=0:duration=longest,apad,atrim=0:${length.toFixed(2)}[vo]`);
+    if (music) {
+      parts.push('[vo]asplit[vo1][vo2]');
+      parts.push('[m][vo2]sidechaincompress=threshold=0.015:ratio=10:attack=15:release=450[md]');
+      parts.push('[md][vo1]amix=inputs=2:normalize=0,alimiter=limit=0.95[a]');
+    } else parts.push('[vo]alimiter=limit=0.95[a]');
+    audioMap = '[a]';
+  } else if (music) audioMap = '[m]';
+  const audioArgs = audioMap ? ['-filter_complex', parts.join(';'), '-map', '0:v', '-map', audioMap, '-c:a', 'aac', '-b:a', '96k', '-ac', '2'] : ['-an'];
+  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', ...inputs, ...audioArgs,
     '-vf', 'scale=720:-2:flags=lanczos,fps=30', '-c:v', 'libx264', '-preset', 'slow', '-crf', '26', '-pix_fmt', 'yuv420p',
-    '-movflags', '+faststart', '-an', mp4]);
+    '-movflags', '+faststart', '-t', length.toFixed(2), mp4]);
+  if (voice.length) console.log(`  voice: ${voice.length} lines`);
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-ss', String(posterAt), '-i', mp4, '-frames:v', '1', '-vf', 'scale=360:-2', '-q:v', '5', jpg]);
   const sec = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', mp4]).toString().trim());
   console.log(`${name}: ${Math.round(sec)}s, ${(statSync(mp4).size / 1e6).toFixed(1)}MB`);
