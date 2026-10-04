@@ -140,7 +140,22 @@ describe('store', () => {
     expect(d.overdue.map((t) => t.title)).toEqual(['באיחור']);
     expect(d.waiting).toHaveLength(1);
     expect(d.later).toBe(1);
-    expect(d.byCategory.find((c) => c.id === 'work').open).toBe(1);
+    // לביצוע: "היום" ו"באיחור" (לא המעקב ולא "לבדוק")
+    expect(d.openTotal).toBe(2);
+  });
+
+  it('מספר המשימות לביצוע בלוח – בלי שבוצעו, תתי משימות, אירועים ופריטים ברשימה', () => {
+    let s = emptyState();
+    s = addTask(s, { title: 'א', due: '2026-12-01' });
+    s = addTask(s, { title: 'ב' });
+    const parent = s.tasks.find((t) => t.title === 'ב').id;
+    s = addTask(s, { title: 'תת משימה', parentId: parent });
+    s = addTask(s, { title: 'אירוע', type: 'event', due: '2026-10-05' });
+    s = addTask(s, { title: 'בוצעה', due: '2026-10-03' });
+    s = toggleDone(s, s.tasks.find((t) => t.title === 'בוצעה').id);
+    s = { ...s, categories: [...s.categories, { id: 'shop', name: 'קניות', kind: 'list' }] };
+    s = addTask(s, { title: 'חלב', categoryId: 'shop' });
+    expect(dashboard(s, NOW).openTotal).toBe(2);
   });
 
   it('fires a reminder once, and again after the time changes', () => {
