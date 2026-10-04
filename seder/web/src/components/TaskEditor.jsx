@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { CalendarPlus, Download, ExternalLink, Plus, Share2, Trash2, X } from 'lucide-react';
+import { CalendarPlus, Download, ExternalLink, Phone, Plus, Share2, Trash2, User, X } from 'lucide-react';
 import { useStore } from '../App';
-import { PRIORITIES, REMIND_OPTIONS, TYPES, makeTask, newId, removeTask, saveTree, subtasksOf } from '../lib/store';
+import { PRIORITIES, REMIND_OPTIONS, TYPES, cleanContact, knownContacts, makeTask, newId, removeTask, saveTree, subtasksOf, telUrl } from '../lib/store';
 import { addDays, shortDate, todayKey } from '../lib/dates';
 import { extractLinks, linkKind } from '../lib/parse';
 import { downloadIcs, googleCalendarUrl } from '../lib/calendar';
@@ -21,6 +21,7 @@ export default function TaskEditor({ initial, onClose }) {
   const [subs, setSubs] = useState(() => (existing ? subtasksOf(state.tasks, initial.id).map((s) => ({ ...s })) : []));
   const [newSub, setNewSub] = useState('');
   const [newLink, setNewLink] = useState('');
+  const [newContact, setNewContact] = useState({ name: '', phone: '' });
   const set = (patch) => setTask((t) => ({ ...t, ...patch }));
   const setSub = (id, patch) => setSubs((list) => list.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   const today = todayKey();
@@ -29,6 +30,18 @@ export default function TaskEditor({ initial, onClose }) {
     if (!newSub.trim()) return;
     setSubs((list) => [...list, { id: newId(), title: newSub.trim(), done: false, due: null, priority: 2, createdAt: Date.now() }]);
     setNewSub('');
+  };
+
+  // אנשים / גורמים לבירור: שם (חובה) וטלפון (רשות). שם שכבר הופיע במשימה אחרת – הטלפון נשלף לבד
+  const known = knownContacts(state.tasks);
+  const phoneFor = (name) => known.find((k) => k.name.toLowerCase() === name.trim().toLowerCase())?.phone || '';
+  const contacts = task.contacts || [];
+  const setContact = (i, patch) => set({ contacts: contacts.map((c, j) => (j === i ? { ...c, ...patch } : c)) });
+  const pendingContact = () => (newContact.name.trim() ? [cleanContact({ ...newContact, phone: newContact.phone || phoneFor(newContact.name) })] : []);
+  const addContact = () => {
+    if (!newContact.name.trim()) return;
+    set({ contacts: [...contacts, ...pendingContact()] });
+    setNewContact({ name: '', phone: '' });
   };
 
   const addLink = () => {
@@ -41,7 +54,8 @@ export default function TaskEditor({ initial, onClose }) {
   const commit = () => {
     if (!task.title.trim()) return;
     const pending = newSub.trim() ? [...subs, { id: newId(), title: newSub.trim(), done: false, priority: 2 }] : subs;
-    act(saveTree, { ...task, title: task.title.trim() }, pending.filter((s) => s.title.trim()));
+    const people = [...contacts, ...pendingContact()].map(cleanContact).filter((c) => c.name || c.phone);
+    act(saveTree, { ...task, title: task.title.trim(), contacts: people }, pending.filter((s) => s.title.trim()));
     onClose();
   };
 
@@ -146,6 +160,42 @@ export default function TaskEditor({ initial, onClose }) {
           <input value={newSub} onChange={(e) => setNewSub(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSub(); } }} placeholder="שלב נוסף..." className={input} />
           <button type="button" aria-label="הוספת תת משימה" onClick={addSub} className="rounded-xl bg-violet-100 text-violet-700 px-3"><Plus size={20} /></button>
         </div>
+      </div>
+
+      <span className={label}>אנשים / גורמים לבירור</span>
+      <div className="space-y-2">
+        {contacts.map((c, i) => (
+          <div key={i} className="flex items-center gap-2 rounded-xl border border-stone-200 p-2">
+            <User size={18} className="text-stone-400 shrink-0" />
+            <input value={c.name} onChange={(e) => setContact(i, { name: e.target.value })} aria-label="שם" placeholder="שם" className="flex-1 min-w-0 bg-transparent outline-none" />
+            <input value={c.phone || ''} onChange={(e) => setContact(i, { phone: e.target.value })} aria-label="טלפון" placeholder="טלפון" type="tel" dir="ltr" className="w-28 lg:w-36 min-w-0 bg-transparent outline-none text-left text-sm text-stone-600" />
+            {telUrl(c.phone) && <a href={telUrl(c.phone)} aria-label={`חיוג ל${c.name}`} className="rounded-lg bg-emerald-50 text-emerald-700 p-1.5 shrink-0"><Phone size={16} /></a>}
+            <button type="button" aria-label="הסרה" onClick={() => set({ contacts: contacts.filter((_, j) => j !== i) })} className="text-stone-400 shrink-0"><X size={18} /></button>
+          </div>
+        ))}
+        <div className="flex gap-2">
+          <input
+            value={newContact.name}
+            onChange={(e) => setNewContact((c) => ({ ...c, name: e.target.value }))}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addContact(); } }}
+            list="seder-contacts"
+            placeholder="שם / גורם (למשל: קופת חולים)"
+            className={`${input} min-w-0`}
+          />
+          <input
+            value={newContact.phone}
+            onChange={(e) => setNewContact((c) => ({ ...c, phone: e.target.value }))}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addContact(); } }}
+            placeholder={phoneFor(newContact.name) || 'טלפון'}
+            type="tel"
+            dir="ltr"
+            className={`${input} text-left max-w-28 lg:max-w-40`}
+          />
+          <button type="button" aria-label="הוספת איש קשר" onClick={addContact} className="rounded-xl bg-violet-100 text-violet-700 px-3 shrink-0"><Plus size={20} /></button>
+        </div>
+        <datalist id="seder-contacts">
+          {known.map((k) => <option key={k.name} value={k.name}>{k.phone}</option>)}
+        </datalist>
       </div>
 
       <span className={label}>קישורים / סרטונים</span>

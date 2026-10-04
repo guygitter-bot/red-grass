@@ -1,6 +1,6 @@
-import { Bell, Check, Clock, Link2, ListChecks, PlayCircle } from 'lucide-react';
+import { Bell, Check, Clock, Link2, ListChecks, PlayCircle, User } from 'lucide-react';
 import { useStore } from '../App';
-import { PRIORITIES, TYPES, isOverdue, progress, toggleDone } from '../lib/store';
+import { PRIORITIES, TYPES, contactsOf, isOverdue, progress, toggleDone } from '../lib/store';
 import { dayLabel } from '../lib/dates';
 import { colorOf } from '../lib/colors';
 
@@ -12,6 +12,7 @@ export default function TaskItem({ task, showDate = true, showCategory = true })
   const late = isOverdue(task);
   const prio = PRIORITIES[task.priority] || PRIORITIES[2];
   const video = task.links?.some((l) => l.kind === 'video');
+  const people = contactsOf(task).map((c) => c.name || c.phone);
 
   return (
     <div className={`flex items-start gap-3 bg-card rounded-2xl border p-3 shadow-sm ${task.done ? 'border-stone-100 opacity-60' : 'border-stone-200'}`}>
@@ -39,6 +40,7 @@ export default function TaskItem({ task, showDate = true, showCategory = true })
           {task.remind != null && !task.done && <Bell size={12} />}
           {total > 0 && <span className="flex items-center gap-0.5"><ListChecks size={12} />{done}/{total}</span>}
           {task.links?.length > 0 && (video ? <PlayCircle size={12} /> : <Link2 size={12} />)}
+          {people.length > 0 && <span className="flex items-center gap-0.5 min-w-0 max-w-full"><User size={12} className="shrink-0" /><span className="truncate">{people.join(', ')}</span></span>}
           {showCategory && cat && <span className={`rounded-full px-2 py-0.5 ${colorOf(cat.color).soft}`}>{cat.emoji} {cat.name}</span>}
         </div>
       </button>

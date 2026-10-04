@@ -1,12 +1,14 @@
 // שיתוף לצורך עזרה: משימה (עם תתי המשימות) או רשימת היום – כהודעת ווטסאפ מסודרת
 import { dayLabel } from './dates';
-import { PRIORITIES } from './store';
+import { PRIORITIES, contactsText } from './store';
 
 export function taskText(task, subtasks = [], now = new Date()) {
   const lines = [`*${task.title}*`];
   const when = [task.due && dayLabel(task.due, now), task.time].filter(Boolean).join(' ב-');
   if (when) lines.push(`🗓️ ${when}`);
   if (task.priority === 3) lines.push(`❗ ${PRIORITIES[3].label}`);
+  const people = contactsText(task);
+  if (people) lines.push(`👤 לבירור עם: ${people}`);
   if (task.notes && task.notes !== task.title) lines.push('', task.notes);
   for (const link of task.links || []) if (!task.notes?.includes(link.url)) lines.push(link.url);
   if (subtasks.length) {

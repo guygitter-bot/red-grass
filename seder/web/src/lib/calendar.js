@@ -1,6 +1,7 @@
 // סנכרון ליומן: קישור "הוסף ליומן גוגל" לכל משימה, וקובץ ‎.ics‎ (יומן אפל / אאוטלוק / גוגל)
 // עם תזכורת מובנית – כך שההתראה מגיעה מהיומן של הטלפון גם כשהאפליקציה סגורה.
 import { addDays, dueDate } from './dates';
+import { contactsText } from './store';
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -42,6 +43,8 @@ function description(task) {
   const lines = [];
   if (task.notes) lines.push(task.notes);
   for (const link of task.links || []) if (!task.notes?.includes(link.url)) lines.push(link.url);
+  const people = contactsText(task);
+  if (people) lines.push(`לבירור עם: ${people}`);
   return lines.join('\n');
 }
 
