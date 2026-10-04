@@ -5,7 +5,7 @@ name: mat-kon-voice
 on:
   push:
     branches-ignore: [main]
-    paths: ["mat_kon/tutorials/voice/lines.json"]
+    paths: ["mat_kon/tutorials/voice/lines.json", "mat_kon/tutorials/voice-generate.mjs", ".github/workflows/mat-kon-voice.yml"]
   workflow_dispatch:
 
 permissions:
