@@ -40,7 +40,7 @@ await record('fridge', async ({ page, mock, say, tap, type, upload, wait, card, 
   await say('לפני שמוסיפים – בודקים את הרשימה', 2400, true);
   await say('מורידים סימון ממה שלא צריך…', 800, true);
   await tap(page.getByRole('button', { name: 'לא להוסיף' }).nth(3), { after: 800 });
-  await say('מתקנים שם, ו-🧊/🥫 מעביר בין מקרר למזווה', 800, true);
+  await say('מתקנים שם, וכפתור 🧊/🥫 מעביר בין מקרר למזווה', 800, true);
   const nameInput = page.locator('input[value="שמנת מתוקה"]');
   await tap(nameInput, { after: 300 });
   await nameInput.press('End');

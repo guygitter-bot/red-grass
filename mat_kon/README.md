@@ -212,3 +212,6 @@ for f in videos/*.mjs; do node "$f"; done   # כולם
 - `tutorials/kit.mjs` – ההקלטה: טלפון 390×844, כתוביות, "אצבע" שמראה איפה לוחצים, המרה ל-MP4 (H.264) ותמונת שער.
 - `tutorials/demo.mjs` – נתוני הדמו. `tutorials/videos/*.mjs` – תסריט לכל סרטון.
 - רשימת הסרטונים באפליקציה: `web/src/lib/tutorials.js`. כשמשנים מסך – מקליטים מחדש את הסרטון שלו.
+- **קול ומוזיקה:** כל כתובית נקראת בקול נשי (Google Text-to-Speech). המשפטים נאספים ל-`tutorials/voice/lines.json` בזמן ההקלטה;
+  כשהקובץ משתנה בענף עבודה, `mat-kon-voice.yml` יוצר את קובצי ה-MP3 החסרים (סוד `GOOGLE_TTS_KEY`) ודוחף אותם לענף – ואז מקליטים שוב.
+  המוזיקה (`tutorials/music.m4a`) מסונתזת ב-`tutorials/music.py`, בלי זכויות יוצרים של אחרים, ויורדת אוטומטית כשמדברים.
