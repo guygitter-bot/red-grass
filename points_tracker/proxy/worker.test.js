@@ -61,3 +61,9 @@ test('allows the key check (GET model) and CORS preflight', async () => {
 test('refuses to run without configuration', async () => {
   assert.equal((await worker.fetch(post(ok), { ACCESS_CODE: 'code123' })).status, 500);
 });
+
+test('CORS allows every method the app uses (PATCH for the device switches)', async () => {
+  const pre = new Request('https://proxy.example/devices', { method: 'OPTIONS', headers: { origin: 'https://app.example' } });
+  const methods = (await worker.fetch(pre, env)).headers.get('access-control-allow-methods');
+  for (const m of ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']) assert.ok(methods.includes(m), m);
+});
