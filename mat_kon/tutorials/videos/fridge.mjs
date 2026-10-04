@@ -1,6 +1,6 @@
 import { record } from '../kit.mjs';
 
-await record('fridge', async ({ page, mock, say, tap, type, upload, wait, card, uncard, scroll, hideDot }) => {
+await record('fridge', async ({ page, mock, say, tap, type, upload, wait, card, uncard, scroll, hideDot, unsay }) => {
   // מוצר בודד: האפליקציה שולחת mode 'single' (השרת המדומה מצפה ל-'one'), אז מחזירים כאן מוצר אחד
   const handle = mock.handle;
   mock.handle = async (method, path, body) => {
@@ -18,11 +18,9 @@ await record('fridge', async ({ page, mock, say, tap, type, upload, wait, card, 
   await say('יש שני אזורים: <b>המקרר</b> ו<b>המזווה</b>', 2600);
   await tap(page.getByRole('link', { name: /המקרר/ }), { after: 1000 });
 
-  await say('הכי פשוט: כותבים מה יש ולוחצים <b>הוספה</b>', 1200);
-  await type(page.getByPlaceholder('הוספת מוצר (למשל: ביצים)'), 'חומוס', { delay: 90 });
-  await tap(page.getByRole('button', { name: 'הוספה' }), { after: 800 });
-  await say('אפשר כמה ביחד, עם פסיק: <b>חסה, טחינה</b>', 1000);
-  await type(page.getByPlaceholder('הוספת מוצר (למשל: ביצים)'), 'חסה, טחינה', { delay: 80 });
+  await say('הכי פשוט: כותבים מה יש – אפשר כמה ביחד, עם פסיק', 800);
+  await type(page.getByPlaceholder('הוספת מוצר (למשל: ביצים)'), 'חומוס, טחינה', { delay: 80 });
+  await say('ולוחצים <b>הוספה</b>', 600);
   await tap(page.getByRole('button', { name: 'הוספה' }), { after: 1400 });
 
   await scroll(-2000, 600);
@@ -54,13 +52,13 @@ await record('fridge', async ({ page, mock, say, tap, type, upload, wait, card, 
   await say('מוצר נגמר? לוחצים על ה-<b>✕</b> ליד השם', 1200, true);
   await tap(page.getByRole('button', { name: 'הסרת חמאה' }), { after: 1400 });
   await say('רוצים לעדכן כמות? פשוט מצלמים או מוסיפים שוב – השורה מתעדכנת ולא נכפלת', 3400, true);
-  await scroll(900, 1400);
-  await scroll(900, 1400);
-
   await hideDot();
+  await scroll(1200, 1800);
+  await unsay();
   await scroll(-3000, 600);
   await tap(page.getByRole('link', { name: 'חזרה' }), { after: 1000 });
   await say('המזווה עובד בדיוק אותו דבר – עם <b>צילום מדף</b> 🥫', 1000);
   await tap(page.getByRole('link', { name: /המזווה/ }), { after: 2200 });
+  await hideDot();
   await say('💡 טיפ: כשהמקרר והמזווה מעודכנים, נמצא לכם מה לבשל ממה שיש בבית', 3800);
 }, { start: '#', mock: { delay: 1800 } });

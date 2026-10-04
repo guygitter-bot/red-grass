@@ -3,7 +3,7 @@
 // הפלט: web/public/tutorials/<name>.mp4 + <name>.jpg
 import { createServer } from 'node:http';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as demo from './demo.mjs';
@@ -238,9 +238,7 @@ export async function record(name, script, opts = {}) {
     serviceWorkers: 'block',
     permissions: ['geolocation', 'clipboard-read', 'clipboard-write'],
     geolocation: { latitude: 32.08, longitude: 34.78 },
-    recordVideo: { dir: vdir, size: { width: W * 2, height: H * 2 } },
   });
-  const t0 = Date.now();
   const mock = mockApi(opts.mock);
   await ctx.route(`${API}/**`, async (route) => {
     const req = route.request();
@@ -279,7 +277,17 @@ export async function record(name, script, opts = {}) {
   await page.waitForLoadState('networkidle').catch(() => {});
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(400);
-  const startAt = (Date.now() - t0) / 1000;
+  // צילום המסך ברזולוציה מלאה (DevTools screencast): ההקלטה המובנית של Playwright מקליטה בגודל CSS בלבד
+  mkdirSync(vdir, { recursive: true });
+  const frames = [];
+  const cdp = await ctx.newCDPSession(page);
+  cdp.on('Page.screencastFrame', ({ data, sessionId, metadata }) => {
+    const file = join(vdir, `f${String(frames.length).padStart(5, '0')}.jpg`);
+    writeFileSync(file, Buffer.from(data, 'base64'));
+    frames.push({ file, t: metadata.timestamp });
+    cdp.send('Page.screencastFrameAck', { sessionId }).catch(() => {});
+  });
+  await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 92, maxWidth: W * 2, maxHeight: H * 2, everyNthFrame: 1 });
 
   const wait = (ms) => page.waitForTimeout(ms);
   const center = async (loc) => {
@@ -342,21 +350,24 @@ export async function record(name, script, opts = {}) {
   try {
     await script(helpers);
   } finally {
-    const video = page.video();
+    const end = Date.now() / 1000;
+    await cdp.send('Page.stopScreencast').catch(() => {});
     await ctx.close();
     await browser.close();
     server.close();
-    const webm = await video.path();
-    encode(webm, name, startAt, opts.poster ?? 1.2);
+    encode(vdir, frames, end, name, opts.poster ?? 1.2);
   }
 }
 
-// webm -> mp4 (H.264, נפתח בכל טלפון) + תמונת שער
-function encode(webm, name, startAt, posterAt) {
+// פריימים -> mp4 (H.264, נפתח בכל טלפון) + תמונת שער. כל פריים מוצג עד שמגיע הבא
+function encode(dir, frames, end, name, posterAt) {
+  if (!frames.length) throw new Error('no frames recorded');
   const mp4 = join(OUT, `${name}.mp4`);
   const jpg = join(OUT, `${name}.jpg`);
-  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-ss', String(startAt), '-i', webm,
-    '-vf', 'scale=540:-2,fps=30', '-c:v', 'libx264', '-preset', 'slow', '-crf', '27', '-pix_fmt', 'yuv420p',
+  const list = frames.map((f, i) => `file '${f.file}'\nduration ${Math.max(0.001, (frames[i + 1]?.t ?? end) - f.t).toFixed(3)}`);
+  writeFileSync(join(dir, 'list.txt'), `${list.join('\n')}\nfile '${frames.at(-1).file}'\n`);
+  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', join(dir, 'list.txt'),
+    '-vf', 'scale=720:-2:flags=lanczos,fps=30', '-c:v', 'libx264', '-preset', 'slow', '-crf', '26', '-pix_fmt', 'yuv420p',
     '-movflags', '+faststart', '-an', mp4]);
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-ss', String(posterAt), '-i', mp4, '-frames:v', '1', '-vf', 'scale=360:-2', '-q:v', '5', jpg]);
   const sec = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', mp4]).toString().trim());
