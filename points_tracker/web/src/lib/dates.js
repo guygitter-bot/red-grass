@@ -38,9 +38,10 @@ export function formatDisplayDate(dateStr) {
 }
 
 // ברכה לפי השעה: בוקר 5–12, צהריים 12–17, ערב בשאר הזמן.
-export function greeting(d = new Date()) {
+// אם הוגדר שם (לא ריק ולא ברירת המחדל "אורח") הוא מתווסף לברכה.
+export function greeting(d = new Date(), name = '') {
   const h = d.getHours();
-  if (h >= 5 && h < 12) return 'בוקר טוב';
-  if (h >= 12 && h < 17) return 'צהריים טובים';
-  return 'ערב טוב';
+  const base = h >= 5 && h < 12 ? 'בוקר טוב' : h >= 12 && h < 17 ? 'צהריים טובים' : 'ערב טוב';
+  const n = (name || '').trim();
+  return n && n !== 'אורח' ? `${base}, ${n}` : base;
 }
