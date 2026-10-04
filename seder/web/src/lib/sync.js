@@ -1,7 +1,7 @@
 // סנכרון בין מכשירים דרך השרת (seder/api). האפליקציה עובדת קודם כול מהמכשיר;
 // כשיש רשת היא שולחת מה שהשתנה ומקבלת מה שהשתנה במכשירים האחרים.
 // כל רשומה נושאת updatedAt – בעריכה של אותה משימה בשני מכשירים, העריכה המאוחרת גוברת.
-import { emptySync } from './store';
+import { emptySync, normalizeProfile } from './store';
 
 export const API_URL = (import.meta.env.VITE_API_URL || 'https://seder-api.guygitter.workers.dev').replace(/\/+$/, '');
 const TOKEN_KEY = 'seder_token';
@@ -62,6 +62,9 @@ function localRecords(state) {
   const map = new Map();
   for (const t of state.tasks) map.set(keyOf('task', t.id), { kind: 'task', id: t.id, data: t, updatedAt: t.updatedAt || 0 });
   for (const c of state.categories) map.set(keyOf('category', c.id), { kind: 'category', id: c.id, data: c, updatedAt: c.updatedAt || 0 });
+  // השם נשלח רק אחרי שנכתב פעם אחת – כדי שמכשיר חדש לא ימחק אותו בשאר המכשירים
+  const p = state.profile;
+  if (p?.updatedAt) map.set(keyOf('setting', 'profile'), { kind: 'setting', id: 'profile', data: p, updatedAt: p.updatedAt });
   return map;
 }
 
@@ -88,7 +91,15 @@ export function applyRemote(state, pushed, response) {
   }
   const tasks = new Map(state.tasks.map((t) => [t.id, t]));
   const categories = new Map(state.categories.map((c) => [c.id, c]));
+  let profile = state.profile;
   for (const r of response.records || []) {
+    if (r.kind === 'setting') {
+      // אותו כלל: העריכה המאוחרת גוברת
+      if (r.id !== 'profile' || r.deleted || (profile?.updatedAt || 0) > r.updatedAt) continue;
+      profile = normalizeProfile({ ...r.data, updatedAt: r.updatedAt });
+      known[keyOf(r.kind, r.id)] = r.updatedAt;
+      continue;
+    }
     const target = r.kind === 'task' ? tasks : r.kind === 'category' ? categories : null;
     if (!target) continue;
     const key = keyOf(r.kind, r.id);
@@ -107,6 +118,7 @@ export function applyRemote(state, pushed, response) {
     ...state,
     tasks: [...tasks.values()],
     categories: [...categories.values()],
+    profile,
     sync: { cursor: response.cursor ?? state.sync.cursor, known },
   };
 }

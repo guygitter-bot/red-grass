@@ -1,18 +1,10 @@
 import { ClipboardPaste } from 'lucide-react';
 import { useStore } from '../App';
 import { dashboard, forDay, sortTasks } from '../lib/store';
-import { DAY_NAMES, todayKey } from '../lib/dates';
+import { DAY_NAMES, greeting, todayKey } from '../lib/dates';
 import { colorOf } from '../lib/colors';
 import { TaskList } from './TaskItem';
 import { Empty, QuickAdd, Section } from './ui';
-
-function greeting(h) {
-  if (h < 5) return 'לילה טוב';
-  if (h < 12) return 'בוקר טוב';
-  if (h < 17) return 'צהריים טובים';
-  if (h < 21) return 'ערב טוב';
-  return 'לילה טוב';
-}
 
 function Stat({ value, label, tone, onClick }) {
   return (
@@ -36,7 +28,7 @@ export default function Dashboard() {
       <div>
       <div className="mt-1">
         <div className="text-stone-500 text-sm">יום {DAY_NAMES[now.getDay()]}, {now.getDate()}.{now.getMonth() + 1}</div>
-        <div className="text-xl font-bold lg:text-3xl">{greeting(now.getHours())} ✨</div>
+        <div className="text-xl font-bold lg:text-3xl break-words">{greeting(now.getHours(), state.profile?.name)} ✨</div>
       </div>
 
       <div className="mt-4 rounded-3xl bg-gradient-to-l from-violet-600 to-fuchsia-500 text-white p-4 shadow-lg shadow-violet-200">
