@@ -246,8 +246,12 @@ export function speakable(html) {
     .trim();
 }
 const voiceKey = (text) => createHash('sha1').update(text).digest('hex').slice(0, 12);
-function voiceClip(text) {
-  if (!text) return null;
+// הגייה: משפט שיש לו גרסה מנוקדת ב-voice/niqqud.json נשלח להקראה מנוקד (הכתובית נשארת בלי ניקוד)
+const NIQQUD_FILE = join(VOICE, 'niqqud.json');
+const NIQQUD = existsSync(NIQQUD_FILE) ? JSON.parse(readFileSync(NIQQUD_FILE, 'utf8')) : {};
+function voiceClip(plain) {
+  if (!plain) return null;
+  const text = NIQQUD[plain] || plain;
   const key = voiceKey(text);
   mkdirSync(VOICE, { recursive: true });
   const listFile = join(VOICE, 'lines.json');
@@ -439,7 +443,7 @@ function encode(dir, frames, end, name, posterAt, voice = []) {
   const first = music ? 2 : 1;
   const parts = [];
   const fadeOut = Math.max(0, length - 2.5).toFixed(2);
-  if (music) parts.push(`[1:a]atrim=0:${length.toFixed(2)},volume=0.30,afade=t=in:d=1.5,afade=t=out:st=${fadeOut}:d=2.5[m]`);
+  if (music) parts.push(`[1:a]atrim=0:${length.toFixed(2)},volume=0.22,afade=t=in:d=1.5,afade=t=out:st=${fadeOut}:d=2.5[m]`);
   voice.forEach((v, i) => {
     const ms = Math.max(0, Math.round((v.t - frames[0].t) * 1000));
     parts.push(`[${first + i}:a]aresample=44100,aformat=channel_layouts=stereo,adelay=${ms}|${ms},volume=1.6[v${i}]`);
