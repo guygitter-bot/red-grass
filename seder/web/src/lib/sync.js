@@ -2,9 +2,10 @@
 // כשיש רשת היא שולחת מה שהשתנה ומקבלת מה שהשתנה במכשירים האחרים.
 // כל רשומה נושאת updatedAt – בעריכה של אותה משימה בשני מכשירים, העריכה המאוחרת גוברת.
 import { emptySync, normalizeProfile, sortCategories } from './store';
+import { SPACE, scoped } from './space';
 
 export const API_URL = (import.meta.env.VITE_API_URL || 'https://seder-api.guygitter.workers.dev').replace(/\/+$/, '');
-const TOKEN_KEY = 'seder_token';
+const TOKEN_KEY = scoped('seder_token');
 export const MAX_CHANGES = 2000;
 
 export function getToken() {
@@ -50,10 +51,33 @@ async function post(path, body, token) {
   return data;
 }
 
-export async function login(password) {
-  const { token } = await post('/login', { password });
-  setToken(token);
-  return token;
+// במרחב: גם המזהה. בפתיחה הראשונה של קישור השרת עונה needsSetup – ואז בוחרים סיסמה (setup)
+export async function login(password, { setup = false } = {}) {
+  const res = await post('/login', SPACE ? { space: SPACE, password, setup } : { password });
+  if (res.token) setToken(res.token);
+  return res;
+}
+
+// האם הקישור עוד מחכה לבחירת סיסמה (ומה השם שנתנו לו)
+export async function spaceStatus() {
+  return post('/login', { space: SPACE, password: '' });
+}
+
+// ניהול האנשים הנוספים (רק באפליקציה הראשית)
+export async function listSpaces() {
+  return (await post('/spaces/list', {}, getToken())).spaces;
+}
+
+export async function createSpace(name) {
+  return (await post('/spaces/create', { name }, getToken())).space;
+}
+
+export async function resetSpace(id) {
+  return post('/spaces/reset', { id }, getToken());
+}
+
+export async function deleteSpace(id) {
+  return post('/spaces/delete', { id }, getToken());
 }
 
 export function logout() {

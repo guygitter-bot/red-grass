@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bell, CalendarPlus, Cloud, CloudOff, Download, Lock, MessageSquarePlus, Upload, UserRound } from 'lucide-react';
+import { Bell, CalendarPlus, Cloud, CloudOff, Download, Lock, LogOut, MessageSquarePlus, Upload, UserRound, Users } from 'lucide-react';
+import { SPACE, leaveSpace } from '../lib/space';
 import { useStore } from '../App';
 import { normalize, setName } from '../lib/store';
 import { greeting, todayKey } from '../lib/dates';
@@ -13,7 +14,7 @@ import { Chip, Sheet } from './ui';
 const row = 'w-full flex items-center gap-3 rounded-2xl bg-stone-50 p-3 text-right';
 
 export default function SettingsSheet({ onClose }) {
-  const { state, act, syncStatus, syncNow, lock, openRequests } = useStore();
+  const { state, act, syncStatus, syncNow, lock, openRequests, openSpaces } = useStore();
   const theme = useTheme();
   const font = useFont();
   const [perm, setPerm] = useState(() => (notificationsSupported() ? Notification.permission : 'unsupported'));
@@ -144,11 +145,25 @@ export default function SettingsSheet({ onClose }) {
           <span>נעילה עכשיו<span className="block text-xs text-stone-500">האפליקציה ננעלת בכל פתיחה, ואחרי 5 דקות ברקע</span></span>
         </button>
 
-        <h3 className="text-sm font-bold text-stone-500 pt-3">שיפור האפליקציה</h3>
-        <button onClick={() => { onClose(); openRequests(); }} className={row}>
-          <MessageSquarePlus size={20} className="text-violet-600" />
-          <span>בקשה לשינוי באפליקציה<span className="block text-xs text-stone-500">כותבים מה לשנות – Claude מכין, ומאשרים כאן</span></span>
-        </button>
+        {SPACE ? (
+          // אדם נוסף: אפשר לצאת מהאפליקציה שלו במכשיר הזה (המשימות שלו נשארות בשרת)
+          <button onClick={() => { if (window.confirm('לצאת מהאפליקציה הזו במכשיר הזה? המשימות נשארות שמורות, ואפשר להיכנס שוב מהקישור.')) leaveSpace(); }} className={row}>
+            <LogOut size={20} className="text-stone-500" />
+            <span>יציאה במכשיר הזה<span className="block text-xs text-stone-500">כדי להיכנס שוב – פותחים את הקישור שקיבלת</span></span>
+          </button>
+        ) : (
+          <>
+            <h3 className="text-sm font-bold text-stone-500 pt-3">שיפור האפליקציה</h3>
+            <button onClick={() => { onClose(); openRequests(); }} className={row}>
+              <MessageSquarePlus size={20} className="text-violet-600" />
+              <span>בקשה לשינוי באפליקציה<span className="block text-xs text-stone-500">כותבים מה לשנות – Claude מכין, ומאשרים כאן</span></span>
+            </button>
+            <button onClick={() => { onClose(); openSpaces(); }} className={row}>
+              <Users size={20} className="text-violet-600" />
+              <span>אפליקציה לאדם נוסף<span className="block text-xs text-stone-500">קישור שפותח לכל אחד אפליקציה משלו – בלי לראות את המשימות שלך</span></span>
+            </button>
+          </>
+        )}
 
         <h3 className="text-sm font-bold text-stone-500 pt-3">תזכורות</h3>
         {perm === 'granted' && push ? (
