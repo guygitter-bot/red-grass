@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Inbox, LogOut, Moon, Pencil, Search, Sun } from 'lucide-react';
-import { AuthError, api, getToken, setToken } from './lib/api';
+import { Inbox, Moon, Pencil, Search, Sun } from 'lucide-react';
+import { api } from './lib/api';
 import { categoryList, downloadFile, filterItems, isWaiting, parsePasted, readFile, sharedText } from './lib/library';
 import { isDark, setTheme } from './lib/theme';
-import Login from './components/Login';
 import AddBox from './components/AddBox';
 import ItemCard from './components/ItemCard';
 import ItemSheet from './components/ItemSheet';
@@ -13,7 +12,6 @@ const SHARED = sharedText(window.location.search);
 if (SHARED) window.history.replaceState(null, '', window.location.pathname);
 
 export default function App() {
-  const [loggedIn, setLoggedIn] = useState(Boolean(getToken()));
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState({});
   const [loaded, setLoaded] = useState(false);
@@ -25,10 +23,6 @@ export default function App() {
   const [dark, setDark] = useState(isDark());
 
   const fail = useCallback((e) => {
-    if (e instanceof AuthError) {
-      setToken('');
-      setLoggedIn(false);
-    }
     setMessage(e.message);
   }, []);
 
@@ -44,8 +38,8 @@ export default function App() {
   }, [fail]);
 
   useEffect(() => {
-    if (loggedIn) load();
-  }, [loggedIn, load]);
+    load();
+  }, [load]);
 
   // בזמן מיפוי – רענון כל 3 שניות עד שהכול מוכן
   const waiting = items.some(isWaiting);
@@ -60,13 +54,13 @@ export default function App() {
   // חזרה לאפליקציה – רענון (אולי נוסף משהו ממכשיר אחר)
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === 'visible' && loggedIn) load();
+      if (document.visibilityState === 'visible') load();
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => {
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [loggedIn, load]);
+  }, [load]);
 
   useEffect(() => {
     if (!message) return undefined;
@@ -153,14 +147,6 @@ export default function App() {
     setDark(!dark);
   }
 
-  function logout() {
-    setToken('');
-    setLoggedIn(false);
-    setItems([]);
-  }
-
-  if (!loggedIn) return <Login onDone={() => setLoggedIn(true)} />;
-
   const chip = (key, label, count) => (
     <button
       key={key}
@@ -185,7 +171,6 @@ export default function App() {
           <button onClick={toggleTheme} className="ms-auto p-2 rounded-full hover:bg-soft" aria-label="מצב לילה">
             {dark ? <Sun size={20} /> : <Moon size={20} />}
           </button>
-          <button onClick={logout} className="p-2 rounded-full hover:bg-soft" aria-label="יציאה"><LogOut size={20} /></button>
         </div>
       </header>
 

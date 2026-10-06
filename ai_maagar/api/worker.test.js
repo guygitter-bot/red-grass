@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import worker, { Library } from './worker.js';
 import { cleanResult, material } from './ai.js';
 import { readPage } from './source.js';
-import { sameUrl } from './library.js';
+import { MAX_PER_DAY, sameUrl } from './library.js';
 
 // זיכרון מדומה במקום האחסון של Durable Object (get/put/delete/list/alarm כמו ב-Cloudflare)
 function fakeStorage() {
@@ -46,7 +46,7 @@ function fakeAI(calls = []) {
 const page = (title) => new Response(`<html><head><title>${title}</title><meta name="description" content="תיאור"></head><body><p>${'טקסט '.repeat(120)}</p></body></html>`, { status: 200, headers: { 'content-type': 'text/html' } });
 
 function fakeEnv(extra = {}) {
-  const env = { AI_MAAGAR_PASSWORD: 'סיסמה', ALLOWED_ORIGINS: 'https://ai-maagar.pages.dev', AI_CLIENT: fakeAI(), FETCH: async (url) => page(url), ...extra };
+  const env = { ALLOWED_ORIGINS: 'https://ai-maagar.pages.dev', AI_CLIENT: fakeAI(), FETCH: async (url) => page(url), ...extra };
   env.lib = new Library({ storage: fakeStorage() }, env);
   env.LIBRARY = { idFromName: (n) => n, get: () => ({ fetch: (req) => env.lib.fetch(req) }) };
   return env;
@@ -61,27 +61,29 @@ async function call(env, path, body, token) {
   return { status: res.status, cors: res.headers.get('access-control-allow-origin'), data: await res.json() };
 }
 
-async function login(env) {
-  return (await call(env, '/login', { password: 'סיסמה' })).data.token;
+// בלי סיסמה – אין אסימון
+async function login() {
+  return undefined;
 }
 
-test('closed without a password, and requires login', async () => {
-  const env = fakeEnv({ AI_MAAGAR_PASSWORD: '' });
-  assert.equal((await call(env, '/list', {})).status, 503);
-  const env2 = fakeEnv();
-  assert.equal((await call(env2, '/list', {})).status, 401);
-  assert.equal((await call(env2, '/login', { password: 'לא' })).status, 401);
-  const token = await login(env2);
-  const res = await call(env2, '/list', {}, token);
+test('open without a password, only for the app site', async () => {
+  const env = fakeEnv();
+  const res = await call(env, '/list', {});
   assert.equal(res.status, 200);
   assert.equal(res.cors, 'https://ai-maagar.pages.dev');
   assert.deepEqual(res.data.items, []);
+  assert.equal((await call(env, '/login', { password: 'x' })).status, 404);
 });
 
-test('locks login after 10 wrong passwords', async () => {
+test('daily limit on additions', async () => {
   const env = fakeEnv();
-  for (let i = 0; i < 10; i++) await call(env, '/login', { password: 'x' });
-  assert.equal((await call(env, '/login', { password: 'סיסמה' })).status, 429);
+  await env.lib.storage.put('day', { date: new Date().toISOString().slice(0, 10), count: MAX_PER_DAY });
+  const res = await call(env, '/add', { kind: 'text', text: 'עוד אחד' });
+  assert.equal(res.status, 429);
+  assert.match(res.data.error, /מחר/);
+  // יום חדש – מתאפס
+  await env.lib.storage.put('day', { date: '2000-01-01', count: MAX_PER_DAY });
+  assert.equal((await call(env, '/add', { kind: 'text', text: 'עוד אחד' })).status, 200);
 });
 
 test('a link is saved at once and mapped in the background', async () => {

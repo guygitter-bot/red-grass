@@ -6,7 +6,7 @@
 //   fm:<id>      -> פרטי קובץ { name, type, size, chunks }
 //   fc:<id>:<n>  -> חתיכה n של הקובץ (base64; לכל ערך באחסון יש גבול גודל)
 //   cats         -> { <שם קטגוריה>: { emoji } }
-//   fails        -> { count, since }  (ניסיונות כניסה שגויים)
+//   day          -> { date, count }  כמה פריטים נוספו היום (מגבלה יומית – האפליקציה בלי סיסמה)
 //
 // הוספה שומרת את הפריט מיד ("ממפה...") ו-Durable Object alarm ממפה אותו ברקע –
 // כך שאפשר לסגור את האפליקציה באמצע, והמיפוי ממשיך.
@@ -19,8 +19,8 @@ export const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const CHUNK_CHARS = 512 * 1024;
 const MAX_TEXT = 20000;
 const MAX_NOTE = 1000;
-const MAX_FAILS = 10;
-const FAIL_WINDOW_MS = 15 * 60 * 1000;
+// האפליקציה פתוחה בלי סיסמה: מגבלה יומית, כדי שמישהו זר לא יוכל להריץ עלויות של Claude בלי סוף
+export const MAX_PER_DAY = 150;
 const MAX_ATTEMPTS = 3;
 const STUCK_MS = 10 * 60 * 1000;
 const PER_ALARM = 5;
@@ -34,20 +34,6 @@ const chunkKey = (id, n) => `fc:${id}:${String(n).padStart(4, '0')}`;
 const json = (status, data) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
 const newId = () => crypto.randomUUID().replace(/-/g, '').slice(0, 16);
 const text = (s, max) => String(s ?? '').replace(/[\u0000-\u0008\u000b-\u001f]/g, '').trim().slice(0, max);
-
-export function safeEqual(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string') return false;
-  let diff = a.length ^ b.length;
-  for (let i = 0; i < Math.max(a.length, b.length); i += 1) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
-  return diff === 0;
-}
-
-// אסימון כניסה: חתימה של הסיסמה. החלפת הסיסמה מנתקת את כל המכשירים
-export async function sessionToken(password) {
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode('ai-maagar-session-v1'));
-  return btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
 
 // כתובת אחידה להשוואה (אותו קישור פעמיים)
 export function sameUrl(u) {
@@ -96,19 +82,6 @@ export class Library {
       return json(400, { error: 'בקשה לא תקינה' });
     }
     if (!body || typeof body !== 'object') return json(400, { error: 'בקשה לא תקינה' });
-
-    if (pathname === '/login') {
-      const now = Date.now();
-      let fails = (await this.storage.get('fails')) || { count: 0, since: now };
-      if (now - fails.since > FAIL_WINDOW_MS) fails = { count: 0, since: now };
-      if (fails.count >= MAX_FAILS) return json(429, { error: 'יותר מדי ניסיונות. נסו שוב בעוד רבע שעה' });
-      if (!safeEqual(String(body.password || ''), this.env.AI_MAAGAR_PASSWORD)) {
-        await this.storage.put('fails', { count: fails.count + 1, since: fails.since });
-        return json(401, { error: 'סיסמה שגויה' });
-      }
-      await this.storage.delete('fails');
-      return json(200, { token: await sessionToken(this.env.AI_MAAGAR_PASSWORD) });
-    }
 
     if (pathname === '/list') return json(200, await this.list());
     if (pathname === '/add') return this.add(body);
@@ -184,6 +157,15 @@ export class Library {
     } else {
       return json(400, { error: 'בקשה לא תקינה' });
     }
+    // נספר רק מה שבאמת נשמר (קישור כפול לא נספר)
+    const date = new Date(now).toISOString().slice(0, 10);
+    const day = (await this.storage.get('day')) || {};
+    const count = day.date === date ? day.count : 0;
+    if (count >= MAX_PER_DAY) {
+      if (item.kind === 'file') await this.removeFile(item.id);
+      return json(429, { error: 'הגעתם למגבלה היומית של הוספות. אפשר להמשיך מחר.' });
+    }
+    await this.storage.put('day', { date, count: count + 1 });
     await this.storage.put(itemKey(item.id), item);
     await this.wake();
     return json(200, { item: item });

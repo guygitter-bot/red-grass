@@ -24,7 +24,8 @@
 - `web/` – React + Vite + Tailwind. כל הצבעים ב-`src/index.css` (משתנים שמתחלפים במצב לילה).
 - `api/` – Cloudflare Worker "ai-maagar-api" עם Durable Object אחד (`library.js`) שבו כל הפריטים, הקבצים (בחתיכות) והקטגוריות.
   ההוספה שומרת מיד, ו-alarm של ה-Durable Object ממפה ברקע. קריאת הדף: `source.js`; הסוכן: `ai.js` (`claude-opus-5-5`, effort נמוך).
-- כניסה בסיסמה (פעם אחת בכל מכשיר). 10 סיסמאות שגויות נועלות לרבע שעה.
+- **בלי סיסמה** (לבקשת המשתמשת): כל מי שיודע את הכתובת יכול לראות, להוסיף ולמחוק. כדי שזר לא יריץ עלויות של Claude –
+  עד 150 הוספות ביום (`MAX_PER_DAY` ב-`api/library.js`).
 
 ## הגדרה (פעם אחת)
 
@@ -32,10 +33,7 @@
 
 | סוד | מה |
 | --- | --- |
-| `AI_MAAGAR_PASSWORD` | הסיסמה לכניסה. אם אין – משתמשים ב-`OWNER_PASSWORD` (של mat-kon) |
 | `ANTHROPIC_API_KEY`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | כבר קיימים |
-
-אחרי שינוי הסיסמה: Actions → ai-maagar → Run workflow.
 
 ## בדיקה
 

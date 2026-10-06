@@ -49,13 +49,11 @@ jobs:
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          PASSWORD: ${{ secrets.AI_MAAGAR_PASSWORD || secrets.OWNER_PASSWORD }}
         run: |
           missing=""
           [ -n "$CF_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
           [ -n "$CF_ACCOUNT" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
           [ -n "$API_KEY" ] || missing="$missing ANTHROPIC_API_KEY"
-          [ -n "$PASSWORD" ] || missing="$missing AI_MAAGAR_PASSWORD"
           if [ -n "$missing" ]; then
             echo "::error::Missing repository secrets:$missing (see ai_maagar/README.md)"
             exit 1
@@ -71,8 +69,6 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          # הסיסמה לכניסה. בלי סוד משלה – אותה סיסמה כמו של הבעלים ב-mat-kon
-          AI_MAAGAR_PASSWORD: ${{ secrets.AI_MAAGAR_PASSWORD || secrets.OWNER_PASSWORD }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -80,7 +76,6 @@ jobs:
           wranglerVersion: "4.146.0"
           secrets: |
             ANTHROPIC_API_KEY
-            AI_MAAGAR_PASSWORD
       - name: Summary
         env:
           URL: ${{ steps.deploy.outputs.deployment-url }}

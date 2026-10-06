@@ -17,5 +17,4 @@ tag = "v1"
 new_sqlite_classes = ["Library"]
 
 # סודות, לא כאן (נקבעים אוטומטית מ-GitHub, ראו .github/workflows/ai-maagar.yml):
-#   AI_MAAGAR_PASSWORD – הסיסמה לכניסה
 #   ANTHROPIC_API_KEY  – המפתח של Claude (המיפוי לקטגוריות)
