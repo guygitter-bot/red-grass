@@ -142,7 +142,7 @@ export default function SettingsSheet({ onClose }) {
         )}
         <button onClick={() => { onClose(); lock(); }} className={row}>
           <Lock size={20} className="text-violet-600" />
-          <span>נעילה עכשיו<span className="block text-xs text-stone-500">האפליקציה ננעלת בכל פתיחה, ואחרי 5 דקות ברקע</span></span>
+          <span>נעילה עכשיו<span className="block text-xs text-stone-500">בלי זה – הסיסמה נדרשת רק אחרי 10 דקות שלא משתמשים באפליקציה</span></span>
         </button>
 
         {SPACE ? (
