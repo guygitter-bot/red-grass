@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { categoryList, filterItems, matches, parsePasted, sharedText } from './library';
+import { categoryList, filterFromHash, filterItems, hashFromFilter, matches, newestTitles, parsePasted, sharedText } from './library';
 
 describe('parsePasted', () => {
   it('finds links and keeps the rest as a note', () => {
@@ -41,5 +41,28 @@ describe('filters', () => {
     expect(filterItems(items, 'waiting', '').map((i) => i.id)).toEqual(['3', '4']);
     expect(filterItems(items, 'all', 'עורך').map((i) => i.id)).toEqual(['2']);
     expect(matches(items[0], 'אמנות midjourney')).toBe(true);
+  });
+});
+
+describe('newestTitles', () => {
+  const items = [
+    { id: '1', title: 'ישן', category: 'קוד', createdAt: 1 },
+    { id: '2', title: 'חדש', category: 'קוד', createdAt: 3 },
+    { id: '3', title: 'אמצע', category: 'קוד', createdAt: 2 },
+    { id: '4', title: 'אחר', category: 'תמונות', createdAt: 9 },
+  ];
+  it('returns up to 2 newest titles of the category', () => {
+    expect(newestTitles(items, 'קוד')).toEqual(['חדש', 'אמצע']);
+    expect(newestTitles(items, 'אין')).toEqual([]);
+  });
+});
+
+describe('hash <-> filter', () => {
+  it('round-trips', () => {
+    for (const f of ['all', 'waiting', 'קוד ופיתוח', 'תמונות, וידאו וקול', 'a/b#c']) {
+      expect(filterFromHash(hashFromFilter(f))).toBe(f);
+    }
+    expect(hashFromFilter('all')).toBe('');
+    expect(filterFromHash('#/c/%E0%A4%A')).toBe('all');
   });
 });

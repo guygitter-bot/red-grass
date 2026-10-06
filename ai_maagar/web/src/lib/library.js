@@ -46,6 +46,36 @@ export function filterItems(items, filter, query) {
   });
 }
 
+// כותרות הפריטים החדשים ביותר בקטגוריה (לתצוגה מקדימה בכרטיס)
+export function newestTitles(items, name, limit = 2) {
+  return items
+    .filter((i) => i.category === name && i.title)
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+    .slice(0, limit)
+    .map((i) => i.title);
+}
+
+// כתובת (hash) -> filter: '' = 'all', '#/waiting', '#/c/<שם>'
+export function filterFromHash(hash) {
+  const h = String(hash || '');
+  if (h === '#/waiting') return 'waiting';
+  if (h.startsWith('#/c/')) {
+    try {
+      return decodeURIComponent(h.slice(4)) || 'all';
+    } catch {
+      return 'all';
+    }
+  }
+  return 'all';
+}
+
+// filter -> כתובת (hash)
+export function hashFromFilter(filter) {
+  if (!filter || filter === 'all') return '';
+  if (filter === 'waiting') return '#/waiting';
+  return `#/c/${encodeURIComponent(filter)}`;
+}
+
 export function domainOf(url) {
   try {
     return new URL(url).hostname.replace(/^www\./, '');

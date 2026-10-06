@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Inbox, Moon, Pencil, Search, Sun } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowRight, Inbox, Moon, Pencil, Search, Sun } from 'lucide-react';
 import { api } from './lib/api';
-import { categoryList, downloadFile, filterItems, isWaiting, parsePasted, readFile, sharedText } from './lib/library';
+import { categoryList, downloadFile, filterFromHash, filterItems, hashFromFilter, isWaiting, newestTitles, parsePasted, readFile, sharedText } from './lib/library';
 import { isDark, setTheme } from './lib/theme';
 import AddBox from './components/AddBox';
+import CategoryTile from './components/CategoryTile';
 import ItemCard from './components/ItemCard';
 import ItemSheet from './components/ItemSheet';
 
@@ -15,12 +16,14 @@ export default function App() {
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState({});
   const [loaded, setLoaded] = useState(false);
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState(() => filterFromHash(window.location.hash));
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [dark, setDark] = useState(isDark());
+  const navigated = useRef(false); // האם נכנסנו לקטגוריה מתוך האפליקציה (אפשר לחזור אחורה)
+  const renaming = useRef(false);
 
   const fail = useCallback((e) => {
     setMessage(e.message);
@@ -71,13 +74,40 @@ export default function App() {
   }, [message]);
 
   const cats = useMemo(() => categoryList(items, categories), [items, categories]);
-  const shown = useMemo(() => filterItems(items, filter, query), [items, filter, query]);
+  const shown = useMemo(() => filterItems(items, filter, query), [items, filter, query]); // במסך הראשי עם חיפוש – כל הפריטים
   const waitingCount = items.filter((i) => isWaiting(i) || i.status === 'failed').length;
   const open = items.find((i) => i.id === openId);
 
-  // קטגוריה שהתרוקנה (העברה / מחיקה) – חזרה ל"הכול"
+  // המסך הפתוח נשמר בכתובת (hash), כדי שכפתור "אחורה" בטלפון יחזור לקטגוריות
   useEffect(() => {
-    if (loaded && filter !== 'all' && filter !== 'waiting' && !cats.some((c) => c.name === filter)) setFilter('all');
+    const onHash = () => {
+      setFilter(filterFromHash(window.location.hash));
+      window.scrollTo(0, 0);
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => {
+      window.removeEventListener('hashchange', onHash);
+    };
+  }, []);
+
+  function openFilter(key) {
+    navigated.current = true;
+    setQuery('');
+    window.location.hash = hashFromFilter(key);
+  }
+
+  function goBack() {
+    if (navigated.current) window.history.back();
+    else window.location.hash = '';
+  }
+
+  // קטגוריה שהתרוקנה (העברה / מחיקה) – חזרה למסך הראשי
+  useEffect(() => {
+    if (renaming.current) return;
+    if (loaded && filter !== 'all' && filter !== 'waiting' && !cats.some((c) => c.name === filter)) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      setFilter('all');
+    }
   }, [loaded, filter, cats]);
 
   async function add(input) {
@@ -138,8 +168,11 @@ export default function App() {
   async function renameCategory(name) {
     const to = window.prompt('שם חדש לקטגוריה (שם של קטגוריה קיימת = איחוד)', name)?.trim();
     if (!to || to === name) return;
+    renaming.current = true;
     await act('/category', { from: name, to });
+    window.history.replaceState(null, '', window.location.pathname + window.location.search + hashFromFilter(to));
     setFilter(to);
+    renaming.current = false;
   }
 
   function toggleTheme() {
@@ -147,20 +180,9 @@ export default function App() {
     setDark(!dark);
   }
 
-  const chip = (key, label, count) => (
-    <button
-      key={key}
-      onClick={() => setFilter(key)}
-      className={`shrink-0 lg:w-full flex items-center gap-2 rounded-full lg:rounded-xl px-3 py-1.5 lg:py-2 text-sm border transition ${
-        filter === key ? 'bg-accent text-white border-accent' : 'bg-card border-line hover:bg-soft'
-      }`}
-    >
-      <span className="truncate">{label}</span>
-      <span className={`ms-auto text-xs ${filter === key ? 'text-white/80' : 'text-muted'}`}>{count}</span>
-    </button>
-  );
-
   const current = cats.find((c) => c.name === filter);
+  const home = filter === 'all';
+  const showTiles = home && !query.trim() && items.length > 0;
 
   return (
     <div className="min-h-dvh bg-page">
@@ -174,15 +196,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-4 lg:grid lg:grid-cols-[15rem_1fr] lg:gap-6">
-        <aside className="lg:sticky lg:top-20 lg:self-start">
-          <div className="flex lg:flex-col gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 lg:mx-0 lg:px-0 pb-3">
-            {chip('all', 'הכול', items.length)}
-            {waitingCount > 0 && chip('waiting', <span className="flex items-center gap-1.5"><Inbox size={15} /> בטיפול</span>, waitingCount)}
-            {cats.map((c) => chip(c.name, `${c.emoji} ${c.name}`, c.count))}
-          </div>
-        </aside>
-
+      <main className="max-w-6xl mx-auto px-4 py-4">
         <section className="space-y-4 min-w-0">
           <AddBox initial={SHARED} busy={busy} onAdd={add} onFiles={addFiles} />
 
@@ -192,16 +206,29 @@ export default function App() {
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="חיפוש"
+                placeholder={home ? 'חיפוש' : 'חיפוש בקטגוריה'}
                 className="flex-1 bg-transparent py-2.5 outline-none placeholder:text-muted"
               />
             </div>
-            {current && (
-              <button onClick={() => renameCategory(current.name)} className="flex items-center gap-1.5 rounded-xl border border-line bg-card px-3 py-2.5 text-sm hover:bg-soft">
-                <Pencil size={15} /> שינוי שם
-              </button>
-            )}
           </div>
+
+          {!home && (
+            <div className="flex items-center gap-3 flex-wrap">
+              <button onClick={goBack} className="flex items-center gap-1.5 rounded-xl border border-line bg-card px-3 py-2 text-sm hover:bg-soft">
+                <ArrowRight size={16} /> כל הקטגוריות
+              </button>
+              <h2 className="flex items-center gap-2 text-lg font-bold min-w-0" dir="auto">
+                {filter === 'waiting' ? <Inbox size={20} /> : <span>{current?.emoji || '📁'}</span>}
+                <span className="truncate">{filter === 'waiting' ? 'בטיפול' : filter}</span>
+              </h2>
+              <span className="text-sm text-muted">{shown.length} פריטים</span>
+              {current && (
+                <button onClick={() => renameCategory(current.name)} className="ms-auto flex items-center gap-1.5 rounded-xl border border-line bg-card px-3 py-2 text-sm hover:bg-soft">
+                  <Pencil size={15} /> שינוי שם
+                </button>
+              )}
+            </div>
+          )}
 
           {loaded && !items.length && (
             <div className="text-center text-muted py-16 space-y-2">
@@ -210,13 +237,26 @@ export default function App() {
               <p className="text-sm">הדביקו קישור לכתבה, סרטון או כלי – או העלו קובץ – ואני אסדר אותו לפי הנושא.</p>
             </div>
           )}
-          {loaded && items.length > 0 && !shown.length && <p className="text-center text-muted py-10">לא נמצא כלום</p>}
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {shown.map((item) => (
-              <ItemCard key={item.id} item={item} emoji={categories[item.category]?.emoji || '📁'} onOpen={setOpenId} />
-            ))}
-          </div>
+          {showTiles ? (
+            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+              {waitingCount > 0 && (
+                <CategoryTile icon={<Inbox size={36} />} name="בטיפול" count={waitingCount} busy={waiting} onOpen={() => openFilter('waiting')} />
+              )}
+              {cats.map((c) => (
+                <CategoryTile key={c.name} emoji={c.emoji} name={c.name} count={c.count} previews={newestTitles(items, c.name)} onOpen={() => openFilter(c.name)} />
+              ))}
+            </div>
+          ) : (
+            <>
+              {loaded && items.length > 0 && !shown.length && <p className="text-center text-muted py-10">לא נמצא כלום</p>}
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {shown.map((item) => (
+                  <ItemCard key={item.id} item={item} emoji={categories[item.category]?.emoji || '📁'} onOpen={setOpenId} />
+                ))}
+              </div>
+            </>
+          )}
         </section>
       </main>
 
