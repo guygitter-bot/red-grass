@@ -2,8 +2,9 @@
 // (בטלפון אנדרואיד – בכל דפדפן מודרני; באייפון – רק כשהאפליקציה הותקנה ב"הוספה למסך הבית")
 import { apiPost, getToken } from './sync';
 import { fromB64url } from './b64';
+import { scoped } from './space';
 
-const FLAG = 'seder_push';
+const FLAG = scoped('seder_push');
 
 export function pushSupported() {
   return typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && typeof Notification !== 'undefined';

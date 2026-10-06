@@ -12,8 +12,12 @@
 //   POST /requests/go      {number}   -> לבצע בקשה אחרי שראו כמה היא תעלה
 //   POST /requests/retry   {number}   -> לנסות שוב בקשה שנכשלה
 //   POST /credits {amount}            -> היתרה בחשבון הקרדיטים של Claude (מוקלדת ידנית; ראו costs.js)
+//   POST /spaces/list | /spaces/create {name} | /spaces/reset {id} | /spaces/delete {id}
+//                                     -> אפליקציה נפרדת לאדם נוסף: קישור משלו, סיסמה משלו ונתונים משלו (spaces.js)
+// במרחב: POST /login {space, password, setup} – ושאר הכתובות כרגיל, עם החיבור של המרחב (רק בלי בקשות, יתרה ומרחבים).
 // הסיסמה (SEDER_PASSWORD) היא סוד של השרת. בלי סיסמה מוגדרת השרת סגור לגמרי.
 import { Vault, safeEqual, sessionToken } from './vault.js';
+import { newSpaceId, spaceOfToken, validSpaceId } from './spaces.js';
 import { approveRequest, createRequest, creditsOf, listRequests, rejectRequest, retryRequest, startRequest } from './requests.js';
 
 export { Vault };
@@ -44,19 +48,67 @@ export default {
     const { pathname } = new URL(request.url);
     if (pathname === '/' || pathname === '/health') return reply(200, { ok: true });
     if (!env.SEDER_PASSWORD || env.SEDER_PASSWORD === 'none' || !env.VAULT) return reply(503, { error: 'השרת לא מוגדר (חסרה סיסמה)' });
-    const ROUTES = ['/login', '/sync', '/push/key', '/push/subscribe', '/push/unsubscribe', '/push/test', '/files/put', '/files/get', '/requests', '/requests/list', '/requests/approve', '/requests/reject', '/requests/retry', '/requests/go', '/credits'];
+    const ROUTES = ['/login', '/sync', '/push/key', '/push/subscribe', '/push/unsubscribe', '/push/test', '/files/put', '/files/get', '/requests', '/requests/list', '/requests/approve', '/requests/reject', '/requests/retry', '/requests/go', '/credits', '/spaces/list', '/spaces/create', '/spaces/reset', '/spaces/delete'];
+    // רק באפליקציה הראשית: שינויים באפליקציה עצמה, היתרה, וניהול האנשים הנוספים
+    const ownerOnly = pathname.startsWith('/requests') || pathname === '/credits' || pathname.startsWith('/spaces/');
     if (request.method !== 'POST' || !ROUTES.includes(pathname)) return reply(404, { error: 'לא נמצא' });
 
     const text = await request.text();
     if (text.length > (pathname === '/files/put' ? MAX_FILE_BODY_BYTES : MAX_BODY_BYTES)) return reply(413, { error: 'גדול מדי' });
 
-    if (pathname !== '/login') {
-      const auth = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
-      if (!safeEqual(auth, await sessionToken(env.SEDER_PASSWORD))) return reply(401, { error: 'צריך להתחבר מחדש' });
+    const auth = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+    const vaultOf = (name) => {
+      const stub = env.VAULT.get(env.VAULT.idFromName(name));
+      return (path, body, headers = {}) => stub.fetch(new Request(`https://vault${path}`, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body }));
+    };
+
+    // מרחב של אדם נוסף: הכול עובר לכספת שלו, והיא בודקת את הסיסמה / החיבור
+    let space = spaceOfToken(auth);
+    if (pathname === '/login') {
+      let body;
+      try {
+        body = JSON.parse(text || '{}');
+      } catch {
+        return reply(400, { error: 'בקשה לא תקינה' });
+      }
+      space = body.space ?? '';
+      if (space !== '' && !validSpaceId(space)) return reply(404, { error: 'הקישור לא תקין' });
+    }
+    if (space) {
+      if (!validSpaceId(space)) return reply(401, { error: 'צריך להתחבר מחדש' });
+      if (ownerOnly) return reply(403, { error: 'זה זמין רק באפליקציה הראשית' });
+      const res = await vaultOf(`space:${space}`)(pathname, text, { authorization: `Bearer ${auth}`, 'x-seder-space': space });
+      return reply(res.status, await res.json());
     }
 
-    const stub = env.VAULT.get(env.VAULT.idFromName('main'));
-    const vault = (path, body) => stub.fetch(new Request(`https://vault${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body }));
+    if (pathname !== '/login' && !safeEqual(auth, await sessionToken(env.SEDER_PASSWORD))) return reply(401, { error: 'צריך להתחבר מחדש' });
+
+    const vault = vaultOf('main');
+
+    if (pathname.startsWith('/spaces/')) {
+      const body = JSON.parse(text || '{}');
+      const { registry } = await (await vault('/registry/list', '{}')).json();
+      if (pathname === '/spaces/list') {
+        const spaces = await Promise.all(Object.entries(registry).map(async ([id, s]) => {
+          const info = await (await vaultOf(`space:${id}`)('/space/info', '{}')).json();
+          return { id, name: s.name, createdAt: s.createdAt, ready: !!info.ready };
+        }));
+        return reply(200, { spaces: spaces.sort((a, b) => b.createdAt - a.createdAt) });
+      }
+      if (pathname === '/spaces/create') {
+        const id = newSpaceId();
+        const added = await vault('/registry/add', JSON.stringify({ id, name: body.name }));
+        const data = await added.json();
+        if (!added.ok) return reply(added.status, data);
+        await vaultOf(`space:${id}`)('/space/init', JSON.stringify({ id, name: data.name }));
+        return reply(200, { space: { id, name: data.name, createdAt: Date.now(), ready: false } });
+      }
+      if (!validSpaceId(body.id) || !registry[body.id]) return reply(404, { error: 'לא נמצא' });
+      if (pathname === '/spaces/reset') return reply(200, await (await vaultOf(`space:${body.id}`)('/space/reset', '{}')).json());
+      await vaultOf(`space:${body.id}`)('/space/delete', '{}');
+      await vault('/registry/remove', JSON.stringify({ id: body.id }));
+      return reply(200, { ok: true });
+    }
 
     if (pathname.startsWith('/requests')) {
       if (!env.SEDER_GITHUB_TOKEN || env.SEDER_GITHUB_TOKEN === 'none' || !env.GITHUB_REPO) return reply(503, { error: 'בקשות לשינוי עוד לא הוגדרו (חסר SEDER_GITHUB_TOKEN)' });

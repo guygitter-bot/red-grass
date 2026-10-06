@@ -2,8 +2,9 @@
 // עם רשת – הסיסמה נבדקת בשרת. בלי רשת – מול "טביעה" של הסיסמה שנשמרה במכשיר בכניסה המוצלחת האחרונה
 // (PBKDF2 עם מלח; הסיסמה עצמה לא נשמרת).
 import { NetworkError, login } from './sync';
+import { scoped } from './space';
 
-const VERIFIER_KEY = 'seder_verifier';
+const VERIFIER_KEY = scoped('seder_verifier');
 const ITERATIONS = 150000;
 // חזרה לאפליקציה אחרי יותר מזה ברקע -> נעילה מחדש
 export const RELOCK_AFTER_MS = 5 * 60 * 1000;
@@ -44,9 +45,11 @@ export async function checkLocal(password) {
 }
 
 // פתיחה: קודם בשרת; רק כשאין רשת/שרת – בדיקה במכשיר. סיסמה שגויה בשרת לא עוברת לבדיקה מקומית
-export async function unlock(password) {
+// setup – פתיחה ראשונה של קישור לאדם נוסף: הסיסמה נבחרת עכשיו
+export async function unlock(password, { setup = false } = {}) {
   try {
-    await login(password);
+    const res = await login(password, { setup });
+    if (res.needsSetup) return { ok: false, needsSetup: true, name: res.name };
     await saveVerifier(password);
     return { ok: true, online: true };
   } catch (e) {
