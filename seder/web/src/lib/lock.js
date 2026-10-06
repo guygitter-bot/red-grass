@@ -1,13 +1,46 @@
-// נעילה: בכל פתיחה של האפליקציה מבקשים סיסמה.
+// נעילה: מבקשים סיסמה רק אחרי יותר מ-10 דקות בלי שימוש (גם אם האפליקציה נסגרה לגמרי ונפתחה שוב).
+// הזמן של השימוש האחרון נשמר במכשיר (לכל מרחב בנפרד); "נעילה עכשיו" מוחקת אותו.
 // עם רשת – הסיסמה נבדקת בשרת. בלי רשת – מול "טביעה" של הסיסמה שנשמרה במכשיר בכניסה המוצלחת האחרונה
 // (PBKDF2 עם מלח; הסיסמה עצמה לא נשמרת).
 import { NetworkError, login } from './sync';
 import { scoped } from './space';
 
 const VERIFIER_KEY = scoped('seder_verifier');
+const ACTIVE_KEY = scoped('seder_active');
 const ITERATIONS = 150000;
-// חזרה לאפליקציה אחרי יותר מזה ברקע -> נעילה מחדש
-export const RELOCK_AFTER_MS = 5 * 60 * 1000;
+// חזרה לאפליקציה (או פתיחה מחדש) אחרי יותר מזה בלי שימוש -> נעילה מחדש
+export const RELOCK_AFTER_MS = 10 * 60 * 1000;
+
+// האפליקציה פתוחה ובשימוש עכשיו (נקרא בכניסה, כשיוצאים ממנה, ופעם בכמה שניות בזמן השימוש)
+export function markActive(now = Date.now()) {
+  try {
+    localStorage.setItem(ACTIVE_KEY, String(now));
+  } catch {
+    // אחסון חסום – תמיד יבקש סיסמה
+  }
+}
+
+export function clearActive() {
+  try {
+    localStorage.removeItem(ACTIVE_KEY);
+  } catch {
+    // אחסון חסום
+  }
+}
+
+// האם אפשר להיכנס בלי סיסמה: היה שימוש לפני פחות מ-10 דקות (שעון שזז אחורה – נועלים)
+export function recentlyActive(now = Date.now(), last = readActive()) {
+  return last != null && last <= now && now - last <= RELOCK_AFTER_MS;
+}
+
+function readActive() {
+  try {
+    const n = Number(localStorage.getItem(ACTIVE_KEY));
+    return n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
 
 const toB64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
 const fromB64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
