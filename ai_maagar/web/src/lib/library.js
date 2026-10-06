@@ -136,3 +136,6 @@ export function downloadFile({ name, type, data }) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
+
+// "פריט אחד" / "3 פריטים"
+export const countText = (n) => (n === 1 ? 'פריט אחד' : `${n} פריטים`);

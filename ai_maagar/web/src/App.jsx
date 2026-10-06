@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, Inbox, Moon, Pencil, Search, Sun } from 'lucide-react';
 import { api } from './lib/api';
-import { categoryList, downloadFile, filterFromHash, filterItems, hashFromFilter, isWaiting, newestTitles, parsePasted, readFile, sharedText } from './lib/library';
+import { categoryList, countText, downloadFile, filterFromHash, filterItems, hashFromFilter, isWaiting, newestTitles, parsePasted, readFile, sharedText } from './lib/library';
 import { isDark, setTheme } from './lib/theme';
 import AddBox from './components/AddBox';
 import CategoryTile from './components/CategoryTile';
@@ -221,7 +221,7 @@ export default function App() {
                 {filter === 'waiting' ? <Inbox size={20} /> : <span>{current?.emoji || '📁'}</span>}
                 <span className="truncate">{filter === 'waiting' ? 'בטיפול' : filter}</span>
               </h2>
-              <span className="text-sm text-muted">{shown.length} פריטים</span>
+              <span className="text-sm text-muted">{countText(shown.length)}</span>
               {current && (
                 <button onClick={() => renameCategory(current.name)} className="ms-auto flex items-center gap-1.5 rounded-xl border border-line bg-card px-3 py-2 text-sm hover:bg-soft">
                   <Pencil size={15} /> שינוי שם
