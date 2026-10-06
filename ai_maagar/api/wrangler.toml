@@ -5,7 +5,7 @@ workers_dev = true
 
 [vars]
 # האתרים שמותר להם לפנות לשרת (האפליקציה ב-Cloudflare Pages ופיתוח מקומי)
-ALLOWED_ORIGINS = "https://ai-maagar.pages.dev,http://localhost:5173,http://localhost:4173"
+ALLOWED_ORIGINS = "https://ai-maagar-631.pages.dev,http://localhost:5173,http://localhost:4173"
 
 # כל החומר (קישורים, קבצים, קטגוריות) – אובייקט אחד ("main")
 [[durable_objects.bindings]]

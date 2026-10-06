@@ -46,7 +46,7 @@ function fakeAI(calls = []) {
 const page = (title) => new Response(`<html><head><title>${title}</title><meta name="description" content="תיאור"></head><body><p>${'טקסט '.repeat(120)}</p></body></html>`, { status: 200, headers: { 'content-type': 'text/html' } });
 
 function fakeEnv(extra = {}) {
-  const env = { ALLOWED_ORIGINS: 'https://ai-maagar.pages.dev', AI_CLIENT: fakeAI(), FETCH: async (url) => page(url), ...extra };
+  const env = { ALLOWED_ORIGINS: 'https://ai-maagar-631.pages.dev', AI_CLIENT: fakeAI(), FETCH: async (url) => page(url), ...extra };
   env.lib = new Library({ storage: fakeStorage() }, env);
   env.LIBRARY = { idFromName: (n) => n, get: () => ({ fetch: (req) => env.lib.fetch(req) }) };
   return env;
@@ -55,7 +55,7 @@ function fakeEnv(extra = {}) {
 async function call(env, path, body, token) {
   const res = await worker.fetch(new Request(`https://api.test${path}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', origin: 'https://ai-maagar.pages.dev', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+    headers: { 'content-type': 'application/json', origin: 'https://ai-maagar-631.pages.dev', ...(token ? { authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify(body),
   }), env);
   return { status: res.status, cors: res.headers.get('access-control-allow-origin'), data: await res.json() };
@@ -70,7 +70,7 @@ test('open without a password, only for the app site', async () => {
   const env = fakeEnv();
   const res = await call(env, '/list', {});
   assert.equal(res.status, 200);
-  assert.equal(res.cors, 'https://ai-maagar.pages.dev');
+  assert.equal(res.cors, 'https://ai-maagar-631.pages.dev');
   assert.deepEqual(res.data.items, []);
   assert.equal((await call(env, '/login', { password: 'x' })).status, 404);
 });

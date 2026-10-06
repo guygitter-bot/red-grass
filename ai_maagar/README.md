@@ -3,7 +3,8 @@
 מקום אחד לכל החומר על בינה מלאכותית: מדביקים קישור (כתבה, סרטון, פוסט, כלי) או מעלים קובץ,
 ו-Claude קורא אותו, כותב תקציר קצר בעברית ומכניס אותו לקטגוריה לפי הנושא.
 
-כתובת: **https://ai-maagar.pages.dev** (Cloudflare Pages, `.github/workflows/ai-maagar.yml`).
+כתובת: **https://ai-maagar-631.pages.dev** (Cloudflare Pages, `.github/workflows/ai-maagar.yml`).
+(השם ai-maagar.pages.dev תפוס באתר של מישהו אחר – Cloudflare הוסיף לשם שלנו את הסיומת 631.)
 
 ## מה יש
 

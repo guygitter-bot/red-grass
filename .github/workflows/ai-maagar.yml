@@ -2,7 +2,7 @@ name: ai-maagar
 
 # מאגר AI (ai_maagar/):
 #   api -> Cloudflare Worker "ai-maagar-api" (שמירה ומיפוי לקטגוריות עם Claude)
-#   web -> Cloudflare Pages "ai-maagar" -> https://ai-maagar.pages.dev
+#   web -> Cloudflare Pages "ai-maagar" -> https://ai-maagar-631.pages.dev
 on:
   push:
     branches: [main]
@@ -118,4 +118,4 @@ jobs:
         env:
           URL: ${{ steps.publish.outputs.deployment-url }}
         run: |
-          echo "Published: https://ai-maagar.pages.dev ($URL)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Published: https://ai-maagar-631.pages.dev ($URL)" >> "$GITHUB_STEP_SUMMARY"

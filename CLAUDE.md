@@ -96,7 +96,7 @@
 
 ### מאגר AI (`ai_maagar/`)
 - תיאור: `ai_maagar/README.md`. קישורים וקבצים על AI שממופים לקטגוריות לפי נושא (Claude, ברקע ב-Durable Object alarm).
-- `ai_maagar/web` → https://ai-maagar.pages.dev · `ai_maagar/api` → Worker `ai-maagar-api`. עלייה: `ai-maagar.yml` אחרי מיזוג ל-main.
+- `ai_maagar/web` → https://ai-maagar-631.pages.dev · `ai_maagar/api` → Worker `ai-maagar-api`. עלייה: `ai-maagar.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd ai_maagar/api && npm test` · `cd ai_maagar/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 
 ### טוטו (`toto_predictor/`)
