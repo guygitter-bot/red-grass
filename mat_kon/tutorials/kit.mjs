@@ -222,7 +222,7 @@ async function samplePhotos(browser) {
 }
 
 // ---------- הקראה ----------
-// כל כתובית נקראת בקול. הקבצים: voice/<key>.mp3 (נוצרים ב-GitHub Actions עם Google TTS – mat-kon-voice.yml),
+// כל כתובית נקראת בקול. הקבצים: voice/eleven/<key>.mp3 (ElevenLabs) או voice/<key>.mp3 (Google TTS), נוצרים ב-GitHub Actions (mat-kon-voice.yml),
 // והטקסטים לרשימה voice/lines.json. משפט בלי קובץ עדיין נרשם לרשימה, והסרטון נבנה בינתיים בלי הקול שלו.
 const SAY_WORDS = [
   [/mat-kon/gi, 'מַט-קוֹן'], [/YouTube/g, 'יוטיוב'], [/TikTok/g, 'טיקטוק'], [/Instagram/g, 'אינסטגרם'], [/Waze/g, 'וֵייז'],
@@ -246,12 +246,8 @@ export function speakable(html) {
     .trim();
 }
 const voiceKey = (text) => createHash('sha1').update(text).digest('hex').slice(0, 12);
-// הגייה: משפט שיש לו גרסה מנוקדת ב-voice/niqqud.json נשלח להקראה מנוקד (הכתובית נשארת בלי ניקוד)
-const NIQQUD_FILE = join(VOICE, 'niqqud.json');
-const NIQQUD = existsSync(NIQQUD_FILE) ? JSON.parse(readFileSync(NIQQUD_FILE, 'utf8')) : {};
-function voiceClip(plain) {
-  if (!plain) return null;
-  const text = NIQQUD[plain] || plain;
+function voiceClip(text) {
+  if (!text) return null;
   const key = voiceKey(text);
   mkdirSync(VOICE, { recursive: true });
   const listFile = join(VOICE, 'lines.json');
@@ -260,8 +256,9 @@ function voiceClip(plain) {
     lines[key] = text;
     writeFileSync(listFile, `${JSON.stringify(Object.fromEntries(Object.entries(lines).sort()), null, 1)}\n`);
   }
-  const file = join(VOICE, `${key}.mp3`);
-  if (!existsSync(file)) return null;
+  // קודם הקראה של ElevenLabs (voice/eleven/), ואם אין – של גוגל
+  const file = [join(VOICE, 'eleven', `${key}.mp3`), join(VOICE, `${key}.mp3`)].find((f) => existsSync(f));
+  if (!file) return null;
   const dur = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file]).toString().trim());
   return { file, dur };
 }
