@@ -79,6 +79,7 @@ export class Accounts {
     for (const [k, v] of await this.storage.list({ prefix: 'rate:' })) if (now - v.since > 86400000) drop.push(k);
     for (const [k, v] of await this.storage.list({ prefix: 'session:' })) if (now - Date.parse(v.createdAt) > SESSION_DAYS * 86400000) drop.push(k);
     for (const [k, v] of await this.storage.list({ prefix: 'join:' })) if (!v.usedBy && Date.parse(v.expiresAt) < now) drop.push(k);
+    for (const [k, v] of await this.storage.list({ prefix: 'device:' })) if (now - v.at > SESSION_DAYS * 86400000) drop.push(k);
     for (let i = 0; i < drop.length; i += 128) await this.storage.delete(drop.slice(i, i + 128));
     await this.storage.setAlarm?.(now + 86400000);
   }
@@ -95,6 +96,18 @@ export class Accounts {
   }
 
   // הגבלת קצב: עד limit פעולות בחלון של windowSec לכל מפתח. מחזיר true אם מותר (וסופר את הפעולה)
+  // מכשיר מוכר: מזהה אקראי שהאפליקציה שומרת במכשיר, נשמר (מגובב) אחרי כניסה מוצלחת
+  async rememberDevice(scope, device) {
+    if (typeof device !== 'string' || device.length < 16 || device.length > 100) return;
+    await this.storage.put(`device:${scope}:${await sha256(device)}`, { at: Date.now() });
+  }
+
+  async knownDevice(scope, device) {
+    if (typeof scope !== 'string' || typeof device !== 'string' || device.length < 16 || device.length > 100) return false;
+    const key = scope.startsWith('e:') ? `e:${normalizeEmail(scope.slice(2))}` : scope;
+    return Boolean(await this.storage.get(`device:${key}:${await sha256(device)}`));
+  }
+
   async allow(key, limit, windowSec) {
     const now = Date.now();
     let a = (await this.storage.get(`rate:${key}`)) || { count: 0, since: now };
@@ -205,6 +218,7 @@ export class Accounts {
       const hash = await hashPassword(String(body.password || ''), user?.salt || 'none');
       if (user && !user.hash) return err(401, 'האימייל או הסיסמה שגויים. אם נרשמתם עם גוגל – היכנסו עם הכפתור "המשך עם Google".');
       if (!user || !sameText(hash, user.hash)) return err(401, 'האימייל או הסיסמה שגויים');
+      await this.rememberDevice(`e:${user.email}`, body.device);
       return this.signedIn(user);
     }
     // ---- ספר משותף: קישורי הצטרפות וחברים ----
@@ -310,13 +324,18 @@ export class Accounts {
 
     // ---- בעל האפליקציה: מכשיר שנכנס, והגבלת ניסיונות סיסמה (10 ברבע שעה) ----
     if (path === '/owner-session' && request.method === 'POST') {
+      await this.rememberDevice('owner', body.device);
       const token = randomToken(32);
       await this.storage.put(`session:${await sha256(token)}`, { owner: true, v: await this.ownerVersion(), createdAt: now });
       return json({ session: token, user: null, owner: true });
     }
     // הגבלת קצב כללית (ניסיונות כניסה, הרשמה...): {checks: [{key, limit, window}]} – כולם חייבים לעבור
+    // מכשיר שכבר נכנס בהצלחה לאותו חשבון (body.trust = {scope, device}) לא נחסם בתקרה הכללית (global) –
+    // כך זר שמנסה סיסמאות מהרבה כתובות לא יכול לנעול את בעל החשבון
     if (path === '/rate' && request.method === 'POST') {
+      const trusted = await this.knownDevice(body.trust?.scope, body.trust?.device);
       for (const c of Array.isArray(body.checks) ? body.checks : []) {
+        if (c.global && trusted) continue;
         if (!(await this.allow(String(c.key).slice(0, 200), Number(c.limit) || 10, Number(c.window) || 900))) {
           return err(429, body.message || 'יותר מדי ניסיונות. נסו שוב מאוחר יותר.');
         }

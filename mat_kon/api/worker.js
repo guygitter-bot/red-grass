@@ -83,8 +83,8 @@ export default {
     // ---- הרשמה וכניסה (בלי זיהוי) ----
     // הגבלת קצב לפי כתובת (ולפי אימייל בכניסה), נבדקת ונספרת באותו צעד
     const ip = request.headers.get('cf-connecting-ip') || 'local';
-    const rate = async (checks, message) => {
-      const res = await internal(accounts, 'POST', '/rate', { checks, message });
+    const rate = async (checks, message, trust) => {
+      const res = await internal(accounts, 'POST', '/rate', { checks, message, trust });
       return res.ok ? null : pass(res);
     };
 
@@ -93,11 +93,12 @@ export default {
       if (error) return error;
       if (parts[0] === 'logout' || parts[0] === 'logout-all') body.session = bearer(request);
       if (parts[0] === 'login') {
+        const email = String(body.email || '').trim().toLowerCase();
         const limited = await rate([
           { key: `login-ip:${ip}`, limit: 30, window: 900 },
-          { key: `login:${String(body.email || '').trim().toLowerCase()}:${ip}`, limit: 10, window: 900 },
-          { key: `login-all:${String(body.email || '').trim().toLowerCase()}`, limit: 100, window: 3600 },
-        ], 'יותר מדי ניסיונות כניסה. נסו שוב בעוד רבע שעה.');
+          { key: `login:${email}:${ip}`, limit: 10, window: 900 },
+          { key: `login-all:${email}`, limit: 100, window: 3600, global: true },
+        ], 'יותר מדי ניסיונות כניסה. נסו שוב בעוד רבע שעה.', { scope: `e:${email}`, device: body.device });
         if (limited) return limited;
       }
       if (['register', 'invite', 'join'].includes(parts[0])) {
@@ -138,11 +139,11 @@ export default {
       // כל ניסיון נספר מראש (גם ניסיונות במקביל), לפי כתובת – וגם תקרה כללית נגד ניחוש מפוזר
       const limited = await rate([
         { key: `owner-ip:${ip}`, limit: 10, window: 900 },
-        { key: 'owner-all', limit: 300, window: 900 },
-      ], 'יותר מדי ניסיונות. נסו שוב בעוד רבע שעה.');
+        { key: 'owner-all', limit: 300, window: 900, global: true },
+      ], 'יותר מדי ניסיונות. נסו שוב בעוד רבע שעה.', { scope: 'owner', device: body.device });
       if (limited) return limited;
       if (!(await sameSecret(String(body.password || ''), ownerPassword))) return fail(401, 'הסיסמה שגויה');
-      return pass(await internal(accounts, 'POST', '/owner-session', {}));
+      return pass(await internal(accounts, 'POST', '/owner-session', { device: body.device }));
     }
 
     // ---- כניסה והרשמה עם חשבון גוגל ----

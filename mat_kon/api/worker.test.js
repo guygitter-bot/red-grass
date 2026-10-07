@@ -857,6 +857,52 @@ test('rate limits on sign-in, sessions end when the owner password changes, logo
   assert.equal((await call('GET', '/recipes', undefined, b2)).status, 401);
 });
 
+test('quota cannot be bypassed by restoring new text over a recipe, or by re-sending new text with the same key', async () => {
+  env = fakeEnv({ FREE_RECIPES: '2' });
+  const { session } = await (await register((await invite()).token)).json();
+  const text = 'מצרכים: קמח, סוכר, ביצים. אופן ההכנה: מערבבים ואופים.';
+  const first = await (await call('POST', '/recipes/text', { key: 'wa:x', text }, session)).json();
+  assert.equal(first.user.added, 1);
+  // אותו key עם טקסט חדש הוא עבודה חדשה – נספר
+  const second = await (await call('POST', '/recipes/text', { key: 'wa:x', text: `${text} ועוד שוקולד` }, session)).json();
+  assert.equal(second.user.added, 2);
+  // שחזור לא מחליף את הטקסט שהרענון קורא
+  await call('POST', '/recipes/restore', { recipes: [{ title: 'x', ingredients: [{ title: '', items: ['x'] }], source: { kind: 'whatsapp', key: 'wa:x', text: 'טקסט אחר לגמרי של מתכון אחר לגמרי' } }] }, session);
+  const [recipe] = (await (await call('GET', '/recipes', undefined, session)).json()).recipes;
+  assert.equal(recipe.source.text, `${text} ועוד שוקולד`);
+  assert.equal((await call('POST', `/recipes/${recipe.id}/refresh`, undefined, session)).status, 200);
+  assert.match(apiCalls.at(-1).messages[0].content, /ועוד שוקולד/);
+});
+
+test('a stranger guessing passwords from many addresses cannot lock out a known device', async () => {
+  await register((await invite()).token);
+  const device = 'a'.repeat(32);
+  assert.equal((await call('POST', '/login', { email: 'dana@example.com', password: 'secret12', device })).status, 200);
+  // 100 ניסיונות שגויים מ"כתובות" שונות ממלאים את התקרה הכללית לאימייל
+  for (let i = 0; i < 101; i++) {
+    await worker.fetch(new Request('https://api.example/login', {
+      method: 'POST',
+      headers: { origin: 'https://mat-kon.pages.dev', 'content-type': 'application/json', 'cf-connecting-ip': `10.0.${i % 50}.${i}` },
+      body: JSON.stringify({ email: 'dana@example.com', password: `wrong${i}` }),
+    }), env);
+  }
+  assert.equal((await call('POST', '/login', { email: 'dana@example.com', password: 'secret12' })).status, 429);
+  assert.equal((await call('POST', '/login', { email: 'dana@example.com', password: 'secret12', device: 'b'.repeat(32) })).status, 429);
+  assert.equal((await call('POST', '/login', { email: 'dana@example.com', password: 'secret12', device })).status, 200);
+
+  env.OWNER_PASSWORD = 'owner-secret-1';
+  assert.equal((await call('POST', '/owner-login', { password: 'owner-secret-1', device })).status, 200);
+  for (let i = 0; i < 301; i++) {
+    await worker.fetch(new Request('https://api.example/owner-login', {
+      method: 'POST',
+      headers: { origin: 'https://mat-kon.pages.dev', 'content-type': 'application/json', 'cf-connecting-ip': `10.1.${i % 200}.${i % 9}` },
+      body: JSON.stringify({ password: `bad${i}` }),
+    }), env);
+  }
+  assert.equal((await call('POST', '/owner-login', { password: 'owner-secret-1' })).status, 429);
+  assert.equal((await call('POST', '/owner-login', { password: 'owner-secret-1', device })).status, 200);
+});
+
 test('pre-registering someone else\'s email never puts them in your book', async () => {
   env.GOOGLE_CLIENT_ID = 'cid';
   // מלורי רושמת את האימייל של הקורבן כחברה בספר שלה

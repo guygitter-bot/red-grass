@@ -296,11 +296,15 @@ export class RecipeBook {
         : { ...recipe, id: crypto.randomUUID(), createdAt: typeof recipe.createdAt === 'string' ? recipe.createdAt : now, updatedAt: now };
       // "שוחזר ועוד לא נקרא מהמקור" – רק למתכון שלא היה בספר (שחזור לאותו ספר לא מחייב שוב במכסה)
       if (url.searchParams.get('replace') !== '1' || (existing && !existing.restored)) delete saved.restored;
+      // שחזור לא מחליף את המקור של מתכון שכבר נקרא (אחרת "רענון" חינמי היה קורא טקסט חדש בלי מכסה)
+      if (url.searchParams.get('replace') === '1' && existing && !existing.restored) saved.source = existing.source;
       await this.storage.put(PREFIX + saved.id, saved);
       if (existing && existing.image !== saved.image) await this.dropImage(existing.image);
       if (key) await this.storage.put(SRC + key, saved.id);
       // counted: נוסף מתכון חדש (או שמתכון שרק שוחזר מגיבוי נקרא עכשיו לראשונה) – נספר במכסה
-      return json({ recipe: saved, updated: Boolean(existing), counted: !existing || Boolean(existing.restored) });
+      // מתכון מטקסט חדש (טקסט אחר מזה שכבר נשמר לאותו מקור) הוא עבודה חדשה, ולכן גם הוא נספר
+      const newText = Boolean(recipe.source?.text) && existing?.source?.text !== recipe.source.text;
+      return json({ recipe: saved, updated: Boolean(existing), counted: !existing || Boolean(existing.restored) || newText });
     }
 
     // מחיקת כל הספר (כשמוחקים משתמש שהוזמן)
