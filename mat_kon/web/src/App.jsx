@@ -57,14 +57,14 @@ async function takeShared() {
       if (!res) return null;
       await cache.delete('shared-link');
       const data = await res.json();
-      return { trusted: true, link: linkFromShare(`?${new URLSearchParams(data)}`), text: data.text || '' };
+      return { link: linkFromShare(`?${new URLSearchParams(data)}`), text: data.text || '' };
     } catch {
       return null;
     }
   }
   const link = linkFromShare(params.toString() ? `?${params}` : '');
   const text = params.get('text') || '';
-  return link || text ? { trusted: false, link, text } : null;
+  return link || text ? { link, text } : null;
 }
 
 const AUTH_LINK = takeAuthLink();
@@ -356,10 +356,8 @@ export default function App() {
   useEffect(() => {
     if (auth) return;
     takeShared().then((shared) => {
-      if (!shared) return;
-      if (!shared.trusted) setSharedOffer(shared);
-      else if (shared.link) add(shared.link);
-      else if (shared.text.trim().length >= 20) addSharedText(shared.text);
+      // תמיד באישור: גם "שיתוף" דרך ה-service worker יכול להגיע מאתר זר (טופס שנשלח לכתובת השיתוף)
+      if (shared?.link || shared?.text?.trim().length >= 20) setSharedOffer(shared);
     });
   }, [auth]); // eslint-disable-line react-hooks/exhaustive-deps
 

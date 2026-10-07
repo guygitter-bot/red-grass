@@ -89,7 +89,20 @@ export const setPlan = (userId, plan) => api(own(), 'PUT', `/users/${userId}/pla
 // משתמש שהוזמן
 export const checkInvite = (token) => api('', 'POST', '/invite', { token });
 export const register = (form) => api('', 'POST', '/register', form);
-export const login = (email, password) => api('', 'POST', '/login', { email, password });
+// מזהה אקראי של המכשיר: מכשיר שכבר נכנס לחשבון לא ננעל כשזר מנסה סיסמאות מהרבה כתובות
+export function deviceId() {
+  try {
+    let id = localStorage.getItem('matkon_device');
+    if (!id) {
+      id = Array.from(crypto.getRandomValues(new Uint8Array(24)), (b) => b.toString(16).padStart(2, '0')).join('');
+      localStorage.setItem('matkon_device', id);
+    }
+    return id;
+  } catch {
+    return undefined;
+  }
+}
+export const login = (email, password) => api('', 'POST', '/login', { email, password, device: deviceId() });
 export const logout = (s) => api(s, 'POST', '/logout', {}).catch(() => {});
 
 export const inviteLink = (token) => `${window.location.origin}${window.location.pathname}#invite=${token}`;
@@ -174,7 +187,7 @@ export const createMemberLink = (s) => api(s, 'POST', '/members', {}).then((d) =
 export const removeMember = (s, id) => api(s, 'DELETE', `/members/${encodeURIComponent(id)}`);
 export const cancelMemberLink = (s, token) => api(s, 'DELETE', `/members/links/${encodeURIComponent(token)}`);
 export const joinLink = (token) => `${window.location.origin}${window.location.pathname}#join=${token}`;
-export const ownerLogin = (password) => api('', 'POST', '/owner-login', { password });
+export const ownerLogin = (password) => api('', 'POST', '/owner-login', { password, device: deviceId() });
 
 // ניהול (בעל האפליקציה): עלויות AI לפי ספר ותקלות אחרונות
 export const getAdminUsage = (month) => api(own(), 'GET', `/admin/usage${month ? `?month=${month}` : ''}`);
