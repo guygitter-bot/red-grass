@@ -87,8 +87,10 @@
 #### סרטוני הדרכה (`mat_kon/tutorials/`)
 - מוקלטים אוטומטית מהאפליקציה (שרת מדומה, בלי AI): `cd mat_kon/web && npm run build`, ואז `cd ../tutorials && node videos/<שם>.mjs`.
 - **שינוי במסך → להקליט מחדש את הסרטון שלו.** רשימת הסרטונים: `web/src/lib/tutorials.js`.
-- קריינות: משפט חדש נכנס ל-`tutorials/voice/lines.json`; דחיפה לענף עבודה מפעילה את `mat-kon-voice.yml` (Google TTS) שמחזיר את
-  קובצי ה-MP3 לענף – ואז `git pull` ולהקליט שוב. מוזיקה: `tutorials/music.py` (מסונתזת, בלי זכויות של אחרים).
+- קריינות: משפט חדש נכנס ל-`tutorials/voice/lines.json`; דחיפה לענף עבודה מפעילה את `mat-kon-voice.yml` שמחזיר את קובצי ה-MP3
+  לענף – ואז `git pull` ולהקליט שוב. הקול: ElevenLabs, הקול "נועה" (`tutorials/voice/eleven.json`, סוד `ELEVENLABS_API_KEY`);
+  Google TTS רק כגיבוי. **בלי ניקוד** – ניסינו, ונשמע גרוע יותר.
+- מוזיקה: `tutorials/music.m4a` – "Stylish Modern" של Beat and Shine מ-ElevenLabs (רישיון מסחרי במנוי), מחוברת לעצמה ללופ.
 
 #### ייבוא
 - My Recipe Box / RecetteTek (`.rtk`): `web/src/lib/importers.js`, דרך הגדרות ← "ייבוא מאפליקציה אחרת". מתכון בלי מצרכים
