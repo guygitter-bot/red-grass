@@ -1,3 +1,14 @@
 {
- "only": ["f16265a2e64a", "80d4c4fe3509", "ba077f6b9f0e", "85a33348c5bf", "3ba68d71d5ba", "4fd7eed3ce11", "f17365131d66"]
+ "only": [
+  "f16265a2e64a",
+  "80d4c4fe3509",
+  "ba077f6b9f0e",
+  "85a33348c5bf",
+  "3ba68d71d5ba",
+  "4fd7eed3ce11",
+  "f17365131d66"
+ ],
+ "model_id": "eleven_v4",
+ "voice_id": "EXAVITQu4vr4xnSDxMaL",
+ "voice_name": "Sarah - Mature, Reassuring, Confident"
 }
