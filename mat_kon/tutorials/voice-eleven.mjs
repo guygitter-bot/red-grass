@@ -47,10 +47,12 @@ if (!cfg.model_id || !cfg.voice_id) {
     cfg.model_id = ok[0].model_id;
   }
   if (!cfg.voice_id) {
-    // קול נשי, עדיף כזה שאומת בעברית
+    // קול לפי שם (voice_search, צריך להוסיף אותו קודם ל-My Voices בחשבון), אחרת קול נשי – עדיף כזה שאומת בעברית
     const female = voices.filter((v) => v.labels?.gender === 'female');
-    const pick = female.find((v) => (v.verified_languages || []).some(isHebrew)) || female[0] || voices[0];
-    if (!pick) throw new Error('לא נמצאו קולות בחשבון');
+    const pick = cfg.voice_search
+      ? voices.find((v) => v.name.toLowerCase().startsWith(cfg.voice_search.toLowerCase()))
+      : female.find((v) => (v.verified_languages || []).some(isHebrew)) || female[0] || voices[0];
+    if (!pick) throw new Error(cfg.voice_search ? `הקול "${cfg.voice_search}" לא נמצא ב-My Voices` : 'לא נמצאו קולות בחשבון');
     cfg.voice_id = pick.voice_id;
     cfg.voice_name = pick.name;
   }
