@@ -246,9 +246,12 @@ export function speakable(html) {
     .trim();
 }
 const voiceKey = (text) => createHash('sha1').update(text).digest('hex').slice(0, 12);
+// המשפטים של כל סרטון נרשמים ל-voice/videos.json, כדי שאפשר יהיה להקריא (ב-ElevenLabs) רק סרטונים מסוימים
+const usedKeys = [];
 function voiceClip(text) {
   if (!text) return null;
   const key = voiceKey(text);
+  usedKeys.push(key);
   mkdirSync(VOICE, { recursive: true });
   const listFile = join(VOICE, 'lines.json');
   const lines = existsSync(listFile) ? JSON.parse(readFileSync(listFile, 'utf8')) : {};
@@ -412,6 +415,10 @@ export async function record(name, script, opts = {}) {
 
   try {
     await script(helpers);
+    const mapFile = join(VOICE, 'videos.json');
+    const map = existsSync(mapFile) ? JSON.parse(readFileSync(mapFile, 'utf8')) : {};
+    map[name] = [...new Set(usedKeys)];
+    writeFileSync(mapFile, `${JSON.stringify(Object.fromEntries(Object.entries(map).sort()), null, 1)}\n`);
     await waitVoice();
     await wait(800);
   } finally {
