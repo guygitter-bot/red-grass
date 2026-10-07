@@ -39,7 +39,8 @@ console.log('voice:', voice.name);
 let made = 0;
 for (const [key, text] of Object.entries(lines)) {
   const out = join(DIR, `${key}.mp3`);
-  if (existsSync(out)) continue;
+  // גיבוי בלבד: משפט שכבר יש לו הקראה של ElevenLabs לא נשלח לגוגל
+  if (existsSync(out) || existsSync(join(DIR, 'eleven', `${key}.mp3`))) continue;
   const audioConfig = { audioEncoding: 'MP3', sampleRateHertz: 24000, speakingRate: voice.speakingRate };
   let data;
   try {

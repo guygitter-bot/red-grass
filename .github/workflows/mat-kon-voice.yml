@@ -23,14 +23,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Generate narration
-        env:
-          GOOGLE_TTS_KEY: ${{ secrets.GOOGLE_TTS_KEY || 'none' }}
-        run: node mat_kon/tutorials/voice-generate.mjs
       - name: Generate narration (ElevenLabs)
         env:
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY || 'none' }}
         run: node mat_kon/tutorials/voice-eleven.mjs
+      - name: Generate narration (Google, fallback)
+        env:
+          GOOGLE_TTS_KEY: ${{ secrets.GOOGLE_TTS_KEY || 'none' }}
+        run: node mat_kon/tutorials/voice-generate.mjs
       - name: Commit audio
         run: |
           git config user.name "github-actions[bot]"
