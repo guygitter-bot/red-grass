@@ -1,7 +1,10 @@
 // מבנה הנתונים ושמירה במכשיר (localStorage). הכול פונקציות טהורות – קל לבדוק ולהחליף בעתיד בשרת.
 import { DAY_NAMES, addDays, addMonths, dueDate, fromKey, todayKey } from './dates';
 
-const KEY = 'seder_v1';
+import { SPACE, scoped } from './space';
+
+// בכל מרחב (אדם נוסף) – מפתח נפרד במכשיר
+const KEY = scoped('seder_v1');
 
 export const PRIORITIES = {
   3: { label: 'חשוב מאוד', short: 'גבוהה', dot: 'bg-rose-500', text: 'text-rose-600', ring: 'border-rose-300 bg-rose-50' },
@@ -78,8 +81,11 @@ export function normalizeProfile(p) {
   };
 }
 
+// אדם נוסף (מרחב) מקבל את התחומים הכלליים, בלי התחום האישי "גיא"
+const startCategories = () => (SPACE ? DEFAULT_CATEGORIES.filter((c) => c.id !== 'guy') : DEFAULT_CATEGORIES);
+
 export function emptyState() {
-  return { categories: DEFAULT_CATEGORIES, tasks: [], notified: {}, profile: emptyProfile(), sync: emptySync() };
+  return { categories: startCategories(), tasks: [], notified: {}, profile: emptyProfile(), sync: emptySync() };
 }
 
 export function load() {
@@ -103,7 +109,7 @@ export function save(state) {
 
 export function normalize(data) {
   return {
-    categories: Array.isArray(data?.categories) && data.categories.length ? sortCategories(data.categories) : DEFAULT_CATEGORIES,
+    categories: Array.isArray(data?.categories) && data.categories.length ? sortCategories(data.categories) : startCategories(),
     tasks: Array.isArray(data?.tasks) ? data.tasks.filter((t) => t && t.id && typeof t.title === 'string') : [],
     notified: data?.notified && typeof data.notified === 'object' ? data.notified : {},
     profile: normalizeProfile(data?.profile),

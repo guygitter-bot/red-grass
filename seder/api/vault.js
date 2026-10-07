@@ -1,4 +1,5 @@
 // הכספת: כל הרשומות (משימות ותחומים) של בעלת האפליקציה, וסנכרון בין מכשירים.
+// לכל אדם נוסף ("מרחב", ראו spaces.js) יש כספת נפרדת משלו – עם הסיסמה שלו (space).
 //
 // כל רשומה נושאת updatedAt (זמן העריכה במכשיר). כשאותה רשומה נערכה בשני מכשירים – העריכה המאוחרת גוברת.
 // מחיקה נשמרת כ"מצבה" (deleted), כדי שמכשיר שהיה כבוי ידע למחוק גם אצלו.
@@ -14,6 +15,8 @@
 //   tz             -> אזור הזמן של המשתמשת (לחישוב שעות התזכורות)
 //   sent           -> { <taskId>: <זמן התזכורת> }  מה כבר נשלח (שינוי שעה = תזכורת חדשה)
 //   fm:<id>, fc:<id>:<n> -> קבצים ותמונות שמצורפים למשימות (ראו files.js)
+//   space          -> רק בכספת של מרחב: השם, הסיסמה והחיבור (spaces.js)
+//   registry       -> רק בכספת של בעלת האפליקציה: רשימת המרחבים
 //
 // התזכורות: אחרי כל שינוי במשימות מחושבת התזכורת הקרובה, ו-Durable Object alarm "מעיר" את הכספת
 // בדיוק בזמן – והיא שולחת התראה לכל המכשירים, גם כשהאפליקציה סגורה.
@@ -31,6 +34,7 @@ import { createVapidKeys, sendPush, validSubscription } from './push.js';
 import { reminderTimes, validTimeZone } from './reminders.js';
 import { cleanFile, cleanupFiles, getFile, putFile } from './files.js';
 import { cleanAmount } from './costs.js';
+import { MAX_SPACES, cleanName, hashPassword, newSecret } from './spaces.js';
 
 // תזכורת שהזמן שלה עבר לפני יותר מזה – כבר לא נשלחת (למשל משימה שנוספה עם תזכורת בעבר)
 export const LATE_WINDOW_MS = 2 * 3600 * 1000;
@@ -106,12 +110,45 @@ export class Vault {
     const body = await request.json().catch(() => ({}));
     const json = (status, data) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
 
+    // ניהול מרחב (רק מהשרת עצמו – הכתובות האלה לא פתוחות מבחוץ, ראו worker.js)
+    if (url.pathname.startsWith('/space/') || url.pathname.startsWith('/registry/')) return this.admin(url.pathname, body, json);
+
+    const space = await this.storage.get('space');
+    // בקשה למרחב שנמחק (או שלא נוצר) – לא פותחים במקומו כספת ריקה
+    const forSpace = request.headers.get('x-seder-space');
+    if (forSpace && space?.id !== forSpace) return json(url.pathname === '/login' ? 404 : 401, { error: 'הקישור לא תקף (אולי נמחק). בקשו קישור חדש.' });
+    // במרחב: כל פעולה חוץ מהכניסה צריכה את החיבור של המרחב הזה
+    if (space && url.pathname !== '/login') {
+      const auth = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+      if (!space.session || !safeEqual(auth, `${space.id}.${space.session}`)) return json(401, { error: 'צריך להתחבר מחדש' });
+    }
+
     if (url.pathname === '/login') {
       const now = Date.now();
       let fails = (await this.storage.get('fails')) || { count: 0, since: now };
       if (now - fails.since > FAIL_WINDOW_MS) fails = { count: 0, since: now };
-      if (fails.count >= MAX_FAILS) return json(429, { error: 'יותר מדי ניסיונות. נסי שוב בעוד רבע שעה' });
-      if (!safeEqual(String(body.password || ''), this.env.SEDER_PASSWORD)) {
+      if (fails.count >= MAX_FAILS) return json(429, { error: 'יותר מדי ניסיונות. נסו שוב בעוד רבע שעה' });
+      const password = String(body.password || '');
+      if (space) {
+        // בלי סיסמה – רק שואלים אם כבר נבחרה סיסמה (מסך הכניסה), בלי לספור ניסיון שגוי
+        if (!password) return json(200, { needsSetup: !space.hash, name: space.name });
+        // פתיחה ראשונה של הקישור: בוחרים סיסמה
+        if (!space.hash) {
+          if (!body.setup) return json(200, { needsSetup: true, name: space.name });
+          if (password.length < 4) return json(400, { error: 'סיסמה של 4 תווים לפחות' });
+          const salt = newSecret();
+          Object.assign(space, { salt, hash: await hashPassword(password, salt), session: newSecret() });
+          await this.storage.put('space', space);
+          return json(200, { token: `${space.id}.${space.session}`, name: space.name });
+        }
+        if (!safeEqual(await hashPassword(password, space.salt), space.hash)) {
+          await this.storage.put('fails', { count: fails.count + 1, since: fails.since });
+          return json(401, { error: 'סיסמה שגויה' });
+        }
+        await this.storage.delete('fails');
+        return json(200, { token: `${space.id}.${space.session}`, name: space.name });
+      }
+      if (!safeEqual(password, this.env.SEDER_PASSWORD)) {
         await this.storage.put('fails', { count: fails.count + 1, since: fails.since });
         return json(401, { error: 'סיסמה שגויה' });
       }
@@ -179,6 +216,45 @@ export class Vault {
       return json(200, result);
     }
 
+    return json(404, { error: 'לא נמצא' });
+  }
+
+  // מרחבים: space/* בכספת של המרחב, registry/* ברשימה שאצל בעלת האפליקציה
+  async admin(path, body, json) {
+    const space = await this.storage.get('space');
+    if (path === '/space/init') {
+      if (space) return json(409, { error: 'המרחב כבר קיים' });
+      await this.storage.put('space', { id: body.id, name: body.name, createdAt: Date.now(), salt: '', hash: '', session: '' });
+      return json(200, { ok: true });
+    }
+    if (path === '/space/info') return space ? json(200, { ready: !!space.hash, name: space.name }) : json(404, { error: 'לא נמצא' });
+    if (path === '/space/reset') {
+      if (!space) return json(404, { error: 'לא נמצא' });
+      // סיסמה חדשה בפתיחה הבאה של הקישור; כל המכשירים מתנתקים
+      await this.storage.put('space', { ...space, salt: '', hash: '', session: '' });
+      await this.storage.delete('fails');
+      return json(200, { ok: true });
+    }
+    if (path === '/space/delete') {
+      await this.storage.deleteAlarm?.();
+      await this.storage.deleteAll();
+      return json(200, { ok: true });
+    }
+    const registry = (await this.storage.get('registry')) || {};
+    if (path === '/registry/list') return json(200, { registry });
+    if (path === '/registry/add') {
+      const name = cleanName(body.name);
+      if (!name) return json(400, { error: 'צריך לכתוב שם (עד 40 תווים)' });
+      if (Object.keys(registry).length >= MAX_SPACES) return json(409, { error: `אפשר עד ${MAX_SPACES} אנשים` });
+      registry[body.id] = { name, createdAt: Date.now() };
+      await this.storage.put('registry', registry);
+      return json(200, { ok: true, name });
+    }
+    if (path === '/registry/remove') {
+      delete registry[body.id];
+      await this.storage.put('registry', registry);
+      return json(200, { ok: true });
+    }
     return json(404, { error: 'לא נמצא' });
   }
 

@@ -14,10 +14,12 @@ import SearchSheet from './components/SearchSheet';
 import RequestsSheet from './components/RequestsSheet';
 import { notify } from './lib/notify';
 import { AuthError, collectChanges, getToken, logout, resetSync, runSync } from './lib/sync';
-import { RELOCK_AFTER_MS } from './lib/lock';
+import { clearActive, markActive, recentlyActive } from './lib/lock';
 import { enablePush } from './lib/push';
 import { setTheme, systemDark, toggledTheme, useTheme } from './lib/theme';
 import LockScreen from './components/LockScreen';
+import SpacesSheet from './components/SpacesSheet';
+import { SPACE, appPath } from './lib/space';
 import ErrorBoundary from './components/ErrorBoundary';
 
 const Store = createContext(null);
@@ -28,7 +30,7 @@ function sharedText() {
   const params = new URLSearchParams(window.location.search);
   const parts = ['title', 'text', 'url'].map((k) => params.get(k)).filter(Boolean);
   if (!parts.length) return null;
-  window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+  window.history.replaceState(null, '', appPath() + window.location.hash);
   return [...new Set(parts)].join('\n');
 }
 
@@ -44,9 +46,14 @@ export default function App() {
   const [toast, setToast] = useState(null);
   // סנכרון: off (לא מחובר) / syncing / ok / offline / error
   const [syncStatus, setSyncStatus] = useState(() => (getToken() ? 'ok' : 'off'));
-  // נעול בכל פתיחה, ושוב אחרי RELOCK_AFTER_MS ברקע
-  const [locked, setLocked] = useState(true);
-  const lockedRef = useRef(true);
+  // נעול רק אחרי יותר מ-10 דקות בלי שימוש (גם אחרי סגירה ופתיחה), ראו lib/lock.js
+  const [locked, setLockedState] = useState(() => !(getToken() && recentlyActive()));
+  const lockedRef = useRef(locked);
+  const setLocked = useCallback((value) => {
+    // נעילה (ידנית או אחרי החלפת סיסמה) – גם הפתיחה הבאה תבקש סיסמה
+    if (value) clearActive();
+    setLockedState(value);
+  }, []);
   lockedRef.current = locked;
 
   const latest = useRef(state);
@@ -97,16 +104,28 @@ export default function App() {
     }
   }, []);
 
-  // נעילה מחדש אחרי זמן ברקע
+  // זוכרים מתי האפליקציה הייתה בשימוש; חזרה אחרי יותר מ-10 דקות – נעילה
   useEffect(() => {
-    let hiddenAt = null;
-    const onChange = () => {
-      if (document.visibilityState === 'hidden') hiddenAt = Date.now();
-      else if (hiddenAt && Date.now() - hiddenAt > RELOCK_AFTER_MS) setLocked(true);
+    const touch = () => {
+      if (!lockedRef.current) markActive();
     };
+    const onChange = () => {
+      if (lockedRef.current) return;
+      if (document.visibilityState === 'hidden') markActive();
+      else if (recentlyActive()) markActive();
+      else setLocked(true);
+    };
+    touch();
     document.addEventListener('visibilitychange', onChange);
-    return () => document.removeEventListener('visibilitychange', onChange);
-  }, []);
+    window.addEventListener('pagehide', touch);
+    // בזמן השימוש – כל 20 שניות (אם הטלפון סוגר את האפליקציה בלי להודיע)
+    const timer = setInterval(() => document.visibilityState === 'visible' && touch(), 20000);
+    return () => {
+      document.removeEventListener('visibilitychange', onChange);
+      window.removeEventListener('pagehide', touch);
+      clearInterval(timer);
+    };
+  }, [setLocked]);
 
   // סנכרון: בפתיחה, כשחוזרים לאפליקציה, כשהרשת חוזרת, ופעם בדקה
   useEffect(() => {
@@ -158,7 +177,7 @@ export default function App() {
       if (!m) return;
       const task = latest.current.tasks.find((t) => t.id === m[1]);
       if (task) setEditing(task);
-      window.history.replaceState(null, '', window.location.pathname);
+      window.history.replaceState(null, '', appPath());
     };
     open();
     window.addEventListener('hashchange', open);
@@ -186,6 +205,7 @@ export default function App() {
     syncNow: sync,
     lock: () => setLocked(true),
     openRequests: () => setSheet('requests'),
+    openSpaces: () => setSheet('spaces'),
   }), [state, act, syncStatus, sync]);
 
   if (locked) {
@@ -193,6 +213,7 @@ export default function App() {
       <LockScreen
         onUnlock={({ online }) => {
           lockedRef.current = false;
+          markActive();
           setLocked(false);
           setSyncStatus(online ? 'ok' : 'offline');
           sync();
@@ -233,7 +254,8 @@ export default function App() {
         <ThemeButton />
         <button aria-label="חיפוש" onClick={() => setSheet('search')} className="p-2 rounded-full hover:bg-violet-100 text-stone-600"><Search size={22} /></button>
         <button aria-label="הגדרות" onClick={() => setSheet('settings')} className="p-2 rounded-full hover:bg-violet-100 text-stone-600"><Settings size={22} /></button>
-        <button aria-label="בקשה לשינוי באפליקציה" title="בקשה לשינוי באפליקציה" onClick={() => setSheet('requests')} className="p-2 rounded-full hover:bg-violet-100 text-stone-600"><MessageSquarePlus size={22} /></button>
+        {/* בקשות לשינוי – רק באפליקציה הראשית (לא אצל אדם נוסף) */}
+        {!SPACE && <button aria-label="בקשה לשינוי באפליקציה" title="בקשה לשינוי באפליקציה" onClick={() => setSheet('requests')} className="p-2 rounded-full hover:bg-violet-100 text-stone-600"><MessageSquarePlus size={22} /></button>}
       </SideNav>
 
       {editing && <TaskEditor initial={editing} onClose={() => setEditing(null)} />}
@@ -241,6 +263,7 @@ export default function App() {
       {sheet === 'settings' && <SettingsSheet onClose={() => setSheet(null)} />}
       {sheet === 'search' && <SearchSheet onClose={() => setSheet(null)} />}
       {sheet === 'requests' && <RequestsSheet onClose={() => setSheet(null)} />}
+      {sheet === 'spaces' && <SpacesSheet onClose={() => setSheet(null)} />}
 
       {toast && (
         <button

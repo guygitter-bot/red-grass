@@ -96,6 +96,11 @@
 - My Recipe Box / RecetteTek (`.rtk`): `web/src/lib/importers.js`, דרך הגדרות ← "ייבוא מאפליקציה אחרת". מתכון בלי מצרכים
   אפשר "להשלים מהמקור" (נשלח לסוכן ברקע).
 
+### מאגר AI (`ai_maagar/`)
+- תיאור: `ai_maagar/README.md`. קישורים וקבצים על AI שממופים לקטגוריות לפי נושא (Claude, ברקע ב-Durable Object alarm).
+- `ai_maagar/web` → https://ai-maagar-631.pages.dev · `ai_maagar/api` → Worker `ai-maagar-api`. עלייה: `ai-maagar.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd ai_maagar/api && npm test` · `cd ai_maagar/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).
 
