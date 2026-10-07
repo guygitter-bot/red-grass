@@ -218,6 +218,8 @@ for f in videos/*.mjs; do node "$f"; done   # כולם
 - `tutorials/kit.mjs` – ההקלטה: טלפון 390×844, כתוביות, "אצבע" שמראה איפה לוחצים, המרה ל-MP4 (H.264) ותמונת שער.
 - `tutorials/demo.mjs` – נתוני הדמו. `tutorials/videos/*.mjs` – תסריט לכל סרטון.
 - רשימת הסרטונים באפליקציה: `web/src/lib/tutorials.js`. כשמשנים מסך – מקליטים מחדש את הסרטון שלו.
-- **קול ומוזיקה:** כל כתובית נקראת בקול נשי (Google Text-to-Speech). המשפטים נאספים ל-`tutorials/voice/lines.json` בזמן ההקלטה;
-  כשהקובץ משתנה בענף עבודה, `mat-kon-voice.yml` יוצר את קובצי ה-MP3 החסרים (סוד `GOOGLE_TTS_KEY`) ודוחף אותם לענף – ואז מקליטים שוב.
-  המוזיקה (`tutorials/music.m4a`) מסונתזת ב-`tutorials/music.py`, בלי זכויות יוצרים של אחרים, ויורדת אוטומטית כשמדברים.
+- **קול ומוזיקה:** כל כתובית נקראת בקול "נועה" של ElevenLabs (מנוע `eleven_v4`, ההגדרות ב-`tutorials/voice/eleven.json`, סוד
+  `ELEVENLABS_API_KEY`; Google Text-to-Speech נשאר כגיבוי). המשפטים נאספים ל-`tutorials/voice/lines.json` בזמן ההקלטה;
+  כשהקובץ משתנה בענף עבודה, `mat-kon-voice.yml` יוצר את קובצי ה-MP3 החסרים ודוחף אותם לענף – ואז מקליטים שוב.
+  המוזיקה (`tutorials/music.m4a`): "Stylish Modern" של Beat and Shine מספריית המוזיקה של ElevenLabs (רישיון מסחרי במנוי),
+  מחוברת לעצמה ללופ של כדקה, ויורדת אוטומטית כשמדברים.

@@ -1,11 +1,12 @@
 name: mat-kon-voice
 
 # הקראה לסרטוני ההדרכה של mat-kon: כשרשימת המשפטים (mat_kon/tutorials/voice/lines.json) משתנה בענף עבודה,
-# יוצרים קובצי MP3 למשפטים החדשים עם Google Text-to-Speech (הסוד GOOGLE_TTS_KEY) ומחזירים אותם לאותו ענף.
+# יוצרים קובצי MP3 למשפטים החדשים עם Google Text-to-Speech (הסוד GOOGLE_TTS_KEY) ועם ElevenLabs (ELEVENLABS_API_KEY,
+# לפי voice/eleven.json) ומחזירים אותם לאותו ענף.
 on:
   push:
     branches-ignore: [main]
-    paths: ["mat_kon/tutorials/voice/lines.json", "mat_kon/tutorials/voice-generate.mjs", ".github/workflows/mat-kon-voice.yml"]
+    paths: ["mat_kon/tutorials/voice/lines.json", "mat_kon/tutorials/voice-generate.mjs", "mat_kon/tutorials/voice-eleven.mjs", "mat_kon/tutorials/voice/eleven.json", ".github/workflows/mat-kon-voice.yml"]
   workflow_dispatch:
 
 permissions:
@@ -22,7 +23,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Generate narration
+      - name: Generate narration (ElevenLabs)
+        env:
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY || 'none' }}
+        run: node mat_kon/tutorials/voice-eleven.mjs
+      - name: Generate narration (Google, fallback)
         env:
           GOOGLE_TTS_KEY: ${{ secrets.GOOGLE_TTS_KEY || 'none' }}
         run: node mat_kon/tutorials/voice-generate.mjs

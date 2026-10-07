@@ -222,11 +222,11 @@ async function samplePhotos(browser) {
 }
 
 // ---------- הקראה ----------
-// כל כתובית נקראת בקול. הקבצים: voice/<key>.mp3 (נוצרים ב-GitHub Actions עם Google TTS – mat-kon-voice.yml),
+// כל כתובית נקראת בקול. הקבצים: voice/eleven/<key>.mp3 (ElevenLabs) או voice/<key>.mp3 (Google TTS), נוצרים ב-GitHub Actions (mat-kon-voice.yml),
 // והטקסטים לרשימה voice/lines.json. משפט בלי קובץ עדיין נרשם לרשימה, והסרטון נבנה בינתיים בלי הקול שלו.
 const SAY_WORDS = [
   [/mat-kon/gi, 'מַט-קוֹן'], [/YouTube/g, 'יוטיוב'], [/TikTok/g, 'טיקטוק'], [/Instagram/g, 'אינסטגרם'], [/Waze/g, 'וֵייז'],
-  [/Safari/g, 'ספארי'], [/Chrome/g, 'כרום'], [/PDF/g, 'פי-די-אף'], [/##/g, 'שתי סולמיות'], [/א-ב/g, 'אלף-בית'],
+  [/Safari/g, 'ספארי'], [/Chrome/g, 'כרום'], [/PDF/g, 'פי-די-אף'], [/##/g, 'שתי סולמיות'], [/א-ב/g, 'אלף-בית'], [/דף מספר/g, 'דף מתוך ספר'], [/סופרים קרובים/g, 'חנויות קרובות'], [/סופרים/g, 'חנויות'], [/בסופר(?=[\s.,]|$)/g, 'בסופרמרקט'],
   [/⋮/g, 'שלוש הנקודות'], [/✕/g, 'האיקס'], [/\s*←\s*/g, ', ואז '], [/\+\s*(?=קטגוריה|ליד|והכמויות)/g, 'פלוס '], [/על \+/g, 'על פלוס'],
 ];
 export function speakable(html) {
@@ -246,9 +246,12 @@ export function speakable(html) {
     .trim();
 }
 const voiceKey = (text) => createHash('sha1').update(text).digest('hex').slice(0, 12);
+// המשפטים של כל סרטון נרשמים ל-voice/videos.json, כדי שאפשר יהיה להקריא (ב-ElevenLabs) רק סרטונים מסוימים
+const usedKeys = [];
 function voiceClip(text) {
   if (!text) return null;
   const key = voiceKey(text);
+  usedKeys.push(key);
   mkdirSync(VOICE, { recursive: true });
   const listFile = join(VOICE, 'lines.json');
   const lines = existsSync(listFile) ? JSON.parse(readFileSync(listFile, 'utf8')) : {};
@@ -256,8 +259,9 @@ function voiceClip(text) {
     lines[key] = text;
     writeFileSync(listFile, `${JSON.stringify(Object.fromEntries(Object.entries(lines).sort()), null, 1)}\n`);
   }
-  const file = join(VOICE, `${key}.mp3`);
-  if (!existsSync(file)) return null;
+  // קודם הקראה של ElevenLabs (voice/eleven/), ואם אין – של גוגל
+  const file = [join(VOICE, 'eleven', `${key}.mp3`), join(VOICE, `${key}.mp3`)].find((f) => existsSync(f));
+  if (!file) return null;
   const dur = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file]).toString().trim());
   return { file, dur };
 }
@@ -402,7 +406,7 @@ export async function record(name, script, opts = {}) {
     async card(emoji, kicker, title, text, ms = 2800) {
       await waitVoice();
       await page.evaluate(([a, b, c, d]) => window.__tut.card(a, b, c, d), [emoji, kicker, title, text]);
-      const spoken = speak([kicker, title, text].filter(Boolean).map((x) => String(x).replace(/[.!?]?$/, '.')).join(' '));
+      const spoken = speak([title, text].filter(Boolean).map((x) => String(x).replace(/[.!?]?$/, '.')).join(' '));
       await wait(Math.max(ms, spoken + 300));
     },
     async uncard(ms = 600) { await page.evaluate(() => window.__tut.uncard()); await wait(ms); },
@@ -411,6 +415,10 @@ export async function record(name, script, opts = {}) {
 
   try {
     await script(helpers);
+    const mapFile = join(VOICE, 'videos.json');
+    const map = existsSync(mapFile) ? JSON.parse(readFileSync(mapFile, 'utf8')) : {};
+    map[name] = [...new Set(usedKeys)];
+    writeFileSync(mapFile, `${JSON.stringify(Object.fromEntries(Object.entries(map).sort()), null, 1)}\n`);
     await waitVoice();
     await wait(800);
   } finally {
