@@ -13,7 +13,9 @@ if (!KEY || KEY === 'none') {
 const API = 'https://texttospeech.googleapis.com/v1';
 
 async function call(path, body) {
-  const res = await fetch(`${API}${path}${path.includes('?') ? '&' : '?'}key=${KEY}`, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {});
+  // המפתח בכותרת ולא בכתובת, כדי שלא יופיע בשום לוג של כתובות
+  const headers = { 'x-goog-api-key': KEY, ...(body ? { 'content-type': 'application/json' } : {}) };
+  const res = await fetch(`${API}${path}`, body ? { method: 'POST', headers, body: JSON.stringify(body) } : { headers });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`${res.status} ${data.error?.message || ''}`);
   return data;

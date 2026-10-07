@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, BarChart3, Download, Loader2, LogOut, PlayCircle, ShieldCheck, Trash2, Upload, UserPlus, Users } from 'lucide-react';
-import { deleteAccount, getAuthConfig, linkGoogle, logoutAll, restoreBackup } from '../lib/api';
+import { ArrowRight, BarChart3, Download, KeyRound, Loader2, LogOut, PlayCircle, ShieldCheck, Trash2, Upload, UserPlus, Users } from 'lucide-react';
+import { changePassword, deleteAccount, getAuthConfig, linkGoogle, logoutAll, restoreBackup } from '../lib/api';
 import GoogleButton from './GoogleButton';
 import { backupFile } from '../lib/recipes';
 import { needsSource, readRecetteTek } from '../lib/importers';
@@ -15,6 +15,7 @@ export default function SettingsView({ session, isOwner, user, recipes, custom, 
   }, [user]);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [pw, setPw] = useState(null); // החלפת סיסמה: { current, next }
   const fileRef = useRef(null);
   const importRef = useRef(null);
   // ייבוא מאפליקציה אחרת: קודם מציגים מה נמצא בקובץ, ואחרי הייבוא – השלמה מהמקור למתכונים בלי מצרכים
@@ -235,7 +236,45 @@ export default function SettingsView({ session, isOwner, user, recipes, custom, 
                 />
               </div>
             )}
+            {user && pw && (
+              <form
+                className="mt-3 rounded-xl bg-stone-50 p-3 flex flex-col gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  run('password', async () => {
+                    await changePassword(session, pw.current, pw.next);
+                    setPw(null);
+                    onToast('הסיסמה הוחלפה. שאר המכשירים יצטרכו להיכנס מחדש');
+                    onRestored();
+                  });
+                }}
+              >
+                {user.password && (
+                  <input
+                    type="password" autoComplete="current-password" placeholder="הסיסמה הנוכחית" value={pw.current}
+                    onChange={(e) => setPw({ ...pw, current: e.target.value })}
+                    className="rounded-xl border border-stone-200 bg-white px-3 py-2"
+                  />
+                )}
+                <input
+                  type="password" autoComplete="new-password" placeholder="סיסמה חדשה (לפחות 8 תווים)" minLength={8} value={pw.next}
+                  onChange={(e) => setPw({ ...pw, next: e.target.value })}
+                  className="rounded-xl border border-stone-200 bg-white px-3 py-2"
+                />
+                <div className="flex gap-2">
+                  <button disabled={busy === 'password' || pw.next.length < 8} className="rounded-xl bg-orange-500 text-white font-bold px-4 py-2 disabled:opacity-50">
+                    שמירה
+                  </button>
+                  <button type="button" onClick={() => setPw(null)} className="rounded-xl bg-white px-4 py-2">ביטול</button>
+                </div>
+              </form>
+            )}
             <div className="mt-3 flex flex-wrap gap-2">
+              {user && !pw && (
+                <button onClick={() => setPw({ current: '', next: '' })} className="rounded-xl bg-stone-100 px-4 py-2.5 font-medium flex items-center gap-1.5">
+                  <KeyRound size={16} /> {user.password ? 'החלפת סיסמה' : 'הוספת סיסמה'}
+                </button>
+              )}
               <button
                 onClick={() => window.confirm('לצאת מהחשבון בכל המכשירים (כולל זה)?') && run('logout-all', async () => {
                   await logoutAll(session);

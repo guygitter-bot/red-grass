@@ -40,7 +40,8 @@ jobs:
 
   api:
     needs: test
-    if: github.event_name != 'pull_request'
+    # עלייה לאוויר רק מ-main (גם בהפעלה ידנית), כדי שענף שלא נבדק לא יעלה עם הסודות
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     outputs:
       url: ${{ steps.deploy.outputs.deployment-url }}

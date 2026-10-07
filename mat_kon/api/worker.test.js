@@ -1,6 +1,7 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import worker, { deps } from './worker.js';
+import { hashPassword } from './accounts.js';
 import { fakeEnv } from './fake-env.js';
 import { RECIPE_TOOL } from './extract.js';
 
@@ -901,6 +902,33 @@ test('a stranger guessing passwords from many addresses cannot lock out a known 
   }
   assert.equal((await call('POST', '/owner-login', { password: 'owner-secret-1' })).status, 429);
   assert.equal((await call('POST', '/owner-login', { password: 'owner-secret-1', device })).status, 200);
+});
+
+test('change password: needs the current one, other devices are signed out; old hashes are upgraded on login', async () => {
+  const { session } = await (await register((await invite()).token)).json();
+  const other = (await (await call('POST', '/login', { email: 'dana@example.com', password: 'secret12' })).json()).session;
+  assert.equal((await call('POST', '/account/password', { current: 'wrong-one', next: 'newsecret1' }, session)).status, 401);
+  assert.equal((await call('POST', '/account/password', { current: 'secret12', next: 'short' }, session)).status, 400);
+  assert.equal((await call('POST', '/account/password', { current: 'secret12', next: 'newsecret1' }, session)).status, 200);
+  assert.equal((await call('GET', '/recipes', undefined, session)).status, 200);
+  assert.equal((await call('GET', '/recipes', undefined, other)).status, 401);
+  assert.equal((await call('POST', '/login', { email: 'dana@example.com', password: 'secret12' })).status, 401);
+  assert.equal((await call('POST', '/login', { email: 'dana@example.com', password: 'newsecret1' })).status, 200);
+
+  // סיסמה שנשמרה בשיטה הישנה (20000 סבבים, בלי iter) עדיין נכנסת, ומשודרגת
+  const accounts = [...env.ACCOUNTS.objects.values()][0];
+  const id = await accounts.storage.get('email:dana@example.com');
+  const user = await accounts.storage.get(`user:${id}`);
+  delete user.iter;
+  user.hash = await hashPassword('oldsecret1', user.salt, 20000);
+  await accounts.storage.put(`user:${id}`, user);
+  assert.equal((await call('POST', '/login', { email: 'dana@example.com', password: 'oldsecret1' })).status, 200);
+  assert.equal((await accounts.storage.get(`user:${id}`)).iter, 100000);
+  assert.equal((await call('POST', '/login', { email: 'dana@example.com', password: 'oldsecret1' })).status, 200);
+  // אותה הודעה לאימייל לא קיים ולסיסמה שגויה
+  const a = await (await call('POST', '/login', { email: 'nobody@example.com', password: 'x' })).json();
+  const b = await (await call('POST', '/login', { email: 'dana@example.com', password: 'x' })).json();
+  assert.equal(a.error, b.error);
 });
 
 test('pre-registering someone else\'s email never puts them in your book', async () => {

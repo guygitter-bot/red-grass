@@ -105,6 +105,15 @@ export default {
         const limited = await rate([{ key: `signup-ip:${ip}`, limit: 30, window: 3600 }]);
         if (limited) return limited;
       }
+      // הצטרפות חוזרת עם סיסמה היא ניסיון סיסמה – אותן מגבלות כמו בכניסה
+      if (parts[0] === 'register' && body.join) {
+        const email = String(body.email || '').trim().toLowerCase();
+        const limited = await rate([
+          { key: `login:${email}:${ip}`, limit: 10, window: 900 },
+          { key: `login-all:${email}`, limit: 100, window: 3600 },
+        ], 'יותר מדי ניסיונות כניסה. נסו שוב בעוד רבע שעה.');
+        if (limited) return limited;
+      }
       const path = { invite: '/invite/check', join: '/join/check' }[parts[0]] || `/${parts[0]}`;
       return pass(await internal(accounts, 'POST', path, body));
     }
@@ -293,6 +302,16 @@ export default {
         return pass(await internal(accounts, 'POST', '/members/cancel', { bookId, token: parts[2] }));
       }
       return fail(405, 'Method not allowed');
+    }
+
+    // ---- החלפת סיסמה (משתמש שנרשם): כל שאר המכשירים מנותקים ----
+    if (url.pathname === '/account/password' && request.method === 'POST') {
+      if (!user) return fail(400, 'לבעל האפליקציה אין סיסמה כאן (סיסמת הבעלים מוגדרת ב-GitHub)');
+      const limited = await rate([{ key: `password:${user.id}`, limit: 10, window: 900 }], 'יותר מדי ניסיונות. נסו שוב בעוד רבע שעה.');
+      if (limited) return limited;
+      const { body, error } = await readJson();
+      if (error) return error;
+      return pass(await internal(accounts, 'POST', '/account/password', { userId: user.id, current: body.current, next: body.next, session: bearer(request) }));
     }
 
     // ---- מחיקת החשבון שלי (משתמש שנרשם; בעל ספר – גם הספר והחברים בו) ----
@@ -490,6 +509,8 @@ export default {
 
     // מתכון שנכתב ידנית: בלי AI ובלי מכסה
     if (request.method === 'POST' && parts.length === 2 && id === 'manual') {
+      const limited = await rate([{ key: `manual:${bookKeyOf(user)}`, limit: 200, window: 86400 }], 'הגעתם למגבלת המתכונים הידניים היומית. נסו שוב מחר.');
+      if (limited) return limited;
       const { body, error } = await readJson(MAX_EDIT_BYTES);
       if (error) return error;
       const recipe = manualRecipe(body);
