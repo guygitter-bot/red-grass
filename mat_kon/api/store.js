@@ -6,6 +6,7 @@ const PREFIX = 'r:';
 const EDITABLE = ['title', 'description', 'category', 'tags', 'servings', 'prepTime', 'cookTime', 'totalTime', 'ingredients', 'steps', 'tips', 'notes', 'favorite', 'myNotes', 'image', 'rating'];
 
 const SRC = 'src:';
+export const MAX_RECIPES = 2000; // תקרה לספר, כדי שאי אפשר יהיה למלא את האחסון
 const STALE_JOB_MS = 5 * 60 * 1000;
 // המקור של מתכון: קישור, או מפתח (הודעת ווטסאפ, צילום...)
 const sourceKey = (r) => String(r?.source?.url || r?.source?.key || '').slice(0, 1500);
@@ -87,6 +88,15 @@ export class RecipeBook {
   }
 
   // אינדקס מקור -> מתכון (נבנה פעם אחת לספרים שנוצרו לפניו)
+  // מספר המתכונים בספר (נספר פעם אחת מהאחסון, ואחר כך מתעדכן בהוספה ובמחיקה)
+  async recipeCount() {
+    const stored = await this.storage.get('recipe-count');
+    if (typeof stored === 'number') return stored;
+    const count = (await this.storage.list({ prefix: PREFIX })).size;
+    await this.storage.put('recipe-count', count);
+    return count;
+  }
+
   async ensureSourceIndex() {
     if (await this.storage.get('src-indexed')) return;
     const all = await this.storage.list({ prefix: PREFIX });
@@ -291,6 +301,13 @@ export class RecipeBook {
         if (existing.edited) keep.edited = existing.edited;
         if (!recipe.image && existing.image) keep.image = existing.image;
       }
+      if (!existing) {
+        const count = await this.recipeCount();
+        if (count >= MAX_RECIPES) {
+          return json({ error: `בספר כבר יש ${MAX_RECIPES} מתכונים – זה המקסימום` }, 413);
+        }
+        await this.storage.put('recipe-count', count + 1);
+      }
       const saved = existing
         ? { ...recipe, ...keep, id: existing.id, createdAt: existing.createdAt, updatedAt: now }
         : { ...recipe, id: crypto.randomUUID(), createdAt: typeof recipe.createdAt === 'string' ? recipe.createdAt : now, updatedAt: now };
@@ -336,6 +353,7 @@ export class RecipeBook {
 
     if (request.method === 'DELETE') {
       await this.storage.delete(PREFIX + id);
+      await this.storage.put('recipe-count', Math.max(0, (await this.recipeCount()) - 1));
       await this.dropImage(current.image);
       const key = sourceKey(current);
       if (key) await this.storage.delete(SRC + key);

@@ -17,6 +17,8 @@ concurrency:
 
 jobs:
   voice:
+    # רק דחיפה של בעל המאגר: הסקריפטים רצים עם מפתחות ההקראה (ודחיפת הבוט עצמו לא מפעילה שוב)
+    if: github.actor == github.repository_owner
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

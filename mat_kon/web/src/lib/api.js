@@ -166,6 +166,7 @@ export async function restoreBackup(s, backup, onProgress) {
 // חשבון: יציאה מכל המכשירים, מחיקת החשבון
 export const logoutAll = (s) => api(s, 'POST', '/logout-all', {});
 export const deleteAccount = (s) => api(s, 'DELETE', '/account');
+export const changePassword = (s, current, next) => api(s, 'POST', '/account/password', { current, next });
 
 // המלאי בבית: מקרר ומזווה
 export const getPantry = (s) => api(s, 'GET', '/pantry').then((d) => d.items);
