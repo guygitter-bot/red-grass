@@ -403,7 +403,7 @@ export async function record(name, script, opts = {}) {
     async card(emoji, kicker, title, text, ms = 2800) {
       await waitVoice();
       await page.evaluate(([a, b, c, d]) => window.__tut.card(a, b, c, d), [emoji, kicker, title, text]);
-      const spoken = speak([kicker, title, text].filter(Boolean).map((x) => String(x).replace(/[.!?]?$/, '.')).join(' '));
+      const spoken = speak([title, text].filter(Boolean).map((x) => String(x).replace(/[.!?]?$/, '.')).join(' '));
       await wait(Math.max(ms, spoken + 300));
     },
     async uncard(ms = 600) { await page.evaluate(() => window.__tut.uncard()); await wait(ms); },
@@ -440,7 +440,7 @@ function encode(dir, frames, end, name, posterAt, voice = []) {
   const first = music ? 2 : 1;
   const parts = [];
   const fadeOut = Math.max(0, length - 2.5).toFixed(2);
-  if (music) parts.push(`[1:a]atrim=0:${length.toFixed(2)},volume=0.22,afade=t=in:d=1.5,afade=t=out:st=${fadeOut}:d=2.5[m]`);
+  if (music) parts.push(`[1:a]atrim=0:${length.toFixed(2)},volume=0.30,afade=t=in:d=1.5,afade=t=out:st=${fadeOut}:d=2.5[m]`);
   voice.forEach((v, i) => {
     const ms = Math.max(0, Math.round((v.t - frames[0].t) * 1000));
     parts.push(`[${first + i}:a]aresample=44100,aformat=channel_layouts=stereo,adelay=${ms}|${ms},volume=1.6[v${i}]`);
