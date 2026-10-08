@@ -30,6 +30,11 @@
   --color-gold: #f59e0b;
 }
 
+/* כתב גדול יותר בכל המשחק (כל הגדלים ב-Tailwind יחסיים לזה) – 18 במקום 16 */
+html {
+  font-size: 112.5%;
+}
+
 html,
 body {
   font-family: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;

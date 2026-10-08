@@ -72,7 +72,7 @@ export default function Results({ state, act }) {
               🏁 {state.players.find((p) => p.id === results.bonus.id)?.name} סיים/ה ראשון/ה – בונוס +{results.bonus.points}
             </p>
           )}
-          {round.spell === 'failed' && <p className="text-xs text-muted">(הפעם לא הצלחנו לבדוק את התשובות)</p>}
+          {round.spell === 'failed' && <p className="text-sm text-muted">(הפעם לא הצלחנו לבדוק את התשובות)</p>}
         </div>
       </div>
 
@@ -80,7 +80,7 @@ export default function Results({ state, act }) {
         <div className="lg:sticky lg:top-4 lg:order-last">
           <Scoreboard state={state} roundTotals={results.totals} />
           {others > 0 && (
-            <p className="mt-2 px-2 text-xs leading-relaxed text-muted">
+            <p className="mt-2 px-2 text-sm leading-relaxed text-muted">
               תשובה לא נכונה? לוחצים 👎. המערכת פסלה תשובה נכונה? לוחצים 👍. ההחלטה לפי יותר ממחצית השחקנים האחרים.
             </p>
           )}
@@ -108,9 +108,9 @@ export default function Results({ state, act }) {
                           <div className={`truncate ${cell.valid ? '' : 'text-muted line-through decoration-red-400'} ${cell.text ? '' : 'no-underline'}`}>
                             {cell.text || '—'}
                           </div>
-                          {cell.typed && <div className="truncate text-xs text-muted">✏️ תוקן מ"{cell.typed}"</div>}
+                          {cell.typed && <div className="truncate text-sm text-muted">✏️ תוקן מ"{cell.typed}"</div>}
                           {(REASONS[cell.reason] || cell.voters.length > 0 || approvers.length > 0) && (
-                            <div className="text-xs text-muted">
+                            <div className="text-sm text-muted">
                               {REASONS[cell.reason]}
                               {cell.reason === 'letter' && ` ${round.letter}`}
                               {cell.reason === 'wrong' && c.label}
