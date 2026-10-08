@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+/* מצב לילה: מחלקה dark על html (נקבעת ב-src/lib/theme.js) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* כל הצבעים במקום אחד – במצב לילה מחליפים רק אותם:
+   page = רקע המסך, card = כרטיסים, ink = טקסט, muted = טקסט משני, line = מסגרות, soft = רקע מודגש עדין */
+@theme {
+  --color-page: #f4f7f2;
+  --color-card: #ffffff;
+  --color-ink: #1b2a1f;
+  --color-muted: #64746a;
+  --color-line: #e1e8de;
+  --color-soft: #e8f5e9;
+  --color-accent: #16a34a;
+  --color-accent-ink: #15803d;
+  --color-gold: #d97706;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-page: #0f1511;
+  --color-card: #19221c;
+  --color-ink: #e8efe9;
+  --color-muted: #9aab9f;
+  --color-line: #2a362e;
+  --color-soft: #1d3324;
+  --color-accent: #22c55e;
+  --color-accent-ink: #4ade80;
+  --color-gold: #f59e0b;
+}
+
+html,
+body {
+  font-family: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--color-page);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* האות של הסיבוב – קופצת פנימה */
+@keyframes pop {
+  0% { transform: scale(0.3); opacity: 0; }
+  70% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.pop {
+  animation: pop 0.45s ease-out both;
+}
