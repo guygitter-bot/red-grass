@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { recentLetters } from '../lib/profile';
 import { Avatar, Button, Card, TimePicker } from './ui';
 
 const REASONS = { letter: 'לא מתחיל באות', short: 'רק אות אחת', wrong: 'לא מתאים ל', voted: 'נפסל', empty: '' };
@@ -42,7 +43,7 @@ export default function Results({ state, act }) {
   const approve = (category, target, yes) => act('/vote', { round: round.n, category, target, kind: 'approve', approve: yes }).catch(() => {});
   const next = async () => {
     setBusy(true);
-    await act('/start', { seconds }).catch(() => {});
+    await act('/start', { seconds, recent: recentLetters() }).catch(() => {});
     setBusy(false);
   };
 
@@ -66,6 +67,11 @@ export default function Results({ state, act }) {
         <div>
           <h2 className="text-2xl font-bold">סוף סיבוב {round.n}</h2>
           <p className="text-sm text-muted">10 – תשובה שרק אחד כתב · 5 – תשובה שכמה כתבו</p>
+          {results.bonus && (
+            <p className="mt-1 text-sm font-medium text-gold">
+              🏁 {state.players.find((p) => p.id === results.bonus.id)?.name} סיים/ה ראשון/ה – בונוס +{results.bonus.points}
+            </p>
+          )}
           {round.spell === 'failed' && <p className="text-xs text-muted">(הפעם לא הצלחנו לבדוק את התשובות)</p>}
         </div>
       </div>

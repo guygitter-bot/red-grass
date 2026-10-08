@@ -42,6 +42,26 @@ export function setLastGame(code) {
   }
 }
 
+// אותיות שהיו לאחרונה במכשיר הזה (גם במשחקים קודמים) – כדי שלא יחזרו מהר
+const RECENT = 'eir_recent_letters';
+export function recentLetters() {
+  try {
+    const list = JSON.parse(localStorage.getItem(RECENT) || '[]');
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+export function rememberLetter(letter) {
+  try {
+    const list = recentLetters();
+    if (list[0] === letter) return;
+    localStorage.setItem(RECENT, JSON.stringify([letter, ...list.filter((l) => l !== letter)].slice(0, 15)));
+  } catch {
+    // לא נורא
+  }
+}
+
 // תמונה מהגלריה/מצלמה -> ריבוע קטן (160 פיקסלים, JPEG) כדי שיעבור מהר לכולם
 export function shrinkPhoto(file, size = 160) {
   return new Promise((resolve, reject) => {

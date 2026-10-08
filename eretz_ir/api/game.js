@@ -10,6 +10,7 @@ export const CATEGORIES = [
   { id: 'boy', label: 'ילד' },
   { id: 'girl', label: 'ילדה' },
   { id: 'job', label: 'מקצוע' },
+  { id: 'food', label: 'מאכל' },
 ];
 const CATEGORY_IDS = new Set(CATEGORIES.map((c) => c.id));
 
@@ -19,6 +20,8 @@ const FINALS = { ך: 'כ', ם: 'מ', ן: 'נ', ף: 'פ', ץ: 'צ' };
 // נקודות: תשובה נכונה שרק אחד נתן – 10, אותה תשובה אצל כמה – 5 לכל אחד
 export const UNIQUE_POINTS = 10;
 export const SHARED_POINTS = 5;
+// מי שלחץ ראשון "סיימתי" עם כל השדות מלאים – בונוס, אם לפחות מחצית מהתשובות שלו נכונות
+export const FIRST_BONUS = 10;
 export const MAX_ANSWER = 40;
 
 // תשובה כפי שנשמרת: בלי תווים מוזרים, עד 40 תווים
@@ -63,10 +66,13 @@ export function cleanAnswers(raw) {
 
 export const isCategory = (id) => CATEGORY_IDS.has(id);
 
-// אות חדשה שעוד לא הייתה במשחק (כשנגמרות – מתחילים מחדש)
-export function pickLetter(used = [], random = Math.random) {
+// אות חדשה שעוד לא הייתה במשחק (כשנגמרות – מתחילים מחדש).
+// recent = אותיות שהיו לאחרונה במשחקים קודמים במכשיר של מי שלחץ "התחל" – גם אותן מנסים לדלג
+export function pickLetter(used = [], random = Math.random, recent = []) {
   let options = LETTERS.filter((l) => !used.includes(l));
   if (!options.length) options = LETTERS;
+  const fresh = options.filter((l) => !recent.includes(l));
+  if (fresh.length) options = fresh;
   return options[Math.floor(random() * options.length)];
 }
 
@@ -78,6 +84,7 @@ export function pickLetter(used = [], random = Math.random) {
 // תשובה שהבודק (Claude) קבע שלא מתאימה – 0, אלא אם יותר ממחצית השחקנים האחרים אישרו אותה.
 // מחזיר { rows: {<קטגוריה>: {<שחקן>: {text, typed?, valid, reason, voters, approvers, points}}}, totals: {<שחקן>: נקודות} }
 // reason: empty | letter | short | wrong | voted
+// round.first = מי שסיים ראשון (עם כל השדות). מחזיר גם bonus: {id, points} כשמגיע לו בונוס
 // typed = מה שנכתב, כשהכתיב תוקן (text = אחרי התיקון)
 export function scoreRound(round, playerIds) {
   const others = playerIds.length - 1;
@@ -114,5 +121,13 @@ export function scoreRound(round, playerIds) {
     }
     rows[cat.id] = cells;
   }
-  return { rows, totals };
+  let bonus = null;
+  if (round.first && playerIds.includes(round.first)) {
+    const valid = CATEGORIES.filter((c) => rows[c.id][round.first].valid).length;
+    if (valid * 2 >= CATEGORIES.length) {
+      bonus = { id: round.first, points: FIRST_BONUS };
+      totals[round.first] += FIRST_BONUS;
+    }
+  }
+  return { rows, totals, bonus };
 }

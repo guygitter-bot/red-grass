@@ -102,7 +102,7 @@
 - בדיקה: `cd ai_maagar/api && npm test` · `cd ai_maagar/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 
 ### ארץ עיר (`eretz_ir/`)
-- תיאור: `eretz_ir/README.md`. משחק לכמה שחקנים בקישור, עם שם ותמונה; ניקוד 10 (רק אחד) / 5 (כמה).
+- תיאור: `eretz_ir/README.md`. משחק לכמה שחקנים בקישור, עם שם ותמונה; 9 קטגוריות (כולל מאכל); ניקוד 10 (רק אחד) / 5 (כמה), בונוס 10 למי שסיים ראשון (עם צלצול).
 - `eretz_ir/web` → https://eretz-ir.pages.dev · `eretz_ir/api` → Worker `eretz-ir-api` (Durable Object `Room` לכל משחק). עלייה: `eretz-ir.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd eretz_ir/api && npm test` · `cd eretz_ir/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 - בדיקת תשובות אוטומטית בסוף סיבוב (`api/spell.js`, Claude ב-alarm): תיקון כתיב (באותה אות) + האם מתאים לקטגוריה (לא מתאים = 0, השחקנים יכולים לאשר ב-👍). אות אחת לבד = 0.

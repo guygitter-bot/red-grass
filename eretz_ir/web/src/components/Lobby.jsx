@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { inviteLink } from '../lib/game';
+import { recentLetters } from '../lib/profile';
 import { Avatar, Button, Card, TimePicker } from './ui';
 
 const INVITE_TEXT = 'בואו לשחק איתי ארץ עיר! 🌍';
@@ -54,7 +55,7 @@ export default function Lobby({ state, act }) {
   const [busy, setBusy] = useState(false);
   const start = async () => {
     setBusy(true);
-    await act('/start', { seconds: state.seconds }).catch(() => {});
+    await act('/start', { seconds: state.seconds, recent: recentLetters() }).catch(() => {});
     setBusy(false);
   };
   return (
