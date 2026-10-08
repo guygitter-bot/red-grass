@@ -44,6 +44,11 @@ export function startsWithLetter(answer, letter) {
   return !!first && (FINALS[first] || first) === letter;
 }
 
+// לפחות שתי אותיות (אות אחת לבד – לא תשובה)
+export function longEnough(answer) {
+  return normalize(answer).replace(/[^\u05d0-\u05eaa-z0-9]/g, '').length >= 2;
+}
+
 // רק הקטגוריות הידועות, כל תשובה מנוקה
 export function cleanAnswers(raw) {
   const out = {};
@@ -67,9 +72,12 @@ export function pickLetter(used = [], random = Math.random) {
 
 // ניקוד סיבוב.
 //   round: { letter, answers: {<שחקן>: {<קטגוריה>: תשובה}}, votes: {'<קטגוריה>|<שחקן>': [מי שפסל]},
-//            fixed: {'<קטגוריה>|<תשובה מנורמלת>': תיקון כתיב} }
+//            fixed: {'<קטגוריה>|<תשובה מנורמלת>': תיקון כתיב}, wrong: [<אותו מפתח> – לא מתאים לקטגוריה],
+//            approves: {'<קטגוריה>|<שחקן>': [מי שאישר]} }
 // תשובה נפסלת כשיותר ממחצית השחקנים האחרים סימנו שהיא לא נכונה.
-// מחזיר { rows: {<קטגוריה>: {<שחקן>: {text, typed?, valid, reason, voters, points}}}, totals: {<שחקן>: נקודות} }
+// תשובה שהבודק (Claude) קבע שלא מתאימה – 0, אלא אם יותר ממחצית השחקנים האחרים אישרו אותה.
+// מחזיר { rows: {<קטגוריה>: {<שחקן>: {text, typed?, valid, reason, voters, approvers, points}}}, totals: {<שחקן>: נקודות} }
+// reason: empty | letter | short | wrong | voted
 // typed = מה שנכתב, כשהכתיב תוקן (text = אחרי התיקון)
 export function scoreRound(round, playerIds) {
   const others = playerIds.length - 1;
@@ -80,15 +88,21 @@ export function scoreRound(round, playerIds) {
     const groups = new Map();
     for (const pid of playerIds) {
       const typed = cleanAnswer(round.answers?.[pid]?.[cat.id]);
-      const fix = round.fixed?.[`${cat.id}|${normalize(typed)}`];
+      const key = `${cat.id}|${normalize(typed)}`;
+      const fix = round.fixed?.[key];
       const text = fix || typed;
       const norm = normalize(text);
-      const voters = (round.votes?.[`${cat.id}|${pid}`] || []).filter((v) => v !== pid && playerIds.includes(v));
+      const fromOthers = (list) => (list || []).filter((v) => v !== pid && playerIds.includes(v));
+      const voters = fromOthers(round.votes?.[`${cat.id}|${pid}`]);
+      const approvers = fromOthers(round.approves?.[`${cat.id}|${pid}`]);
+      const majority = (list) => others > 0 && list.length * 2 > others;
       let reason = '';
       if (!norm) reason = 'empty';
       else if (!startsWithLetter(norm, round.letter)) reason = 'letter';
-      else if (others > 0 && voters.length * 2 > others) reason = 'voted';
-      cells[pid] = { text, ...(fix ? { typed } : {}), valid: !reason, reason, voters, points: 0 };
+      else if (!longEnough(norm)) reason = 'short';
+      else if (round.wrong?.includes(key) && !majority(approvers)) reason = 'wrong';
+      else if (majority(voters)) reason = 'voted';
+      cells[pid] = { text, ...(fix ? { typed } : {}), valid: !reason, reason, voters, approvers, points: 0 };
       if (!reason) groups.set(norm, [...(groups.get(norm) || []), pid]);
     }
     for (const ids of groups.values()) {

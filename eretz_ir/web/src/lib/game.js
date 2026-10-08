@@ -17,6 +17,11 @@ export function startsWithLetter(answer, letter) {
   return !!first && (FINALS[first] || first) === letter;
 }
 
+// לפחות שתי אותיות (כמו longEnough בשרת)
+export function longEnough(answer) {
+  return normalize(answer).replace(/[^\u05d0-\u05eaa-z0-9]/g, '').length >= 2;
+}
+
 // זמנים לבחירה (כמו TIMES בשרת)
 export const TIMES = [
   { seconds: 60, label: 'דקה' },

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { startsWithLetter, normalize, clock, codeFrom } from './game';
+import { startsWithLetter, normalize, clock, codeFrom, longEnough } from './game';
 
 describe('game helpers', () => {
   it('checks the first letter like the server', () => {
@@ -19,5 +19,13 @@ describe('game helpers', () => {
     expect(codeFrom('https://eretz-ir.pages.dev/?g=ab3cd')).toBe('AB3CD');
     expect(codeFrom(' xyz12 ')).toBe('XYZ12');
     expect(codeFrom('hello world')).toBe('');
+  });
+});
+
+describe('longEnough', () => {
+  it('a lone letter is not an answer', () => {
+    expect(longEnough('א')).toBe(false);
+    expect(longEnough("ג'")).toBe(false);
+    expect(longEnough('אב')).toBe(true);
   });
 });
