@@ -45,6 +45,19 @@ export default function Results({ state, act }) {
     setBusy(false);
   };
 
+  // בודקים ומתקנים שגיאות כתיב (עד חצי דקה) – התוצאות אחר כך
+  if (round.spell === 'pending') {
+    return (
+      <div className="grid min-h-[50vh] place-items-center text-center">
+        <div>
+          <div className="animate-bounce text-6xl">✏️</div>
+          <div className="mt-3 text-xl font-bold">הזמן נגמר!</div>
+          <div className="mt-1 text-muted">מתקנים שגיאות כתיב ומחשבים נקודות...</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4 pb-32">
       <div className="flex items-center gap-3">
@@ -52,6 +65,7 @@ export default function Results({ state, act }) {
         <div>
           <h2 className="text-2xl font-bold">סוף סיבוב {round.n}</h2>
           <p className="text-sm text-muted">10 – תשובה שרק אחד כתב · 5 – תשובה שכמה כתבו</p>
+          {round.spell === 'failed' && <p className="text-xs text-muted">(הפעם לא הצלחנו לתקן שגיאות כתיב)</p>}
         </div>
       </div>
 
@@ -83,6 +97,7 @@ export default function Results({ state, act }) {
                           <div className={`truncate ${cell.valid ? '' : 'text-muted line-through decoration-red-400'} ${cell.text ? '' : 'no-underline'}`}>
                             {cell.text || '—'}
                           </div>
+                          {cell.typed && <div className="truncate text-xs text-muted">✏️ תוקן מ"{cell.typed}"</div>}
                           {(REASONS[cell.reason] || cell.voters.length > 0) && (
                             <div className="text-xs text-muted">
                               {REASONS[cell.reason]}

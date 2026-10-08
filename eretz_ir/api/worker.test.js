@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import worker, { Room, CODE_RE, originAllowed } from './worker.js';
 import { normalize, startsWithLetter, scoreRound, pickLetter, LETTERS } from './game.js';
-import { GRACE_MS, COUNTDOWN_MS, MAX_PLAYERS } from './room.js';
+import { GRACE_MS, COUNTDOWN_MS, MAX_PLAYERS, SPELL_MS } from './room.js';
+import { spellJobs } from './spell.js';
 
 // זיכרון מדומה במקום האחסון של Durable Object
 function fakeStorage() {
@@ -21,9 +22,9 @@ function fakeStorage() {
 }
 
 // סביבה מדומה: שעון שאפשר להזיז, ואות קבועה (הראשונה שעוד לא הייתה)
-function fakeEnv() {
+function fakeEnv(extra = {}) {
   const env = { ALLOWED_ORIGINS: 'https://eretz-ir.pages.dev,https://eretz-ir-*.pages.dev', time: 1_000_000, rooms: new Map() };
-  const roomEnv = { NOW: () => env.time, RANDOM: () => 0 };
+  const roomEnv = { NOW: () => env.time, RANDOM: () => 0, ...extra };
   env.ROOMS = {
     idFromName: (n) => n,
     get: (id) => {
@@ -218,4 +219,78 @@ test('an old game is deleted', async () => {
   env.time += 4 * 24 * 60 * 60 * 1000;
   await room.alarm();
   assert.equal((await call(env, '/state', auth(code, 1))).status, 404);
+});
+
+// סוכן מדומה לתיקון כתיב: מתקן לפי מילון קטן, ומנסה גם "לתקן" לאות אחרת (שאסור)
+function fakeSpeller(calls = [], fail = false) {
+  const dict = { ארייה: 'אריה', אמרכה: 'אמריקה', אבטיך: 'אבטיח', אנגליה: 'בריטניה' };
+  return {
+    beta: {
+      messages: {
+        async create(req) {
+          calls.push(req);
+          if (fail) throw Object.assign(new Error('overloaded'), { status: 529 });
+          const lines = req.messages[0].content.split('\n').filter((l) => /^\d+\./.test(l));
+          const fixes = lines.map((l) => {
+            const [, i, text] = l.match(/^(\d+)\. \[[^\]]+\] (.*)$/);
+            return { i: Number(i), fixed: dict[text] || text };
+          });
+          return { stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'fix_answers', input: { fixes } }] };
+        },
+      },
+    },
+  };
+}
+
+test('spelling is fixed at the end of the round, and fixed answers count as the same answer', async () => {
+  const calls = [];
+  const env = fakeEnv({ AI_CLIENT: fakeSpeller(calls) });
+  const code = await gameWith(env, 3);
+  await call(env, '/start', auth(code, 1));
+  env.time += COUNTDOWN_MS + 5000;
+  await call(env, '/answers', { ...auth(code, 1), round: 1, answers: { animal: 'ארייה', country: 'אמרכה', plant: 'אבטיך' }, done: true });
+  await call(env, '/answers', { ...auth(code, 2), round: 1, answers: { animal: 'אריה', country: 'אנגליה', plant: 'בננה' }, done: true });
+  await call(env, '/answers', { ...auth(code, 3), round: 1, answers: { animal: 'ארייה' }, done: true });
+
+  const waiting = await call(env, '/state', auth(code, 1));
+  assert.equal(waiting.data.phase, 'results');
+  assert.equal(waiting.data.round.spell, 'pending');
+  // "ארייה" פעמיים נשלח פעם אחת; "בננה" לא מתחיל ב-א – לא נשלח
+  assert.equal(spellJobs((await env.rooms.get(code).storage.get('room')).round).length, 5);
+
+  await env.rooms.get(code).alarm();
+  assert.equal(calls.length, 1);
+  const res = await call(env, '/state', auth(code, 1));
+  assert.equal(res.data.round.spell, 'done');
+  const animal = res.data.results.rows.animal;
+  assert.equal(animal[player(1).id].text, 'אריה');
+  assert.equal(animal[player(1).id].typed, 'ארייה');
+  assert.equal(animal[player(2).id].typed, undefined);
+  // שלושתם כתבו "אריה" (אחרי התיקון) – 5 לכל אחד
+  assert.deepEqual([1, 2, 3].map((n) => animal[player(n).id].points), [5, 5, 5]);
+  assert.equal(res.data.results.rows.country[player(1).id].text, 'אמריקה');
+  // תיקון שמחליף את האות הראשונה – לא מתקבל
+  assert.equal(res.data.results.rows.country[player(2).id].text, 'אנגליה');
+  assert.equal(res.data.results.rows.plant[player(1).id].text, 'אבטיח');
+});
+
+test('when the speller fails or is stuck, results show without fixes', async () => {
+  const env = fakeEnv({ AI_CLIENT: fakeSpeller([], true) });
+  const code = await gameWith(env, 1);
+  await call(env, '/start', auth(code, 1));
+  await call(env, '/answers', { ...auth(code, 1), round: 1, answers: { animal: 'ארייה' }, done: true });
+  await env.rooms.get(code).alarm();
+  const failed = await call(env, '/state', auth(code, 1));
+  assert.equal(failed.data.round.spell, 'failed');
+  assert.equal(failed.data.results.rows.animal[player(1).id].text, 'ארייה');
+  assert.equal(failed.data.results.rows.animal[player(1).id].points, 10);
+
+  // נתקע (ה-alarm לא רץ) – אחרי חצי דקה מציגים בלי
+  const env2 = fakeEnv({ AI_CLIENT: fakeSpeller() });
+  const code2 = await gameWith(env2, 1);
+  await call(env2, '/start', auth(code2, 1));
+  await call(env2, '/answers', { ...auth(code2, 1), round: 1, answers: { animal: 'ארייה' }, done: true });
+  assert.equal((await call(env2, '/state', auth(code2, 1))).data.round.spell, 'pending');
+  env2.time += SPELL_MS + 1;
+  assert.equal((await call(env2, '/state', auth(code2, 1))).data.round.spell, 'failed');
 });

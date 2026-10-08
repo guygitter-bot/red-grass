@@ -66,9 +66,11 @@ export function pickLetter(used = [], random = Math.random) {
 }
 
 // ניקוד סיבוב.
-//   round: { letter, answers: {<שחקן>: {<קטגוריה>: תשובה}}, votes: {'<קטגוריה>|<שחקן>': [מי שפסל]} }
+//   round: { letter, answers: {<שחקן>: {<קטגוריה>: תשובה}}, votes: {'<קטגוריה>|<שחקן>': [מי שפסל]},
+//            fixed: {'<קטגוריה>|<תשובה מנורמלת>': תיקון כתיב} }
 // תשובה נפסלת כשיותר ממחצית השחקנים האחרים סימנו שהיא לא נכונה.
-// מחזיר { rows: {<קטגוריה>: {<שחקן>: {text, valid, reason, voters, points}}}, totals: {<שחקן>: נקודות} }
+// מחזיר { rows: {<קטגוריה>: {<שחקן>: {text, typed?, valid, reason, voters, points}}}, totals: {<שחקן>: נקודות} }
+// typed = מה שנכתב, כשהכתיב תוקן (text = אחרי התיקון)
 export function scoreRound(round, playerIds) {
   const others = playerIds.length - 1;
   const rows = {};
@@ -77,14 +79,16 @@ export function scoreRound(round, playerIds) {
     const cells = {};
     const groups = new Map();
     for (const pid of playerIds) {
-      const text = cleanAnswer(round.answers?.[pid]?.[cat.id]);
+      const typed = cleanAnswer(round.answers?.[pid]?.[cat.id]);
+      const fix = round.fixed?.[`${cat.id}|${normalize(typed)}`];
+      const text = fix || typed;
       const norm = normalize(text);
       const voters = (round.votes?.[`${cat.id}|${pid}`] || []).filter((v) => v !== pid && playerIds.includes(v));
       let reason = '';
       if (!norm) reason = 'empty';
       else if (!startsWithLetter(norm, round.letter)) reason = 'letter';
       else if (others > 0 && voters.length * 2 > others) reason = 'voted';
-      cells[pid] = { text, valid: !reason, reason, voters, points: 0 };
+      cells[pid] = { text, ...(fix ? { typed } : {}), valid: !reason, reason, voters, points: 0 };
       if (!reason) groups.set(norm, [...(groups.get(norm) || []), pid]);
     }
     for (const ids of groups.values()) {

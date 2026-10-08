@@ -1,7 +1,7 @@
 name: eretz-ir
 
 # ארץ עיר (eretz_ir/):
-#   api -> Cloudflare Worker "eretz-ir-api" (המשחקים עצמם, Durable Object לכל משחק)
+#   api -> Cloudflare Worker "eretz-ir-api" (המשחקים עצמם, Durable Object לכל משחק; תיקון כתיב עם Claude)
 #   web -> Cloudflare Pages "eretz-ir" -> https://eretz-ir.pages.dev
 on:
   push:
@@ -48,10 +48,12 @@ jobs:
         env:
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           missing=""
           [ -n "$CF_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
           [ -n "$CF_ACCOUNT" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          [ -n "$API_KEY" ] || missing="$missing ANTHROPIC_API_KEY"
           if [ -n "$missing" ]; then
             echo "::error::Missing repository secrets:$missing (see eretz_ir/README.md)"
             exit 1
@@ -65,11 +67,15 @@ jobs:
       - name: Deploy worker
         id: deploy
         uses: cloudflare/wrangler-action@v3
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: eretz_ir/api
           wranglerVersion: "4.146.0"
+          secrets: |
+            ANTHROPIC_API_KEY
       - name: Summary
         env:
           URL: ${{ steps.deploy.outputs.deployment-url }}
