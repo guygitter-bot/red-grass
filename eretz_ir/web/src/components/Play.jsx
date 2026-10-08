@@ -2,6 +2,24 @@ import { useEffect, useRef, useState } from 'react';
 import { clock, startsWithLetter } from '../lib/game';
 import { Avatar, Button, Card } from './ui';
 
+// כמה הוזז המסך הנראה (באייפון, כשהמקלדת פתוחה, דברים "קבועים" בראש הדף בורחים למעלה)
+function useViewportTop() {
+  const [top, setTop] = useState(0);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const on = () => setTop(Math.max(0, vv.offsetTop));
+    on();
+    vv.addEventListener('resize', on);
+    vv.addEventListener('scroll', on);
+    return () => {
+      vv.removeEventListener('resize', on);
+      vv.removeEventListener('scroll', on);
+    };
+  }, []);
+  return top;
+}
+
 // סיבוב: האות, השעון, ושמונה שדות. התשובות נשמרות בשרת תוך כדי כתיבה,
 // וכשהזמן נגמר (או "סיימתי") נשלחות סופית.
 export default function Play({ state, act, now }) {
@@ -15,6 +33,9 @@ export default function Play({ state, act, now }) {
   const dirty = useRef(false);
   const sent = useRef(false);
   latest.current = answers;
+  const cardRef = useRef(null);
+  const [cardHidden, setCardHidden] = useState(false);
+  const viewportTop = useViewportTop();
 
   useEffect(() => {
     const id = setInterval(() => setT(now()), 250);
@@ -27,6 +48,17 @@ export default function Play({ state, act, now }) {
   const before = t < round.startsAt;
   const over = left <= 0;
   const locked = before || over || done;
+
+  // כשגוללים והכרטיס הגדול של השעון יוצא מהמסך – מציגים שעון קטן שתמיד צמוד למעלה
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el || !window.IntersectionObserver) return;
+    const io = new IntersectionObserver(([e]) => setCardHidden(!e.isIntersecting), { threshold: 0.6 });
+    io.observe(el);
+    return () => {
+      io.disconnect();
+    };
+  }, [before]);
 
   const save = (final) => {
     dirty.current = false;
@@ -85,33 +117,49 @@ export default function Play({ state, act, now }) {
 
   const urgent = left <= 10000 && !over;
   const total = round.endsAt - round.startsAt;
+  const percent = Math.max(0, Math.min(100, (left / total) * 100));
   return (
     <div className="flex flex-col gap-4 pb-28">
-      <Card className="sticky top-2 z-10 flex items-center gap-4">
-        <div className="pop grid h-20 w-20 shrink-0 place-items-center rounded-3xl bg-accent text-6xl font-extrabold text-white shadow">{round.letter}</div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-baseline justify-between">
-            <span className="text-sm text-muted">סיבוב {round.n}</span>
-            <span dir="ltr" className={`text-3xl font-bold tabular-nums ${urgent ? 'animate-pulse text-red-600 dark:text-red-400' : ''}`}>
+      {cardHidden && (
+        <div className="fixed inset-x-0 top-0 z-20 px-3 pt-2" style={{ transform: `translateY(${viewportTop}px)` }}>
+          <div className="mx-auto flex max-w-5xl items-center gap-3 rounded-2xl border border-line bg-card/95 px-3 py-2 shadow-lg backdrop-blur">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent text-2xl font-extrabold text-white">{round.letter}</div>
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-soft">
+              <div className={`h-full rounded-full transition-[width] duration-300 ${urgent ? 'bg-red-500' : 'bg-accent'}`} style={{ width: `${percent}%` }} />
+            </div>
+            <span dir="ltr" className={`text-2xl font-bold tabular-nums ${urgent ? 'animate-pulse text-red-600 dark:text-red-400' : ''}`}>
               {clock(left)}
             </span>
           </div>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-soft">
-            <div
-              className={`h-full rounded-full transition-[width] duration-300 ${urgent ? 'bg-red-500' : 'bg-accent'}`}
-              style={{ width: `${Math.max(0, Math.min(100, (left / total) * 100))}%` }}
-            />
-          </div>
-          <div className="mt-2 flex flex-wrap gap-1">
-            {state.players.map((p) => (
-              <span key={p.id} className="relative" title={p.done ? `${p.name} סיים/ה` : p.name}>
-                <Avatar player={p} size={26} />
-                {p.done && <span className="absolute -bottom-1 -left-1 grid h-4 w-4 place-items-center rounded-full bg-accent text-[10px] text-white">✓</span>}
-              </span>
-            ))}
-          </div>
         </div>
-      </Card>
+      )}
+      <div ref={cardRef}>
+        <Card className="flex items-center gap-4">
+          <div className="pop grid h-20 w-20 shrink-0 place-items-center rounded-3xl bg-accent text-6xl font-extrabold text-white shadow">{round.letter}</div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm text-muted">סיבוב {round.n}</span>
+              <span dir="ltr" className={`text-3xl font-bold tabular-nums ${urgent ? 'animate-pulse text-red-600 dark:text-red-400' : ''}`}>
+                {clock(left)}
+              </span>
+            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-soft">
+              <div
+                className={`h-full rounded-full transition-[width] duration-300 ${urgent ? 'bg-red-500' : 'bg-accent'}`}
+                style={{ width: `${percent}%` }}
+              />
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1">
+              {state.players.map((p) => (
+                <span key={p.id} className="relative" title={p.done ? `${p.name} סיים/ה` : p.name}>
+                  <Avatar player={p} size={26} />
+                  {p.done && <span className="absolute -bottom-1 -left-1 grid h-4 w-4 place-items-center rounded-full bg-accent text-[10px] text-white">✓</span>}
+                </span>
+              ))}
+            </div>
+          </div>
+        </Card>
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         {state.categories.map((c, i) => {
