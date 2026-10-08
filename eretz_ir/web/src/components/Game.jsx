@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
-import { setLastGame } from '../lib/profile';
+import { rememberLetter, setLastGame } from '../lib/profile';
 import Lobby, { Invite } from './Lobby';
 import Play from './Play';
 import Results from './Results';
@@ -64,6 +64,12 @@ export default function Game({ code, profile, onExit, onEditProfile }) {
       clearTimeout(timer);
     };
   }, [code, profile.id, profile.name, profile.photo]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // האות של הסיבוב נשמרת במכשיר, כדי שלא תחזור מהר גם במשחק הבא
+  const letter = state?.round?.letter;
+  useEffect(() => {
+    if (letter) rememberLetter(letter);
+  }, [letter]);
 
   const leave = async () => {
     if (!window.confirm('לצאת מהמשחק? הניקוד שלך יימחק מהמשחק הזה.')) return;

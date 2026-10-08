@@ -135,8 +135,8 @@ export default function Home({ profile, onEditProfile, onOpen }) {
       <Card className="text-sm leading-relaxed text-muted">
         <div className="mb-1 font-bold text-ink">איך משחקים?</div>
         פותחים משחק ושולחים לחברים את הקישור. בכל סיבוב יוצאת אות, ולכל אחד יש זמן קצוב למלא: ארץ, עיר, חי, צומח, דומם, ילד, ילדה,
-        מקצוע. בסוף רואים את התשובות של כולם: תשובה נכונה שרק את/ה כתבת – <b className="text-ink">10 נקודות</b>, תשובה שגם אחרים כתבו –{' '}
-        <b className="text-ink">5 נקודות</b> לכל אחד.
+        מקצוע, מאכל. בסוף רואים את התשובות של כולם: תשובה נכונה שרק את/ה כתבת – <b className="text-ink">10 נקודות</b>, תשובה שגם אחרים כתבו –{' '}
+        <b className="text-ink">5 נקודות</b> לכל אחד. מי שמסיים ראשון עם כל השדות מלאים – <b className="text-ink">10 נקודות בונוס</b>.
       </Card>
     </div>
   );

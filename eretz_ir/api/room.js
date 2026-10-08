@@ -124,7 +124,8 @@ export class Room {
           const { totals } = scoreRound(room.round, room.players.map((p) => p.id));
           room.history.push({ n: room.round.n, letter: room.round.letter, totals });
         }
-        const letter = pickLetter(room.usedLetters, this.random);
+        const recent = Array.isArray(body.recent) ? body.recent.filter((l) => typeof l === 'string').slice(0, 30) : [];
+        const letter = pickLetter(room.usedLetters, this.random, recent);
         room.usedLetters = room.usedLetters.length >= 21 ? [letter] : [...room.usedLetters, letter];
         const startsAt = this.now() + COUNTDOWN_MS;
         room.round = {
@@ -152,6 +153,9 @@ export class Room {
         round.answers[me.id] = cleanAnswers(body.answers);
         if (body.done && !round.done.includes(me.id)) {
           round.done.push(me.id);
+          // הראשון שסיים בזמן, עם כל השדות מלאים – מועמד לבונוס (ובאפליקציה מתנגן צלצול)
+          const full = Object.keys(round.answers[me.id]).length === CATEGORIES.length;
+          if (!round.first && full && this.now() < round.endsAt) round.first = me.id;
           room.v++;
         }
         this.tick(room);
@@ -294,6 +298,7 @@ export class Room {
         endsAt: round.endsAt,
         spell: round.spell || 'off',
         mine: round.answers[meId] || {},
+        first: round.first || null,
       },
       results,
       history: room.history.map((h) => ({ n: h.n, letter: h.letter })),

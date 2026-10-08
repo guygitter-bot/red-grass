@@ -332,3 +332,31 @@ test('answers that do not fit the category score nothing, unless most players ap
   res = await approve(3, false);
   assert.equal(res.data.results.rows.job[player(1).id].points, 0);
 });
+
+test('first to finish with every field filled gets a bonus (if at least half are right)', async () => {
+  const env = fakeEnv();
+  const code = await gameWith(env, 3);
+  await call(env, '/start', auth(code, 1));
+  env.time += COUNTDOWN_MS + 5000;
+  const full = { country: 'אוסטריה', city: 'אשדוד', animal: 'אריה', plant: 'אורן', object: 'ארון', boy: 'אבי', girl: 'אורית', job: 'אופה', food: 'אורז' };
+  // שחקן 2 סיים ראשון אבל עם שדות ריקים – אין בונוס
+  await call(env, '/answers', { ...auth(code, 2), round: 1, answers: { country: 'אוסטריה' }, done: true });
+  await call(env, '/answers', { ...auth(code, 1), round: 1, answers: full, done: true });
+  await call(env, '/answers', { ...auth(code, 3), round: 1, answers: { ...full, food: 'אבטיח' }, done: true });
+  const res = await call(env, '/state', auth(code, 1));
+  assert.equal(res.data.round.first, player(1).id);
+  assert.deepEqual(res.data.results.bonus, { id: player(1).id, points: 10 });
+  // שחקן 1: 8 תשובות משותפות (5) + מאכל ייחודי (10) + בונוס
+  assert.equal(res.data.results.totals[player(1).id], 8 * 5 + 10 + 10);
+
+  // מלא אבל רוב התשובות לא באות הנכונה – בלי בונוס
+  const round = { letter: 'א', first: 'a', answers: { a: { ...full, country: 'בלגיה', city: 'בת ים', animal: 'ברווז', plant: 'במבוק', object: 'בית' } }, votes: {} };
+  assert.equal(scoreRound(round, ['a']).bonus, null);
+});
+
+test('letters from recent games on this device are skipped when possible', () => {
+  assert.equal(pickLetter([], () => 0, ['א', 'ב']), 'ג');
+  assert.equal(pickLetter(['ג'], () => 0, ['א', 'ב']), 'ד');
+  // כולן היו – בכל זאת יש אות
+  assert.ok(LETTERS.includes(pickLetter([], () => 0, LETTERS)));
+});

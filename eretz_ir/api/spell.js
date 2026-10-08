@@ -48,7 +48,8 @@ If it is already correct, or you cannot tell what was meant, return it exactly a
 - עיר: a city or town anywhere in the world, including Israeli towns, kibbutzim and moshavim.
 - חי: any animal (mammals, birds, fish, insects, reptiles...).
 - צומח: any plant – trees, flowers, fruits, vegetables, herbs, grains.
-- דומם: any inanimate object or thing (furniture, tools, toys, food items that are not plants, materials...).
+- דומם: any inanimate object or thing (furniture, tools, toys, materials...).
+- מאכל: any food, dish or drink (e.g. "פלאפל", "מרק", "פיצה"; fruits and vegetables are fine too).
 - ילד: a first name used for boys (unisex names are fine). ילדה: a first name used for girls (unisex names are fine).
 - מקצוע: an occupation or profession (e.g. "בורר", "הנדסאי", "חייל", "זמר").
 ok=false for words that are not real, greetings and other words that do not fit (e.g. "היי" as a profession), \

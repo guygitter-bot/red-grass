@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { clock, longEnough, startsWithLetter } from '../lib/game';
+import { chime } from '../lib/sound';
 import { Avatar, Button, Card } from './ui';
 
 // כמה הוזז המסך הנראה (באייפון, כשהמקלדת פתוחה, דברים "קבועים" בראש הדף בורחים למעלה)
@@ -43,6 +44,17 @@ export default function Play({ state, act, now }) {
       clearInterval(id);
     };
   }, [now]);
+
+  // מישהו סיים ראשון – צלצול נעים לכולם (פעם אחת)
+  const first = round.first;
+  const rang = useRef(!!first);
+  useEffect(() => {
+    if (first && !rang.current) {
+      rang.current = true;
+      chime();
+    }
+  }, [first]);
+  const firstName = state.players.find((p) => p.id === first)?.name;
 
   const left = round.endsAt - t;
   const before = t < round.startsAt;
@@ -97,7 +109,8 @@ export default function Play({ state, act, now }) {
 
   const finish = () => {
     const empty = state.categories.filter((c) => !String(answers[c.id] || '').trim()).length;
-    if (empty && !window.confirm(`נשארו ${empty} שדות ריקים. לסיים בכל זאת?`)) return;
+    const bonus = round.first ? '' : ' (בונוס לראשון רק עם כל השדות מלאים)';
+    if (empty && !window.confirm(`נשארו ${empty} שדות ריקים${bonus}. לסיים בכל זאת?`)) return;
     setDone(true);
   };
 
@@ -160,6 +173,12 @@ export default function Play({ state, act, now }) {
           </div>
         </Card>
       </div>
+
+      {first && (
+        <div className="pop rounded-2xl bg-soft px-4 py-2 text-center font-medium text-accent-ink">
+          🏁 {first === state.me ? 'סיימת ראשון/ה! (בונוס +10 אם רוב התשובות נכונות)' : `${firstName} סיים/ה ראשון/ה!`}
+        </div>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2">
         {state.categories.map((c, i) => {
