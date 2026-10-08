@@ -1,0 +1,17 @@
+name = "eretz-ir-api"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[vars]
+# האתרים שמותר להם לפנות לשרת (* = כל תת-כתובת, למקרה ש-Cloudflare Pages מוסיף סיומת לשם)
+ALLOWED_ORIGINS = "https://eretz-ir.pages.dev,https://*.eretz-ir.pages.dev,https://eretz-ir-*.pages.dev,http://localhost:5173,http://localhost:4173"
+
+# כל משחק – אובייקט משלו (לפי הקוד שלו)
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]

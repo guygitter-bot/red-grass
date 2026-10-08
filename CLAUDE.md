@@ -101,6 +101,12 @@
 - `ai_maagar/web` → https://ai-maagar-631.pages.dev · `ai_maagar/api` → Worker `ai-maagar-api`. עלייה: `ai-maagar.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd ai_maagar/api && npm test` · `cd ai_maagar/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 
+### ארץ עיר (`eretz_ir/`)
+- תיאור: `eretz_ir/README.md`. משחק לכמה שחקנים בקישור, עם שם ותמונה; ניקוד 10 (רק אחד) / 5 (כמה).
+- `eretz_ir/web` → https://eretz-ir.pages.dev · `eretz_ir/api` → Worker `eretz-ir-api` (Durable Object `Room` לכל משחק). עלייה: `eretz-ir.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd eretz_ir/api && npm test` · `cd eretz_ir/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- הקטגוריות ובדיקת האות כפולות ב-`api/game.js` וב-`web/src/lib/game.js` – לשנות בשניהם.
+
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).
 

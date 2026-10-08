@@ -1,0 +1,115 @@
+name: eretz-ir
+
+# ארץ עיר (eretz_ir/):
+#   api -> Cloudflare Worker "eretz-ir-api" (המשחקים עצמם, Durable Object לכל משחק)
+#   web -> Cloudflare Pages "eretz-ir" -> https://eretz-ir.pages.dev
+on:
+  push:
+    branches: [main]
+    paths: ["eretz_ir/**", ".github/workflows/eretz-ir.yml"]
+  pull_request:
+    paths: ["eretz_ir/**", ".github/workflows/eretz-ir.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eretz-ir-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Server tests
+        working-directory: eretz_ir/api
+        run: |
+          npm ci
+          npm test
+      - name: App tests and build
+        working-directory: eretz_ir/web
+        run: |
+          npm ci
+          npm test
+          npm run build
+
+  api:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check secrets
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          missing=""
+          [ -n "$CF_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -n "$CF_ACCOUNT" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing (see eretz_ir/README.md)"
+            exit 1
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install
+        working-directory: eretz_ir/api
+        run: npm ci
+      - name: Deploy worker
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: eretz_ir/api
+          wranglerVersion: "4.146.0"
+      - name: Summary
+        env:
+          URL: ${{ steps.deploy.outputs.deployment-url }}
+        run: |
+          echo "Worker: $URL" >> "$GITHUB_STEP_SUMMARY"
+
+  web:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build
+        working-directory: eretz_ir/web
+        run: |
+          npm ci
+          npm run build
+      - name: Create the Pages project (first run only)
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: eretz_ir/web
+          wranglerVersion: "4.146.0"
+          command: pages project create eretz-ir --production-branch=main
+      - name: Publish
+        id: publish
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: eretz_ir/web
+          wranglerVersion: "4.146.0"
+          command: pages deploy dist --project-name=eretz-ir --branch=main --commit-dirty=true
+      - name: Summary
+        env:
+          URL: ${{ steps.publish.outputs.deployment-url }}
+        run: |
+          echo "Published: https://eretz-ir.pages.dev ($URL)" >> "$GITHUB_STEP_SUMMARY"
