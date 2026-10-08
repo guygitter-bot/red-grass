@@ -39,6 +39,14 @@ describe('search', () => {
     expect(filterRecipes(recipes, { favorites: true }).map((r) => r.id)).toEqual([2]);
     expect(countByCategory(recipes)).toEqual({ 'עוגות': 1, 'ארוחת בוקר': 1 });
   });
+
+  it('a recipe in several categories is found and counted in each of them', () => {
+    const chicken = { id: 3, title: 'עוף בסויה', category: 'עוף', categories: ['עוף', 'מנה עיקרית'], tags: [], ingredients: [] };
+    const all = [...recipes, chicken];
+    expect(filterRecipes(all, { category: 'עוף' }).map((r) => r.id)).toEqual([3]);
+    expect(filterRecipes(all, { category: 'מנה עיקרית' }).map((r) => r.id)).toEqual([3]);
+    expect(countByCategory(all)).toEqual({ 'עוגות': 1, 'ארוחת בוקר': 1, 'עוף': 1, 'מנה עיקרית': 1 });
+  });
 });
 
 describe('editing as text', () => {

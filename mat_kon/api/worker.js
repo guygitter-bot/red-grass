@@ -11,7 +11,7 @@ import { buildRecipe, failure } from './jobs.js';
 import { RecipeBook } from './store.js';
 import { Accounts, canAdd } from './accounts.js';
 import { gatherSource, normalizeUrl, sourceKind } from './source.js';
-import { NoRecipeError, aiMessage, extractRecipe, ideasFromPantry, organizeShopping, scanPantry, searchRecipes } from './extract.js';
+import { NoRecipeError, aiMessage, categoryFields, extractRecipe, ideasFromPantry, organizeShopping, scanPantry, searchRecipes, suggestCategories } from './extract.js';
 import { findStores } from './stores.js';
 import { CATEGORIES } from './categories.js';
 
@@ -515,8 +515,7 @@ export default {
       if (error) return error;
       const recipe = manualRecipe(body);
       if (typeof recipe === 'string') return fail(400, recipe);
-      if (!(await allCategories()).includes(body.category)) recipe.category = 'אחר';
-      else recipe.category = body.category;
+      Object.assign(recipe, categoryFields(Array.isArray(body.categories) ? body.categories : [body.category], await allCategories()));
       recipe.image = await storeImage(recipe.image);
       return pass(await internal(book, 'POST', '/recipes', recipe));
     }
@@ -638,10 +637,28 @@ export default {
     if (parts.length === 1 && request.method === 'GET') return pass(await internal(book, 'GET', '/recipes'));
     if (parts.length === 2 && request.method === 'GET') return pass(await internal(book, 'GET', `/recipes/${id}`));
     if (parts.length === 2 && request.method === 'DELETE') return pass(await internal(book, 'DELETE', `/recipes/${id}`));
+    // סידור מתכון קיים בכל הקטגוריות שמתאימות לו (AI קצר, בלי רשת, בלי מכסת מתכונים – רק בתקציב היומי)
+    if (parts.length === 3 && parts[2] === 'categorize' && request.method === 'POST') {
+      const res = await internal(book, 'GET', `/recipes/${id}`);
+      if (!res.ok) return fail(404, 'המתכון לא נמצא');
+      const { recipe } = await res.json();
+      const limited = await aiBudget();
+      if (limited) return limited;
+      try {
+        const fields = await suggestCategories(ai(), recipe, await allCategories());
+        return pass(await internal(book, 'PUT', `/recipes/${id}`, { ...fields, categorized: true }));
+      } catch (e) {
+        return aiFail(e, (!e.status && e.message) || 'לא הצלחתי לסדר את הקטגוריות');
+      }
+    }
     if (parts.length === 2 && request.method === 'PUT') {
       const { body: patch, error } = await readJson(MAX_EDIT_BYTES);
       if (error) return error;
-      if ('category' in patch && !(await allCategories()).includes(patch.category)) return fail(400, 'קטגוריה לא מוכרת');
+      if ('categories' in patch) {
+        const known = await allCategories();
+        if (!Array.isArray(patch.categories) || !patch.categories.length || patch.categories.some((c) => !known.includes(c))) return fail(400, 'קטגוריה לא מוכרת');
+        Object.assign(patch, categoryFields(patch.categories, known));
+      } else if ('category' in patch && !(await allCategories()).includes(patch.category)) return fail(400, 'קטגוריה לא מוכרת');
       if ('rating' in patch && !(Number.isInteger(patch.rating) && patch.rating >= 0 && patch.rating <= 5)) return fail(400, 'דירוג לא תקין');
       if ('tags' in patch) {
         if (!Array.isArray(patch.tags)) return fail(400, 'תגיות לא תקינות');
@@ -735,7 +752,7 @@ function manualRecipe(body) {
     title,
     originalTitle: title,
     description: str(body.description, 500),
-    category: CATEGORIES.includes(body.category) ? body.category : 'אחר',
+    ...categoryFields(Array.isArray(body.categories) ? body.categories : [body.category]),
     tags: strList(body.tags, 5),
     servings: str(body.servings),
     prepTime: str(body.prepTime),
@@ -805,7 +822,7 @@ function restoredRecipe(r, categories) {
     title,
     originalTitle: str(r.originalTitle) || title,
     description: str(r.description, 500),
-    category: categories.includes(r.category) ? r.category : 'אחר',
+    ...categoryFields(Array.isArray(r.categories) ? [r.category, ...r.categories] : [r.category], categories),
     tags: strList(r.tags, 15),
     servings: str(r.servings, 100),
     prepTime: str(r.prepTime, 100),

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, GripVertical, Heart, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
-import { emojiOf } from '../lib/recipes';
+import { categoriesOf, emojiOf } from '../lib/recipes';
 
 // כל הקטגוריות במסך אחד: אריח לכל קטגוריה (עם תמונה של מתכון ממנה), לחיצה מסננת את הספר.
 // לב = מועדפת (מוצגת ראשונה ובקיצורי הדרך במסך הבית). במצב עריכה גוררים אריח בידית כדי לשנות את הסדר.
-export default function CategoriesView({ categories, custom, favorites, counts, recipes, active, onPick, onAdd, onRemove, onToggleFavorite, onReorder, onBack }) {
+export default function CategoriesView({ categories, custom, favorites, counts, recipes, active, onPick, onAdd, onRemove, onToggleFavorite, onReorder, onBack, onCategorize }) {
   const [editing, setEditing] = useState(false);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
@@ -13,7 +13,31 @@ export default function CategoriesView({ categories, custom, favorites, counts, 
 
   // קטגוריות עם מתכונים, וגם קטגוריות שלכם שעוד ריקות (categories כבר מסודרות: מועדפות קודם)
   const shown = categories.filter((c) => counts[c] || custom.includes(c));
-  const cover = (c) => recipes.find((r) => r.category === c && r.image)?.image;
+  const cover = (c) => recipes.find((r) => categoriesOf(r).includes(c) && r.image)?.image;
+
+  // שיבוץ מתכונים קיימים בכל הקטגוריות שמתאימות להם (פעם אחת לכל מתכון; נעצר כשיוצאים מהמסך)
+  const todo = recipes.filter((r) => !r.categorized);
+  const [sorting, setSorting] = useState(null); // { done, total }
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; };
+  }, []);
+  const sortAll = async () => {
+    const list = todo;
+    setError('');
+    setSorting({ done: 0, total: list.length });
+    for (let i = 0; i < list.length && alive.current; i++) {
+      try {
+        await onCategorize(list[i]);
+      } catch (e) {
+        setError(e.message);
+        break;
+      }
+      if (alive.current) setSorting({ done: i + 1, total: list.length });
+    }
+    if (alive.current) setSorting(null);
+  };
   const isFav = (c) => favorites.includes(c);
 
   // גרירה: בזמן הגרירה מציגים סדר זמני, ושומרים בסוף
@@ -194,8 +218,21 @@ export default function CategoriesView({ categories, custom, favorites, counts, 
             )}
           </li>
         </ul>
+        {onCategorize && (todo.length > 0 || sorting) && (
+          <div className="mt-4 rounded-2xl bg-orange-50 border border-orange-200 p-3 text-sm">
+            <p className="text-orange-900 leading-relaxed">מתכון יכול להופיע בכמה קטגוריות (למשל "עוף" וגם "מנה עיקרית"). הסוכן יכול לעבור על המתכונים שכבר בספר ולשבץ כל אחד בכל הקטגוריות שמתאימות לו.</p>
+            <button
+              onClick={sortAll}
+              disabled={Boolean(sorting)}
+              className="mt-2 rounded-xl bg-orange-500 text-white font-bold px-4 py-2 inline-flex items-center gap-1.5 disabled:opacity-70"
+            >
+              {sorting ? <><Loader2 size={16} className="animate-spin" /> משבץ {sorting.done} מתוך {sorting.total}…</> : `שיבוץ ${todo.length} מתכונים בקטגוריות`}
+            </button>
+            {sorting && <p className="mt-1 text-xs text-orange-800">השיבוץ רץ כל עוד המסך הזה פתוח. אם יוצאים – הוא ממשיך מאיפה שנעצר בפעם הבאה.</p>}
+          </div>
+        )}
         <p className="mt-4 text-sm text-stone-500 leading-relaxed">
-          בקטגוריה משלכם הסוכן ישבץ מתכונים חדשים כשהם מתאימים. מתכון קיים מעבירים בדף המתכון, בבחירת הקטגוריה.
+          בקטגוריה משלכם הסוכן ישבץ מתכונים חדשים כשהם מתאימים. מתכון יכול להיות בכמה קטגוריות – מוסיפים או מסירים בדף המתכון.
           ❤️ על אריח = קטגוריה מועדפת: מוצגת ראשונה, וגם כקיצור דרך במסך הבית. הסדר והמועדפות נשמרים לכל הספר (גם בספר משותף).
         </p>
       </div>

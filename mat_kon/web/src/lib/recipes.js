@@ -25,9 +25,12 @@ export const normalize = (s) =>
     .replace(/\s+/g, ' ')
     .trim();
 
+// כל הקטגוריות של מתכון (מתכון יכול להופיע בכמה, למשל "עוף" וגם "מנה עיקרית")
+export const categoriesOf = (r) => (Array.isArray(r.categories) && r.categories.length ? r.categories : [r.category]);
+
 const haystack = (r) =>
   normalize([
-    r.title, r.originalTitle, r.description, r.category, ...(r.tags || []),
+    r.title, r.originalTitle, r.description, ...categoriesOf(r), ...(r.tags || []),
     ...(r.ingredients || []).flatMap((s) => [s.title, ...s.items]),
     r.source?.author, r.source?.site,
   ].join(' '));
@@ -37,7 +40,7 @@ export function filterRecipes(recipes, { query = '', category = null, favorites 
   const words = normalize(query).split(' ').filter(Boolean);
   return recipes.filter(
     (r) =>
-      (!category || r.category === category) &&
+      (!category || categoriesOf(r).includes(category)) &&
       (!favorites || r.favorite) &&
       (!tag || (r.tags || []).includes(tag)) &&
       (!words.length || words.every((w) => haystack(r).includes(w))),
@@ -46,7 +49,7 @@ export function filterRecipes(recipes, { query = '', category = null, favorites 
 
 export function countByCategory(recipes) {
   const counts = {};
-  for (const r of recipes) counts[r.category] = (counts[r.category] || 0) + 1;
+  for (const r of recipes) for (const c of categoriesOf(r)) counts[c] = (counts[c] || 0) + 1;
   return counts;
 }
 

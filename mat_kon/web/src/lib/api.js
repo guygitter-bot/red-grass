@@ -46,6 +46,8 @@ export function safeRecipe(r) {
     ...r,
     title: strOr(r.title, 'מתכון') || 'מתכון',
     category: strOr(r.category, 'אחר') || 'אחר',
+    // כל הקטגוריות של המתכון (הראשית ראשונה). מתכון ישן – רק הקטגוריה שלו
+    categories: [...new Set([strOr(r.category, 'אחר') || 'אחר', ...(Array.isArray(r.categories) ? r.categories.filter((c) => typeof c === 'string' && c) : [])])],
     tags: Array.isArray(r.tags) ? r.tags.map(String) : [],
     ingredients: sectionsOr(r.ingredients),
     steps: sectionsOr(r.steps),
@@ -77,6 +79,8 @@ export async function addRecipeAndWait(s, url, hint) {
 export const getRecipe = (s, id) => api(s, 'GET', `/recipes/${id}`).then((d) => safeRecipe(d.recipe));
 export const refreshRecipe = (s, id) => api(s, 'POST', `/recipes/${id}/refresh`);
 export const updateRecipe = (s, id, patch) => api(s, 'PUT', `/recipes/${id}`, patch).then((d) => d.recipe);
+// הסוכן משבץ מתכון קיים בכל הקטגוריות שמתאימות לו
+export const categorizeRecipe = (s, id) => api(s, 'POST', `/recipes/${id}/categorize`).then((d) => d.recipe);
 export const deleteRecipe = (s, id) => api(s, 'DELETE', `/recipes/${id}`);
 
 // הזמנות (בעל האפליקציה). כשהספר נעול, המכשיר של הבעלים שולח את ה-session שלו
