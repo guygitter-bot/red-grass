@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { clock, startsWithLetter } from '../lib/game';
+import { clock, longEnough, startsWithLetter } from '../lib/game';
 import { Avatar, Button, Card } from './ui';
 
 // כמה הוזז המסך הנראה (באייפון, כשהמקלדת פתוחה, דברים "קבועים" בראש הדף בורחים למעלה)
@@ -165,6 +165,7 @@ export default function Play({ state, act, now }) {
         {state.categories.map((c, i) => {
           const value = answers[c.id] || '';
           const wrong = value.trim() && !startsWithLetter(value, round.letter);
+          const short = value.trim() && !wrong && !longEnough(value);
           return (
             <label key={c.id} className="block">
               <span className="mb-1 block font-bold">{c.label}</span>
@@ -186,6 +187,7 @@ export default function Play({ state, act, now }) {
                 className={`w-full rounded-2xl border bg-card px-4 py-3 text-lg outline-none disabled:opacity-70 ${wrong ? 'border-red-400 focus:border-red-500' : 'border-line focus:border-accent'}`}
               />
               {wrong && <span className="mt-1 block text-sm text-red-600 dark:text-red-400">צריך להתחיל באות {round.letter}</span>}
+              {short && <span className="mt-1 block text-sm text-muted">צריך מילה שלמה, לא רק אות</span>}
             </label>
           );
         })}

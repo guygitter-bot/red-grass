@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Avatar, Button, Card, TimePicker } from './ui';
 
-const REASONS = { letter: 'לא מתחיל באות', voted: 'נפסל', empty: '' };
+const REASONS = { letter: 'לא מתחיל באות', short: 'רק אות אחת', wrong: 'לא מתאים ל', voted: 'נפסל', empty: '' };
 
 function Points({ cell }) {
   if (!cell.valid) return <span className="w-10 shrink-0 text-center text-sm text-muted">0</span>;
@@ -39,6 +39,7 @@ export default function Results({ state, act }) {
   const others = state.players.length - 1;
 
   const vote = (category, target, bad) => act('/vote', { round: round.n, category, target, bad }).catch(() => {});
+  const approve = (category, target, yes) => act('/vote', { round: round.n, category, target, kind: 'approve', approve: yes }).catch(() => {});
   const next = async () => {
     setBusy(true);
     await act('/start', { seconds }).catch(() => {});
@@ -52,7 +53,7 @@ export default function Results({ state, act }) {
         <div>
           <div className="animate-bounce text-6xl">✏️</div>
           <div className="mt-3 text-xl font-bold">הזמן נגמר!</div>
-          <div className="mt-1 text-muted">מתקנים שגיאות כתיב ומחשבים נקודות...</div>
+          <div className="mt-1 text-muted">בודקים את התשובות ומתקנים שגיאות כתיב...</div>
         </div>
       </div>
     );
@@ -65,7 +66,7 @@ export default function Results({ state, act }) {
         <div>
           <h2 className="text-2xl font-bold">סוף סיבוב {round.n}</h2>
           <p className="text-sm text-muted">10 – תשובה שרק אחד כתב · 5 – תשובה שכמה כתבו</p>
-          {round.spell === 'failed' && <p className="text-xs text-muted">(הפעם לא הצלחנו לתקן שגיאות כתיב)</p>}
+          {round.spell === 'failed' && <p className="text-xs text-muted">(הפעם לא הצלחנו לבדוק את התשובות)</p>}
         </div>
       </div>
 
@@ -74,7 +75,7 @@ export default function Results({ state, act }) {
           <Scoreboard state={state} roundTotals={results.totals} />
           {others > 0 && (
             <p className="mt-2 px-2 text-xs leading-relaxed text-muted">
-              תשובה לא נכונה? לוחצים 👎. היא נפסלת כשיותר ממחצית השחקנים האחרים סימנו אותה.
+              תשובה לא נכונה? לוחצים 👎. המערכת פסלה תשובה נכונה? לוחצים 👍. ההחלטה לפי יותר ממחצית השחקנים האחרים.
             </p>
           )}
         </div>
@@ -89,7 +90,11 @@ export default function Results({ state, act }) {
                     const cell = cells[p.id];
                     if (!cell) return null;
                     const mine = cell.voters.includes(state.me);
-                    const canVote = p.id !== state.me && cell.text && cell.reason !== 'letter';
+                    const approvers = cell.approvers || [];
+                    const approved = approvers.includes(state.me);
+                    // תשובה שהמערכת פסלה (או שאושרה) – 👍. תשובה תקינה – 👎
+                    const canApprove = p.id !== state.me && (cell.reason === 'wrong' || approvers.length > 0);
+                    const canVote = p.id !== state.me && cell.text && !canApprove && !['letter', 'short'].includes(cell.reason);
                     return (
                       <li key={p.id} className="flex items-center gap-2">
                         <Avatar player={p} size={28} />
@@ -98,11 +103,13 @@ export default function Results({ state, act }) {
                             {cell.text || '—'}
                           </div>
                           {cell.typed && <div className="truncate text-xs text-muted">✏️ תוקן מ"{cell.typed}"</div>}
-                          {(REASONS[cell.reason] || cell.voters.length > 0) && (
+                          {(REASONS[cell.reason] || cell.voters.length > 0 || approvers.length > 0) && (
                             <div className="text-xs text-muted">
                               {REASONS[cell.reason]}
                               {cell.reason === 'letter' && ` ${round.letter}`}
+                              {cell.reason === 'wrong' && c.label}
                               {cell.voters.length > 0 && cell.reason !== 'letter' && ` 👎 ${cell.voters.length}`}
+                              {approvers.length > 0 && ` 👍 ${approvers.length}`}
                             </div>
                           )}
                         </div>
@@ -115,6 +122,17 @@ export default function Results({ state, act }) {
                             className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border text-sm transition ${mine ? 'border-red-400 bg-red-100 dark:bg-red-950' : 'border-line opacity-60 hover:opacity-100'}`}
                           >
                             👎
+                          </button>
+                        )}
+                        {canApprove && (
+                          <button
+                            type="button"
+                            onClick={() => approve(c.id, p.id, !approved)}
+                            title={approved ? 'ביטול האישור' : 'זה כן נכון'}
+                            aria-label={approved ? 'ביטול האישור' : 'זה כן נכון'}
+                            className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border text-sm transition ${approved ? 'border-accent bg-soft' : 'border-line opacity-60 hover:opacity-100'}`}
+                          >
+                            👍
                           </button>
                         )}
                         <Points cell={cell} />

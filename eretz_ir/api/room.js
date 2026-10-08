@@ -5,17 +5,18 @@
 //                phase: lobby (מחכים לשחקנים) | playing (כותבים) | results (תוצאות ופסילות)
 //                players: [{ id, token, name, joined }]   (token = סוד של השחקן, לא נשלח לאחרים)
 //                round: { n, letter, startsAt, endsAt, endedAt, answers: {<שחקן>: {...}}, done: [...], votes: {...},
-//                         spell: pending | done | failed | off, fixed: {...} }   (תיקון כתיב, ראו spell.js)
+//                         approves: {...}, spell: pending | done | failed | off, fixed: {...}, wrong: [...] }
+//                         (בדיקת התשובות – תיקון כתיב והתאמה לקטגוריה, ראו spell.js)
 //                history: [{ n, letter, totals }]   ניקוד סיבובים קודמים (נקבע כשמתחיל סיבוב חדש)
 //   ph:<id>   -> תמונת השחקן (data URL קטן), בנפרד כדי שהחדר לא יעבור את גבול הגודל
 //
 // v (גרסה) עולה בכל שינוי שהשחקנים האחרים צריכים לראות. האפליקציה שואלת כל שנייה וחצי
 // "יש משהו חדש מאז v?" – ואם לא, מקבלת תשובה קצרה (בלי תמונות).
 // משחק שלא נגעו בו שלושה ימים נמחק (alarm).
-// בסוף סיבוב, ה-alarm גם מתקן שגיאות כתיב (Claude) – עד אז האפליקציה מציגה "בודקים את התשובות".
+// בסוף סיבוב, ה-alarm גם בודק את התשובות (Claude) – עד אז האפליקציה מציגה "בודקים את התשובות".
 import Anthropic from '@anthropic-ai/sdk';
 import { CATEGORIES, cleanAnswers, isCategory, pickLetter, scoreRound } from './game.js';
-import { fixSpelling, spellJobs } from './spell.js';
+import { checkAnswers, spellJobs } from './spell.js';
 
 export const MAX_PLAYERS = 12;
 export const TIMES = [60, 120, 180, 300, 480];
@@ -134,6 +135,7 @@ export class Room {
           answers: {},
           done: [],
           votes: {},
+          approves: {},
         };
         room.phase = 'playing';
         room.v++;
@@ -163,10 +165,12 @@ export class Room {
         if (!isCategory(body.category) || body.target === me.id || !room.players.some((p) => p.id === body.target)) {
           return json(400, { error: 'בקשה לא תקינה' });
         }
+        // bad = 👎 (לא נכון). approve = 👍 (כן נכון, לתשובה שהבודק פסל)
         const key = `${body.category}|${body.target}`;
-        const voters = (round.votes[key] || []).filter((id) => id !== me.id);
-        if (body.bad) voters.push(me.id);
-        round.votes[key] = voters;
+        const list = body.kind === 'approve' ? (round.approves ||= {}) : round.votes;
+        const voters = (list[key] || []).filter((id) => id !== me.id);
+        if (body.kind === 'approve' ? body.approve : body.bad) voters.push(me.id);
+        list[key] = voters;
         room.v++;
         await this.save(room);
         return json(200, await this.view(room, me.id));
@@ -240,19 +244,20 @@ export class Room {
     await this.storage.deleteAll();
   }
 
-  // תיקון הכתיב של הסיבוב שנגמר. בזמן שמחכים לסוכן יכולים להגיע בקשות אחרות – לכן קוראים שוב את החדר אחרי
+  // בדיקת התשובות של הסיבוב שנגמר. בזמן שמחכים לסוכן יכולים להגיע בקשות אחרות – לכן קוראים שוב את החדר אחרי
   async fixRound(round) {
-    let fixed = {};
+    let checked = { fixed: {}, wrong: [] };
     let ok = true;
     try {
-      fixed = await fixSpelling(this.client(), round);
+      checked = await checkAnswers(this.client(), round);
     } catch (e) {
       ok = false;
       console.log('spell failed', e?.status || '', e?.message || e);
     }
     const room = await this.storage.get('room');
     if (!room || room.round?.n !== round.n || room.round.spell !== 'pending') return;
-    room.round.fixed = fixed;
+    room.round.fixed = checked.fixed;
+    room.round.wrong = checked.wrong;
     room.round.spell = ok ? 'done' : 'failed';
     room.v++;
     await this.save(room);

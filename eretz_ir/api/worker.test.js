@@ -233,7 +233,7 @@ function fakeSpeller(calls = [], fail = false) {
           const lines = req.messages[0].content.split('\n').filter((l) => /^\d+\./.test(l));
           const fixes = lines.map((l) => {
             const [, i, text] = l.match(/^(\d+)\. \[[^\]]+\] (.*)$/);
-            return { i: Number(i), fixed: dict[text] || text };
+            return { i: Number(i), fixed: dict[text] || text, ok: !['היי', 'אאאא'].includes(text) };
           });
           return { stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'fix_answers', input: { fixes } }] };
         },
@@ -293,4 +293,42 @@ test('when the speller fails or is stuck, results show without fixes', async () 
   assert.equal((await call(env2, '/state', auth(code2, 1))).data.round.spell, 'pending');
   env2.time += SPELL_MS + 1;
   assert.equal((await call(env2, '/state', auth(code2, 1))).data.round.spell, 'failed');
+});
+
+test('a lone letter scores nothing', () => {
+  const round = { letter: 'ב', answers: { a: { animal: 'ב' }, b: { animal: 'ב׳' }, c: { animal: 'בז' } }, votes: {} };
+  const { rows } = scoreRound(round, ['a', 'b', 'c']);
+  assert.equal(rows.animal.a.reason, 'short');
+  assert.equal(rows.animal.b.reason, 'short');
+  assert.equal(rows.animal.c.points, 10);
+});
+
+test('answers that do not fit the category score nothing, unless most players approve them', async () => {
+  const calls = [];
+  const env = fakeEnv({ AI_CLIENT: fakeSpeller(calls), RANDOM: () => 4.5 / 22 }); // האות ה
+  const code = await gameWith(env, 3);
+  const started = await call(env, '/start', auth(code, 1));
+  assert.equal(started.data.round.letter, 'ה');
+  env.time += COUNTDOWN_MS + 5000;
+  await call(env, '/answers', { ...auth(code, 1), round: 1, answers: { job: 'היי', animal: 'ה' }, done: true });
+  await call(env, '/answers', { ...auth(code, 2), round: 1, answers: { job: 'הנדסאי' }, done: true });
+  await call(env, '/answers', { ...auth(code, 3), round: 1, answers: {}, done: true });
+  await env.rooms.get(code).alarm();
+  // אות לבד לא נשלחת לבדיקה
+  assert.ok(!calls[0].messages[0].content.includes('] ה\n') && !calls[0].messages[0].content.endsWith('] ה'));
+  let res = await call(env, '/state', auth(code, 1));
+  const job = res.data.results.rows.job;
+  assert.equal(job[player(1).id].reason, 'wrong');
+  assert.equal(job[player(1).id].points, 0);
+  assert.equal(job[player(2).id].points, 10);
+  assert.equal(res.data.results.rows.animal[player(1).id].reason, 'short');
+
+  // אישור: צריך יותר ממחצית האחרים (2 מתוך 2)
+  const approve = (n, yes) => call(env, '/vote', { ...auth(code, n), round: 1, category: 'job', target: player(1).id, kind: 'approve', approve: yes });
+  res = await approve(2, true);
+  assert.equal(res.data.results.rows.job[player(1).id].reason, 'wrong');
+  res = await approve(3, true);
+  assert.equal(res.data.results.rows.job[player(1).id].points, 10);
+  res = await approve(3, false);
+  assert.equal(res.data.results.rows.job[player(1).id].points, 0);
 });

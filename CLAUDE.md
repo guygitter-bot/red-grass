@@ -105,7 +105,7 @@
 - תיאור: `eretz_ir/README.md`. משחק לכמה שחקנים בקישור, עם שם ותמונה; ניקוד 10 (רק אחד) / 5 (כמה).
 - `eretz_ir/web` → https://eretz-ir.pages.dev · `eretz_ir/api` → Worker `eretz-ir-api` (Durable Object `Room` לכל משחק). עלייה: `eretz-ir.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd eretz_ir/api && npm test` · `cd eretz_ir/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
-- תיקון כתיב אוטומטי בסוף סיבוב (`api/spell.js`, Claude ב-alarm) – רק לתשובות שמתחילות באות הנכונה, והתיקון באותה אות.
+- בדיקת תשובות אוטומטית בסוף סיבוב (`api/spell.js`, Claude ב-alarm): תיקון כתיב (באותה אות) + האם מתאים לקטגוריה (לא מתאים = 0, השחקנים יכולים לאשר ב-👍). אות אחת לבד = 0.
 - הקטגוריות ובדיקת האות כפולות ב-`api/game.js` וב-`web/src/lib/game.js` – לשנות בשניהם.
 
 ### טוטו (`toto_predictor/`)
