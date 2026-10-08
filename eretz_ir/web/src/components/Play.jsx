@@ -166,7 +166,7 @@ export default function Play({ state, act, now }) {
               {state.players.map((p) => (
                 <span key={p.id} className="relative" title={p.done ? `${p.name} סיים/ה` : p.name}>
                   <Avatar player={p} size={26} />
-                  {p.done && <span className="absolute -bottom-1 -left-1 grid h-4 w-4 place-items-center rounded-full bg-accent text-[10px] text-white">✓</span>}
+                  {p.done && <span className="absolute -bottom-1 -left-1 grid h-4 w-4 place-items-center rounded-full bg-accent text-xs text-white">✓</span>}
                 </span>
               ))}
             </div>
@@ -187,7 +187,7 @@ export default function Play({ state, act, now }) {
           const short = value.trim() && !wrong && !longEnough(value);
           return (
             <label key={c.id} className="block">
-              <span className="mb-1 block font-bold">{c.label}</span>
+              <span className="mb-1 block text-lg font-bold">{c.label}</span>
               <input
                 value={value}
                 onChange={(e) => change(c.id, e.target.value)}
