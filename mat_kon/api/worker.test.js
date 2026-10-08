@@ -931,6 +931,40 @@ test('change password: needs the current one, other devices are signed out; old 
   assert.equal(a.error, b.error);
 });
 
+test('a recipe can be in several categories: from the agent, by edit, by re-filing, and removing a custom category', async () => {
+  await call('POST', '/categories', { name: 'מנה עיקרית' });
+  reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_recipe', input: { ...recipeInput, category: 'עוף', more_categories: ['מנה עיקרית', 'לא קיימת'] } }] });
+  const { recipe } = await (await call('POST', '/recipes', { url: 'https://cake.example/chicken' })).json();
+  assert.equal(recipe.category, 'עוף');
+  assert.deepEqual(recipe.categories, ['עוף', 'מנה עיקרית']);
+  assert.ok(apiCalls[0].tools.some((t) => t.input_schema?.properties?.more_categories?.items.enum.includes('מנה עיקרית')));
+
+  // עריכה: רשימה לא מוכרת נדחית, רשימה תקינה נשמרת והראשית מתעדכנת
+  assert.equal((await call('PUT', `/recipes/${recipe.id}`, { categories: ['לא קיימת'] })).status, 400);
+  const edited = (await (await call('PUT', `/recipes/${recipe.id}`, { categories: ['מנה עיקרית', 'עוף'] })).json()).recipe;
+  assert.equal(edited.category, 'מנה עיקרית');
+  // גרסה ישנה ששולחת רק category: נכנסת ראשונה, השאר נשארות
+  const old = (await (await call('PUT', `/recipes/${recipe.id}`, { category: 'בשר' })).json()).recipe;
+  assert.deepEqual(old.categories, ['בשר', 'מנה עיקרית', 'עוף']);
+
+  // שיבוץ מחדש של מתכון קיים
+  reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_categories', input: { categories: ['עוף', 'מנה עיקרית'] } }] });
+  const sorted = (await (await call('POST', `/recipes/${recipe.id}/categorize`)).json()).recipe;
+  assert.deepEqual(sorted.categories, ['עוף', 'מנה עיקרית']);
+  assert.equal(sorted.categorized, true);
+  assert.match(apiCalls.at(-1).system, /מנה עיקרית/);
+
+  // מחיקת קטגוריה שלכם מוציאה אותה מהמתכונים, והמתכון נשאר בשאר הקטגוריות
+  await call('POST', '/categories/remove', { name: 'מנה עיקרית' });
+  const after = (await (await call('GET', '/recipes')).json()).recipes[0];
+  assert.deepEqual(after.categories, ['עוף']);
+
+  // שחזור מגיבוי שומר כמה קטגוריות (רק מוכרות)
+  await call('POST', '/recipes/restore', { recipes: [{ title: 'r', category: 'סלטים', categories: ['סלטים', 'תוספות', 'xx'], ingredients: [{ title: '', items: ['x'] }], source: { url: 'https://cake.example/r' } }] });
+  const restored = (await (await call('GET', '/recipes')).json()).recipes.find((r) => r.title === 'r');
+  assert.deepEqual(restored.categories, ['סלטים', 'תוספות']);
+});
+
 test('pre-registering someone else\'s email never puts them in your book', async () => {
   env.GOOGLE_CLIENT_ID = 'cid';
   // מלורי רושמת את האימייל של הקורבן כחברה בספר שלה

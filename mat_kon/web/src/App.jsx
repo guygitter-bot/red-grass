@@ -33,9 +33,9 @@ import RecipeView from './components/RecipeView';
 import { CATEGORIES } from './lib/categories';
 import {
   addCategory, setCategoryPrefs, addRecipeAsync, addTextRecipe, getJob, getRecipe, deleteRecipe, removeCategory, getMe, getPlan, getShopping, listRecipes, logout as apiLogout, refreshRecipe,
-  updateRecipe, safeRecipe, getPantry, shoppingOps, pantryOps, planOps,
+  updateRecipe, categorizeRecipe, safeRecipe, getPantry, shoppingOps, pantryOps, planOps,
 } from './lib/api';
-import { SORTS, countByCategory, emojiOf, filterRecipes, freeLeft, linkFromShare, orderCategories, parseAuthHash, sortRecipes } from './lib/recipes';
+import { SORTS, categoriesOf, countByCategory, emojiOf, filterRecipes, freeLeft, linkFromShare, orderCategories, parseAuthHash, sortRecipes } from './lib/recipes';
 import { usePersistentState } from './lib/storage';
 
 // קישור הזמנה (#invite=...) או כניסה (#login). נלקח מהכתובת ונמחק ממנה מיד.
@@ -430,6 +430,7 @@ export default function App() {
     return (
       <>
         <CategoriesView
+          onCategorize={async (r) => upsert(safeRecipe(await categorizeRecipe(session, r.id)))}
           categories={orderedCategories}
           custom={custom}
           favorites={categoryPrefs.favorites || []}
@@ -457,7 +458,12 @@ export default function App() {
           onRemove={async (name) => {
             const res = await removeCategory(session, name);
             setCustom(res.custom);
-            setRecipes((list) => list.map((r) => (r.category === name ? { ...r, category: 'אחר' } : r)));
+            setRecipes((list) => list.map((r) => {
+              const cats = categoriesOf(r);
+              if (!cats.includes(name)) return r;
+              const left = cats.filter((c) => c !== name);
+              return left.length ? { ...r, category: left[0], categories: left } : { ...r, category: 'אחר', categories: ['אחר'] };
+            }));
             if (category === name) setCategory(null);
           }}
         />

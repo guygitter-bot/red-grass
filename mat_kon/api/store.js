@@ -3,7 +3,7 @@ import { trackedClient } from './deps.js';
 // ספר המתכונים: Durable Object אחד שמחזיק את כל המתכונים (כל מתכון במפתח r:<id>).
 
 const PREFIX = 'r:';
-const EDITABLE = ['title', 'description', 'category', 'tags', 'servings', 'prepTime', 'cookTime', 'totalTime', 'ingredients', 'steps', 'tips', 'notes', 'favorite', 'myNotes', 'image', 'rating'];
+const EDITABLE = ['title', 'description', 'category', 'categories', 'tags', 'servings', 'prepTime', 'cookTime', 'totalTime', 'ingredients', 'steps', 'tips', 'notes', 'favorite', 'myNotes', 'image', 'rating'];
 
 const SRC = 'src:';
 export const MAX_RECIPES = 2000; // תקרה לספר, כדי שאי אפשר יהיה למלא את האחסון
@@ -246,8 +246,11 @@ export class RecipeBook {
       const all = await this.storage.list({ prefix: PREFIX });
       let moved = 0;
       for (const r of all.values()) {
-        if (r.category === name) {
-          await this.storage.put(PREFIX + r.id, { ...r, category: 'אחר', updatedAt: new Date().toISOString() });
+        const cats = Array.isArray(r.categories) ? r.categories : [r.category];
+        if (cats.includes(name)) {
+          const left = cats.filter((c) => c !== name);
+          const fixed = left.length ? { category: left[0], categories: left } : { category: 'אחר', categories: ['אחר'] };
+          await this.storage.put(PREFIX + r.id, { ...r, ...fixed, updatedAt: new Date().toISOString() });
           moved += 1;
         }
       }
@@ -311,6 +314,8 @@ export class RecipeBook {
       const saved = existing
         ? { ...recipe, ...keep, id: existing.id, createdAt: existing.createdAt, updatedAt: now }
         : { ...recipe, id: crypto.randomUUID(), createdAt: typeof recipe.createdAt === 'string' ? recipe.createdAt : now, updatedAt: now };
+      // הקטגוריה הראשית תמיד ראשונה ברשימת הקטגוריות (גם כשהמשתמש ערך רק אותה)
+      if (saved.category) saved.categories = [saved.category, ...(Array.isArray(saved.categories) ? saved.categories : []).filter((c) => c !== saved.category)].slice(0, 4);
       // "שוחזר ועוד לא נקרא מהמקור" – רק למתכון שלא היה בספר (שחזור לאותו ספר לא מחייב שוב במכסה)
       if (url.searchParams.get('replace') !== '1' || (existing && !existing.restored)) delete saved.restored;
       // שחזור לא מחליף את המקור של מתכון שכבר נקרא (אחרת "רענון" חינמי היה קורא טקסט חדש בלי מכסה)
@@ -343,8 +348,14 @@ export class RecipeBook {
       if (typeof patch.image === 'string' && /\/img\/[^/]+\/[0-9a-f-]{36}$/.test(patch.image) && patch.image !== current.image && !patch.imageFresh) delete patch.image;
       delete patch.imageFresh;
       for (const k of EDITABLE) if (k in patch) next[k] = patch[k];
+      // קטגוריה ראשית בלבד (גרסה ישנה של האפליקציה): נכנסת ראשונה, ושאר הקטגוריות נשארות
+      if ('category' in patch && !('categories' in patch)) {
+        next.categories = [patch.category, ...(current.categories || []).filter((c) => c !== patch.category && c !== 'אחר')].slice(0, 4);
+      }
+      // סידור הקטגוריות על ידי הסוכן (פעם אחת לכל מתכון)
+      if (patch.categorized) next.categorized = true;
       // שדות שהמשתמש ערך בעצמו – רענון מהמקור לא ידרוס אותם
-      const edited = EDITABLE.filter((k) => k in patch && !['favorite', 'myNotes', 'rating'].includes(k));
+      const edited = EDITABLE.filter((k) => k in patch && !['favorite', 'myNotes', 'rating'].includes(k) && !patch.categorized);
       if (edited.length) next.edited = { ...(current.edited || {}), ...Object.fromEntries(edited.map((k) => [k, true])) };
       await this.storage.put(PREFIX + id, next);
       if ('image' in patch && current.image !== next.image) await this.dropImage(current.image);

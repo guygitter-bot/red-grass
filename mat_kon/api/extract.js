@@ -31,7 +31,11 @@ export const RECIPE_TOOL = {
       title: { type: 'string', description: 'Hebrew recipe name' },
       original_title: { type: 'string', description: 'The title as it appears in the source (any language)' },
       description: { type: 'string', description: 'One or two Hebrew sentences about the dish' },
-      category: { type: 'string', enum: CATEGORIES },
+      category: { type: 'string', enum: CATEGORIES, description: 'The single best category' },
+      more_categories: {
+        type: 'array', items: { type: 'string', enum: CATEGORIES },
+        description: 'Other categories that also clearly fit (0-2), e.g. a chicken main dish: category "עוף" plus a user category like "מנה עיקרית". Empty if none.',
+      },
       tags: { type: 'array', items: { type: 'string' }, description: 'Up to 5 short Hebrew tags, e.g. "פרווה", "ללא גלוטן", "מהיר", "לשבת"' },
       servings: { type: 'string', description: 'Hebrew yield, e.g. "6 מנות", "תבנית 24 ס\\"מ", or empty' },
       prep_time: { type: 'string', description: 'Hebrew, e.g. "20 דקות", or empty' },
@@ -47,7 +51,7 @@ export const RECIPE_TOOL = {
       },
     },
     required: [
-      'found', 'title', 'original_title', 'description', 'category', 'tags', 'servings', 'prep_time',
+      'found', 'title', 'original_title', 'description', 'category', 'more_categories', 'tags', 'servings', 'prep_time',
       'cook_time', 'total_time', 'ingredients', 'steps', 'tips', 'confidence', 'notes',
     ],
     additionalProperties: false,
@@ -60,7 +64,7 @@ const WEB_TOOLS = [
 ];
 
 export const SYSTEM = `You turn a link that a user saved (a recipe website or a cooking video) into a clean recipe \
-for their Hebrew recipe book, and file it under one category.
+for their Hebrew recipe book, and file it under the categories that fit.
 
 Rules:
 - Write everything in natural Israeli Hebrew. Translate foreign recipes; convert cups/oz/°F to what an Israeli \
@@ -79,7 +83,9 @@ from a reliable recipe for the same dish that you found with web_search. Set con
 notes exactly what came from the creator and what was completed from elsewhere.
 - A website: if the page text below is missing or blocked, web_fetch the link.
 - A WhatsApp message or text the user pasted: use only that text. If it is chatter and not a recipe, set found=false.
-- Choose the single best category. Desserts that are cakes → "עוגות"; cookies, rugelach, pastries → \
+- Choose the single best category, and in more_categories every other category that also clearly fits \
+(a recipe can be in several, e.g. chicken that is a main dish: "עוף" and the user's "מנה עיקרית"). Don't add \
+categories that only loosely fit. Desserts that are cakes → "עוגות"; cookies, rugelach, pastries → \
 "עוגיות ומאפים מתוקים"; bread, pita, savory pies/bourekas → "לחמים ומאפים"; shakshuka/pancakes → "ארוחת בוקר"; \
 a vegetarian main dish → "צמחוני וטבעוני" unless it is clearly a salad/soup/pasta.
 - Set found=false ONLY when the link is clearly not about food or cooking, or nothing at all identifies a \
@@ -142,7 +148,7 @@ export function toRecipe(input, src, categories = CATEGORIES) {
     title: clean(input.title) || clean(src.title) || 'מתכון',
     originalTitle: clean(input.original_title) || clean(src.title),
     description: clean(input.description),
-    category: categories.includes(input.category) ? input.category : DEFAULT_CATEGORY,
+    ...categoryFields([input.category, ...(Array.isArray(input.more_categories) ? input.more_categories : [])], categories),
     tags: cleanList(input.tags).slice(0, 5),
     servings: clean(input.servings),
     prepTime: clean(input.prep_time),
@@ -225,12 +231,55 @@ export async function organizeShopping(client, items) {
     .filter((g) => g.items.length);
 }
 
+// סידור מחדש של מתכון קיים בכל הקטגוריות שמתאימות לו (בלי רשת – רק השם, התיאור והמצרכים)
+export async function suggestCategories(client, recipe, categories = CATEGORIES) {
+  const names = [...new Set([...CATEGORIES, ...categories])];
+  const tool = {
+    name: 'submit_categories',
+    description: 'Submit the categories for the recipe, best first.',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: { categories: { type: 'array', items: { type: 'string', enum: names }, description: 'The best category first, then every other category that clearly fits (1-3 in total)' } },
+      required: ['categories'],
+      additionalProperties: false,
+    },
+  };
+  const items = (recipe.ingredients || []).flatMap((g) => g.items || []).slice(0, 40);
+  const response = await client.beta.messages.create({
+    model: MODEL,
+    max_tokens: 1000,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: { effort: 'low' },
+    system: `You file recipes in a Hebrew recipe book. A recipe can be in several categories: the best one first, then every other category that clearly fits (e.g. chicken that is a main dish: "עוף" and "מנה עיקרית" if that category exists). Don't add categories that only loosely fit. Categories: ${names.join(', ')}. Call submit_categories.`,
+    tools: [tool],
+    messages: [{
+      role: 'user',
+      content: `Recipe: ${recipe.title || ''}\n${recipe.description || ''}\nCurrent category: ${recipe.category || ''}\nIngredients:\n${items.map((i) => `- ${i}`).join('\n')}`,
+    }],
+  });
+  const submit = response.content.find((b) => b.type === 'tool_use' && b.name === tool.name);
+  if (!submit) throw new Error('לא הצלחתי לסדר את הקטגוריות. נסו שוב.');
+  return categoryFields(submit.input.categories, names);
+}
+
+// קטגוריות של מתכון: category = הראשית (גם בשביל מתכונים ונתונים ישנים), categories = כולן, הראשית ראשונה
+export const MAX_RECIPE_CATEGORIES = 4;
+export function categoryFields(list, categories = CATEGORIES) {
+  const valid = [...new Set((Array.isArray(list) ? list : [list]).filter((c) => typeof c === 'string' && categories.includes(c)))];
+  const chosen = valid.filter((c) => c !== DEFAULT_CATEGORY).slice(0, MAX_RECIPE_CATEGORIES);
+  const final = chosen.length ? chosen : [DEFAULT_CATEGORY];
+  return { category: final[0], categories: final };
+}
+
 export class NoRecipeError extends Error {}
 
 // הכלי עם רשימת הקטגוריות של הספר (הקבועות + אלה שהמשתמש הוסיף)
 export function recipeTool(categories = CATEGORIES) {
   const tool = structuredClone(RECIPE_TOOL);
   tool.input_schema.properties.category.enum = [...new Set([...CATEGORIES, ...categories])];
+  tool.input_schema.properties.more_categories.items.enum = tool.input_schema.properties.category.enum;
   return tool;
 }
 

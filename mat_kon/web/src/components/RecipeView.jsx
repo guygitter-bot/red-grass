@@ -8,7 +8,7 @@ import { missingLines } from '../lib/fridge';
 import { baseServings, formatAmount, scaleSections } from '../lib/scale';
 import { thumbnail } from '../lib/image';
 import { DAY_NAMES, MEALS, dateKey, shortDate } from '../lib/plan';
-import { emojiOf, VIDEO_LABEL, isVideo, recipeAsText, sectionsToText, shortUrl, textToSections } from '../lib/recipes';
+import { categoriesOf, emojiOf, VIDEO_LABEL, isVideo, recipeAsText, sectionsToText, shortUrl, textToSections } from '../lib/recipes';
 import { usePersistentState } from '../lib/storage';
 
 // רק נגני סרטונים מהאתרים המוכרים
@@ -26,6 +26,8 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
   const [busy, setBusy] = useState('');
   // עדכון קטן (מועדף, דירוג...): השגיאה כבר מוצגת כהודעה
   const quiet = (patch) => Promise.resolve(onUpdate(patch)).catch(() => {});
+  const cats = categoriesOf(recipe);
+  const setCats = (next) => next.length && quiet({ category: next[0], categories: next });
   const [error, setError] = useState('');
   // סימון מצרכים ושלבים בזמן הבישול - נשמר רק במכשיר הזה
   const [checked, setChecked] = usePersistentState(`matkon_checked_${recipe.id}`, {});
@@ -186,19 +188,30 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
         {recipe.description && <p className="mt-2 text-stone-600 leading-relaxed">{recipe.description}</p>}
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <label className="inline-flex items-center gap-1 rounded-full bg-orange-100 text-orange-800 text-sm pr-3 pl-1 py-0.5">
-            {emojiOf(recipe.category)}
+          {/* המתכון מופיע בכל הקטגוריות שלו; הראשונה היא הראשית */}
+          {cats.map((c) => (
+            <span key={c} className="inline-flex items-center gap-1 rounded-full bg-orange-100 text-orange-800 text-sm font-medium pr-3 pl-1 py-1">
+              {emojiOf(c)} {c}
+              {cats.length > 1 && (
+                <button onClick={() => setCats(cats.filter((x) => x !== c))} className="p-0.5 rounded-full hover:bg-orange-200 print:hidden" aria-label={`הסרה מהקטגוריה ${c}`}>
+                  <X size={14} />
+                </button>
+              )}
+            </span>
+          ))}
+          {cats.length < 4 && (
             <select
-              value={recipe.category}
-              onChange={(e) => quiet({ category: e.target.value })}
-              className="bg-transparent font-medium outline-none py-1 cursor-pointer"
-              aria-label="קטגוריה"
+              value=""
+              onChange={(e) => e.target.value && setCats([...cats.filter((x) => x !== 'אחר'), e.target.value])}
+              className="rounded-full border border-dashed border-orange-300 bg-transparent text-orange-700 text-sm px-3 py-1 outline-none cursor-pointer print:hidden"
+              aria-label="הוספה לקטגוריה"
             >
-              {(categories.includes(recipe.category) ? categories : [...categories, recipe.category]).map((c) => (
+              <option value="">+ קטגוריה</option>
+              {categories.filter((c) => !cats.includes(c)).map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
-          </label>
+          )}
         </div>
 
         <Rating value={recipe.rating || 0} onChange={(rating) => quiet({ rating })} />
