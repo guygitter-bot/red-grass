@@ -105,7 +105,7 @@ export function conflicts(lesson, lessons, { students = [], teachers = [], rooms
       const b2 = b1 + (o.minutes || 45);
       if (a1 >= b2 || b1 >= a2) continue;
       const why = [];
-      if (lesson.roomId && o.roomId === lesson.roomId) why.push(`החדר ${rooms.find((r) => r.id === o.roomId)?.name || ''} תפוס`);
+      if (lesson.roomId && o.roomId === lesson.roomId) why.push(`${rooms.find((r) => r.id === o.roomId)?.name || 'החדר'} תפוס`);
       if (o.teacherId === lesson.teacherId) why.push(`ל${fullName(teachers.find((t) => t.id === o.teacherId))} יש שיעור אחר`);
       const both = o.studentIds.filter((id) => lesson.studentIds.includes(id));
       for (const id of both) why.push(`ל${fullName(students.find((s) => s.id === id))} יש שיעור אחר`);

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   DAYS,
   PAY_STATE,
@@ -195,15 +195,29 @@ export function LessonForm({ app, panel, onBack }) {
     () => (l.start ? conflicts(l, app.lessons, { students: app.students, teachers: app.teachers, rooms: app.settings.rooms }) : []),
     [l, app.lessons, app.students, app.teachers, app.settings.rooms],
   );
+  // אזהרה באמצע המסך: כשמופיעה התנגשות חדשה, וגם לפני שמירה עם התנגשות
+  const [warn, setWarn] = useState(null); // null | 'new' | 'save'
+  const [seen, setSeen] = useState('');
+  const conflictKey = found.map((c) => c.lesson.id).sort().join(',');
+  useEffect(() => {
+    if (!conflictKey) setSeen('');
+    else if (conflictKey !== seen) setWarn('new');
+  }, [conflictKey, seen]);
+  const closeWarn = () => {
+    setSeen(conflictKey);
+    setWarn(null);
+  };
+
   const owner = editing && panel.lesson.teacherId !== app.me.id ? panel.lesson.teacherId : l.teacherId;
   const request = asRequest(app, owner);
   // מורה עם עריכה רואה קודם את עצמו
   const teachers = app.teachers;
   const students = app.students.filter((s) => s.active !== false || l.studentIds.includes(s.id));
 
-  async function save() {
+  async function save(force = false) {
     if (!l.studentIds.length) return app.toast('⚠️ צריך לבחור תלמיד');
-    if (found.length && !window.confirm(`יש ${found.length === 1 ? 'התנגשות' : `${found.length} התנגשויות`} עם שיעורים אחרים. לשמור בכל זאת?`)) return;
+    if (found.length && !force) return setWarn('save');
+    setWarn(null);
     setBusy(true);
     const item = l.kind === 'once' ? { ...l, day: dayOf(l.date) } : l;
     const res = await run(app, '/save', { kind: 'lesson', item }, editing ? 'השיעור עודכן' : 'השיעור נוסף');
@@ -329,14 +343,33 @@ export function LessonForm({ app, panel, onBack }) {
         {found.length > 0 && (
           <div className="rounded-xl border border-orange/50 bg-orange/10 p-3 text-sm">
             <p className="mb-1 font-bold">⚠️ התנגשות עם שיעורים אחרים</p>
-            <ul className="space-y-1">
-              {found.slice(0, 5).map((c) => (
-                <li key={c.lesson.id}>
-                  {c.why.join(', ')} – {describeLesson(c.lesson, app.students)}
-                  {l.kind === 'weekly' && c.lesson.kind === 'once' && ` (ב־${showDate(c.date)})`}
-                </li>
-              ))}
-            </ul>
+            <ConflictList app={app} lesson={l} found={found} />
+          </div>
+        )}
+
+        {warn && (
+          <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={closeWarn}>
+            <div className="sheet-in w-full max-w-sm rounded-3xl border-2 border-orange bg-card p-5 text-center shadow-2xl" role="alertdialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+              <div className="text-5xl">⚠️</div>
+              <h3 className="mt-2 text-xl font-bold">{found.length === 1 ? 'יש התנגשות' : `יש ${found.length} התנגשויות`}</h3>
+              <div className="mt-3 rounded-xl bg-orange/10 p-3 text-start text-sm">
+                <ConflictList app={app} lesson={l} found={found} />
+              </div>
+              {warn === 'save' ? (
+                <div className="mt-4 flex flex-col gap-2">
+                  <Button kind="secondary" onClick={closeWarn}>
+                    חזרה לתיקון
+                  </Button>
+                  <Button onClick={() => save(true)} disabled={busy}>
+                    {request ? 'לשלוח בקשה בכל זאת' : 'לשמור בכל זאת'}
+                  </Button>
+                </div>
+              ) : (
+                <Button className="mt-4 w-full" onClick={closeWarn}>
+                  הבנתי
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
@@ -347,7 +380,7 @@ export function LessonForm({ app, panel, onBack }) {
         )}
 
         <div className="flex gap-2">
-          <Button className="flex-1 text-lg" onClick={save} disabled={busy}>
+          <Button className="flex-1 text-lg" onClick={() => save()} disabled={busy}>
             {request ? 'שליחת בקשה' : 'שמירה'}
           </Button>
           <Button kind="secondary" onClick={onBack || app.close}>
@@ -356,5 +389,19 @@ export function LessonForm({ app, panel, onBack }) {
         </div>
       </div>
     </Sheet>
+  );
+}
+
+// רשימת ההתנגשויות: למה (חדר / מורה / תלמיד) ועם איזה שיעור
+function ConflictList({ app, lesson, found }) {
+  return (
+    <ul className="space-y-1">
+      {found.slice(0, 5).map((c) => (
+        <li key={c.lesson.id}>
+          {c.why.join(', ')} – {describeLesson(c.lesson, app.students)}
+          {lesson.kind === 'weekly' && c.lesson.kind === 'once' && ` (ב־${showDate(c.date)})`}
+        </li>
+      ))}
+    </ul>
   );
 }
