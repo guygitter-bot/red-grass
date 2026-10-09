@@ -108,6 +108,12 @@
 - בדיקת תשובות אוטומטית בסוף סיבוב (`api/spell.js`, Claude ב-alarm): תיקון כתיב (באותה אות) + האם מתאים לקטגוריה (לא מתאים = 0, השחקנים יכולים לאשר ב-👍). אות אחת לבד = 0.
 - הקטגוריות ובדיקת האות כפולות ב-`api/game.js` וב-`web/src/lib/game.js` – לשנות בשניהם.
 
+### רוק סיטי – מערכת שעות (`rock_city/`)
+- תיאור: `rock_city/README.md`. מערכת שעות לבית ספר למוזיקה: שיעורים, תלמידים, מורים, חדרים, תשלומים, בקשות לשינוי והרשאות.
+- `rock_city/web` → https://rock-city-school.pages.dev · `rock_city/api` → Worker `rock-city-api` (Durable Object `School` אחד). עלייה: `rock-city.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd rock_city/api && npm test` · `cd rock_city/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- הרשאות נבדקות בשרת (`api/school.js`). צבעי המותג: צהוב-זהב ושחור (`web/src/index.css`). תאריך עברי + מספר: מקף עברי (`ב־${...}`) כדי שלא יתהפך.
+
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).
 
