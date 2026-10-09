@@ -16,8 +16,10 @@ import {
   showDate,
   statusOn,
   today,
+  whatsapp,
   whenText,
 } from '../lib/schedule';
+import { gcalLink } from '../lib/gcal';
 import { run } from './Panels';
 import { Avatar, Button, Chips, ContactButtons, Field, Input, LinkRow, Select, Sheet, Textarea } from './ui';
 
@@ -140,6 +142,8 @@ export function LessonView({ app, panel, onBack }) {
             </button>
           </div>
         )}
+
+        <CalendarShare app={app} lesson={l} />
 
         {request && <p className="text-sm text-muted">זה שיעור של {t?.first}. שינויים יישלחו אליו/אליה כבקשה לאישור.</p>}
 
@@ -403,5 +407,36 @@ function ConflictList({ app, lesson, found }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+// יומן גוגל: הוספה ליומן שלי, ושליחה בוואטסאפ למורה ולתלמידים (קישור שמכניס את השיעור ליומן שלהם, כל שבוע)
+function CalendarShare({ app, lesson: l }) {
+  const t = app.teacherMap[l.teacherId];
+  const msg = (name, link) => `היי ${name}! השיעור ב${l.subject || 'רוק סיטי'}: ${whenText(l)} 🎸\nבלחיצה כאן הוא נכנס ליומן גוגל שלך:\n${link}`;
+  const people = [
+    t?.phone && t.id !== app.me.id && { key: t.id, name: t.first, href: whatsapp(t.phone, msg(t.first, gcalLink(l, app))) },
+    ...l.studentIds.map((id) => {
+      const s = app.studentMap[id];
+      const phone = s?.phone || s?.contactPhone;
+      return phone && { key: id, name: s.first, href: whatsapp(phone, msg(s.first, gcalLink(l, app, { forStudent: true }))) };
+    }),
+  ].filter(Boolean);
+  const link = 'inline-flex items-center gap-1 rounded-xl border border-line bg-card px-3 py-2 text-sm font-medium hover:bg-soft';
+  return (
+    <section className="rounded-2xl border border-line bg-card p-3">
+      <h3 className="mb-2 font-bold">📅 יומן גוגל</h3>
+      <div className="flex flex-wrap gap-2">
+        <a className={link} href={gcalLink(l, app)} target="_blank" rel="noreferrer">
+          ➕ ליומן שלי
+        </a>
+        {people.map((p) => (
+          <a key={p.key} className={link} href={p.href} target="_blank" rel="noreferrer">
+            💬 שליחה ל{p.name}
+          </a>
+        ))}
+      </div>
+      {l.kind === 'weekly' && <p className="mt-2 text-xs text-muted">השיעור נכנס ליומן כשיעור שחוזר כל שבוע.</p>}
+    </section>
   );
 }

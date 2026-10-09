@@ -4,8 +4,10 @@ import {
   PAY_STATE,
   SHORT_DAYS,
   addDays,
+  addMonths,
   dayOf,
   endTime,
+  fromKey,
   fromMinutes,
   fullName,
   lessonsOn,
@@ -24,10 +26,11 @@ const isWide = () => window.matchMedia?.('(min-width: 1024px)').matches;
 const VIEWS = [
   { value: 'day', label: 'יום' },
   { value: 'week', label: 'שבוע' },
+  { value: 'month', label: 'חודש' },
   { value: 'rooms', label: 'לפי חדרים' },
 ];
 
-// מערכת השעות: יום (רשימה), שבוע (לוח), או יום אחד מחולק לחדרים
+// מערכת השעות: יום (רשימה), שבוע (לוח), חודש (לוח שנה), או יום אחד מחולק לחדרים
 export default function Calendar({ app }) {
   const [date, setDate] = useState(today);
   const [view, setView] = useState(() => (isWide() ? 'week' : 'day'));
@@ -43,6 +46,7 @@ export default function Calendar({ app }) {
   const week = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const now = today();
   const step = view === 'week' ? 7 : 1;
+  const move = (n) => setDate(view === 'month' ? addMonths(date.slice(0, 8) + '01', n) : addDays(date, n * step));
 
   const openLesson = (l, k) => app.open({ type: 'lesson', id: l.id, date: k });
   const add = (preset = {}) => app.open({ type: 'lessonForm', preset: { teacherId: teacherId || (app.me.role === 'teacher' ? app.me.id : ''), roomId, ...preset } });
@@ -53,17 +57,19 @@ export default function Calendar({ app }) {
   const title =
     view === 'week'
       ? `${shortDate(week[0])} – ${shortDate(week[6])}`
+      : view === 'month'
+      ? new Intl.DateTimeFormat('he-IL', { month: 'long', year: 'numeric' }).format(fromKey(date))
       : `יום ${DAYS[dayOf(date)]} ${showDate(date)}`;
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1">
-          <button type="button" className="grid h-10 w-10 place-items-center rounded-full text-xl hover:bg-soft" onClick={() => setDate(addDays(date, -step))} aria-label="אחורה">
+          <button type="button" className="grid h-10 w-10 place-items-center rounded-full text-xl hover:bg-soft" onClick={() => move(-1)} aria-label="אחורה">
             ›
           </button>
           <h1 className="min-w-36 text-center text-lg font-bold">{title}</h1>
-          <button type="button" className="grid h-10 w-10 place-items-center rounded-full text-xl hover:bg-soft" onClick={() => setDate(addDays(date, step))} aria-label="קדימה">
+          <button type="button" className="grid h-10 w-10 place-items-center rounded-full text-xl hover:bg-soft" onClick={() => move(1)} aria-label="קדימה">
             ‹
           </button>
           {date !== now && (
@@ -105,13 +111,13 @@ export default function Calendar({ app }) {
           ))}
         </Select>
         {app.canEdit && (
-          <Button className="ms-auto" onClick={() => add(view === 'week' ? {} : { date })}>
+          <Button className="ms-auto" onClick={() => add(view === 'week' || view === 'month' ? {} : { date })}>
             + שיעור
           </Button>
         )}
       </div>
 
-      {view !== 'week' && (
+      {(view === 'day' || view === 'rooms') && (
         <div className="grid grid-cols-7 gap-1">
           {week.map((k, i) => {
             const n = lessonsOn(lessons, k).filter((l) => statusOn(l, k) !== 'cancelled').length;
@@ -142,6 +148,19 @@ export default function Calendar({ app }) {
         />
       )}
 
+      {view === 'month' && (
+        <MonthGrid
+          app={app}
+          lessons={lessons}
+          date={date}
+          onOpen={openLesson}
+          onDay={(k) => {
+            setDate(k);
+            setView('day');
+          }}
+        />
+      )}
+
       {view === 'rooms' && (
         <TimeGrid
           app={app}
@@ -156,6 +175,74 @@ export default function Calendar({ app }) {
           onAdd={app.canEdit ? (col, start) => add({ date, start, roomId: col.roomId || '' }) : null}
         />
       )}
+    </div>
+  );
+}
+
+// לוח חודשי: כל יום עם השיעורים שלו (בטלפון – רק שעה ונקודה בצבע המורה). לחיצה על יום = התצוגה היומית שלו
+function MonthGrid({ app, lessons, date, onOpen, onDay }) {
+  const month = date.slice(0, 7);
+  const first = weekStart(`${month}-01`);
+  const weeks = [];
+  for (let k = first; k.slice(0, 7) <= month || weeks.length === 0; k = addDays(k, 7)) {
+    if (k.slice(0, 7) > month) break;
+    weeks.push(Array.from({ length: 7 }, (_, i) => addDays(k, i)));
+  }
+  const now = today();
+  const MAX = 4;
+  return (
+    <div className="overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
+      <div className="grid grid-cols-7 border-b border-line text-center text-xs font-bold text-muted">
+        {SHORT_DAYS.map((d) => (
+          <div key={d} className="py-2">
+            {d}
+          </div>
+        ))}
+      </div>
+      {weeks.map((days) => (
+        <div key={days[0]} className="grid grid-cols-7 border-b border-line last:border-b-0">
+          {days.map((k) => {
+            const items = lessonsOn(lessons, k);
+            const other = k.slice(0, 7) !== month;
+            return (
+              <div
+                key={k}
+                role="button"
+                tabIndex={0}
+                onClick={() => onDay(k)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') onDay(k);
+                }}
+                className={`min-h-20 cursor-pointer border-e border-line p-1 transition last:border-e-0 hover:bg-soft lg:min-h-28 ${other ? 'opacity-40' : ''}`}
+              >
+                <div className={`mb-0.5 grid h-6 w-6 place-items-center rounded-full text-xs font-bold ${k === now ? 'bg-accent text-black' : ''}`}>{Number(k.slice(8))}</div>
+                <div className="space-y-0.5">
+                  {items.slice(0, MAX).map((l) => {
+                    const t = app.teacherMap[l.teacherId];
+                    const cancelled = statusOn(l, k) === 'cancelled';
+                    return (
+                      <button
+                        key={l.id}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpen(l, k);
+                        }}
+                        className={`flex w-full items-center gap-1 truncate rounded px-0.5 text-start text-[10px] leading-4 hover:bg-line lg:text-xs ${cancelled ? 'line-through opacity-50' : ''}`}
+                      >
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: t?.color || '#f5b800' }} />
+                        <span className="font-medium">{l.start}</span>
+                        <span className="hidden truncate lg:inline">{l.studentIds.map((id) => app.studentMap[id]?.first).join(', ')}</span>
+                      </button>
+                    );
+                  })}
+                  {items.length > MAX && <div className="px-0.5 text-[10px] text-muted">+{items.length - MAX} נוספים</div>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }

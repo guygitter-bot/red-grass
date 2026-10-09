@@ -6,6 +6,7 @@ import Calendar from './components/Calendar';
 import Students from './components/Students';
 import Teachers from './components/Teachers';
 import Payments from './components/Payments';
+import Rooms from './components/Rooms';
 import Inbox from './components/Inbox';
 import More from './components/More';
 import Panels from './components/Panels';
@@ -24,6 +25,7 @@ const TABS = [
   { id: 'calendar', label: 'מערכת שעות', icon: '🗓️' },
   { id: 'students', label: 'תלמידים', icon: '🎒' },
   { id: 'teachers', label: 'מורים', icon: '🎸' },
+  { id: 'rooms', label: 'חדרים', icon: '🚪' },
   { id: 'payments', label: 'תשלומים', icon: '💰', manager: true },
   { id: 'more', label: 'עוד', icon: '⚙️' },
 ];
@@ -119,6 +121,7 @@ export default function App() {
     calendar: <Calendar app={app} />,
     students: <Students app={app} />,
     teachers: <Teachers app={app} />,
+    rooms: <Rooms app={app} />,
     payments: app.isManager ? <Payments app={app} /> : null,
     inbox: <Inbox app={app} />,
     more: <More app={app} signOut={signOut} />,

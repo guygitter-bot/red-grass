@@ -8,7 +8,7 @@
 //             kind: weekly (כל שבוע ביום day, מ-from עד until) | once (פעם אחת בתאריך date)
 //             dates: { 'YYYY-MM-DD': { status: cancelled | attended | absent, note } } – מה קרה בשיעור מסוים
 // payment  -> { id, studentId, amount, date, until, method, note }   until = התשלום מכסה עד התאריך הזה
-// settings -> { subjects: [..], rooms: [{ id, name }] }
+// settings -> { subjects: [..], rooms: [{ id, name }], hours: { from, to } }   hours = שעות הפעילות (לזמינות החדרים)
 
 export const LEVELS = ['view', 'edit', 'manage'];
 export const DEFAULT_SUBJECTS = ['גיטרה', 'תופים', 'פסנתר', 'שירה ופיתוח קול'];
@@ -148,7 +148,10 @@ export function cleanSettings(s, old) {
     .slice(0, 40);
   need(subjects.length, 'צריך לפחות נושא אחד');
   need(rooms.length, 'צריך לפחות חדר אחד');
-  return { subjects, rooms };
+  const h = s?.hours || old.hours || {};
+  const hours = { from: TIME_RE.test(h.from) ? h.from : '08:00', to: TIME_RE.test(h.to) ? h.to : '22:00' };
+  need(hours.from < hours.to, 'שעת הסגירה לפני שעת הפתיחה');
+  return { subjects, rooms, hours };
 }
 
 // מי מחובר: { role: 'admin' } או { role: 'teacher', id, level }

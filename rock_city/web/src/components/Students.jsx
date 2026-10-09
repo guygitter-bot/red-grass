@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { PAY_STATE, daysBetween, fullName, newId, paymentStatus, payText, showDate, today } from '../lib/schedule';
 import { LessonCard } from './Calendar';
+import { icsFile, shareIcs } from '../lib/gcal';
 import { run } from './Panels';
 import { Button, Card, ContactButtons, Empty, Field, Input, Sheet, Textarea } from './ui';
 
@@ -130,6 +131,15 @@ export function StudentView({ app, panel, onBack }) {
               <LessonCard key={l.id} app={app} lesson={l} showDay onClick={() => app.open({ type: 'lesson', id: l.id })} />
             ))}
           </div>
+          {lessons.length > 0 && (
+            <Button
+              kind="secondary"
+              className="mt-2"
+              onClick={() => shareIcs(icsFile(lessons, app, { forStudent: true, name: `רוק סיטי – ${fullName(s)}` }), `rock-city-${s.first}.ics`)}
+            >
+              📅 כל השיעורים ליומן גוגל
+            </Button>
+          )}
           {app.canEdit && (
             <Button kind="secondary" className="mt-2" onClick={() => app.open({ type: 'lessonForm', preset: { studentIds: [s.id] } })}>
               + שיעור ל{s.first}

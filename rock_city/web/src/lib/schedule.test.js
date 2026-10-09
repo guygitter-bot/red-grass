@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { addDays, addMonths, conflicts, dayOf, nextDates, occursOn, paymentStatus, weekStart, whatsapp } from './schedule';
+import { addDays, addMonths, conflicts, dayOf, nextDates, occursOn, paymentStatus, roomDay, weekStart, whatsapp } from './schedule';
 
 const lesson = (id, extra) => ({ id, teacherId: 't1', studentIds: ['s1'], roomId: 'r1', kind: 'weekly', day: 1, start: '16:00', minutes: 45, from: '', until: '', ...extra });
 
@@ -60,4 +60,19 @@ describe('payments', () => {
 test('whatsapp links', () => {
   expect(whatsapp('050-123 4567')).toBe('https://wa.me/972501234567');
   expect(whatsapp('')).toBe('');
+});
+
+describe('room availability', () => {
+  test('free windows around lessons, cancelled lessons free the room', () => {
+    const ls = [lesson('a', { start: '16:00', minutes: 45 }), lesson('b', { start: '17:00', minutes: 60, roomId: 'r1' }), lesson('c', { roomId: 'r2', start: '10:00' })];
+    const { busy, free } = roomDay(ls, 'r1', '2026-10-12', { from: '08:00', to: '20:00' });
+    expect(busy).toHaveLength(2);
+    expect(free).toEqual([
+      { start: 480, end: 960 },
+      { start: 1005, end: 1020 },
+      { start: 1080, end: 1200 },
+    ]);
+    ls[0].dates = { '2026-10-12': { status: 'cancelled' } };
+    expect(roomDay(ls, 'r1', '2026-10-12', { from: '08:00', to: '20:00' }).free[0]).toEqual({ start: 480, end: 1020 });
+  });
 });
