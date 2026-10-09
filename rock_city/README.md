@@ -46,6 +46,11 @@
 - `web/` – React + Vite + Tailwind. מסכים ב-`src/components`, חישובי תאריכים/התנגשויות/תשלומים ב-`src/lib/schedule.js`.
   הלוגו (`public/logo.png`) והאייקונים נחתכו מהלוגו שנשלח.
 
+## עמוד נחיתה (`landing/`)
+עמוד מכירה למוצר בשם העבודה **"קצב"** → https://ketzev-music.pages.dev. HTML אחד בלי בנייה (`landing/index.html`),
+צילומי מסך עם נתוני דוגמה ב-`landing/img` (צולמו מהאפליקציה עם שרת מקומי). מצב לילה לפי המכשיר.
+מספר הוואטסאפ לפניות – בכפתור בסוף העמוד (`wa.me/...`).
+
 ## עלייה לאוויר
 `.github/workflows/rock-city.yml` – אחרי מיזוג ל-main (בודק ובונה גם ב-PR). משתמש בסודות הקיימים
 `CLOUDFLARE_API_TOKEN` ו-`CLOUDFLARE_ACCOUNT_ID`. אם Cloudflare נותן לאתר כתובת עם סיומת (למשל `rock-city-school-abc.pages.dev`),
