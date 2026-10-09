@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { Button, Input, Logo } from './ui';
+import { Button, Input, Logo, PasswordInput } from './ui';
 
 // כניסה של המנהל. בפעם הראשונה (עוד אין מנהל) – יצירת שם משתמש וסיסמה
 export default function Login({ onToken, linkFailed }) {
@@ -44,15 +44,14 @@ export default function Login({ onToken, linkFailed }) {
         {ready === false && <p className="mt-2 text-center text-sm text-white/70">פעם ראשונה כאן – בוחרים שם משתמש וסיסמה למנהל המערכת.</p>}
         <div className="mt-5 space-y-3 text-ink">
           <Input placeholder="שם משתמש" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} required />
-          <Input
-            type="password"
+          <PasswordInput
             placeholder="סיסמה"
             autoComplete={ready ? 'current-password' : 'new-password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
           />
-          {ready === false && <Input type="password" placeholder="שוב את הסיסמה" autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} required />}
+          {ready === false && <PasswordInput placeholder="שוב את הסיסמה" autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} required />}
         </div>
         {error && <p className="mt-3 text-center text-sm text-red-300">{error}</p>}
         <Button type="submit" className="mt-5 w-full text-lg" disabled={busy || ready === null}>
