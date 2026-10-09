@@ -113,3 +113,33 @@ jobs:
           URL: ${{ steps.publish.outputs.deployment-url }}
         run: |
           echo "Published: https://rock-city-school.pages.dev ($URL)" >> "$GITHUB_STEP_SUMMARY"
+
+  # עמוד הנחיתה של המוצר ("קצב") – קבצים סטטיים, בלי בנייה -> https://ketzev-music.pages.dev
+  landing:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create the Pages project (first run only)
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: rock_city/landing
+          wranglerVersion: "4.146.0"
+          command: pages project create ketzev-music --production-branch=main
+      - name: Publish
+        id: publish
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: rock_city/landing
+          wranglerVersion: "4.146.0"
+          command: pages deploy . --project-name=ketzev-music --branch=main --commit-dirty=true
+      - name: Summary
+        env:
+          URL: ${{ steps.publish.outputs.deployment-url }}
+        run: |
+          echo "Landing: https://ketzev-music.pages.dev ($URL)" >> "$GITHUB_STEP_SUMMARY"
