@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LEVELS, LEVEL_HELP, fullName, newId } from '../lib/schedule';
+import { LEVELS, LEVEL_HELP, fullName, hoursOf, newId } from '../lib/schedule';
 import { run } from './Panels';
 import { Avatar, Button, Card, Field, Input, PasswordInput, Select } from './ui';
 
@@ -50,8 +50,10 @@ export default function More({ app, signOut }) {
 function Places({ app }) {
   const [rooms, setRooms] = useState(app.settings.rooms);
   const [subjects, setSubjects] = useState(app.settings.subjects);
+  const [hours, setHours] = useState(() => hoursOf(app.settings));
   const [newSubject, setNewSubject] = useState('');
-  const changed = JSON.stringify({ rooms, subjects }) !== JSON.stringify(app.settings);
+  const { rooms: r0, subjects: s0 } = app.settings;
+  const changed = JSON.stringify({ rooms, subjects, hours }) !== JSON.stringify({ rooms: r0, subjects: s0, hours: hoursOf(app.settings) });
 
   function removeRoom(r) {
     const used = app.lessons.filter((l) => l.roomId === r.id).length;
@@ -100,8 +102,16 @@ function Places({ app }) {
           </Button>
         </div>
       </div>
+      <div>
+        <p className="mb-1 text-sm font-medium text-muted">🕗 שעות הפעילות (לזמינות החדרים)</p>
+        <div className="flex items-center gap-2">
+          <Input type="time" step="900" value={hours.from} onChange={(e) => setHours({ ...hours, from: e.target.value })} aria-label="פתיחה" />
+          <span>עד</span>
+          <Input type="time" step="900" value={hours.to} onChange={(e) => setHours({ ...hours, to: e.target.value })} aria-label="סגירה" />
+        </div>
+      </div>
       {changed && (
-        <Button className="w-full" onClick={() => run(app, '/save', { kind: 'settings', item: { rooms, subjects } }, 'נשמר')}>
+        <Button className="w-full" onClick={() => run(app, '/save', { kind: 'settings', item: { rooms, subjects, hours } }, 'נשמר')}>
           שמירת השינויים
         </Button>
       )}

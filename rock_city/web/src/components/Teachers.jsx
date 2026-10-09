@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { COLORS, LEVELS, LEVEL_HELP, fullName, newId, whatsapp } from '../lib/schedule';
 import { resizePhoto } from '../lib/photo';
 import { LessonCard } from './Calendar';
+import { icsFile, shareIcs } from '../lib/gcal';
 import { run } from './Panels';
 import { Avatar, Button, Card, Chips, ContactButtons, Empty, Field, Input, Sheet, Textarea } from './ui';
 
@@ -151,6 +152,15 @@ export function TeacherView({ app, panel, onBack }) {
               <LessonCard key={l.id} app={app} lesson={l} showDay onClick={() => app.open({ type: 'lesson', id: l.id })} />
             ))}
           </div>
+          {ls.length > 0 && (
+            <Button
+              kind="secondary"
+              className="mt-2"
+              onClick={() => shareIcs(icsFile(ls, app, { forStudent: false, name: `רוק סיטי – ${fullName(t)}` }), `rock-city-${t.first}.ics`)}
+            >
+              📅 כל השיעורים ליומן גוגל
+            </Button>
+          )}
         </section>
 
         {app.isAdmin && (

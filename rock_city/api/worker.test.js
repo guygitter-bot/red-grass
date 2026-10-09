@@ -245,3 +245,11 @@ test('deleting a teacher stops the link', async () => {
   assert.equal((await call(env, '/remove', { kind: 'teacher', id: 'teacher-b' }, admin)).status, 200);
   assert.equal((await call(env, '/state', {}, b)).status, 401);
 });
+
+test('opening hours in settings', async () => {
+  const { env, admin, save } = await school();
+  assert.equal((await save('settings', { hours: { from: '09:00', to: '21:30' } })).status, 200);
+  assert.deepEqual((await call(env, '/state', {}, admin)).data.settings.hours, { from: '09:00', to: '21:30' });
+  assert.equal((await save('settings', { hours: { from: '22:00', to: '08:00' } })).status, 400);
+  assert.equal((await call(env, '/state', {}, admin)).data.settings.rooms.length, 3, 'החדרים נשארו');
+});

@@ -150,3 +150,23 @@ export function whatsapp(phone, msg = '') {
 }
 
 export const newId = (prefix) => `${prefix}-${crypto.randomUUID().slice(0, 13)}`;
+
+// שעות הפעילות של בית הספר (בהגדרות) – ברירת מחדל 08:00 עד 22:00
+export const hoursOf = (settings) => ({ from: settings?.hours?.from || '08:00', to: settings?.hours?.to || '22:00' });
+
+// חדר ביום מסוים: מתי תפוס (שיעורים שלא בוטלו) ומתי פנוי, בתוך שעות הפעילות
+export function roomDay(lessons, roomId, k, { from = '08:00', to = '22:00' } = {}) {
+  const open = toMinutes(from);
+  const close = toMinutes(to);
+  const busy = lessonsOn(lessons, k)
+    .filter((l) => l.roomId === roomId && statusOn(l, k) !== 'cancelled')
+    .map((l) => ({ lesson: l, start: toMinutes(l.start), end: toMinutes(l.start) + (l.minutes || 45) }));
+  const free = [];
+  let t = open;
+  for (const b of [...busy].sort((a, c) => a.start - c.start)) {
+    if (b.start - t >= 15) free.push({ start: t, end: Math.min(b.start, close) });
+    t = Math.max(t, b.end);
+  }
+  if (close - t >= 15) free.push({ start: t, end: close });
+  return { busy, free: free.filter((f) => f.end - f.start >= 15) };
+}
