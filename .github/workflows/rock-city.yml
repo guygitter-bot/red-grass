@@ -115,6 +115,7 @@ jobs:
           echo "Published: https://rock-city-school.pages.dev ($URL)" >> "$GITHUB_STEP_SUMMARY"
 
   # עמוד הנחיתה של המוצר ("קצב") – קבצים סטטיים, בלי בנייה -> https://ketzev-music.pages.dev
+  # (wrangler רץ מתוך rock_city/web – בתיקייה בלי package.json הוא מתקין מהשורש של המאגר ונכשל)
   landing:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
@@ -126,7 +127,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: rock_city/landing
+          workingDirectory: rock_city/web
           wranglerVersion: "4.146.0"
           command: pages project create ketzev-music --production-branch=main
       - name: Publish
@@ -135,9 +136,9 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: rock_city/landing
+          workingDirectory: rock_city/web
           wranglerVersion: "4.146.0"
-          command: pages deploy . --project-name=ketzev-music --branch=main --commit-dirty=true
+          command: pages deploy ../landing --project-name=ketzev-music --branch=main --commit-dirty=true
       - name: Summary
         env:
           URL: ${{ steps.publish.outputs.deployment-url }}
