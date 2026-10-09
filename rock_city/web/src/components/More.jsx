@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { LEVELS, LEVEL_HELP, newId } from '../lib/schedule';
 import { run } from './Panels';
-import { Avatar, Button, Card, Field, Input } from './ui';
+import { Avatar, Button, Card, Field, Input, PasswordInput } from './ui';
 
 // הגדרות: הפרופיל שלי, חדרים ונושאים, חשבון המנהל, גיבוי ויומן שינויים
 export default function More({ app, signOut }) {
@@ -128,10 +128,10 @@ function Account({ app }) {
           <Input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
         </Field>
         <Field label="סיסמה חדשה (לא חובה)">
-          <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" />
+          <PasswordInput value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" />
         </Field>
         <Field label="הסיסמה הנוכחית (לאישור)">
-          <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
+          <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
         </Field>
         <Button type="submit" kind="secondary">
           עדכון

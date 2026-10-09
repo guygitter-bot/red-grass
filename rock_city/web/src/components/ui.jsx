@@ -82,6 +82,29 @@ export function Input({ className = '', ...props }) {
   return <input className={`${inputClass} ${className}`} {...props} />;
 }
 
+// שדה סיסמה עם עין: לחיצה מראה / מסתירה את מה שהוקלד
+export function PasswordInput({ className = '', ...props }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <Input type={show ? 'text' : 'password'} className={`pe-12 ${className}`} {...props} />
+      <button
+        type="button"
+        onClick={() => setShow(!show)}
+        className="absolute inset-y-0 end-0 grid w-12 place-items-center text-muted hover:text-ink"
+        aria-label={show ? 'הסתרת הסיסמה' : 'הצגת הסיסמה'}
+        title={show ? 'הסתרת הסיסמה' : 'הצגת הסיסמה'}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+          <circle cx="12" cy="12" r="3" />
+          {show && <line x1="3" y1="3" x2="21" y2="21" />}
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 export function Textarea({ className = '', ...props }) {
   return <textarea rows={3} className={`${inputClass} ${className}`} {...props} />;
 }
