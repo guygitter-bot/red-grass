@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { LEVELS, LEVEL_HELP, newId } from '../lib/schedule';
+import { LEVELS, LEVEL_HELP, fullName, newId } from '../lib/schedule';
 import { run } from './Panels';
-import { Avatar, Button, Card, Field, Input, PasswordInput } from './ui';
+import { Avatar, Button, Card, Field, Input, PasswordInput, Select } from './ui';
 
 // הגדרות: הפרופיל שלי, חדרים ונושאים, חשבון המנהל, גיבוי ויומן שינויים
 export default function More({ app, signOut }) {
@@ -10,16 +10,19 @@ export default function More({ app, signOut }) {
     <div className="grid gap-4 lg:grid-cols-2">
       <Card className="space-y-3">
         <div className="flex items-center gap-3">
-          {self ? <Avatar person={self} size={56} /> : <span className="grid h-14 w-14 place-items-center rounded-full bg-accent text-2xl">👑</span>}
+          {self ? <Avatar person={self} size={56} /> : app.admin?.photo ? <Avatar person={app.admin} size={56} /> : <span className="grid h-14 w-14 place-items-center rounded-full bg-accent text-2xl">👑</span>}
           <div className="min-w-0 flex-1">
             <div className="text-lg font-bold">{app.me.name}</div>
             <div className="text-sm text-muted">{app.isAdmin ? `מנהל המערכת (${app.me.username})` : LEVELS[app.me.level]}</div>
+            {app.isAdmin && app.admin?.phone && <div className="text-sm text-muted">
+                <span dir="ltr">{app.admin.phone}</span>
+              </div>}
           </div>
         </div>
         {!app.isAdmin && <p className="text-sm text-muted">{LEVEL_HELP[app.me.level]}</p>}
         <div className="flex flex-wrap gap-2">
-          {self && (
-            <Button kind="secondary" onClick={() => app.open({ type: 'teacherForm', teacher: self })}>
+          {(self || app.isAdmin) && (
+            <Button kind="secondary" onClick={() => app.open(self ? { type: 'teacherForm', teacher: self } : { type: 'teacherForm', admin: app.admin || {} })}>
               ✏️ הפרטים שלי
             </Button>
           )}
@@ -36,7 +39,7 @@ export default function More({ app, signOut }) {
 
       {app.isManager && <Places app={app} />}
       {app.isAdmin && <Account app={app} />}
-      {app.isAdmin && <Permissions />}
+      {app.isAdmin && <Team app={app} />}
       {app.isManager && <Backup app={app} />}
       {app.isManager && <Log app={app} />}
     </div>
@@ -141,16 +144,61 @@ function Account({ app }) {
   );
 }
 
-function Permissions() {
+// כל המורים וההרשאות שלהם: שינוי הרשאה, קישור כניסה, ומחיקה (הקישור שלו מפסיק לעבוד)
+function Team({ app }) {
+  const setLevel = (t, level) => run(app, '/save', { kind: 'teacher', item: { ...t, photo: undefined, level } }, `${t.first}: ${LEVELS[level]}`);
+
+  async function remove(t) {
+    const n = app.lessons.filter((l) => l.teacherId === t.id).length;
+    if (n) {
+      if (!t.hasLink) return app.toast(`ל${t.first} יש ${n} שיעורים – קודם להעביר אותם למורה אחר או למחוק אותם`, { ms: 6000 });
+      if (window.confirm(`ל${t.first} יש ${n} שיעורים, אז אי אפשר למחוק אותו/אותה עכשיו. לבטל את הגישה (הקישור יפסיק לעבוד)?`)) {
+        await run(app, '/revoke', { teacherId: t.id }, `הגישה של ${t.first} בוטלה`);
+      }
+      return;
+    }
+    if (window.confirm(`למחוק את ${fullName(t)}? הקישור שלו/שלה יפסיק לעבוד.`)) await run(app, '/remove', { kind: 'teacher', id: t.id }, 'המורה נמחק');
+  }
+
   return (
-    <Card className="space-y-2">
-      <h2 className="text-lg font-bold">🔑 הרשאות של מורים</h2>
-      <p className="text-sm text-muted">נותנים הרשאה ושולחים קישור כניסה מהכרטיס של כל מורה (מורים ← לוחצים על המורה).</p>
-      {Object.entries(LEVELS).map(([k, label]) => (
-        <p key={k} className="text-sm">
-          <b>{label}:</b> {LEVEL_HELP[k]}
-        </p>
-      ))}
+    <Card className="space-y-3 lg:col-span-2">
+      <div className="flex items-center gap-2">
+        <h2 className="text-lg font-bold">🔑 מורים והרשאות</h2>
+        <Button kind="secondary" className="ms-auto !px-3 !py-1.5 text-sm" onClick={() => app.open({ type: 'teacherForm' })}>
+          + מורה
+        </Button>
+      </div>
+      {app.teachers.length === 0 && <p className="text-sm text-muted">עוד אין מורים</p>}
+      <div className="divide-y divide-line">
+        {app.teachers.map((t) => (
+          <div key={t.id} className="flex flex-wrap items-center gap-2 py-2">
+            <button type="button" className="flex min-w-0 flex-1 items-center gap-2 text-start" onClick={() => app.open({ type: 'teacher', id: t.id })}>
+              <Avatar person={t} size={36} />
+              <span className="min-w-0">
+                <span className="block truncate font-bold">{fullName(t)}</span>
+                <span className={`block text-xs ${t.hasLink ? 'text-ok' : 'text-muted'}`}>{t.hasLink ? '✓ יש קישור כניסה' : 'בלי קישור – לחצו ליצירה'}</span>
+              </span>
+            </button>
+            <Select className="!w-auto !py-1.5 text-sm" value={t.level} onChange={(e) => setLevel(t, e.target.value)} aria-label={`הרשאה של ${t.first}`}>
+              {Object.entries(LEVELS).map(([k, label]) => (
+                <option key={k} value={k}>
+                  {label}
+                </option>
+              ))}
+            </Select>
+            <Button kind="ghost" className="!px-2" onClick={() => remove(t)} aria-label={`מחיקת ${t.first}`} title="מחיקה">
+              🗑️
+            </Button>
+          </div>
+        ))}
+      </div>
+      <div className="space-y-1 rounded-xl bg-soft p-3 text-sm">
+        {Object.entries(LEVELS).map(([k, label]) => (
+          <p key={k}>
+            <b>{label}:</b> {LEVEL_HELP[k]}
+          </p>
+        ))}
+      </div>
     </Card>
   );
 }

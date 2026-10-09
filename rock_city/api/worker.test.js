@@ -227,3 +227,21 @@ test('admin can change password', async () => {
   await call(env, '/logout', {}, admin);
   assert.equal((await call(env, '/state', {}, admin)).status, 401);
 });
+
+test('admin profile with photo, shown to teachers', async () => {
+  const { env, admin, b, save } = await school();
+  assert.equal((await save('profile', { first: 'גיל', last: 'רוק', phone: '050', photo: 'data:image/jpeg;base64,AAAA' })).status, 200);
+  assert.equal((await save('profile', { first: 'אחר' }, b)).status, 403);
+  const st = (await call(env, '/state', {}, b)).data;
+  assert.equal(st.admin.first, 'גיל');
+  assert.equal(st.admin.photo, 'data:image/jpeg;base64,AAAA');
+  assert.equal((await call(env, '/state', {}, admin)).data.me.name, 'גיל רוק');
+  assert.ok(!('salt' in st.admin) && !('username' in st.admin));
+});
+
+test('deleting a teacher stops the link', async () => {
+  const { env, admin, b } = await school();
+  await call(env, '/remove', { kind: 'lesson', id: 'lesson-b' }, admin);
+  assert.equal((await call(env, '/remove', { kind: 'teacher', id: 'teacher-b' }, admin)).status, 200);
+  assert.equal((await call(env, '/state', {}, b)).status, 401);
+});

@@ -219,9 +219,13 @@ export function TeacherView({ app, panel, onBack }) {
 }
 
 export function TeacherForm({ app, panel, onBack }) {
-  const editing = !!panel.teacher;
+  // panel.admin = הפרטים של המנהל (תמונה, שם, טלפון, מייל – בלי נושאים וצבע)
+  const admin = !!panel.admin;
+  const editing = !!panel.teacher || admin;
   const [t, setT] = useState(() =>
-    panel.teacher
+    admin
+      ? { first: '', last: '', phone: '', email: '', subjects: [], ...panel.admin }
+      : panel.teacher
       ? { ...panel.teacher }
       : { id: newId('teacher'), first: '', last: '', phone: '', email: '', subjects: [], color: COLORS[app.teachers.length % COLORS.length], notes: '', level: 'edit', photo: '' },
   );
@@ -243,8 +247,8 @@ export function TeacherForm({ app, panel, onBack }) {
     e.preventDefault();
     setBusy(true);
     // התמונה נשלחת רק אם השתנתה
-    const photo = t.photo === (panel.teacher?.photo || '') ? undefined : t.photo;
-    const res = await run(app, '/save', { kind: 'teacher', item: { ...t, photo } }, editing ? 'הפרטים נשמרו' : 'המורה נוסף');
+    const photo = t.photo === ((panel.teacher || panel.admin)?.photo || '') ? undefined : t.photo;
+    const res = await run(app, '/save', { kind: admin ? 'profile' : 'teacher', item: { ...t, photo } }, editing ? 'הפרטים נשמרו' : 'המורה נוסף');
     setBusy(false);
     if (!res) return;
     if (editing) (onBack || app.close)();
@@ -254,7 +258,7 @@ export function TeacherForm({ app, panel, onBack }) {
   const subjects = [...new Set([...app.settings.subjects, ...t.subjects])];
 
   return (
-    <Sheet title={editing ? `עריכה – ${fullName(panel.teacher)}` : 'מורה חדש'} onClose={app.close} onBack={onBack}>
+    <Sheet title={admin ? 'הפרטים שלי (מנהל)' : editing ? `עריכה – ${fullName(panel.teacher)}` : 'מורה חדש'} onClose={app.close} onBack={onBack}>
       <form onSubmit={save} className="space-y-3">
         <div className="flex items-center gap-4">
           <Avatar person={t} size={80} />
@@ -286,6 +290,8 @@ export function TeacherForm({ app, panel, onBack }) {
             <Input type="email" dir="ltr" value={t.email} onChange={(e) => set({ email: e.target.value })} />
           </Field>
         </div>
+        {!admin && (
+          <>
         <Field label="מה מלמד/ת">
           <Chips multi options={subjects.map((s) => ({ value: s, label: s }))} value={t.subjects} onChange={(v) => set({ subjects: v })} />
           <div className="mt-2 flex gap-2">
@@ -319,6 +325,8 @@ export function TeacherForm({ app, panel, onBack }) {
         <Field label="הערות">
           <Textarea value={t.notes} onChange={(e) => set({ notes: e.target.value })} placeholder="ימים שבהם זמין/ה, ניסיון..." />
         </Field>
+          </>
+        )}
         <div className="flex gap-2 pt-2">
           <Button type="submit" className="flex-1 text-lg" disabled={busy}>
             שמירה

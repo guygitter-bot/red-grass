@@ -1,7 +1,8 @@
 // בית הספר כולו – Durable Object אחד ("main"). כל הנתונים כאן, והשרת בודק הרשאות לכל שינוי.
 //
 // אחסון:
-//   meta      -> { v, admin: { username, salt, hash }, fails: { count, until } }
+//   meta      -> { v, admin: { username, salt, hash }, profile: { first, last, phone, email }, fails: { count, until } }
+//                profile = הפרטים של המנהל (מוצגים לכולם); התמונה שלו ב-ph:admin
 //                v (גרסה) עולה בכל שינוי – האפליקציה שואלת "יש משהו חדש מאז v?"
 //   sessions  -> { <sha256 של סוד הכניסה>: תוקף }   כניסות של המנהל (שם משתמש + סיסמה)
 //   settings, teachers, students, lessons, payments  (ראו model.js)
@@ -186,11 +187,16 @@ export class School {
   async who(token) {
     if (!token || token.length < 20 || token.length > 100) return null;
     const hash = await sha256(token);
-    if (this.d.sessions[hash] > this.now()) return { role: 'admin', name: 'המנהל' };
+    if (this.d.sessions[hash] > this.now()) return { role: 'admin', name: this.adminName() };
     const teacherId = await this.storage.get(`key:${hash}`);
     const t = teacherId && this.d.teachers.find((x) => x.id === teacherId);
     if (!t || t.keyHash !== hash) return null;
     return { role: 'teacher', id: t.id, level: LEVELS.includes(t.level) ? t.level : 'view', name: fullName(t) };
+  }
+
+  adminName() {
+    const p = this.d.meta.profile;
+    return p?.first ? fullName(p) : 'המנהל';
   }
 
   async logout(token) {
@@ -222,11 +228,13 @@ export class School {
     const d = this.d;
     if (v === d.meta.v) return { same: true, v };
     const manager = isManager(me);
-    const photos = await this.storage.get(d.teachers.map((t) => `ph:${t.id}`));
+    const photos = await this.storage.get(['ph:admin', ...d.teachers.map((t) => `ph:${t.id}`)]);
     const mine = (n) => n.to === me.id || (manager && n.to === 'office');
     return {
       v: d.meta.v,
       me: { role: me.role, id: me.id || null, level: me.role === 'admin' ? 'admin' : me.level, name: me.name, username: me.role === 'admin' ? d.meta.admin.username : undefined },
+      // המנהל: שם, טלפון ותמונה – לכולם (כדי שמורים ידעו למי לפנות)
+      admin: { first: '', last: '', phone: '', email: '', ...d.meta.profile, photo: photos.get('ph:admin') || '' },
       settings: d.settings,
       teachers: d.teachers.map(({ keyHash, ...t }) => ({ ...t, hasLink: !!keyHash, photo: photos.get(`ph:${t.id}`) || '' })),
       students: d.students,
@@ -300,6 +308,17 @@ export class School {
       else if (photo) await this.storage.put(`ph:${t.id}`, photo);
       this.logIt(me, `${i >= 0 ? 'עדכן' : 'הוסיף'} מורה: ${fullName(t)}`);
       return this.saved('teachers', 'log');
+    }
+
+    if (kind === 'profile') {
+      if (me.role !== 'admin') throw fail(403, 'רק למנהל');
+      const t = cleanTeacher({ ...item, id: 'admin' });
+      d.meta.profile = { first: t.first, last: t.last, phone: t.phone, email: t.email };
+      const photo = cleanPhoto(item.photo);
+      if (photo === '') await this.storage.delete('ph:admin');
+      else if (photo) await this.storage.put('ph:admin', photo);
+      this.logIt({ ...me, name: this.adminName() }, 'עדכן את פרטי המנהל');
+      return this.saved('log');
     }
 
     if (kind === 'settings') {
