@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+/* מצב לילה: מחלקה dark על html (נקבעת ב-src/lib/theme.js) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* צבעי המותג (מהלוגו): צהוב-זהב ושחור. במצב לילה מחליפים רק את המשתנים:
+   page = רקע המסך, card = כרטיסים, ink = טקסט, muted = טקסט משני, line = מסגרות, soft = רקע מודגש עדין,
+   accent = הצהוב (כפתורים – עם טקסט שחור), accent-ink = צהוב כהה לטקסט על רקע בהיר */
+@theme {
+  --color-page: #f7f5ee;
+  --color-card: #ffffff;
+  --color-ink: #141414;
+  --color-muted: #6b675c;
+  --color-line: #e7e2d3;
+  --color-soft: #fff6cc;
+  --color-accent: #ffc400;
+  --color-accent-ink: #a16207;
+  --color-orange: #f59e0b;
+  --color-bar: #0a0a0a;
+  --color-danger: #dc2626;
+  --color-ok: #16a34a;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-page: #0a0a0a;
+  --color-card: #171717;
+  --color-ink: #f2f0ea;
+  --color-muted: #a29d90;
+  --color-line: #2b2a26;
+  --color-soft: #2a2410;
+  --color-accent: #ffd21f;
+  --color-accent-ink: #ffd21f;
+  --color-orange: #fbbf24;
+  --color-bar: #000000;
+  --color-danger: #f87171;
+  --color-ok: #4ade80;
+}
+
+html,
+body {
+  font-family: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--color-page);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* רקע "שברי זכוכית" צהובים, כמו בלוגו – למסך הכניסה */
+.shards {
+  background:
+    conic-gradient(from 30deg at 20% 30%, #ffd21f22, #f59e0b33, #ffd21f11, #ffc40033, #ffd21f22),
+    conic-gradient(from 200deg at 80% 70%, #f59e0b22, #ffd21f33, #ffc40011, #f59e0b22),
+    var(--color-bar);
+}
+
+.sheet-in {
+  animation: sheet-in 0.18s ease-out both;
+}
+@keyframes sheet-in {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
