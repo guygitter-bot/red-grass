@@ -26,7 +26,7 @@ export const GRACE_MS = 4000;
 export const COUNTDOWN_MS = 3000;
 const KEEP_MS = 3 * 24 * 60 * 60 * 1000;
 // תיקון הכתיב לא יכול לעכב את התוצאות יותר מזה – אחרי זה מציגים בלי תיקון
-export const SPELL_MS = 30000;
+export const SPELL_MS = 90000;
 const MAX_NAME = 20;
 const MAX_PHOTO = 20000;
 const PHOTO_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/;
@@ -48,7 +48,7 @@ export class Room {
   client() {
     if (this.env.AI_CLIENT) return this.env.AI_CLIENT;
     if (!this.env.ANTHROPIC_API_KEY) return null;
-    this.ai ||= new Anthropic({ apiKey: this.env.ANTHROPIC_API_KEY, maxRetries: 1, timeout: SPELL_MS - 5000 });
+    this.ai ||= new Anthropic({ apiKey: this.env.ANTHROPIC_API_KEY, maxRetries: 1, timeout: 40000 });
     return this.ai;
   }
 
@@ -250,7 +250,7 @@ export class Room {
 
   // בדיקת התשובות של הסיבוב שנגמר. בזמן שמחכים לסוכן יכולים להגיע בקשות אחרות – לכן קוראים שוב את החדר אחרי
   async fixRound(round) {
-    let checked = { fixed: {}, wrong: [] };
+    let checked = { fixed: {}, wrong: [], why: {} };
     let ok = true;
     try {
       checked = await checkAnswers(this.client(), round);
@@ -262,6 +262,7 @@ export class Room {
     if (!room || room.round?.n !== round.n || room.round.spell !== 'pending') return;
     room.round.fixed = checked.fixed;
     room.round.wrong = checked.wrong;
+    room.round.why = checked.why;
     room.round.spell = ok ? 'done' : 'failed';
     room.v++;
     await this.save(room);

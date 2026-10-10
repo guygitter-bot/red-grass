@@ -55,6 +55,7 @@ export default function Results({ state, act }) {
           <div className="animate-bounce text-6xl">✏️</div>
           <div className="mt-3 text-xl font-bold">הזמן נגמר!</div>
           <div className="mt-1 text-muted">בודקים את התשובות ומתקנים שגיאות כתיב...</div>
+          <div className="mt-1 text-sm text-muted">תשובה שנראית לא נכונה נבדקת פעמיים, לפעמים גם בחיפוש ברשת</div>
         </div>
       </div>
     );
@@ -114,6 +115,7 @@ export default function Results({ state, act }) {
                               {REASONS[cell.reason]}
                               {cell.reason === 'letter' && ` ${round.letter}`}
                               {cell.reason === 'wrong' && c.label}
+                              {cell.reason === 'wrong' && cell.why && ` – ${cell.why}`}
                               {cell.voters.length > 0 && cell.reason !== 'letter' && ` 👎 ${cell.voters.length}`}
                               {approvers.length > 0 && ` 👍 ${approvers.length}`}
                             </div>
