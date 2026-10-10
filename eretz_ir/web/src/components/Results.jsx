@@ -36,14 +36,13 @@ export function Scoreboard({ state, roundTotals }) {
 export default function Results({ state, act }) {
   const { round, results } = state;
   const [busy, setBusy] = useState(false);
-  const [seconds, setSeconds] = useState(state.seconds);
   const others = state.players.length - 1;
 
   const vote = (category, target, bad) => act('/vote', { round: round.n, category, target, bad }).catch(() => {});
   const approve = (category, target, yes) => act('/vote', { round: round.n, category, target, kind: 'approve', approve: yes }).catch(() => {});
   const next = async () => {
     setBusy(true);
-    await act('/start', { seconds, recent: recentLetters() }).catch(() => {});
+    await act('/start', { seconds: state.seconds, recent: recentLetters() }).catch(() => {});
     setBusy(false);
   };
 
@@ -156,7 +155,11 @@ export default function Results({ state, act }) {
 
       <div className="fixed inset-x-0 bottom-0 border-t border-line bg-card/95 p-3 backdrop-blur">
         <div className="mx-auto flex max-w-5xl flex-col gap-2 lg:flex-row lg:items-center">
-          <TimePicker value={seconds} onChange={setSeconds} />
+          <TimePicker
+            value={state.seconds}
+            readOnly={state.me !== state.hostId}
+            onChange={(s) => act('/settings', { seconds: s }).catch(() => {})}
+          />
           <Button className="text-lg lg:mr-auto lg:px-10" onClick={next} disabled={busy}>
             🔁 סיבוב נוסף
           </Button>

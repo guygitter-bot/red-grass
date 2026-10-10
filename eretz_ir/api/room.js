@@ -108,7 +108,9 @@ export class Room {
         if (!changed && body.v === room.v) return json(200, { same: true, v: room.v, now: this.now() });
         return json(200, await this.view(room, me.id));
 
+      // רק מי שפתח את המשחק קובע את הזמן
       case '/settings': {
+        if (me.id !== room.hostId) return json(403, { error: 'רק מי שפתח את המשחק יכול לשנות את הזמן' });
         const seconds = Number(body.seconds);
         if (!TIMES.includes(seconds)) return json(400, { error: 'זמן לא תקין' });
         room.seconds = seconds;
@@ -119,7 +121,7 @@ export class Room {
 
       case '/start': {
         if (room.phase === 'playing') return json(200, await this.view(room, me.id));
-        if (TIMES.includes(Number(body.seconds))) room.seconds = Number(body.seconds);
+        if (me.id === room.hostId && TIMES.includes(Number(body.seconds))) room.seconds = Number(body.seconds);
         if (room.phase === 'results' && room.round) {
           const { totals } = scoreRound(room.round, room.players.map((p) => p.id));
           room.history.push({ n: room.round.n, letter: room.round.letter, totals });

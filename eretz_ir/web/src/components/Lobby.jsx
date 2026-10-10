@@ -81,8 +81,12 @@ export default function Lobby({ state, act, profile }) {
           {state.players.length < 2 && <p className="mt-3 text-sm text-muted">מחכים לחברים... (אפשר גם להתחיל לבד, לאימון)</p>}
         </Card>
         <Card className="flex flex-col gap-3 text-center">
-          <div className="font-bold">כמה זמן לכל סיבוב?</div>
-          <TimePicker value={state.seconds} onChange={(seconds) => act('/settings', { seconds }).catch(() => {})} />
+          {state.me === state.hostId && <div className="font-bold">כמה זמן לכל סיבוב?</div>}
+          <TimePicker
+            value={state.seconds}
+            readOnly={state.me !== state.hostId}
+            onChange={(seconds) => act('/settings', { seconds }).catch(() => {})}
+          />
           <Button className="py-4 text-xl" onClick={start} disabled={busy}>
             ▶️ מתחילים!
           </Button>

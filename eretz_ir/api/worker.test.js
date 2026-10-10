@@ -400,3 +400,14 @@ test('the country list', async () => {
   for (const c of ['לוב', 'פרו', "צ'אד", 'ארה"ב', 'ארצות הברית', 'ניו-זילנד', 'שוויץ', 'דרום אפריקה']) assert.ok(isKnownCountry(c), c);
   for (const c of ['צפון', 'איי', 'ירושלים', 'היי']) assert.ok(!isKnownCountry(c), c);
 });
+
+test('only whoever opened the game can change the time', async () => {
+  const env = fakeEnv();
+  const code = await gameWith(env, 2);
+  assert.equal((await call(env, '/settings', { ...auth(code, 2), seconds: 300 })).status, 403);
+  assert.equal((await call(env, '/settings', { ...auth(code, 1), seconds: 300 })).data.seconds, 300);
+  // שחקן אחר מתחיל – הזמן לא משתנה
+  const started = await call(env, '/start', { ...auth(code, 2), seconds: 60 });
+  assert.equal(started.data.seconds, 300);
+  assert.equal(started.data.round.endsAt - started.data.round.startsAt, 300_000);
+});
