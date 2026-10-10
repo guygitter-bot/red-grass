@@ -8,18 +8,28 @@
 //   POST /vote {code, playerId, token, round, category, target, bad}  -> סימון תשובה של מישהו כלא נכונה
 //   POST /leave {code, playerId, token}
 // player = {id, token, name, photo}. בלי סיסמה: מי שיש לו את הקוד יכול להצטרף.
+//
+// קהילות חברים (club.js), קוד בן 6 תווים:
+//   POST /club/create {name, player} | /club/join {club, player}
+//   POST /club/get | /club/leave {club, playerId, token} | /club/rename {club, playerId, token, name}
+//   POST /club/subscribe {club, playerId, token, subscription}   (null = כיבוי התראות)
+//   POST /club/invite {club, playerId, token, game}              -> התראה לכל החברים: "בואו לשחק"
+//   POST /push/key                                               -> המפתח הציבורי להרשמה להתראות
 import { Room } from './room.js';
+import { Club } from './club.js';
 
-export { Room };
+export { Room, Club };
 
 const MAX_BODY_BYTES = 64 * 1024;
 const ROUTES = ['/create', '/join', '/state', '/settings', '/start', '/answers', '/vote', '/leave'];
+const CLUB_ROUTES = ['/club/create', '/club/join', '/club/get', '/club/rename', '/club/subscribe', '/club/invite', '/club/leave'];
 // בלי אותיות ומספרים שמתבלבלים (O/0, I/1/L)
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 export const CODE_RE = /^[A-HJKMNP-Z2-9]{5}$/;
+export const CLUB_RE = /^[A-HJKMNP-Z2-9]{6}$/;
 
-export function newCode() {
-  const bytes = crypto.getRandomValues(new Uint8Array(5));
+export function newCode(length = 5) {
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
   return [...bytes].map((b) => CODE_CHARS[b % CODE_CHARS.length]).join('');
 }
 
@@ -52,8 +62,9 @@ export default {
 
     const { pathname } = new URL(request.url);
     if (pathname === '/' || pathname === '/health') return reply(200, { ok: true });
-    if (!env.ROOMS) return reply(503, { error: 'השרת לא מוגדר' });
-    if (request.method !== 'POST' || !ROUTES.includes(pathname)) return reply(404, { error: 'לא נמצא' });
+    const isClub = CLUB_ROUTES.includes(pathname) || pathname === '/push/key';
+    if (request.method !== 'POST' || (!ROUTES.includes(pathname) && !isClub)) return reply(404, { error: 'לא נמצא' });
+    if (!(isClub ? env.CLUBS : env.ROOMS)) return reply(503, { error: 'השרת לא מוגדר' });
 
     const text = await request.text();
     if (text.length > MAX_BODY_BYTES) return reply(413, { error: 'גדול מדי' });
@@ -70,6 +81,31 @@ export default {
       const res = await stub.fetch(new Request(`https://room${pathname}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }));
       return { status: res.status, data: await res.json() };
     };
+
+    // קהילות
+    if (isClub) {
+      const club = (code, path, payload) =>
+        env.CLUBS.get(env.CLUBS.idFromName(code))
+          .fetch(new Request(`https://club${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }))
+          .then(async (res) => ({ status: res.status, data: await res.json() }));
+      if (pathname === '/push/key') {
+        const res = await club('~vapid', '/vapid', {});
+        return reply(res.status, { publicKey: res.data.publicKey });
+      }
+      const path = pathname.slice('/club'.length);
+      if (path === '/create') {
+        for (let i = 0; i < 5; i++) {
+          const code = newCode(6);
+          const res = await club(code, path, { ...body, club: code });
+          if (res.status !== 409) return reply(res.status, res.data);
+        }
+        return reply(503, { error: 'נסו שוב' });
+      }
+      const code = String(body.club || '').trim().toUpperCase();
+      if (!CLUB_RE.test(code)) return reply(404, { error: 'קוד קהילה לא תקין' });
+      const res = await club(code, path, { ...body, club: code });
+      return reply(res.status, res.data);
+    }
 
     if (pathname === '/create') {
       // קוד חדש; אם במקרה תפוס – מנסים אחר
