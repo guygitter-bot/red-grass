@@ -29,3 +29,11 @@ describe('longEnough', () => {
     expect(longEnough('אב')).toBe(true);
   });
 });
+
+describe('club links', async () => {
+  const { clubFrom } = await import('./clubs');
+  it('reads a community code', () => {
+    expect(clubFrom('https://eretz-ir.pages.dev/?c=ab3cd9')).toBe('AB3CD9');
+    expect(clubFrom('abcde')).toBe('');
+  });
+});

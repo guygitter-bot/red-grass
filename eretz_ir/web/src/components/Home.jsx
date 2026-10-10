@@ -3,6 +3,7 @@ import { api } from '../lib/api';
 import { codeFrom } from '../lib/game';
 import { lastGame } from '../lib/profile';
 import { Avatar, Button, Card } from './ui';
+import { ClubsCard } from './Clubs';
 
 // התקנה במסך הבית: באנדרואיד/מחשב – הכפתור של הדפדפן; באייפון – הסבר קצר
 let installEvent = null;
@@ -52,7 +53,7 @@ function Install() {
   );
 }
 
-export default function Home({ profile, onEditProfile, onOpen }) {
+export default function Home({ profile, onEditProfile, onOpen, onOpenClub }) {
   const [joinText, setJoinText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -129,6 +130,8 @@ export default function Home({ profile, onEditProfile, onOpen }) {
       </Card>
 
       {error && <p className="text-center text-sm text-red-600 dark:text-red-400">{error}</p>}
+
+      <ClubsCard profile={profile} onOpenClub={onOpenClub} onOpenGame={onOpen} />
 
       <Install />
 

@@ -120,7 +120,7 @@ export default function Game({ code, profile, onExit, onEditProfile }) {
         </div>
       )}
 
-      {state.phase === 'lobby' && <Lobby state={state} act={act} />}
+      {state.phase === 'lobby' && <Lobby state={state} act={act} profile={profile} />}
       {state.phase === 'playing' && <Play key={state.round.n} state={state} act={act} now={now} />}
       {state.phase === 'results' && <Results state={state} act={act} />}
     </div>

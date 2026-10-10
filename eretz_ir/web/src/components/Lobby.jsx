@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { inviteLink } from '../lib/game';
 import { recentLetters } from '../lib/profile';
 import { Avatar, Button, Card, TimePicker } from './ui';
+import { CallFriends } from './Clubs';
 
 const INVITE_TEXT = 'בואו לשחק איתי ארץ עיר! 🌍';
 
@@ -51,7 +52,7 @@ export function Invite({ code }) {
 }
 
 // חדר ההמתנה: מי כבר כאן, כמה זמן לסיבוב, ו"מתחילים!"
-export default function Lobby({ state, act }) {
+export default function Lobby({ state, act, profile }) {
   const [busy, setBusy] = useState(false);
   const start = async () => {
     setBusy(true);
@@ -60,7 +61,10 @@ export default function Lobby({ state, act }) {
   };
   return (
     <div className="flex flex-col gap-4 lg:grid lg:grid-cols-2 lg:items-start">
-      <Invite code={state.code} />
+      <div className="flex flex-col gap-4">
+        <Invite code={state.code} />
+        <CallFriends profile={profile} game={state.code} />
+      </div>
       <div className="flex flex-col gap-4">
         <Card>
           <div className="mb-3 font-bold">מי כבר כאן ({state.players.length})</div>
