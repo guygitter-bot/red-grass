@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import worker, { Room, CODE_RE, originAllowed } from './worker.js';
 import { normalize, startsWithLetter, scoreRound, pickLetter, LETTERS } from './game.js';
-import { GRACE_MS, COUNTDOWN_MS, MAX_PLAYERS, SPELL_MS } from './room.js';
+import { GRACE_MS, COUNTDOWN_MS, MAX_PLAYERS, SPELL_MS, READY_MS } from './room.js';
 import { spellJobs } from './spell.js';
 
 // זיכרון מדומה במקום האחסון של Durable Object
@@ -47,6 +47,19 @@ async function call(env, path, body, origin = 'https://eretz-ir.pages.dev') {
 
 const player = (n, extra = {}) => ({ id: `player-${n}-aaaa`, token: `token-${n}-0123456789abcdef`, name: `שחקן ${n}`, photo: '', ...extra });
 const auth = (code, n) => ({ code, playerId: player(n).id, token: player(n).token });
+
+// "מתחילים!" ואז כל השאר מאשרים "מוכן" – מחזיר את המצב אחרי שהסיבוב התחיל
+async function start(env, body) {
+  const res = await call(env, '/start', body);
+  if (res.data.phase !== 'ready') return res;
+  let last = res;
+  for (const p of res.data.players) {
+    if (res.data.ready.players.includes(p.id)) continue;
+    const n = p.id.match(/^player-(\d+)-/)[1];
+    last = await call(env, '/ready', { code: body.code, playerId: p.id, token: `token-${n}-0123456789abcdef` });
+  }
+  return last;
+}
 
 async function gameWith(env, count) {
   const created = await call(env, '/create', { player: player(1) });
@@ -129,13 +142,13 @@ test('create, join, and a full round', async () => {
   const same = await call(env, '/state', { ...auth(code, 1), v: joined.data.v });
   assert.equal(same.data.same, true);
 
-  const started = await call(env, '/start', { ...auth(code, 1), seconds: 60 });
+  const started = await start(env, { ...auth(code, 1), seconds: 60 });
   assert.equal(started.data.phase, 'playing');
   assert.equal(started.data.round.letter, 'א');
   assert.equal(started.data.round.endsAt - started.data.round.startsAt, 60_000);
   assert.equal(started.data.round.startsAt, env.time + COUNTDOWN_MS);
   // לחיצה כפולה על "התחל" לא מתחילה סיבוב נוסף
-  assert.equal((await call(env, '/start', auth(code, 2))).data.round.n, 1);
+  assert.equal((await start(env, auth(code, 2))).data.round.n, 1);
 
   env.time += 20_000;
   await call(env, '/answers', { ...auth(code, 1), round: 1, answers: { country: 'אנגליה', city: 'אשדוד', junk: 'x' } });
@@ -165,7 +178,7 @@ test('create, join, and a full round', async () => {
   assert.equal(undone.data.players.find((p) => p.id === player(1).id).total, 15);
 
   // סיבוב שני: הניקוד נשמר, אות אחרת
-  const next = await call(env, '/start', auth(code, 2));
+  const next = await start(env, auth(code, 2));
   assert.equal(next.data.round.n, 2);
   assert.equal(next.data.round.letter, 'ב');
   assert.equal(next.data.seconds, 60);
@@ -176,7 +189,7 @@ test('create, join, and a full round', async () => {
 test('the round ends when the time is up, late answers are refused', async () => {
   const env = fakeEnv();
   const code = await gameWith(env, 2);
-  await call(env, '/start', auth(code, 1));
+  await start(env, auth(code, 1));
   env.time += COUNTDOWN_MS + 120_000 + 1000;
   // עדיין בזמן החסד – התשובה נקלטת
   assert.equal((await call(env, '/answers', { ...auth(code, 1), round: 1, answers: { country: 'אוסטריה' }, done: true })).status, 200);
@@ -253,7 +266,7 @@ test('spelling is fixed at the end of the round, and fixed answers count as the 
   const calls = [];
   const env = fakeEnv({ AI_CLIENT: fakeSpeller(calls) });
   const code = await gameWith(env, 3);
-  await call(env, '/start', auth(code, 1));
+  await start(env, auth(code, 1));
   env.time += COUNTDOWN_MS + 5000;
   await call(env, '/answers', { ...auth(code, 1), round: 1, answers: { animal: 'ארייה', country: 'אמרכה', plant: 'אבטיך' }, done: true });
   await call(env, '/answers', { ...auth(code, 2), round: 1, answers: { animal: 'אריה', country: 'אנגליה', plant: 'בננה' }, done: true });
@@ -284,7 +297,7 @@ test('spelling is fixed at the end of the round, and fixed answers count as the 
 test('when the speller fails or is stuck, results show without fixes', async () => {
   const env = fakeEnv({ AI_CLIENT: fakeSpeller([], true) });
   const code = await gameWith(env, 1);
-  await call(env, '/start', auth(code, 1));
+  await start(env, auth(code, 1));
   await call(env, '/answers', { ...auth(code, 1), round: 1, answers: { animal: 'ארייה' }, done: true });
   await env.rooms.get(code).alarm();
   const failed = await call(env, '/state', auth(code, 1));
@@ -295,7 +308,7 @@ test('when the speller fails or is stuck, results show without fixes', async () 
   // נתקע (ה-alarm לא רץ) – אחרי חצי דקה מציגים בלי
   const env2 = fakeEnv({ AI_CLIENT: fakeSpeller() });
   const code2 = await gameWith(env2, 1);
-  await call(env2, '/start', auth(code2, 1));
+  await start(env2, auth(code2, 1));
   await call(env2, '/answers', { ...auth(code2, 1), round: 1, answers: { animal: 'ארייה' }, done: true });
   assert.equal((await call(env2, '/state', auth(code2, 1))).data.round.spell, 'pending');
   env2.time += SPELL_MS + 1;
@@ -314,7 +327,7 @@ test('answers that do not fit the category score nothing, unless most players ap
   const calls = [];
   const env = fakeEnv({ AI_CLIENT: fakeSpeller(calls), RANDOM: () => 4.5 / 22 }); // האות ה
   const code = await gameWith(env, 3);
-  const started = await call(env, '/start', auth(code, 1));
+  const started = await start(env, auth(code, 1));
   assert.equal(started.data.round.letter, 'ה');
   env.time += COUNTDOWN_MS + 5000;
   await call(env, '/answers', { ...auth(code, 1), round: 1, answers: { job: 'היי', animal: 'ה' }, done: true });
@@ -343,7 +356,7 @@ test('answers that do not fit the category score nothing, unless most players ap
 test('first to finish with every field filled gets a bonus (if at least half are right)', async () => {
   const env = fakeEnv();
   const code = await gameWith(env, 3);
-  await call(env, '/start', auth(code, 1));
+  await start(env, auth(code, 1));
   env.time += COUNTDOWN_MS + 5000;
   const full = { country: 'אוסטריה', city: 'אשדוד', animal: 'אריה', plant: 'אורן', object: 'ארון', boy: 'אבי', girl: 'אורית', job: 'אופה', food: 'אורז' };
   // שחקן 2 סיים ראשון אבל עם שדות ריקים – אין בונוס
@@ -399,4 +412,40 @@ test('the country list', async () => {
   const { isKnownCountry } = await import('./countries.js');
   for (const c of ['לוב', 'פרו', "צ'אד", 'ארה"ב', 'ארצות הברית', 'ניו-זילנד', 'שוויץ', 'דרום אפריקה']) assert.ok(isKnownCountry(c), c);
   for (const c of ['צפון', 'איי', 'ירושלים', 'היי']) assert.ok(!isKnownCountry(c), c);
+});
+
+test('only whoever opened the game can change the time', async () => {
+  const env = fakeEnv();
+  const code = await gameWith(env, 2);
+  assert.equal((await call(env, '/settings', { ...auth(code, 2), seconds: 300 })).status, 403);
+  assert.equal((await call(env, '/settings', { ...auth(code, 1), seconds: 300 })).data.seconds, 300);
+  // שחקן אחר מתחיל – הזמן לא משתנה
+  const started = await start(env, { ...auth(code, 2), seconds: 60 });
+  assert.equal(started.data.seconds, 300);
+  assert.equal(started.data.round.endsAt - started.data.round.startsAt, 300_000);
+});
+
+test('everyone confirms they are ready; after half a minute the round starts anyway', async () => {
+  const env = fakeEnv();
+  const code = await gameWith(env, 3);
+  const started = await call(env, '/start', auth(code, 2));
+  assert.equal(started.data.phase, 'ready');
+  assert.deepEqual(started.data.ready.players, [player(2).id]);
+  assert.equal(started.data.ready.until, env.time + READY_MS);
+  // לחיצה נוספת לא מאפסת
+  assert.equal((await call(env, '/start', auth(code, 1))).data.ready.players.length, 1);
+  const one = await call(env, '/ready', auth(code, 1));
+  assert.equal(one.data.phase, 'ready');
+  assert.equal(one.data.ready.players.length, 2);
+  // שחקן 3 לא אישר – אחרי חצי דקה מתחילים בכל זאת
+  env.time += READY_MS;
+  const later = await call(env, '/state', auth(code, 3));
+  assert.equal(later.data.phase, 'playing');
+  assert.equal(later.data.round.n, 1);
+  assert.equal(later.data.round.startsAt, env.time + COUNTDOWN_MS);
+
+  // כולם מאשרים – מתחילים מיד; משחק של אחד – מתחיל מיד
+  const solo = fakeEnv();
+  const soloCode = await gameWith(solo, 1);
+  assert.equal((await call(solo, '/start', auth(soloCode, 1))).data.phase, 'playing');
 });

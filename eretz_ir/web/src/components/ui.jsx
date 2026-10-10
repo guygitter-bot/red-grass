@@ -36,8 +36,12 @@ export function Avatar({ player, size = 40, ring = false }) {
   );
 }
 
-// בחירת זמן לסיבוב
-export function TimePicker({ value, onChange }) {
+// בחירת זמן לסיבוב (רק מי שפתח את המשחק; האחרים רואים מה נבחר)
+export function TimePicker({ value, onChange, readOnly }) {
+  if (readOnly) {
+    const label = TIMES.find((t) => t.seconds === value)?.label || `${Math.round(value / 60)} דקות`;
+    return <div className="text-center text-muted">⏱️ זמן לסיבוב: <b className="text-ink">{label}</b> (קובע/ת מי שפתח/ה את המשחק)</div>;
+  }
   return (
     <div className="flex flex-wrap justify-center gap-2">
       {TIMES.map((t) => (

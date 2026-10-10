@@ -2,7 +2,9 @@
 //
 // אחסון:
 //   room      -> { code, v, hostId, phase, seconds, players, usedLetters, round, history, updated }
-//                phase: lobby (מחכים לשחקנים) | playing (כותבים) | results (תוצאות ופסילות)
+//                phase: lobby (מחכים לשחקנים) | ready (מחכים שכולם יאשרו "מוכן", עד חצי דקה) | playing (כותבים)
+//                       | results (תוצאות ופסילות)
+//                ready: [מי אישר], readyUntil: עד מתי מחכים, readyRecent: אותיות אחרונות של מי שלחץ "מתחילים"
 //                players: [{ id, token, name, joined }]   (token = סוד של השחקן, לא נשלח לאחרים)
 //                round: { n, letter, startsAt, endsAt, endedAt, answers: {<שחקן>: {...}}, done: [...], votes: {...},
 //                         approves: {...}, spell: pending | done | failed | off, fixed: {...}, wrong: [...] }
@@ -24,6 +26,8 @@ export const DEFAULT_SECONDS = 120;
 // אחרי שהזמן נגמר מחכים עוד קצת לתשובות האחרונות שבדרך
 export const GRACE_MS = 4000;
 export const COUNTDOWN_MS = 3000;
+// אחרי "מתחילים!" – כולם צריכים לאשר שהם מוכנים; מי שלא אישר תוך חצי דקה – המשחק מתחיל בלעדיו
+export const READY_MS = 30000;
 const KEEP_MS = 3 * 24 * 60 * 60 * 1000;
 // תיקון הכתיב לא יכול לעכב את התוצאות יותר מזה – אחרי זה מציגים בלי תיקון
 export const SPELL_MS = 90000;
@@ -108,7 +112,9 @@ export class Room {
         if (!changed && body.v === room.v) return json(200, { same: true, v: room.v, now: this.now() });
         return json(200, await this.view(room, me.id));
 
+      // רק מי שפתח את המשחק קובע את הזמן
       case '/settings': {
+        if (me.id !== room.hostId) return json(403, { error: 'רק מי שפתח את המשחק יכול לשנות את הזמן' });
         const seconds = Number(body.seconds);
         if (!TIMES.includes(seconds)) return json(400, { error: 'זמן לא תקין' });
         room.seconds = seconds;
@@ -117,30 +123,31 @@ export class Room {
         return json(200, await this.view(room, me.id));
       }
 
+      // "מתחילים!" / "סיבוב נוסף": קודם כולם מאשרים שהם מוכנים (מי שלחץ – כבר מוכן)
       case '/start': {
-        if (room.phase === 'playing') return json(200, await this.view(room, me.id));
-        if (TIMES.includes(Number(body.seconds))) room.seconds = Number(body.seconds);
+        if (room.phase === 'playing' || room.phase === 'ready') return json(200, await this.view(room, me.id));
+        if (me.id === room.hostId && TIMES.includes(Number(body.seconds))) room.seconds = Number(body.seconds);
         if (room.phase === 'results' && room.round) {
           const { totals } = scoreRound(room.round, room.players.map((p) => p.id));
           room.history.push({ n: room.round.n, letter: room.round.letter, totals });
         }
-        const recent = Array.isArray(body.recent) ? body.recent.filter((l) => typeof l === 'string').slice(0, 30) : [];
-        const letter = pickLetter(room.usedLetters, this.random, recent);
-        room.usedLetters = room.usedLetters.length >= 21 ? [letter] : [...room.usedLetters, letter];
-        const startsAt = this.now() + COUNTDOWN_MS;
-        room.round = {
-          n: (room.round?.n || 0) + 1,
-          letter,
-          startsAt,
-          endsAt: startsAt + room.seconds * 1000,
-          answers: {},
-          done: [],
-          votes: {},
-          approves: {},
-        };
-        room.phase = 'playing';
+        room.readyRecent = Array.isArray(body.recent) ? body.recent.filter((l) => typeof l === 'string').slice(0, 30) : [];
+        room.phase = 'ready';
+        room.ready = [me.id];
+        room.readyUntil = this.now() + READY_MS;
         room.v++;
+        this.tick(room);
         await this.save(room);
+        return json(200, await this.view(room, me.id));
+      }
+
+      case '/ready': {
+        if (room.phase === 'ready' && !room.ready.includes(me.id)) {
+          room.ready.push(me.id);
+          room.v++;
+          this.tick(room);
+          await this.save(room);
+        } else if (changed) await this.save(room);
         return json(200, await this.view(room, me.id));
       }
 
@@ -197,6 +204,13 @@ export class Room {
 
   // סוף הסיבוב: כשהזמן (ועוד קצת) עבר, או כשכל השחקנים לחצו "סיימתי". מחזיר true אם משהו השתנה
   tick(room) {
+    // כולם מוכנים, או שעברה חצי דקה – מתחילים
+    if (room.phase === 'ready') {
+      const all = room.players.every((p) => room.ready.includes(p.id));
+      if (!all && this.now() < room.readyUntil) return false;
+      this.beginRound(room);
+      return true;
+    }
     const round = room.round;
     // התיקון נתקע – מציגים בלי
     if (room.phase === 'results' && round?.spell === 'pending' && this.now() - round.endedAt > SPELL_MS) {
@@ -212,6 +226,26 @@ export class Room {
     round.spell = this.client() && spellJobs(round).length ? 'pending' : 'off';
     room.v++;
     return true;
+  }
+
+  // סיבוב חדש עם אות חדשה (אחרי שכולם מוכנים)
+  beginRound(room) {
+    const letter = pickLetter(room.usedLetters, this.random, room.readyRecent || []);
+    room.usedLetters = room.usedLetters.length >= 21 ? [letter] : [...room.usedLetters, letter];
+    const startsAt = this.now() + COUNTDOWN_MS;
+    room.round = {
+      n: (room.round?.n || 0) + 1,
+      letter,
+      startsAt,
+      endsAt: startsAt + room.seconds * 1000,
+      answers: {},
+      done: [],
+      votes: {},
+      approves: {},
+    };
+    room.phase = 'playing';
+    room.ready = [];
+    room.v++;
   }
 
   checkPlayer(raw) {
@@ -292,6 +326,7 @@ export class Room {
         total: totals[p.id],
         done: !!round?.done.includes(p.id),
       })),
+      ready: room.phase === 'ready' ? { until: room.readyUntil, players: room.ready } : null,
       round: round && {
         n: round.n,
         letter: round.letter,
