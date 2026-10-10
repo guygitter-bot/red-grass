@@ -231,10 +231,17 @@ function fakeSpeller(calls = [], fail = false) {
           calls.push(req);
           if (fail) throw Object.assign(new Error('overloaded'), { status: 529 });
           const lines = req.messages[0].content.split('\n').filter((l) => /^\d+\./.test(l));
-          const fixes = lines.map((l) => {
+          const items = lines.map((l) => {
             const [, i, text] = l.match(/^(\d+)\. \[[^\]]+\] (.*)$/);
-            return { i: Number(i), fixed: dict[text] || text, ok: !['היי', 'אאאא'].includes(text) };
+            return { i: Number(i), text };
           });
+          // הבודק השני: פוסל רק את מה שבאמת לא נכון
+          if (req.tools.some((t) => t.name === 'final_verdicts')) {
+            const verdicts = items.map(({ i, text }) => ({ i, ok: !['היי', 'אאאא'].includes(text), why: 'זו לא מילה' }));
+            return { stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'final_verdicts', input: { verdicts } }] };
+          }
+          // הבודק הראשון טועה גם ב"לוב" וב"וירוס"
+          const fixes = items.map(({ i, text }) => ({ i, fixed: dict[text] || text, ok: !['היי', 'אאאא', 'לוב', 'וירוס'].includes(text) }));
           return { stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'fix_answers', input: { fixes } }] };
         },
       },
@@ -359,4 +366,37 @@ test('letters from recent games on this device are skipped when possible', () =>
   assert.equal(pickLetter(['ג'], () => 0, ['א', 'ב']), 'ד');
   // כולן היו – בכל זאת יש אות
   assert.ok(LETTERS.includes(pickLetter([], () => 0, LETTERS)));
+});
+
+test('wrong rejections are undone: known countries, and a second judge re-checks every rejection', async () => {
+  const calls = [];
+  const round = { letter: 'ל', answers: { a: { country: 'לוב', animal: 'לביא', job: 'להיי' } }, votes: {} };
+  const { checkAnswers } = await import('./spell.js');
+  // "לוב" ברשימת הארצות – לא נשלח לבודק השני
+  let res = await checkAnswers(fakeSpeller(calls), round);
+  assert.deepEqual(res.wrong, []);
+  assert.equal(calls.length, 1);
+
+  const round2 = { letter: 'ו', answers: { a: { animal: 'וירוס', job: 'וו' } , b: { boy: 'ויקי' } }, votes: {} };
+  calls.length = 0;
+  res = await checkAnswers(fakeSpeller(calls), round2);
+  // "וירוס" נפסל אצל הראשון, השני מחזיר אותו
+  assert.equal(calls.length, 2);
+  assert.ok(calls[1].tools.some((t) => t.type === 'web_search_20260209'));
+  assert.match(calls[1].messages[0].content, /וירוס/);
+  assert.deepEqual(res.wrong, []);
+
+  // "היי" – גם השני פוסל, עם הסבר
+  const round3 = { letter: 'ה', answers: { a: { job: 'היי' } }, votes: {} };
+  res = await checkAnswers(fakeSpeller([]), round3);
+  assert.deepEqual(res.wrong, ['job|היי']);
+  assert.equal(res.why['job|היי'], 'זו לא מילה');
+  const scored = scoreRound({ ...round3, ...res }, ['a']);
+  assert.equal(scored.rows.job.a.why, 'זו לא מילה');
+});
+
+test('the country list', async () => {
+  const { isKnownCountry } = await import('./countries.js');
+  for (const c of ['לוב', 'פרו', "צ'אד", 'ארה"ב', 'ארצות הברית', 'ניו-זילנד', 'שוויץ', 'דרום אפריקה']) assert.ok(isKnownCountry(c), c);
+  for (const c of ['צפון', 'איי', 'ירושלים', 'היי']) assert.ok(!isKnownCountry(c), c);
 });

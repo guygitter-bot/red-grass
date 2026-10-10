@@ -109,7 +109,8 @@ export function scoreRound(round, playerIds) {
       else if (!longEnough(norm)) reason = 'short';
       else if (round.wrong?.includes(key) && !majority(approvers)) reason = 'wrong';
       else if (majority(voters)) reason = 'voted';
-      cells[pid] = { text, ...(fix ? { typed } : {}), valid: !reason, reason, voters, approvers, points: 0 };
+      const why = reason === 'wrong' && round.why?.[key];
+      cells[pid] = { text, ...(fix ? { typed } : {}), ...(why ? { why } : {}), valid: !reason, reason, voters, approvers, points: 0 };
       if (!reason) groups.set(norm, [...(groups.get(norm) || []), pid]);
     }
     for (const ids of groups.values()) {
