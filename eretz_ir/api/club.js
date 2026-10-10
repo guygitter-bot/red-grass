@@ -102,6 +102,15 @@ export class Club {
         return json(200, { ...this.view(club, me.id), sent });
       }
 
+      // שינוי שם הקהילה (כל חבר יכול)
+      case '/rename': {
+        const name = clean(body.name, MAX_NAME);
+        if (!name) return json(400, { error: 'צריך שם לקהילה' });
+        club.name = name;
+        await this.save(club);
+        return json(200, this.view(club, me.id));
+      }
+
       case '/leave':
         club.members = club.members.filter((m) => m.id !== me.id);
         await this.save(club);

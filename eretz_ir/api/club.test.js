@@ -107,6 +107,9 @@ test('community checks: tokens, bad codes, leaving, full', async () => {
   const env = fakeEnv();
   const club = (await call(env, '/club/create', { name: 'כיתה ג', player: player(1) })).data.code;
   assert.equal((await call(env, '/club/create', { name: '  ', player: player(1) })).status, 400);
+  // שינוי שם
+  assert.equal((await call(env, '/club/rename', { ...auth(club, 1), name: ' כיתה ד ' })).data.name, 'כיתה ד');
+  assert.equal((await call(env, '/club/rename', { ...auth(club, 1), name: '' })).status, 400);
   assert.equal((await call(env, '/club/get', { ...auth(club, 1), token: 'x'.repeat(20) })).status, 403);
   assert.equal((await call(env, '/club/get', auth('ZZZZZZ', 1))).status, 404);
   assert.equal((await call(env, '/club/get', auth('~vapid', 1))).status, 404);

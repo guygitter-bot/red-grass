@@ -11,7 +11,7 @@
 //
 // קהילות חברים (club.js), קוד בן 6 תווים:
 //   POST /club/create {name, player} | /club/join {club, player}
-//   POST /club/get | /club/leave {club, playerId, token}
+//   POST /club/get | /club/leave {club, playerId, token} | /club/rename {club, playerId, token, name}
 //   POST /club/subscribe {club, playerId, token, subscription}   (null = כיבוי התראות)
 //   POST /club/invite {club, playerId, token, game}              -> התראה לכל החברים: "בואו לשחק"
 //   POST /push/key                                               -> המפתח הציבורי להרשמה להתראות
@@ -22,7 +22,7 @@ export { Room, Club };
 
 const MAX_BODY_BYTES = 64 * 1024;
 const ROUTES = ['/create', '/join', '/state', '/settings', '/start', '/answers', '/vote', '/leave'];
-const CLUB_ROUTES = ['/club/create', '/club/join', '/club/get', '/club/subscribe', '/club/invite', '/club/leave'];
+const CLUB_ROUTES = ['/club/create', '/club/join', '/club/get', '/club/rename', '/club/subscribe', '/club/invite', '/club/leave'];
 // בלי אותיות ומספרים שמתבלבלים (O/0, I/1/L)
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 export const CODE_RE = /^[A-HJKMNP-Z2-9]{5}$/;

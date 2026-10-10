@@ -111,7 +111,8 @@ export function ClubsCard({ profile, onOpenClub, onOpenGame }) {
       <div className="font-bold">👥 הקהילות שלי</div>
       {clubs.length === 0 && (
         <p className="text-sm text-muted">
-          קהילה = קבוצת חברים או משפחה. כשמישהו רוצה לשחק – כולם מקבלים התראה לטלפון עם קישור למשחק.
+          קהילה = קבוצת חברים או משפחה עם שם משלה (למשל "המשפחה", "החברים מהכיתה"). אפשר כמה קהילות נפרדות. כשמישהו רוצה
+          לשחק – כל מי שבקהילה מקבל התראה לטלפון עם קישור למשחק.
         </p>
       )}
       {clubs.map((c) => (
@@ -159,6 +160,8 @@ export function ClubScreen({ code, profile, onExit, onOpenGame }) {
   const [fatal, setFatal] = useState('');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [newName, setNewName] = useState('');
 
   const load = (joining) =>
     api(joining ? '/club/join' : '/club/get', joining ? { club: code, player: profile } : clubAuth(code, profile))
@@ -205,6 +208,19 @@ export function ClubScreen({ code, profile, onExit, onOpenGame }) {
     onExit();
   };
 
+  const rename = async (e) => {
+    e.preventDefault();
+    if (!newName.trim()) return;
+    try {
+      const data = await api('/club/rename', { ...clubAuth(code, profile), name: newName });
+      setClub(data);
+      rememberClub(data);
+      setRenaming(false);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const url = clubLink(code);
   const share = async () => {
     try {
@@ -241,7 +257,36 @@ export function ClubScreen({ code, profile, onExit, onOpenGame }) {
           ארץ עיר
         </button>
         <span className="text-muted">‹</span>
-        <h1 className="truncate text-xl font-bold">👥 {club.name}</h1>
+        {renaming ? (
+          <form onSubmit={rename} className="flex min-w-0 flex-1 gap-2">
+            <input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              maxLength={30}
+              autoFocus
+              className="min-w-0 flex-1 rounded-xl border border-line bg-page px-3 py-1.5 outline-none focus:border-accent"
+            />
+            <Button type="submit" className="px-3 py-1.5">
+              שמירה
+            </Button>
+          </form>
+        ) : (
+          <>
+            <h1 className="truncate text-xl font-bold">👥 {club.name}</h1>
+            <button
+              type="button"
+              aria-label="שינוי שם הקהילה"
+              title="שינוי שם הקהילה"
+              onClick={() => {
+                setNewName(club.name);
+                setRenaming(true);
+              }}
+              className="rounded-full px-2 py-1 text-muted hover:bg-soft"
+            >
+              ✏️
+            </button>
+          </>
+        )}
       </header>
 
       <InviteBanner invite={club.invite} me={profile.id} onOpenGame={onOpenGame} />
