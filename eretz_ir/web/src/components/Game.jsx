@@ -4,6 +4,7 @@ import { rememberLetter, setLastGame } from '../lib/profile';
 import Lobby, { Invite } from './Lobby';
 import Play from './Play';
 import Results from './Results';
+import Ready from './Ready';
 import { Avatar, Button, Card, ThemeButton } from './ui';
 
 // משחק אחד: מצטרפים, ואז שואלים את השרת כל שנייה וחצי מה חדש
@@ -96,10 +97,10 @@ export default function Game({ code, profile, onExit, onEditProfile }) {
   return (
     <div className="mx-auto max-w-5xl px-4 pt-3">
       <header className="mb-4 flex items-center gap-2">
-        <button type="button" onClick={onExit} className="text-xl font-extrabold text-accent-ink">
+        <button type="button" onClick={onExit} className="text-xl font-extrabold whitespace-nowrap text-accent-ink">
           ארץ עיר
         </button>
-        <button type="button" dir="ltr" onClick={() => setInvite(!invite)} className="rounded-full bg-soft px-3 py-1 text-sm font-bold tracking-widest">
+        <button type="button" dir="ltr" onClick={() => setInvite(!invite)} className="rounded-full bg-soft px-3 py-1 text-sm font-bold whitespace-nowrap tracking-widest">
           {code} +👤
         </button>
         <div className="mr-auto flex items-center gap-1">
@@ -121,6 +122,7 @@ export default function Game({ code, profile, onExit, onEditProfile }) {
       )}
 
       {state.phase === 'lobby' && <Lobby state={state} act={act} profile={profile} />}
+      {state.phase === 'ready' && <Ready state={state} act={act} now={now} />}
       {state.phase === 'playing' && <Play key={state.round.n} state={state} act={act} now={now} />}
       {state.phase === 'results' && <Results state={state} act={act} />}
     </div>

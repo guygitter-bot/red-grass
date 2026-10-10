@@ -3,7 +3,8 @@
 //   POST /join {code, player}                          -> הצטרפות (או עדכון שם/תמונה)
 //   POST /state {code, playerId, token, v}             -> מצב המשחק, או {same: true} אם לא השתנה מאז v
 //   POST /settings {code, playerId, token, seconds}    -> זמן לסיבוב
-//   POST /start {code, playerId, token, seconds?}      -> סיבוב חדש עם אות חדשה
+//   POST /start {code, playerId, token, seconds?}      -> "מתחילים": כולם מאשרים מוכנות (עד חצי דקה), ואז סיבוב חדש
+//   POST /ready {code, playerId, token}                -> "אני מוכן/ה"
 //   POST /answers {code, playerId, token, round, answers, done?}
 //   POST /vote {code, playerId, token, round, category, target, bad}  -> סימון תשובה של מישהו כלא נכונה
 //   POST /leave {code, playerId, token}
@@ -21,7 +22,7 @@ import { Club } from './club.js';
 export { Room, Club };
 
 const MAX_BODY_BYTES = 64 * 1024;
-const ROUTES = ['/create', '/join', '/state', '/settings', '/start', '/answers', '/vote', '/leave'];
+const ROUTES = ['/create', '/join', '/state', '/settings', '/start', '/ready', '/answers', '/vote', '/leave'];
 const CLUB_ROUTES = ['/club/create', '/club/join', '/club/get', '/club/rename', '/club/subscribe', '/club/invite', '/club/leave'];
 // בלי אותיות ומספרים שמתבלבלים (O/0, I/1/L)
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
