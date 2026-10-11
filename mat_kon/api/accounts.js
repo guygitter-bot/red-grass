@@ -158,6 +158,13 @@ export class Accounts {
     const now = new Date().toISOString();
     await this.ensureCleanup();
 
+    // ---- גיבוי (רק מתוך השרת, backup.js): המשתמשים וההזמנות, בלי מוני הגבלת קצב ----
+    if (path === '/backup/export' && request.method === 'GET') {
+      const data = {};
+      for (const [k, v] of await this.storage.list()) if (!k.startsWith('rate:')) data[k] = v;
+      return json({ data });
+    }
+
     // ---- בעל האפליקציה: הזמנות ומשתמשים ----
     if (path === '/invites' && request.method === 'POST') {
       const invite = {

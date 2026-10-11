@@ -92,6 +92,10 @@
   Google TTS רק כגיבוי. **בלי ניקוד** – ניסינו, ונשמע גרוע יותר.
 - מוזיקה: `tutorials/music.m4a` – "Stylish Modern" של Beat and Shine מ-ElevenLabs (רישיון מסחרי במנוי), מחוברת לעצמה ללופ.
 
+#### גיבוי
+- גיבוי לילי ל-R2 (`api/backup.js`, דלי `mat-kon-backups`, 30 ימים); שחזור ספר: `mat-kon-restore.yml`. שינוי במבנה הנתונים של ספר –
+  לוודא שהגיבוי והשחזור (`/backup/export`, `/backup/import`) עדיין מכסים אותו.
+
 #### ייבוא
 - My Recipe Box / RecetteTek (`.rtk`): `web/src/lib/importers.js`, דרך הגדרות ← "ייבוא מאפליקציה אחרת". מתכון בלי מצרכים
   אפשר "להשלים מהמקור" (נשלח לסוכן ברקע).

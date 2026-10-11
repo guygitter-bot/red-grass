@@ -14,6 +14,7 @@ import { gatherSource, normalizeUrl, sourceKind } from './source.js';
 import { NoRecipeError, aiMessage, categoryFields, extractRecipe, ideasFromPantry, organizeShopping, scanPantry, searchRecipes, suggestCategories } from './extract.js';
 import { findStores } from './stores.js';
 import { CATEGORIES } from './categories.js';
+import { backupStatus, restoreBook, runBackup } from './backup.js';
 
 export { RecipeBook, Accounts };
 
@@ -49,6 +50,14 @@ const internal = (stub, method, path, body) =>
   }));
 
 export default {
+  // גיבוי לילי ל-R2 (ראו backup.js ו-[triggers] ב-wrangler.toml). תקלה נרשמת במסך "עלויות ותקלות"
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runBackup(env).catch((e) => {
+      console.error('backup', e);
+      return internal(env.ACCOUNTS.get(env.ACCOUNTS.idFromName('accounts')), 'POST', '/errors/add', { where: 'backup', message: String(e?.message || e).slice(0, 300), user: 'owner' }).catch(() => {});
+    }));
+  },
+
   async fetch(request, env) {
     const cors = corsHeaders(request, env);
     const reply = (status, data) =>
@@ -321,6 +330,23 @@ export default {
       const data = await res.json();
       if (res.ok && data.deletedBook) await internal(bookOf(user.id), 'DELETE', '/recipes');
       return reply(res.status, data);
+    }
+
+    // ---- גיבויים: רק בעל האפליקציה ----
+    if (parts[0] === 'admin' && (parts[1] === 'backups' || parts[1] === 'restore')) {
+      if (user) return fail(403, 'רק לבעל האפליקציה');
+      if (parts[1] === 'backups' && request.method === 'GET') return reply(200, await backupStatus(env));
+      if (parts[1] === 'restore' && request.method === 'POST') {
+        const { body, error } = await readJson();
+        if (error) return error;
+        try {
+          return reply(200, await restoreBook(env, String(body.date || ''), String(body.book || '')));
+        } catch (e) {
+          await recordError('restore', e);
+          return fail(400, e.message);
+        }
+      }
+      return fail(405, 'Method not allowed');
     }
 
     // ---- ניהול הזמנות: רק בעל האפליקציה ----

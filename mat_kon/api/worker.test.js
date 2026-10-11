@@ -2,6 +2,7 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import worker, { deps } from './worker.js';
 import { hashPassword } from './accounts.js';
+import { runBackup } from './backup.js';
 import { fakeEnv } from './fake-env.js';
 import { RECIPE_TOOL } from './extract.js';
 
@@ -963,6 +964,64 @@ test('a recipe can be in several categories: from the agent, by edit, by re-fili
   await call('POST', '/recipes/restore', { recipes: [{ title: 'r', category: 'סלטים', categories: ['סלטים', 'תוספות', 'xx'], ingredients: [{ title: '', items: ['x'] }], source: { url: 'https://cake.example/r' } }] });
   const restored = (await (await call('GET', '/recipes')).json()).recipes.find((r) => r.title === 'r');
   assert.deepEqual(restored.categories, ['סלטים', 'תוספות']);
+});
+
+// דלי R2 מדומה (מה שהגיבוי משתמש בו)
+function fakeBucket() {
+  const files = new Map();
+  const obj = (v) => ({ json: async () => JSON.parse(new TextDecoder().decode(v.body)), arrayBuffer: async () => v.body.slice().buffer, httpMetadata: v.meta });
+  return {
+    files,
+    put: async (key, body, opts = {}) => {
+      const bytes = typeof body === 'string' ? new TextEncoder().encode(body) : new Uint8Array(body);
+      files.set(key, { body: bytes, meta: opts.httpMetadata || {} });
+    },
+    get: async (key) => (files.has(key) ? obj(files.get(key)) : null),
+    head: async (key) => (files.has(key) ? {} : null),
+    delete: async (keys) => { for (const k of [].concat(keys)) files.delete(k); },
+    list: async ({ prefix = '', delimiter } = {}) => {
+      const keys = [...files.keys()].filter((k) => k.startsWith(prefix)).sort();
+      if (!delimiter) return { objects: keys.map((key) => ({ key })), truncated: false };
+      const prefixes = [...new Set(keys.map((k) => k.slice(prefix.length)).filter((r) => r.includes(delimiter)).map((r) => prefix + r.slice(0, r.indexOf(delimiter) + 1)))];
+      return { objects: [], delimitedPrefixes: prefixes, truncated: false };
+    },
+  };
+}
+
+test('nightly backup to R2: every book and its images; the owner restores a book; old days are pruned', async () => {
+  env.BACKUPS = fakeBucket();
+  const { session } = await (await register((await invite()).token)).json();
+  const me = (await (await call('GET', '/me', undefined, session)).json()).user;
+  const manual = { title: 'עוגה של סבתא', category: 'עוגות', ingredients: [{ title: '', items: ['קמח'] }], steps: [{ title: '', items: ['אופים'] }], image: `data:image/png;base64,${PIXEL}` };
+  const { recipe } = await (await call('POST', '/recipes/manual', manual, session)).json();
+  await call('POST', '/recipes/manual', { ...manual, title: 'של הבעלים', image: null });
+
+  const summary = await runBackup(env, new Date('2026-10-01T01:17:00Z'));
+  assert.equal(summary.books, 2);
+  assert.equal(summary.newImages, 1);
+  assert.ok(env.BACKUPS.files.has('daily/2026-10-01/accounts.json'));
+  assert.ok(env.BACKUPS.files.has(`daily/2026-10-01/books/${me.id}.json`));
+  assert.ok(env.BACKUPS.files.has('daily/2026-10-01/books/book.json'));
+  // תמונה שכבר גובתה לא נשמרת שוב
+  assert.equal((await runBackup(env, new Date('2026-10-02T01:17:00Z'))).newImages, 0);
+
+  // המשתמש מוחק את המתכון; רק בעל האפליקציה יכול לשחזר
+  await call('DELETE', `/recipes/${recipe.id}`, undefined, session);
+  assert.equal((await (await call('GET', '/recipes', undefined, session)).json()).recipes.length, 0);
+  assert.equal((await call('POST', '/admin/restore', { date: '2026-10-01', book: me.id }, session)).status, 403);
+  const restored = await (await call('POST', '/admin/restore', { date: '2026-10-01', book: me.id })).json();
+  assert.equal(restored.images, 1);
+  const [back] = (await (await call('GET', '/recipes', undefined, session)).json()).recipes;
+  assert.equal(back.title, 'עוגה של סבתא');
+  const imageId = back.image.split('/').pop();
+  assert.equal((await call('GET', `/img/${me.id}/${imageId}`)).status, 200);
+  assert.equal((await call('POST', '/admin/restore', { date: '2026-09-01', book: me.id })).status, 400);
+
+  const status = await (await call('GET', '/admin/backups')).json();
+  assert.deepEqual(status.days, ['2026-10-01', '2026-10-02']);
+  // אחרי 30 יום הימים הישנים נמחקים
+  await runBackup(env, new Date('2026-11-05T01:17:00Z'));
+  assert.deepEqual((await (await call('GET', '/admin/backups')).json()).days, ['2026-11-05']);
 });
 
 test('pre-registering someone else\'s email never puts them in your book', async () => {

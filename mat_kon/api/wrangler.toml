@@ -29,4 +29,12 @@ new_sqlite_classes = ["RecipeBook"]
 tag = "v2"
 new_sqlite_classes = ["Accounts"]
 
+# גיבוי לילי (backup.js): כל הספרים לדלי R2 פרטי, 30 הימים האחרונים. הדלי נוצר פעם אחת בחשבון Cloudflare
+[[r2_buckets]]
+binding = "BACKUPS"
+bucket_name = "mat-kon-backups"
+
+[triggers]
+crons = ["17 1 * * *"] # כל לילה ב-01:17 UTC (בערך 4 בבוקר בישראל)
+
 # מפתח ה-API הוא סוד, לא כאן: ANTHROPIC_API_KEY (נקבע אוטומטית מ-GitHub, ראו .github/workflows/mat-kon.yml)

@@ -116,6 +116,29 @@ export class RecipeBook {
     const url = new URL(request.url);
     const id = url.pathname.split('/')[2] || '';
 
+    // ---- גיבוי (רק מתוך השרת, backup.js): כל הנתונים בלי התמונות, והתמונות אחת-אחת ----
+    if (url.pathname === '/backup/export' && request.method === 'GET') {
+      const data = {};
+      const images = [];
+      for (const [k, v] of await this.storage.list()) {
+        if (k.startsWith('img:')) images.push(k.slice(4));
+        else data[k] = v;
+      }
+      return json({ data, images });
+    }
+    if (url.pathname === '/backup/import' && request.method === 'POST') {
+      const { data } = await request.json();
+      await this.storage.deleteAll();
+      const entries = Object.entries(data || {});
+      for (let i = 0; i < entries.length; i += 128) await this.storage.put(Object.fromEntries(entries.slice(i, i + 128)));
+      return json({ ok: true, keys: entries.length });
+    }
+    if (url.pathname === '/backup/image' && request.method === 'POST') {
+      const { id: imageId, type, data } = await request.json();
+      await this.storage.put(`img:${imageId}`, { type, bytes: Uint8Array.from(atob(data), (c) => c.charCodeAt(0)) });
+      return json({ ok: true });
+    }
+
     // שינויים ברמת פריט ברשימות המשותפות (קניות, מלאי, תכנון): כל שינוי חל על הרשימה העדכנית,
     // כך ששני בני משפחה שעורכים בו-זמנית לא מוחקים זה לזה. {ops: [{op: add|update|remove, id, item}]}
     const opsMatch = url.pathname.match(/^\/ops\/(shopping|pantry|plan)$/);
