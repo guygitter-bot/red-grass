@@ -82,6 +82,8 @@ export class Accounts {
     this.storage = state.storage;
     this.env = env || {};
     this.freeLimit = Number(env?.FREE_RECIPES ?? 10);
+    // מנוי של מי שנרשם מקישור הזמנה: paid = בלי הגבלת מתכונים (ברירת המחדל), free = FREE_RECIPES בחינם
+    this.invitePlan = env?.INVITE_PLAN === 'free' ? 'free' : 'paid';
   }
 
   // ניקוי יומי: מוני הגבלת קצב ישנים, חיבורים שפגו וקישורי הצטרפות שפגו
@@ -97,9 +99,16 @@ export class Accounts {
   }
 
   async ensureCleanup() {
-    if (this.cleanupChecked || !this.storage.getAlarm) return;
+    if (this.cleanupChecked) return;
     this.cleanupChecked = true;
-    if (!(await this.storage.getAlarm())) await this.storage.setAlarm(Date.now() + 3600000);
+    // פעם אחת: כשמוזמנים מקבלים מנוי, גם מי שכבר נרשם קודם עובר למנוי
+    if (this.invitePlan === 'paid' && !(await this.storage.get('migrated-invite-paid'))) {
+      for (const [k, u] of await this.storage.list({ prefix: 'user:' })) {
+        if (u.plan !== 'paid' && !u.bookId) await this.storage.put(k, { ...u, plan: 'paid' });
+      }
+      await this.storage.put('migrated-invite-paid', true);
+    }
+    if (this.storage.getAlarm && !(await this.storage.getAlarm())) await this.storage.setAlarm(Date.now() + 3600000);
   }
 
   // גרסת הסוד של בעל האפליקציה: החלפת הסיסמה מנתקת את כל מכשירי הבעלים
@@ -183,7 +192,7 @@ export class Accounts {
       const list = invites
         .map((i) => ({ ...i, user: i.userId && byId[i.userId] ? { ...byId[i.userId], members: members(i.userId) } : null }))
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-      return json({ invites: list, freeLimit: this.freeLimit });
+      return json({ invites: list, freeLimit: this.freeLimit, invitePlan: this.invitePlan });
     }
     if (path === '/invites' && request.method === 'DELETE') {
       const invite = await this.storage.get(`invite:${body.token}`);
@@ -504,7 +513,7 @@ export class Accounts {
 
   async createUser(id, fields, { invite, join }) {
     const user = {
-      id, ...fields, plan: 'free', added: 0, createdAt: new Date().toISOString(),
+      id, ...fields, plan: invite ? this.invitePlan : 'free', added: 0, createdAt: new Date().toISOString(),
       invite: invite?.token || null, ...(join ? { bookId: join.bookId } : {}),
     };
     const puts = { [`user:${user.id}`]: user, [`email:${user.email}`]: user.id };
