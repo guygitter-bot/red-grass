@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, ArrowRight, Loader2 } from 'lucide-react';
-import { getAdminErrors, getAdminUsage } from '../lib/api';
+import { getAdminErrors, getAdminUsage, getBackups } from '../lib/api';
 
 const nis = (usd) => `₪${(usd * 3.7).toFixed(2)}`;
 const k = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}K` : String(n));
@@ -12,6 +12,7 @@ export default function AdminView({ onBack }) {
   const [errors, setErrors] = useState(null);
   const [clientErrors, setClientErrors] = useState([]);
   const [error, setError] = useState('');
+  const [backups, setBackups] = useState(null);
 
   useEffect(() => {
     setUsage(null);
@@ -24,6 +25,7 @@ export default function AdminView({ onBack }) {
         setClientErrors(d.clientErrors || []);
       })
       .catch(() => setErrors([]));
+    getBackups().then(setBackups).catch(() => setBackups(null));
   }, []);
 
   const total = usage?.rows.reduce((t, r) => t + r.usd, 0) || 0;
@@ -38,6 +40,20 @@ export default function AdminView({ onBack }) {
       </div>
       <div className="max-w-2xl mx-auto px-4 mt-4 space-y-6">
         {error && <p className="text-sm text-red-600">{error}</p>}
+        {backups && (
+          <section className="rounded-2xl bg-white shadow-sm p-3 text-sm">
+            <h2 className="font-bold mb-1">🗄️ גיבוי לילי</h2>
+            {!backups.enabled ? (
+              <p className="text-stone-600">הגיבוי עוד לא מחובר (דלי R2 בשם mat-kon-backups).</p>
+            ) : backups.last ? (
+              <p className="text-stone-600">
+                אחרון: {new Date(backups.last.at).toLocaleString('he-IL')} · {backups.last.books} ספרים · נשמרים {backups.days.length} ימים
+              </p>
+            ) : (
+              <p className="text-stone-600">מחובר. הגיבוי הראשון ירוץ הלילה.</p>
+            )}
+          </section>
+        )}
         <section>
           <h2 className="font-bold text-lg mb-1">שימוש ב-AI לפי ספר</h2>
           <p className="text-xs text-stone-500 mb-2">

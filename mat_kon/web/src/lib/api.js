@@ -197,5 +197,6 @@ export const ownerLogin = (password) => api('', 'POST', '/owner-login', { passwo
 // ניהול (בעל האפליקציה): עלויות AI לפי ספר ותקלות אחרונות
 export const getAdminUsage = (month) => api(own(), 'GET', `/admin/usage${month ? `?month=${month}` : ''}`);
 export const getAdminErrors = () => api(own(), 'GET', '/admin/errors');
+export const getBackups = () => api(own(), 'GET', '/admin/backups');
 export const linkGoogle = (s, credential) => api(s, 'POST', '/google', { credential, link: true }).then((d) => d.user);
 export const reportClientError = (where, message) => api(loadJson('matkon_session', ''), 'POST', '/client-error', { where, message }).catch(() => {});
