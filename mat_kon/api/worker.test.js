@@ -1024,6 +1024,29 @@ test('nightly backup to R2: every book and its images; the owner restores a book
   assert.deepEqual((await (await call('GET', '/admin/backups')).json()).days, ['2026-11-05']);
 });
 
+test('with INVITE_PLAN=paid, everyone who signs up from an invite has no recipe limit', async () => {
+  env = fakeEnv({ INVITE_PLAN: 'paid', FREE_RECIPES: '1' });
+  const { session, user } = await (await register((await invite()).token)).json();
+  assert.equal(user.plan, 'paid');
+  for (let i = 0; i < 3; i++) assert.equal((await call('POST', '/recipes', { url: `https://cake.example/p${i}` }, session)).status, 200);
+});
+
+test('switching to INVITE_PLAN=paid moves users who already signed up to the paid plan', async () => {
+  env = fakeEnv({ FREE_RECIPES: '1' });
+  const { session } = await (await register((await invite()).token)).json();
+  assert.equal((await (await call('GET', '/me', undefined, session)).json()).user.plan, 'free');
+  const fresh = fakeEnv({ INVITE_PLAN: 'paid', FREE_RECIPES: '1' });
+  for (const [name, obj] of env.ACCOUNTS.objects) {
+    obj.env = fresh;
+    obj.invitePlan = 'paid';
+    obj.cleanupChecked = false;
+    fresh.ACCOUNTS.objects.set(name, obj);
+  }
+  fresh.BOOK = env.BOOK;
+  env = fresh;
+  assert.equal((await (await call('GET', '/me', undefined, session)).json()).user.plan, 'paid');
+});
+
 test('pre-registering someone else\'s email never puts them in your book', async () => {
   env.GOOGLE_CLIENT_ID = 'cid';
   // מלורי רושמת את האימייל של הקורבן כחברה בספר שלה

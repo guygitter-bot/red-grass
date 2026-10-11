@@ -87,7 +87,7 @@ export default function InvitesView({ onBack }) {
       <div className="max-w-2xl mx-auto px-4">
         <p className="mt-4 text-stone-600 leading-relaxed text-sm">
           מי שמקבל קישור הזמנה נרשם (שם, אימייל וסיסמה) ומקבל ספר מתכונים ריק משלו, שרק הוא רואה.
-          {data ? ` ${data.freeLimit} המתכונים הראשונים בחינם, ואחר כך צריך מנוי.` : ''}
+          {data ? (data.invitePlan === 'free' ? ` ${data.freeLimit} המתכונים הראשונים בחינם, ואחר כך צריך מנוי.` : ' כל מי שנרשם מקישור מקבל מנוי – בלי הגבלה על מספר המתכונים.') : ''}
           {' '}כל קישור טוב להרשמה אחת.
         </p>
 
