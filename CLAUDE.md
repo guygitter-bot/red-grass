@@ -119,6 +119,12 @@
 - בדיקה: `cd rock_city/api && npm test` · `cd rock_city/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 - הרשאות נבדקות בשרת (`api/school.js`). צבעי המותג: צהוב-זהב ושחור (`web/src/index.css`). תאריך עברי + מספר: מקף עברי (`ב־${...}`) כדי שלא יתהפך.
 
+### צוות – בוטים של שיווק ב-Telegram (`tsevet/`)
+- תיאור: `tsevet/README.md`. בוטים עם תפקידים (🎨 קריאייטיב, 📊 קמפיינים) בקבוצת Telegram עם נושאים; מדברים ביניהם (`handoff`).
+- `tsevet/api` → Worker `tsevet-api` (Durable Object `Team` אחד, עבודה ברקע ב-alarm). עלייה: `tsevet.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd tsevet/api && npm test`. בוט חדש = מפתח ב-`AGENTS` (`api/agents.js`) + סוד `TG_<KEY>_TOKEN` ב-workflow.
+- הבוטים לא מוציאים כסף בלי אישור מפורש של הבעלים (בכפתור). רק הבעלים מדבר איתם.
+
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).
 

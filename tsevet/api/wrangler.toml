@@ -1,0 +1,19 @@
+name = "tsevet-api"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+# כל הצוות (בוטים, שיחות, זיכרון, עלויות) – אובייקט אחד ("main")
+[[durable_objects.bindings]]
+name = "TEAM"
+class_name = "Team"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Team"]
+
+# סודות, לא כאן (נקבעים אוטומטית מ-GitHub, ראו .github/workflows/tsevet.yml):
+#   ANTHROPIC_API_KEY   – המפתח של Claude
+#   TG_CREATIVE_TOKEN   – הבוט 🎨 קריאייטיב (מ-BotFather)
+#   TG_CAMPAIGNS_TOKEN  – הבוט 📊 קמפיינים (מ-BotFather)
+#   TEAM_OWNER_CODE     – הקוד שהבעלים שולח פעם אחת: /start <קוד>
