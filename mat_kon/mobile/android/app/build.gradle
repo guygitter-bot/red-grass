@@ -19,6 +19,13 @@ android {
     }
     // חתימה לחנות: מפתח ההעלאה מגיע מסודות ב-GitHub (ANDROID_KEYSTORE וכו'), אף פעם לא מהמאגר
     signingConfigs {
+        // גרסת בדיקה: מפתח קבוע במאגר (לא סודי – רק לבדיקות), כדי שהכניסה עם Google תזהה אותה (SHA-1 רשום ב-Google Cloud)
+        debug {
+            storeFile file('debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
         release {
             if (System.getenv("KEYSTORE_PATH")) {
                 storeFile file(System.getenv("KEYSTORE_PATH"))
