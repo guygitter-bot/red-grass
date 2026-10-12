@@ -216,6 +216,11 @@
 `ANDROID_KEY_PASSWORD`). באפליקציה: אין service worker, סרטוני ההדרכה נטענים מהאתר, וכפתור Google של הדפדפן מוסתר (גוגל חוסמת
 WebView) עד שתהיה כניסה מהטלפון. השרת מקבל גם `https://localhost` (המקור של האפליקציה באנדרואיד). אייקון ומסך פתיחה:
 `mobile/assets` → `npx @capacitor/assets generate --android`.
+- **כניסה עם Google באפליקציה:** `@capgo/capacitor-social-login` (Credential Manager) עם ה-**Web** client ID (אותו `GOOGLE_CLIENT_ID`),
+  והשרת מאמת את הטוקן כרגיל. גוגל מזהה את האפליקציה לפי Android OAuth client ב-Google Cloud (חבילה `app.matkon` + SHA-1 של המפתח שחתם):
+  גרסת בדיקה – `mobile/android/app/debug.keystore` (במאגר, לא סודי), SHA-1 `C7:E1:B5:5B:AB:EC:62:38:CF:0E:ED:02:31:0A:FA:9A:FC:30:21:9E`;
+  לחנות – גם ה-SHA-1 של מפתח ההעלאה ושל App signing מ-Play Console.
+- **שיתוף לאפליקציה (אנדרואיד):** intent `SEND text/plain` → `ShareTargetPlugin.java` → `take()` באפליקציה, ותמיד "להוסיף לספר?".
 
 ## פיתוח
 

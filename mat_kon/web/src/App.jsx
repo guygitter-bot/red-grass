@@ -31,6 +31,7 @@ import PendingList from './components/PendingList';
 import RecipeCard from './components/RecipeCard';
 import RecipeView from './components/RecipeView';
 import { CATEGORIES } from './lib/categories';
+import { isNative } from './lib/native';
 import {
   addCategory, setCategoryPrefs, addRecipeAsync, addTextRecipe, getJob, getRecipe, deleteRecipe, removeCategory, getMe, getPlan, getShopping, listRecipes, logout as apiLogout, refreshRecipe,
   updateRecipe, categorizeRecipe, safeRecipe, getPantry, shoppingOps, pantryOps, planOps,
@@ -360,6 +361,32 @@ export default function App() {
       if (shared?.link || shared?.text?.trim().length >= 20) setSharedOffer(shared);
     });
   }, [auth]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // שיתוף מאפליקציה אחרת באפליקציה מהחנות (ShareTarget ב-mat_kon/mobile) – גם כאן רק באישור
+  useEffect(() => {
+    if (auth || !isNative()) return undefined;
+    let alive = true;
+    let handle;
+    const take = async () => {
+      const { registerPlugin } = await import('@capacitor/core');
+      const { share } = await registerPlugin('ShareTarget').take();
+      if (!alive || !share) return;
+      const link = linkFromShare(`?${new URLSearchParams({ text: share.text || '', title: share.title || '' })}`);
+      if (link || (share.text || '').trim().length >= 20) setSharedOffer({ link, text: share.text || '' });
+    };
+    take().catch(() => {});
+    import('@capacitor/core')
+      .then(({ registerPlugin }) => registerPlugin('ShareTarget').addListener('share', () => { take().catch(() => {}); }))
+      .then((h) => {
+        if (alive) handle = h;
+        else h.remove();
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+      handle?.remove();
+    };
+  }, [auth]);
 
   const open = (id) => {
     window.location.hash = id ? `#/r/${id}` : '';
