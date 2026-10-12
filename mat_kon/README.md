@@ -209,6 +209,14 @@
 עלות משוערת: כמה סנטים למתכון מאתר עם נתונים מובנים, ועד כ-10–20 סנט לסרטון שדורש חיפוש ברשת.
 משתמשים מוזמנים משתמשים באותו מפתח, ולכן המכסה החינמית מגבילה גם את העלות שלהם.
 
+## אפליקציה בחנויות (`mobile/`)
+
+אותה אפליקציה עטופה ב-Capacitor (`app.matkon`). לאנדרואיד: `mat-kon-android.yml` בונה בכל שינוי APK לבדיקה, ו-AAB חתום
+ל-Google Play כשמוגדרים סודות מפתח ההעלאה (`ANDROID_KEYSTORE` ב-base64, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
+`ANDROID_KEY_PASSWORD`). באפליקציה: אין service worker, סרטוני ההדרכה נטענים מהאתר, וכפתור Google של הדפדפן מוסתר (גוגל חוסמת
+WebView) עד שתהיה כניסה מהטלפון. השרת מקבל גם `https://localhost` (המקור של האפליקציה באנדרואיד). אייקון ומסך פתיחה:
+`mobile/assets` → `npx @capacitor/assets generate --android`.
+
 ## פיתוח
 
 ```bash

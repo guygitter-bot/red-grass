@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">mat-kon</string>
+    <string name="title_activity_main">mat-kon</string>
+    <string name="package_name">app.matkon</string>
+    <string name="custom_url_scheme">app.matkon</string>
+</resources>

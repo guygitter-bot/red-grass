@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { isNative } from '../lib/native';
 
 // כפתור "המשך עם Google" (Google Identity Services). מחזיר את טוקן הכניסה, והשרת מאמת אותו
 let loading;
@@ -18,7 +19,13 @@ function loadGoogle() {
   return loading;
 }
 
-export default function GoogleButton({ clientId, text = 'continue_with', onCredential, onError }) {
+export default function GoogleButton(props) {
+  // באפליקציה מהחנות הכפתור של הדפדפן לא עובד (גוגל חוסמת WebView) – עד שתהיה כניסה מהטלפון עצמו
+  if (isNative()) return null;
+  return <WebGoogleButton {...props} />;
+}
+
+function WebGoogleButton({ clientId, text = 'continue_with', onCredential, onError }) {
   const box = useRef(null);
   const [width, setWidth] = useState(0);
   const callback = useRef(onCredential);

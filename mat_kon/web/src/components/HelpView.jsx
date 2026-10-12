@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { ArrowRight, PlayCircle, X } from 'lucide-react';
 import { TUTORIALS } from '../lib/tutorials';
+import { siteAsset } from '../lib/native';
 
 // סרטוני הדרכה: רשימה, ולחיצה פותחת את הסרטון (#/help/<id>)
 export default function HelpView({ playing, onBack, onClose }) {
@@ -22,7 +23,7 @@ export default function HelpView({ playing, onBack, onClose }) {
             <li key={t.id}>
               <a href={`#/help/${t.id}`} className="block bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition text-right h-full">
                 <div className="relative aspect-[3/4] bg-orange-100 flex items-center justify-center">
-                  <img src={`tutorials/${t.id}.jpg`} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover object-top" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                  <img src={siteAsset(`tutorials/${t.id}.jpg`)} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover object-top" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                   <span className="text-5xl">{t.emoji}</span>
                   <PlayCircle size={34} className="absolute bottom-2 left-2 text-white drop-shadow-lg" fill="rgba(249,115,22,.9)" />
                 </div>
@@ -57,8 +58,8 @@ function Player({ tutorial, onClose }) {
       <video
         ref={ref}
         key={tutorial.id}
-        src={`tutorials/${tutorial.id}.mp4`}
-        poster={`tutorials/${tutorial.id}.jpg`}
+        src={siteAsset(`tutorials/${tutorial.id}.mp4`)}
+        poster={siteAsset(`tutorials/${tutorial.id}.jpg`)}
         controls
         playsInline
         preload="metadata"

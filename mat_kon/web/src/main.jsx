@@ -13,6 +13,7 @@ createRoot(document.getElementById('root')).render(
 );
 
 // שיתוף לאפליקציה (קישורים וצ'אטים מווטסאפ) עובר דרך ה-service worker
-if ('serviceWorker' in navigator) {
+// (באפליקציה מהחנות אין service worker – הקבצים כבר בתוך האפליקציה)
+if ('serviceWorker' in navigator && !window.Capacitor?.isNativePlatform?.()) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }

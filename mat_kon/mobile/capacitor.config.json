@@ -1,0 +1,11 @@
+{
+  "appId": "app.matkon",
+  "appName": "mat-kon",
+  "webDir": "../web/dist",
+  "android": {
+    "allowMixedContent": false
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

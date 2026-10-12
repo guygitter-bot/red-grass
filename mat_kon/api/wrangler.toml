@@ -5,7 +5,7 @@ workers_dev = true
 
 [vars]
 # האתרים שמותר להם לפנות לשרת (האפליקציה ב-Cloudflare Pages ופיתוח מקומי)
-ALLOWED_ORIGINS = "https://mat-kon.pages.dev" # לפיתוח מקומי: ALLOWED_ORIGINS בקובץ .dev.vars
+ALLOWED_ORIGINS = "https://mat-kon.pages.dev,https://localhost" # https://localhost = האפליקציה מהחנות (Capacitor באנדרואיד). לפיתוח מקומי: .dev.vars
 # כמה מתכונים משתמש שהוזמן מקבל בחינם לפני שצריך מנוי
 FREE_RECIPES = "10"
 # מי שנרשם מקישור הזמנה: "paid" = מנוי בלי הגבלה (וגם מי שכבר נרשם עובר למנוי), "free" = FREE_RECIPES בחינם
