@@ -8,7 +8,7 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // מספר גרסה עולה בכל בנייה (מספר ההרצה ב-GitHub Actions, mat-kon-android.yml)
-        versionCode (System.getenv("VERSION_CODE") ?: "1") as Integer
+        versionCode Integer.parseInt(System.getenv("VERSION_CODE") ?: "1")
         versionName System.getenv("VERSION_NAME") ?: "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
