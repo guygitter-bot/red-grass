@@ -4,6 +4,7 @@ import {
   CalendarPlus, Plus, Printer, RotateCw, Share2, ShoppingCart, Star, Trash2, Users, X,
 } from 'lucide-react';
 import CookMode from './CookMode';
+import { isNative } from '../lib/native';
 import { missingLines } from '../lib/fridge';
 import { baseServings, formatAmount, scaleSections } from '../lib/scale';
 import { thumbnail } from '../lib/image';
@@ -165,7 +166,22 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
           </div>
         )}
 
-        {SAFE_EMBED.test(recipe.source.embed || '') ? (
+        {/* באפליקציה מהחנות נגני טיקטוק/יוטיוב חוסמים את ה-WebView ("overload-protect") – שם מציגים תמונה ופותחים את הסרטון באפליקציה שלו */}
+        {isNative() && SAFE_EMBED.test(recipe.source.embed || '') && recipe.source.url ? (
+          <a
+            href={recipe.source.url}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-3 relative block rounded-2xl overflow-hidden bg-stone-900 print:hidden aspect-video"
+            aria-label="צפייה בסרטון המקורי"
+          >
+            {recipe.image && <img src={recipe.image} alt="" referrerPolicy="no-referrer" className="absolute inset-0 w-full h-full object-cover opacity-80" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
+            <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white font-bold drop-shadow">
+              <PlayCircle size={56} />
+              צפייה בסרטון
+            </span>
+          </a>
+        ) : SAFE_EMBED.test(recipe.source.embed || '') ? (
           <div className={`mt-3 rounded-2xl overflow-hidden bg-black print:hidden ${recipe.source.kind === 'tiktok' ? 'aspect-[9/16] max-w-xs mx-auto' : 'aspect-video'}`}>
             <iframe
               src={recipe.source.embed}
