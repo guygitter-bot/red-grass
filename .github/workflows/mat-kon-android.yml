@@ -31,7 +31,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - uses: android-actions/setup-android@v3
+      # כלי אנדרואיד (SDK) כבר מותקנים בשרת של GitHub (ANDROID_HOME); Gradle מוריד לבד רכיבים חסרים
 
       - name: Build the web app
         working-directory: mat_kon/web
