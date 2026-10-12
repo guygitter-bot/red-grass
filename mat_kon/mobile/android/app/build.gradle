@@ -17,7 +17,7 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
-    // חתימה לחנות: מפתח ההעלאה מגיע מסודות ב-GitHub (ANDROID_KEYSTORE וכו'), אף פעם לא מהמאגר
+    // חתימה לחנות: מפתח ההעלאה מגיע מ-R2 הפרטי בזמן הבנייה (mat-kon-android-key.yml), אף פעם לא מהמאגר
     signingConfigs {
         // גרסת בדיקה: מפתח קבוע במאגר (לא סודי – רק לבדיקות), כדי שהכניסה עם Google תזהה אותה (SHA-1 רשום ב-Google Cloud)
         debug {

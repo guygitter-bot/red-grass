@@ -2,7 +2,7 @@ name: mat-kon android
 
 # mat-kon כאפליקציה לאנדרואיד (Capacitor, mat_kon/mobile): עוטף את אותו web/dist.
 #   app-debug.apk  – להתקנה ישירה בטלפון לבדיקה (בכל בנייה)
-#   app-release.aab – לחנות Google Play (רק כשמוגדרים סודות מפתח ההעלאה: ANDROID_KEYSTORE וכו')
+#   app-release.aab – לחנות Google Play (רק מ-main, אחרי שנוצר מפתח ההעלאה ב-mat-kon-android-key.yml)
 # הקבצים מופיעים בהרצה ב-Actions, תחת Artifacts.
 on:
   push:
@@ -54,20 +54,26 @@ jobs:
         run: ./gradlew --no-daemon assembleDebug
 
       - name: Release bundle for Google Play (signed with the upload key)
-        if: github.event_name != 'pull_request'
+        # רק מ-main: המפתח נשמר בדלי הפרטי ב-R2 (נוצר ב-mat-kon-android-key.yml), נמחק מהשרת מיד אחרי הבנייה
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         working-directory: mat_kon/mobile/android
         env:
           VERSION_CODE: ${{ github.run_number }}
           VERSION_NAME: 1.0.${{ github.run_number }}
-          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: upload
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          if [ -z "$ANDROID_KEYSTORE" ]; then echo "אין עדיין מפתח העלאה (ANDROID_KEYSTORE) – מדלגים על הקובץ לחנות"; exit 0; fi
-          echo "$ANDROID_KEYSTORE" | base64 -d > "$RUNNER_TEMP/upload.jks"
-          KEYSTORE_PATH="$RUNNER_TEMP/upload.jks" ./gradlew --no-daemon bundleRelease
-          rm -f "$RUNNER_TEMP/upload.jks"
+          set -euo pipefail
+          if [ -z "$KEYSTORE_PASSWORD" ]; then echo "אין עדיין סיסמת מפתח (ANDROID_KEYSTORE_PASSWORD) – מדלגים על הקובץ לחנות"; exit 0; fi
+          KS="$RUNNER_TEMP/upload.jks"
+          trap 'rm -f "$KS"' EXIT
+          if ! npx --yes wrangler@4.146.0 r2 object get mat-kon-backups/signing/upload.jks --file "$KS" --remote > /dev/null 2>&1; then
+            echo "אין עדיין מפתח העלאה ב-R2 (מריצים פעם אחת את mat-kon android key) – מדלגים על הקובץ לחנות"; exit 0
+          fi
+          KEYSTORE_PATH="$KS" ./gradlew --no-daemon bundleRelease
 
       - uses: actions/upload-artifact@v4
         with:

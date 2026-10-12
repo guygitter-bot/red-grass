@@ -62,6 +62,7 @@
 #### סודות ואבטחה
 - מפתחות רק כסודות ב-GitHub, לעולם לא בקוד: `ANTHROPIC_API_KEY`, `CHEAPERSAL_API_KEY`, `GOOGLE_CLIENT_ID`, `OWNER_PASSWORD`,
   `OWNER_EMAIL`, `GOOGLE_TTS_KEY`. לא לבקש סיסמאות או מפתחות בצ'אט. לא לחבר חשבונות רשתות חברתיות של משתמשים.
+- מפתח החתימה לאנדרואיד: רק ב-R2 (`mat-kon-backups/signing/upload.jks`) + סוד `ANDROID_KEYSTORE_PASSWORD`. לעולם לא במאגר, ב-Artifact או בלוג.
 - הספר של הבעלים נעול (fail-closed). `OWNER_OPEN=true` רק בבדיקות (`api/fake-env.js`).
 - CSP ב-`web/public/_headers`: `connect-src` הוא כתובת השרת המדויקת – שירות חיצוני חדש מהדפדפן מחייב עדכון שם.
 - קישור ששותף (`?url=` או דרך ה-service worker) תמיד רק מוצע באישור – גם "שיתוף" יכול להגיע מאתר זר.
