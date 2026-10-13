@@ -1,4 +1,5 @@
 import { loadJson } from './storage';
+import { isNative, siteAsset } from './native';
 // השרת של mat-kon (mat_kon/api). הכתובת נקבעת בזמן הבנייה (.github/workflows/mat-kon.yml).
 // בלי session = בעל האפליקציה (פתוח). עם session = משתמש שהוזמן, עם ספר מתכונים משלו.
 export const API_URL = (import.meta.env.VITE_API_URL || 'https://mat-kon-api.guygitter.workers.dev').replace(/\/+$/, '');
@@ -109,8 +110,10 @@ export function deviceId() {
 export const login = (email, password) => api('', 'POST', '/login', { email, password, device: deviceId() });
 export const logout = (s) => api(s, 'POST', '/logout', {}).catch(() => {});
 
-export const inviteLink = (token) => `${window.location.origin}${window.location.pathname}#invite=${token}`;
-export const loginLink = () => `${window.location.origin}${window.location.pathname}#login`;
+// כתובת לקישורים שנשלחים לאחרים: באפליקציה לאנדרואיד המקור הוא https://localhost, ולכן תמיד כתובת האתר
+const appUrl = () => (isNative() ? siteAsset('') : `${window.location.origin}${window.location.pathname}`);
+export const inviteLink = (token) => `${appUrl()}#invite=${token}`;
+export const loginLink = () => `${appUrl()}#login`;
 export const addTextRecipe = (s, item) => api(s, 'POST', '/recipes/text', item);
 
 // מתכון מתמונות / שנכתב ידנית
@@ -191,7 +194,7 @@ export const getMembers = (s) => api(s, 'GET', '/members');
 export const createMemberLink = (s) => api(s, 'POST', '/members', {}).then((d) => d.join);
 export const removeMember = (s, id) => api(s, 'DELETE', `/members/${encodeURIComponent(id)}`);
 export const cancelMemberLink = (s, token) => api(s, 'DELETE', `/members/links/${encodeURIComponent(token)}`);
-export const joinLink = (token) => `${window.location.origin}${window.location.pathname}#join=${token}`;
+export const joinLink = (token) => `${appUrl()}#join=${token}`;
 export const ownerLogin = (password) => api('', 'POST', '/owner-login', { password, device: deviceId() });
 
 // ניהול (בעל האפליקציה): עלויות AI לפי ספר ותקלות אחרונות
