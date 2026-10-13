@@ -1,4 +1,5 @@
 import { ArrowRight } from 'lucide-react';
+import { siteAsset } from '../lib/native';
 
 // פרטיות ותנאי שימוש – תקציר פשוט. לפני השקה מסחרית יש לעבור עליו עם עורך דין.
 export default function PrivacyView({ onBack }) {
@@ -46,7 +47,11 @@ export default function PrivacyView({ onBack }) {
           <li>משתמשים באפליקציה לשימוש אישי ומשפחתי, ושומרים רק תוכן שמותר לכם לשמור.</li>
           <li>לשימוש החינמי ולמנוי יש מכסה הוגנת של פעולות חכמות ביום.</li>
         </ul>
-        <p className="text-sm text-stone-500 mt-6">עודכן: אוקטובר 2026</p>
+        <p className="mt-6">
+          <a href={siteAsset('privacy.html')} target="_blank" rel="noopener" className="text-orange-600 underline">מדיניות הפרטיות המלאה</a>
+          {' · '}שאלות ובקשות: <a href="mailto:matkon.app@gmail.com" className="text-orange-600 underline">matkon.app@gmail.com</a>
+        </p>
+        <p className="text-sm text-stone-500 mt-2">עודכן: אוקטובר 2026</p>
       </div>
     </div>
   );
