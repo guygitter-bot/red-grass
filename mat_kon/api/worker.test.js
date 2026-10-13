@@ -1022,6 +1022,17 @@ test('nightly backup to R2: every book and its images; the owner restores a book
   // אחרי 30 יום הימים הישנים נמחקים
   await runBackup(env, new Date('2026-11-05T01:17:00Z'));
   assert.deepEqual((await (await call('GET', '/admin/backups')).json()).days, ['2026-11-05']);
+  const mine = () => [...env.BACKUPS.files.keys()].filter((k) => k.startsWith(`images/${me.id}/`)).length;
+  assert.equal(mine(), 1);
+
+  // מחיקת החשבון: התמונות שלו בגיבוי נמחקות כשאף יום שנשאר כבר לא מכיל את הספר; מפתחות אחרים בדלי לא נוגעים
+  await env.BACKUPS.put('signing/upload.jks', 'key');
+  await call('DELETE', '/account', undefined, session);
+  await runBackup(env, new Date('2026-11-06T01:17:00Z'));
+  assert.equal(mine(), 1);
+  await runBackup(env, new Date('2026-12-07T01:17:00Z'));
+  assert.equal(mine(), 0);
+  assert.ok(env.BACKUPS.files.has('signing/upload.jks'));
 });
 
 test('with INVITE_PLAN=paid, everyone who signs up from an invite has no recipe limit', async () => {
