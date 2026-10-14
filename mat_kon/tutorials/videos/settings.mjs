@@ -2,7 +2,7 @@ import { record } from '../kit.mjs';
 
 await record('settings', async ({ page, mock, say, tap, point, wait, card, uncard, scroll, hideDot, unsay }) => {
   const handle = mock.handle;
-  const me = { id: 'u1', name: 'דנה כהן', email: 'dana@example.com', role: 'holder', plan: 'paid', added: 7, freeLimit: 10 };
+  const me = { id: 'u1', name: 'דנה כהן', email: 'dana@example.com', role: 'holder', plan: 'paid', added: 7, freeLimit: 10, password: true };
   mock.handle = async (method, path, body) => (path.split('?')[0] === '/me' ? { owner: false, user: me, categories: [], paymentUrl: '' } : handle(method, path, body));
   await page.reload();
   await page.waitForLoadState('networkidle').catch(() => {});

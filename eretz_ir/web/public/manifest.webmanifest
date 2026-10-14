@@ -1,0 +1,20 @@
+{
+  "name": "ארץ עיר",
+  "short_name": "ארץ עיר",
+  "description": "ארץ עיר עם חברים – כל אחד מהטלפון שלו",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f7f2",
+  "theme_color": "#16a34a",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

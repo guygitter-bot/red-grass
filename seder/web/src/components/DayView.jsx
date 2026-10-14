@@ -31,7 +31,7 @@ export default function DayView({ day, setDay }) {
           const active = key === day;
           const n = count(key);
           return (
-            <button key={key} ref={active ? selected : null} onClick={() => setDay(key)} className={`shrink-0 w-12 rounded-2xl py-2 flex flex-col items-center ${active ? 'bg-violet-600 text-white' : key === today ? 'bg-violet-100 text-violet-800' : 'bg-white border border-stone-200'}`}>
+            <button key={key} ref={active ? selected : null} onClick={() => setDay(key)} className={`shrink-0 w-12 rounded-2xl py-2 flex flex-col items-center ${active ? 'bg-violet-600 text-white' : key === today ? 'bg-violet-100 text-violet-800' : 'bg-card border border-stone-200'}`}>
               <span className="text-[11px] opacity-80">{weekdayShort(key)}</span>
               <span className="font-bold">{fromKey(key).getDate()}</span>
               <span className={`w-1.5 h-1.5 rounded-full mt-0.5 ${n ? (active ? 'bg-white' : 'bg-violet-500') : 'bg-transparent'}`} />

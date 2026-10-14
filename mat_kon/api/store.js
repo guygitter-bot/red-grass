@@ -3,9 +3,10 @@ import { trackedClient } from './deps.js';
 // ספר המתכונים: Durable Object אחד שמחזיק את כל המתכונים (כל מתכון במפתח r:<id>).
 
 const PREFIX = 'r:';
-const EDITABLE = ['title', 'description', 'category', 'tags', 'servings', 'prepTime', 'cookTime', 'totalTime', 'ingredients', 'steps', 'tips', 'notes', 'favorite', 'myNotes', 'image', 'rating'];
+const EDITABLE = ['title', 'description', 'category', 'categories', 'tags', 'servings', 'prepTime', 'cookTime', 'totalTime', 'ingredients', 'steps', 'tips', 'notes', 'favorite', 'myNotes', 'image', 'rating'];
 
 const SRC = 'src:';
+export const MAX_RECIPES = 2000; // תקרה לספר, כדי שאי אפשר יהיה למלא את האחסון
 const STALE_JOB_MS = 5 * 60 * 1000;
 // המקור של מתכון: קישור, או מפתח (הודעת ווטסאפ, צילום...)
 const sourceKey = (r) => String(r?.source?.url || r?.source?.key || '').slice(0, 1500);
@@ -87,6 +88,15 @@ export class RecipeBook {
   }
 
   // אינדקס מקור -> מתכון (נבנה פעם אחת לספרים שנוצרו לפניו)
+  // מספר המתכונים בספר (נספר פעם אחת מהאחסון, ואחר כך מתעדכן בהוספה ובמחיקה)
+  async recipeCount() {
+    const stored = await this.storage.get('recipe-count');
+    if (typeof stored === 'number') return stored;
+    const count = (await this.storage.list({ prefix: PREFIX })).size;
+    await this.storage.put('recipe-count', count);
+    return count;
+  }
+
   async ensureSourceIndex() {
     if (await this.storage.get('src-indexed')) return;
     const all = await this.storage.list({ prefix: PREFIX });
@@ -105,6 +115,29 @@ export class RecipeBook {
   async fetch(request) {
     const url = new URL(request.url);
     const id = url.pathname.split('/')[2] || '';
+
+    // ---- גיבוי (רק מתוך השרת, backup.js): כל הנתונים בלי התמונות, והתמונות אחת-אחת ----
+    if (url.pathname === '/backup/export' && request.method === 'GET') {
+      const data = {};
+      const images = [];
+      for (const [k, v] of await this.storage.list()) {
+        if (k.startsWith('img:')) images.push(k.slice(4));
+        else data[k] = v;
+      }
+      return json({ data, images });
+    }
+    if (url.pathname === '/backup/import' && request.method === 'POST') {
+      const { data } = await request.json();
+      await this.storage.deleteAll();
+      const entries = Object.entries(data || {});
+      for (let i = 0; i < entries.length; i += 128) await this.storage.put(Object.fromEntries(entries.slice(i, i + 128)));
+      return json({ ok: true, keys: entries.length });
+    }
+    if (url.pathname === '/backup/image' && request.method === 'POST') {
+      const { id: imageId, type, data } = await request.json();
+      await this.storage.put(`img:${imageId}`, { type, bytes: Uint8Array.from(atob(data), (c) => c.charCodeAt(0)) });
+      return json({ ok: true });
+    }
 
     // שינויים ברמת פריט ברשימות המשותפות (קניות, מלאי, תכנון): כל שינוי חל על הרשימה העדכנית,
     // כך ששני בני משפחה שעורכים בו-זמנית לא מוחקים זה לזה. {ops: [{op: add|update|remove, id, item}]}
@@ -218,6 +251,16 @@ export class RecipeBook {
       }
       return json({ error: 'method not allowed' }, 405);
     }
+    // סדר הקטגוריות במסך ומועדפות (משותף לכל מי שבספר)
+    if (url.pathname === '/category-prefs') {
+      if (request.method === 'GET') return json((await this.storage.get('categoryPrefs')) || { order: [], favorites: [] });
+      if (request.method === 'PUT') {
+        const prefs = await request.json();
+        await this.storage.put('categoryPrefs', prefs);
+        return json(prefs);
+      }
+      return json({ error: 'method not allowed' }, 405);
+    }
     // מחיקת קטגוריה: המתכונים שבה עוברים ל"אחר"
     if (url.pathname === '/categories/remove' && request.method === 'POST') {
       const { name } = await request.json();
@@ -226,8 +269,11 @@ export class RecipeBook {
       const all = await this.storage.list({ prefix: PREFIX });
       let moved = 0;
       for (const r of all.values()) {
-        if (r.category === name) {
-          await this.storage.put(PREFIX + r.id, { ...r, category: 'אחר', updatedAt: new Date().toISOString() });
+        const cats = Array.isArray(r.categories) ? r.categories : [r.category];
+        if (cats.includes(name)) {
+          const left = cats.filter((c) => c !== name);
+          const fixed = left.length ? { category: left[0], categories: left } : { category: 'אחר', categories: ['אחר'] };
+          await this.storage.put(PREFIX + r.id, { ...r, ...fixed, updatedAt: new Date().toISOString() });
           moved += 1;
         }
       }
@@ -281,16 +327,29 @@ export class RecipeBook {
         if (existing.edited) keep.edited = existing.edited;
         if (!recipe.image && existing.image) keep.image = existing.image;
       }
+      if (!existing) {
+        const count = await this.recipeCount();
+        if (count >= MAX_RECIPES) {
+          return json({ error: `בספר כבר יש ${MAX_RECIPES} מתכונים – זה המקסימום` }, 413);
+        }
+        await this.storage.put('recipe-count', count + 1);
+      }
       const saved = existing
         ? { ...recipe, ...keep, id: existing.id, createdAt: existing.createdAt, updatedAt: now }
         : { ...recipe, id: crypto.randomUUID(), createdAt: typeof recipe.createdAt === 'string' ? recipe.createdAt : now, updatedAt: now };
+      // הקטגוריה הראשית תמיד ראשונה ברשימת הקטגוריות (גם כשהמשתמש ערך רק אותה)
+      if (saved.category) saved.categories = [saved.category, ...(Array.isArray(saved.categories) ? saved.categories : []).filter((c) => c !== saved.category)].slice(0, 4);
       // "שוחזר ועוד לא נקרא מהמקור" – רק למתכון שלא היה בספר (שחזור לאותו ספר לא מחייב שוב במכסה)
       if (url.searchParams.get('replace') !== '1' || (existing && !existing.restored)) delete saved.restored;
+      // שחזור לא מחליף את המקור של מתכון שכבר נקרא (אחרת "רענון" חינמי היה קורא טקסט חדש בלי מכסה)
+      if (url.searchParams.get('replace') === '1' && existing && !existing.restored) saved.source = existing.source;
       await this.storage.put(PREFIX + saved.id, saved);
       if (existing && existing.image !== saved.image) await this.dropImage(existing.image);
       if (key) await this.storage.put(SRC + key, saved.id);
       // counted: נוסף מתכון חדש (או שמתכון שרק שוחזר מגיבוי נקרא עכשיו לראשונה) – נספר במכסה
-      return json({ recipe: saved, updated: Boolean(existing), counted: !existing || Boolean(existing.restored) });
+      // מתכון מטקסט חדש (טקסט אחר מזה שכבר נשמר לאותו מקור) הוא עבודה חדשה, ולכן גם הוא נספר
+      const newText = Boolean(recipe.source?.text) && existing?.source?.text !== recipe.source.text;
+      return json({ recipe: saved, updated: Boolean(existing), counted: !existing || Boolean(existing.restored) || newText });
     }
 
     // מחיקת כל הספר (כשמוחקים משתמש שהוזמן)
@@ -312,8 +371,14 @@ export class RecipeBook {
       if (typeof patch.image === 'string' && /\/img\/[^/]+\/[0-9a-f-]{36}$/.test(patch.image) && patch.image !== current.image && !patch.imageFresh) delete patch.image;
       delete patch.imageFresh;
       for (const k of EDITABLE) if (k in patch) next[k] = patch[k];
+      // קטגוריה ראשית בלבד (גרסה ישנה של האפליקציה): נכנסת ראשונה, ושאר הקטגוריות נשארות
+      if ('category' in patch && !('categories' in patch)) {
+        next.categories = [patch.category, ...(current.categories || []).filter((c) => c !== patch.category && c !== 'אחר')].slice(0, 4);
+      }
+      // סידור הקטגוריות על ידי הסוכן (פעם אחת לכל מתכון)
+      if (patch.categorized) next.categorized = true;
       // שדות שהמשתמש ערך בעצמו – רענון מהמקור לא ידרוס אותם
-      const edited = EDITABLE.filter((k) => k in patch && !['favorite', 'myNotes', 'rating'].includes(k));
+      const edited = EDITABLE.filter((k) => k in patch && !['favorite', 'myNotes', 'rating'].includes(k) && !patch.categorized);
       if (edited.length) next.edited = { ...(current.edited || {}), ...Object.fromEntries(edited.map((k) => [k, true])) };
       await this.storage.put(PREFIX + id, next);
       if ('image' in patch && current.image !== next.image) await this.dropImage(current.image);
@@ -322,6 +387,7 @@ export class RecipeBook {
 
     if (request.method === 'DELETE') {
       await this.storage.delete(PREFIX + id);
+      await this.storage.put('recipe-count', Math.max(0, (await this.recipeCount()) - 1));
       await this.dropImage(current.image);
       const key = sourceKey(current);
       if (key) await this.storage.delete(SRC + key);

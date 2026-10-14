@@ -1,4 +1,5 @@
 import { loadJson } from './storage';
+import { isNative, siteAsset } from './native';
 // השרת של mat-kon (mat_kon/api). הכתובת נקבעת בזמן הבנייה (.github/workflows/mat-kon.yml).
 // בלי session = בעל האפליקציה (פתוח). עם session = משתמש שהוזמן, עם ספר מתכונים משלו.
 export const API_URL = (import.meta.env.VITE_API_URL || 'https://mat-kon-api.guygitter.workers.dev').replace(/\/+$/, '');
@@ -46,6 +47,8 @@ export function safeRecipe(r) {
     ...r,
     title: strOr(r.title, 'מתכון') || 'מתכון',
     category: strOr(r.category, 'אחר') || 'אחר',
+    // כל הקטגוריות של המתכון (הראשית ראשונה). מתכון ישן – רק הקטגוריה שלו
+    categories: [...new Set([strOr(r.category, 'אחר') || 'אחר', ...(Array.isArray(r.categories) ? r.categories.filter((c) => typeof c === 'string' && c) : [])])],
     tags: Array.isArray(r.tags) ? r.tags.map(String) : [],
     ingredients: sectionsOr(r.ingredients),
     steps: sectionsOr(r.steps),
@@ -77,6 +80,8 @@ export async function addRecipeAndWait(s, url, hint) {
 export const getRecipe = (s, id) => api(s, 'GET', `/recipes/${id}`).then((d) => safeRecipe(d.recipe));
 export const refreshRecipe = (s, id) => api(s, 'POST', `/recipes/${id}/refresh`);
 export const updateRecipe = (s, id, patch) => api(s, 'PUT', `/recipes/${id}`, patch).then((d) => d.recipe);
+// הסוכן משבץ מתכון קיים בכל הקטגוריות שמתאימות לו
+export const categorizeRecipe = (s, id) => api(s, 'POST', `/recipes/${id}/categorize`).then((d) => d.recipe);
 export const deleteRecipe = (s, id) => api(s, 'DELETE', `/recipes/${id}`);
 
 // הזמנות (בעל האפליקציה). כשהספר נעול, המכשיר של הבעלים שולח את ה-session שלו
@@ -89,11 +94,26 @@ export const setPlan = (userId, plan) => api(own(), 'PUT', `/users/${userId}/pla
 // משתמש שהוזמן
 export const checkInvite = (token) => api('', 'POST', '/invite', { token });
 export const register = (form) => api('', 'POST', '/register', form);
-export const login = (email, password) => api('', 'POST', '/login', { email, password });
+// מזהה אקראי של המכשיר: מכשיר שכבר נכנס לחשבון לא ננעל כשזר מנסה סיסמאות מהרבה כתובות
+export function deviceId() {
+  try {
+    let id = localStorage.getItem('matkon_device');
+    if (!id) {
+      id = Array.from(crypto.getRandomValues(new Uint8Array(24)), (b) => b.toString(16).padStart(2, '0')).join('');
+      localStorage.setItem('matkon_device', id);
+    }
+    return id;
+  } catch {
+    return undefined;
+  }
+}
+export const login = (email, password) => api('', 'POST', '/login', { email, password, device: deviceId() });
 export const logout = (s) => api(s, 'POST', '/logout', {}).catch(() => {});
 
-export const inviteLink = (token) => `${window.location.origin}${window.location.pathname}#invite=${token}`;
-export const loginLink = () => `${window.location.origin}${window.location.pathname}#login`;
+// כתובת לקישורים שנשלחים לאחרים: באפליקציה לאנדרואיד המקור הוא https://localhost, ולכן תמיד כתובת האתר
+const appUrl = () => (isNative() ? siteAsset('') : `${window.location.origin}${window.location.pathname}`);
+export const inviteLink = (token) => `${appUrl()}#invite=${token}`;
+export const loginLink = () => `${appUrl()}#login`;
 export const addTextRecipe = (s, item) => api(s, 'POST', '/recipes/text', item);
 
 // מתכון מתמונות / שנכתב ידנית
@@ -119,6 +139,7 @@ export const searchRecipes = (s, q) => api(s, 'POST', '/search', { q }).then((d)
 
 // קטגוריות משלי
 export const addCategory = (s, name) => api(s, 'POST', '/categories', { name }).then((d) => d.custom);
+export const setCategoryPrefs = (s, prefs) => api(s, 'PUT', '/categories/prefs', prefs);
 export const removeCategory = (s, name) => api(s, 'POST', '/categories/remove', { name });
 
 // גיבוי ושחזור
@@ -152,6 +173,7 @@ export async function restoreBackup(s, backup, onProgress) {
 // חשבון: יציאה מכל המכשירים, מחיקת החשבון
 export const logoutAll = (s) => api(s, 'POST', '/logout-all', {});
 export const deleteAccount = (s) => api(s, 'DELETE', '/account');
+export const changePassword = (s, current, next) => api(s, 'POST', '/account/password', { current, next });
 
 // המלאי בבית: מקרר ומזווה
 export const getPantry = (s) => api(s, 'GET', '/pantry').then((d) => d.items);
@@ -172,11 +194,12 @@ export const getMembers = (s) => api(s, 'GET', '/members');
 export const createMemberLink = (s) => api(s, 'POST', '/members', {}).then((d) => d.join);
 export const removeMember = (s, id) => api(s, 'DELETE', `/members/${encodeURIComponent(id)}`);
 export const cancelMemberLink = (s, token) => api(s, 'DELETE', `/members/links/${encodeURIComponent(token)}`);
-export const joinLink = (token) => `${window.location.origin}${window.location.pathname}#join=${token}`;
-export const ownerLogin = (password) => api('', 'POST', '/owner-login', { password });
+export const joinLink = (token) => `${appUrl()}#join=${token}`;
+export const ownerLogin = (password) => api('', 'POST', '/owner-login', { password, device: deviceId() });
 
 // ניהול (בעל האפליקציה): עלויות AI לפי ספר ותקלות אחרונות
 export const getAdminUsage = (month) => api(own(), 'GET', `/admin/usage${month ? `?month=${month}` : ''}`);
 export const getAdminErrors = () => api(own(), 'GET', '/admin/errors');
+export const getBackups = () => api(own(), 'GET', '/admin/backups');
 export const linkGoogle = (s, credential) => api(s, 'POST', '/google', { credential, link: true }).then((d) => d.user);
 export const reportClientError = (where, message) => api(loadJson('matkon_session', ''), 'POST', '/client-error', { where, message }).catch(() => {});

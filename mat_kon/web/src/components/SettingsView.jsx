@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, BarChart3, Download, Loader2, LogOut, PlayCircle, ShieldCheck, Trash2, Upload, UserPlus, Users } from 'lucide-react';
-import { deleteAccount, getAuthConfig, linkGoogle, logoutAll, restoreBackup } from '../lib/api';
+import { ArrowRight, BarChart3, Download, KeyRound, Loader2, LogOut, PlayCircle, ShieldCheck, Trash2, Upload, UserPlus, Users } from 'lucide-react';
+import { changePassword, deleteAccount, getAuthConfig, linkGoogle, logoutAll, restoreBackup } from '../lib/api';
 import GoogleButton from './GoogleButton';
 import { backupFile } from '../lib/recipes';
+import { needsSource, readRecetteTek } from '../lib/importers';
+import { thumbnail } from '../lib/image';
 
 // הגדרות: גיבוי ושחזור, הזמנות
-export default function SettingsView({ session, isOwner, user, recipes, custom, shopping, plan, pantry, onRestored, onSignedOut, onBack, onToast }) {
+export default function SettingsView({ session, isOwner, user, recipes, custom, shopping, plan, pantry, onRestored, onSignedOut, onBack, onToast, onAddLinks }) {
   const [progress, setProgress] = useState('');
   const [googleId, setGoogleId] = useState('');
   useEffect(() => {
@@ -13,7 +15,11 @@ export default function SettingsView({ session, isOwner, user, recipes, custom, 
   }, [user]);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [pw, setPw] = useState(null); // החלפת סיסמה: { current, next }
   const fileRef = useRef(null);
+  const importRef = useRef(null);
+  // ייבוא מאפליקציה אחרת: קודם מציגים מה נמצא בקובץ, ואחרי הייבוא – השלמה מהמקור למתכונים בלי מצרכים
+  const [imported, setImported] = useState(null); // { file: {recipes, categories, images}, done?: {restored, skipped, links} }
 
   const run = async (key, fn) => {
     setBusy(key);
@@ -67,6 +73,29 @@ export default function SettingsView({ session, isOwner, user, recipes, custom, 
       const res = await restoreBackup(session, data, (done, total) => setProgress(`${done}/${total}`));
       setProgress('');
       onToast(`שוחזרו ${res.restored} מתכונים${res.skipped ? ` (${res.skipped} דולגו)` : ''}, וגם רשימת הקניות, התכנון והמלאי`);
+      onRestored();
+    });
+
+  const readImport = (file) =>
+    run('import', async () => {
+      setImported({ file: readRecetteTek(new Uint8Array(await file.arrayBuffer())) });
+    });
+
+  const runImport = () =>
+    run('import', async () => {
+      const { recipes: list, categories, images } = imported.file;
+      setProgress('תמונות');
+      const ready = [];
+      for (const { picture, originalPicture, ...r } of list) {
+        let image = originalPicture || null;
+        if (images[picture]) image = await thumbnail(images[picture]).catch(() => image);
+        ready.push({ ...r, image });
+      }
+      // מתכון בלי מצרכים ובלי הוראות לא נשמר כמו שהוא – אם יש לו קישור, הסוכן יקרא אותו מהמקור
+      const res = await restoreBackup(session, { recipes: ready.filter((r) => r.ingredients.length || r.steps.length), categories },
+        (done, total) => setProgress(`${done}/${total}`));
+      setProgress('');
+      setImported((cur) => ({ ...cur, done: { restored: res.restored, links: [...new Set(list.filter(needsSource).map((r) => r.source.url))] } }));
       onRestored();
     });
 
@@ -138,6 +167,56 @@ export default function SettingsView({ session, isOwner, user, recipes, custom, 
           </div>
         </section>
 
+        <section className="rounded-2xl bg-white shadow-sm p-4">
+          <h2 className="font-bold text-lg">ייבוא מאפליקציה אחרת</h2>
+          <p className="text-sm text-stone-500 mt-1">
+            עוברים מ-My Recipe Box (RecetteTek)? מייצאים שם גיבוי (קובץ ‎.rtk) ובוחרים אותו כאן. המתכונים נכנסים עם התמונות,
+            הקטגוריות, המועדפים והדירוגים – בלי AI ובלי לספור במכסה.
+          </p>
+          {!imported && (
+            <button onClick={() => importRef.current?.click()} disabled={busy === 'import'} className="mt-3 rounded-xl bg-stone-100 px-4 py-2.5 font-medium flex items-center gap-1.5 disabled:opacity-40">
+              {busy === 'import' ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />} בחירת קובץ
+            </button>
+          )}
+          <input ref={importRef} type="file" accept=".rtk,.zip,application/zip,application/octet-stream" className="hidden" onChange={(e) => { if (e.target.files[0]) readImport(e.target.files[0]); e.target.value = ''; }} />
+          {imported && !imported.done && (
+            <div className="mt-3 rounded-xl bg-orange-50 p-3 text-sm">
+              <div className="font-bold">נמצאו {imported.file.recipes.length} מתכונים</div>
+              <div className="text-stone-600 mt-0.5">
+                {Object.keys(imported.file.images).length} עם תמונה
+                {imported.file.categories.length > 0 && ` · קטגוריות: ${imported.file.categories.join(', ')}`}
+              </div>
+              <div className="mt-2 flex gap-2">
+                <button onClick={runImport} disabled={busy === 'import'} className="rounded-xl bg-orange-500 text-white px-4 py-2 font-bold flex items-center gap-1.5 disabled:opacity-50">
+                  {busy === 'import' ? <><Loader2 size={16} className="animate-spin" /> מייבא {progress}</> : 'ייבוא לספר'}
+                </button>
+                <button onClick={() => setImported(null)} disabled={busy === 'import'} className="rounded-xl bg-white px-4 py-2">ביטול</button>
+              </div>
+            </div>
+          )}
+          {imported?.done && (
+            <div className="mt-3 rounded-xl bg-emerald-50 p-3 text-sm">
+              <div className="font-bold text-emerald-800">יובאו {imported.done.restored} מתכונים ✓</div>
+              {imported.done.links.length > 0 ? (
+                <>
+                  <p className="text-stone-700 mt-1">
+                    ב-{imported.done.links.length} מתכונים (בעיקר מסרטונים) לא נשמרו מצרכים. הסוכן יכול לקרוא את המקור ולהשלים אותם
+                    – זה רץ ברקע, כמו הוספת קישור{user ? ', ונספר במכסה' : ''}.
+                  </p>
+                  <button
+                    onClick={() => { onAddLinks(imported.done.links); setImported(null); }}
+                    className="mt-2 rounded-xl bg-orange-500 text-white px-4 py-2 font-bold"
+                  >
+                    השלמה מהמקור ({imported.done.links.length})
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => setImported(null)} className="mt-2 rounded-xl bg-white px-4 py-2">סגירה</button>
+              )}
+            </div>
+          )}
+        </section>
+
         {session && (
           <section className="rounded-2xl bg-white shadow-sm p-4">
             <h2 className="font-bold text-lg">החשבון</h2>
@@ -157,7 +236,45 @@ export default function SettingsView({ session, isOwner, user, recipes, custom, 
                 />
               </div>
             )}
+            {user && pw && (
+              <form
+                className="mt-3 rounded-xl bg-stone-50 p-3 flex flex-col gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  run('password', async () => {
+                    await changePassword(session, pw.current, pw.next);
+                    setPw(null);
+                    onToast('הסיסמה הוחלפה. שאר המכשירים יצטרכו להיכנס מחדש');
+                    onRestored();
+                  });
+                }}
+              >
+                {user.password && (
+                  <input
+                    type="password" autoComplete="current-password" placeholder="הסיסמה הנוכחית" value={pw.current}
+                    onChange={(e) => setPw({ ...pw, current: e.target.value })}
+                    className="rounded-xl border border-stone-200 bg-white px-3 py-2"
+                  />
+                )}
+                <input
+                  type="password" autoComplete="new-password" placeholder="סיסמה חדשה (לפחות 8 תווים)" minLength={8} value={pw.next}
+                  onChange={(e) => setPw({ ...pw, next: e.target.value })}
+                  className="rounded-xl border border-stone-200 bg-white px-3 py-2"
+                />
+                <div className="flex gap-2">
+                  <button disabled={busy === 'password' || pw.next.length < 8} className="rounded-xl bg-orange-500 text-white font-bold px-4 py-2 disabled:opacity-50">
+                    שמירה
+                  </button>
+                  <button type="button" onClick={() => setPw(null)} className="rounded-xl bg-white px-4 py-2">ביטול</button>
+                </div>
+              </form>
+            )}
             <div className="mt-3 flex flex-wrap gap-2">
+              {user && !pw && (
+                <button onClick={() => setPw({ current: '', next: '' })} className="rounded-xl bg-stone-100 px-4 py-2.5 font-medium flex items-center gap-1.5">
+                  <KeyRound size={16} /> {user.password ? 'החלפת סיסמה' : 'הוספת סיסמה'}
+                </button>
+              )}
               <button
                 onClick={() => window.confirm('לצאת מהחשבון בכל המכשירים (כולל זה)?') && run('logout-all', async () => {
                   await logoutAll(session);

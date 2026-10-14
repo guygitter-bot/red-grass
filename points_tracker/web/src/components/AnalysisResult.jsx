@@ -3,6 +3,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { Button } from './ui';
 import PortionPicker from './PortionPicker';
 import { scoreComponents } from '../lib/ai';
+import { saveChoices } from '../lib/measures';
 import { formatPoints, pointsForGrams, round1 } from '../lib/points';
 
 const CONFIDENCE = { high: 'ביטחון גבוה', medium: 'ביטחון בינוני', low: 'ביטחון נמוך - כדאי לבדוק' };
@@ -17,6 +18,7 @@ export default function AnalysisResult({ analysis, db, onAdd }) {
   const [name, setName] = useState(analysis.dish_name);
   const [saveToDb, setSaveToDb] = useState(analysis.servings > 1);
   const [favorite, setFavorite] = useState(false);
+  const [saveKey, setSaveKey] = useState('chosen');
 
   const components = initial.map((c, i) => {
     const g = Number(grams[i]) || 0;
@@ -26,6 +28,9 @@ export default function AnalysisResult({ analysis, db, onAdd }) {
   });
   const total = components.filter((c) => !c.removed).reduce((s, c) => s + c.points, 0);
   const perServing = round1(total / (servings > 0 ? servings : 1));
+
+  const choices = saveChoices(name, total, servings, portion);
+  const toSave = choices.find((c) => c.key === saveKey) || choices[0];
 
   const add = () =>
     onAdd(
@@ -37,6 +42,7 @@ export default function AnalysisResult({ analysis, db, onAdd }) {
       },
       saveToDb,
       favorite,
+      { name: toSave.name, points: toSave.points },
     );
 
   return (
@@ -115,6 +121,22 @@ export default function AnalysisResult({ analysis, db, onAdd }) {
         <input type="checkbox" checked={saveToDb || favorite} onChange={(e) => setSaveToDb(e.target.checked)} />
         שמור את המאכל במאגר שלי לפעם הבאה
       </label>
+      {(saveToDb || favorite) && choices.length > 1 && (
+        <div className="flex gap-2 text-sm">
+          {choices.map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              onClick={() => setSaveKey(c.key)}
+              className={`flex-1 rounded-xl border px-2 py-2 ${
+                c.key === toSave.key ? 'border-emerald-500 bg-emerald-50 text-emerald-700 font-bold' : 'border-slate-200 text-slate-600'
+              }`}
+            >
+              {c.label} · {formatPoints(c.points)} נק'
+            </button>
+          ))}
+        </div>
+      )}
       <label className="flex items-center gap-2 text-sm text-slate-600">
         <input type="checkbox" checked={favorite} onChange={(e) => setFavorite(e.target.checked)} />
         ⭐ שמור גם במועדפים

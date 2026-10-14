@@ -11,9 +11,10 @@ import { buildRecipe, failure } from './jobs.js';
 import { RecipeBook } from './store.js';
 import { Accounts, canAdd } from './accounts.js';
 import { gatherSource, normalizeUrl, sourceKind } from './source.js';
-import { NoRecipeError, aiMessage, extractRecipe, ideasFromPantry, organizeShopping, scanPantry, searchRecipes } from './extract.js';
+import { NoRecipeError, aiMessage, categoryFields, extractRecipe, ideasFromPantry, organizeShopping, scanPantry, searchRecipes, suggestCategories } from './extract.js';
 import { findStores } from './stores.js';
 import { CATEGORIES } from './categories.js';
+import { backupStatus, restoreBook, runBackup } from './backup.js';
 
 export { RecipeBook, Accounts };
 
@@ -49,6 +50,14 @@ const internal = (stub, method, path, body) =>
   }));
 
 export default {
+  // גיבוי לילי ל-R2 (ראו backup.js ו-[triggers] ב-wrangler.toml). תקלה נרשמת במסך "עלויות ותקלות"
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runBackup(env).catch((e) => {
+      console.error('backup', e);
+      return internal(env.ACCOUNTS.get(env.ACCOUNTS.idFromName('accounts')), 'POST', '/errors/add', { where: 'backup', message: String(e?.message || e).slice(0, 300), user: 'owner' }).catch(() => {});
+    }));
+  },
+
   async fetch(request, env) {
     const cors = corsHeaders(request, env);
     const reply = (status, data) =>
@@ -83,8 +92,8 @@ export default {
     // ---- הרשמה וכניסה (בלי זיהוי) ----
     // הגבלת קצב לפי כתובת (ולפי אימייל בכניסה), נבדקת ונספרת באותו צעד
     const ip = request.headers.get('cf-connecting-ip') || 'local';
-    const rate = async (checks, message) => {
-      const res = await internal(accounts, 'POST', '/rate', { checks, message });
+    const rate = async (checks, message, trust) => {
+      const res = await internal(accounts, 'POST', '/rate', { checks, message, trust });
       return res.ok ? null : pass(res);
     };
 
@@ -93,15 +102,25 @@ export default {
       if (error) return error;
       if (parts[0] === 'logout' || parts[0] === 'logout-all') body.session = bearer(request);
       if (parts[0] === 'login') {
+        const email = String(body.email || '').trim().toLowerCase();
         const limited = await rate([
           { key: `login-ip:${ip}`, limit: 30, window: 900 },
-          { key: `login:${String(body.email || '').trim().toLowerCase()}:${ip}`, limit: 10, window: 900 },
-          { key: `login-all:${String(body.email || '').trim().toLowerCase()}`, limit: 100, window: 3600 },
-        ], 'יותר מדי ניסיונות כניסה. נסו שוב בעוד רבע שעה.');
+          { key: `login:${email}:${ip}`, limit: 10, window: 900 },
+          { key: `login-all:${email}`, limit: 100, window: 3600, global: true },
+        ], 'יותר מדי ניסיונות כניסה. נסו שוב בעוד רבע שעה.', { scope: `e:${email}`, device: body.device });
         if (limited) return limited;
       }
       if (['register', 'invite', 'join'].includes(parts[0])) {
         const limited = await rate([{ key: `signup-ip:${ip}`, limit: 30, window: 3600 }]);
+        if (limited) return limited;
+      }
+      // הצטרפות חוזרת עם סיסמה היא ניסיון סיסמה – אותן מגבלות כמו בכניסה
+      if (parts[0] === 'register' && body.join) {
+        const email = String(body.email || '').trim().toLowerCase();
+        const limited = await rate([
+          { key: `login:${email}:${ip}`, limit: 10, window: 900 },
+          { key: `login-all:${email}`, limit: 100, window: 3600 },
+        ], 'יותר מדי ניסיונות כניסה. נסו שוב בעוד רבע שעה.');
         if (limited) return limited;
       }
       const path = { invite: '/invite/check', join: '/join/check' }[parts[0]] || `/${parts[0]}`;
@@ -138,11 +157,11 @@ export default {
       // כל ניסיון נספר מראש (גם ניסיונות במקביל), לפי כתובת – וגם תקרה כללית נגד ניחוש מפוזר
       const limited = await rate([
         { key: `owner-ip:${ip}`, limit: 10, window: 900 },
-        { key: 'owner-all', limit: 300, window: 900 },
-      ], 'יותר מדי ניסיונות. נסו שוב בעוד רבע שעה.');
+        { key: 'owner-all', limit: 300, window: 900, global: true },
+      ], 'יותר מדי ניסיונות. נסו שוב בעוד רבע שעה.', { scope: 'owner', device: body.device });
       if (limited) return limited;
       if (!(await sameSecret(String(body.password || ''), ownerPassword))) return fail(401, 'הסיסמה שגויה');
-      return pass(await internal(accounts, 'POST', '/owner-session', {}));
+      return pass(await internal(accounts, 'POST', '/owner-session', { device: body.device }));
     }
 
     // ---- כניסה והרשמה עם חשבון גוגל ----
@@ -233,13 +252,21 @@ export default {
     const allCategories = async () => [...CATEGORIES, ...(await customCategories())];
 
     if (url.pathname === '/me') {
-      return reply(200, { owner: !user, user, categories: await allCategories(), paymentUrl: env.PAYMENT_URL || '' });
+      const categoryPrefs = await (await internal(bookStub(), 'GET', '/category-prefs')).json();
+      return reply(200, { owner: !user, user, categories: await allCategories(), categoryPrefs, paymentUrl: env.PAYMENT_URL || '' });
     }
 
     // ---- קטגוריות משלי ----
     if (parts[0] === 'categories') {
       const book = bookStub();
       if (parts.length === 1 && request.method === 'GET') return pass(await internal(book, 'GET', '/categories'));
+      // סדר האריחים במסך הקטגוריות ומועדפות: רשימות של שמות (עד 60, בלי כפילויות)
+      if (parts[1] === 'prefs' && parts.length === 2 && request.method === 'PUT') {
+        const { body, error } = await readJson();
+        if (error) return error;
+        const names = (v) => [...new Set((Array.isArray(v) ? v : []).filter((c) => typeof c === 'string').map((c) => c.trim().slice(0, 30)).filter(Boolean))].slice(0, 60);
+        return pass(await internal(book, 'PUT', '/category-prefs', { order: names(body.order), favorites: names(body.favorites) }));
+      }
       if (request.method === 'POST' && parts.length <= 2) {
         const { body, error } = await readJson();
         if (error) return error;
@@ -286,6 +313,16 @@ export default {
       return fail(405, 'Method not allowed');
     }
 
+    // ---- החלפת סיסמה (משתמש שנרשם): כל שאר המכשירים מנותקים ----
+    if (url.pathname === '/account/password' && request.method === 'POST') {
+      if (!user) return fail(400, 'לבעל האפליקציה אין סיסמה כאן (סיסמת הבעלים מוגדרת ב-GitHub)');
+      const limited = await rate([{ key: `password:${user.id}`, limit: 10, window: 900 }], 'יותר מדי ניסיונות. נסו שוב בעוד רבע שעה.');
+      if (limited) return limited;
+      const { body, error } = await readJson();
+      if (error) return error;
+      return pass(await internal(accounts, 'POST', '/account/password', { userId: user.id, current: body.current, next: body.next, session: bearer(request) }));
+    }
+
     // ---- מחיקת החשבון שלי (משתמש שנרשם; בעל ספר – גם הספר והחברים בו) ----
     if (url.pathname === '/account' && request.method === 'DELETE') {
       if (!user) return fail(400, 'לבעל האפליקציה אין חשבון למחוק');
@@ -293,6 +330,23 @@ export default {
       const data = await res.json();
       if (res.ok && data.deletedBook) await internal(bookOf(user.id), 'DELETE', '/recipes');
       return reply(res.status, data);
+    }
+
+    // ---- גיבויים: רק בעל האפליקציה ----
+    if (parts[0] === 'admin' && (parts[1] === 'backups' || parts[1] === 'restore')) {
+      if (user) return fail(403, 'רק לבעל האפליקציה');
+      if (parts[1] === 'backups' && request.method === 'GET') return reply(200, await backupStatus(env));
+      if (parts[1] === 'restore' && request.method === 'POST') {
+        const { body, error } = await readJson();
+        if (error) return error;
+        try {
+          return reply(200, await restoreBook(env, String(body.date || ''), String(body.book || '')));
+        } catch (e) {
+          await recordError('restore', e);
+          return fail(400, e.message);
+        }
+      }
+      return fail(405, 'Method not allowed');
     }
 
     // ---- ניהול הזמנות: רק בעל האפליקציה ----
@@ -481,12 +535,13 @@ export default {
 
     // מתכון שנכתב ידנית: בלי AI ובלי מכסה
     if (request.method === 'POST' && parts.length === 2 && id === 'manual') {
+      const limited = await rate([{ key: `manual:${bookKeyOf(user)}`, limit: 200, window: 86400 }], 'הגעתם למגבלת המתכונים הידניים היומית. נסו שוב מחר.');
+      if (limited) return limited;
       const { body, error } = await readJson(MAX_EDIT_BYTES);
       if (error) return error;
       const recipe = manualRecipe(body);
       if (typeof recipe === 'string') return fail(400, recipe);
-      if (!(await allCategories()).includes(body.category)) recipe.category = 'אחר';
-      else recipe.category = body.category;
+      Object.assign(recipe, categoryFields(Array.isArray(body.categories) ? body.categories : [body.category], await allCategories()));
       recipe.image = await storeImage(recipe.image);
       return pass(await internal(book, 'POST', '/recipes', recipe));
     }
@@ -608,10 +663,28 @@ export default {
     if (parts.length === 1 && request.method === 'GET') return pass(await internal(book, 'GET', '/recipes'));
     if (parts.length === 2 && request.method === 'GET') return pass(await internal(book, 'GET', `/recipes/${id}`));
     if (parts.length === 2 && request.method === 'DELETE') return pass(await internal(book, 'DELETE', `/recipes/${id}`));
+    // סידור מתכון קיים בכל הקטגוריות שמתאימות לו (AI קצר, בלי רשת, בלי מכסת מתכונים – רק בתקציב היומי)
+    if (parts.length === 3 && parts[2] === 'categorize' && request.method === 'POST') {
+      const res = await internal(book, 'GET', `/recipes/${id}`);
+      if (!res.ok) return fail(404, 'המתכון לא נמצא');
+      const { recipe } = await res.json();
+      const limited = await aiBudget();
+      if (limited) return limited;
+      try {
+        const fields = await suggestCategories(ai(), recipe, await allCategories());
+        return pass(await internal(book, 'PUT', `/recipes/${id}`, { ...fields, categorized: true }));
+      } catch (e) {
+        return aiFail(e, (!e.status && e.message) || 'לא הצלחתי לסדר את הקטגוריות');
+      }
+    }
     if (parts.length === 2 && request.method === 'PUT') {
       const { body: patch, error } = await readJson(MAX_EDIT_BYTES);
       if (error) return error;
-      if ('category' in patch && !(await allCategories()).includes(patch.category)) return fail(400, 'קטגוריה לא מוכרת');
+      if ('categories' in patch) {
+        const known = await allCategories();
+        if (!Array.isArray(patch.categories) || !patch.categories.length || patch.categories.some((c) => !known.includes(c))) return fail(400, 'קטגוריה לא מוכרת');
+        Object.assign(patch, categoryFields(patch.categories, known));
+      } else if ('category' in patch && !(await allCategories()).includes(patch.category)) return fail(400, 'קטגוריה לא מוכרת');
       if ('rating' in patch && !(Number.isInteger(patch.rating) && patch.rating >= 0 && patch.rating <= 5)) return fail(400, 'דירוג לא תקין');
       if ('tags' in patch) {
         if (!Array.isArray(patch.tags)) return fail(400, 'תגיות לא תקינות');
@@ -705,7 +778,7 @@ function manualRecipe(body) {
     title,
     originalTitle: title,
     description: str(body.description, 500),
-    category: CATEGORIES.includes(body.category) ? body.category : 'אחר',
+    ...categoryFields(Array.isArray(body.categories) ? body.categories : [body.category]),
     tags: strList(body.tags, 5),
     servings: str(body.servings),
     prepTime: str(body.prepTime),
@@ -775,7 +848,7 @@ function restoredRecipe(r, categories) {
     title,
     originalTitle: str(r.originalTitle) || title,
     description: str(r.description, 500),
-    category: categories.includes(r.category) ? r.category : 'אחר',
+    ...categoryFields(Array.isArray(r.categories) ? [r.category, ...r.categories] : [r.category], categories),
     tags: strList(r.tags, 15),
     servings: str(r.servings, 100),
     prepTime: str(r.prepTime, 100),

@@ -1,0 +1,111 @@
+name: tsevet
+
+# צוות (tsevet/): בוטים של שיווק ב-Telegram
+#   api -> Cloudflare Worker "tsevet-api" (הבוטים, Durable Object אחד, Claude)
+# עולה גם כשה-README של אחת האפליקציות משתנה – כדי שהבוטים יכירו את הגרסה העדכנית.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tsevet/**"
+      - ".github/workflows/tsevet.yml"
+      - "seder/README.md"
+      - "points_tracker/README.md"
+      - "mat_kon/README.md"
+      - "ai_maagar/README.md"
+      - "eretz_ir/README.md"
+      - "rock_city/README.md"
+  pull_request:
+    paths: ["tsevet/**", ".github/workflows/tsevet.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tsevet-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Server tests
+        working-directory: tsevet/api
+        run: |
+          npm ci
+          node build-apps.mjs
+          npm test
+
+  api:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check secrets
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TG_CREATIVE: ${{ secrets.TG_CREATIVE_TOKEN }}
+          TG_CAMPAIGNS: ${{ secrets.TG_CAMPAIGNS_TOKEN }}
+          OWNER_CODE: ${{ secrets.TEAM_OWNER_CODE }}
+        run: |
+          missing=""
+          [ -n "$CF_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -n "$CF_ACCOUNT" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          [ -n "$API_KEY" ] || missing="$missing ANTHROPIC_API_KEY"
+          [ -n "$TG_CREATIVE" ] || missing="$missing TG_CREATIVE_TOKEN"
+          [ -n "$TG_CAMPAIGNS" ] || missing="$missing TG_CAMPAIGNS_TOKEN"
+          [ -n "$OWNER_CODE" ] || missing="$missing TEAM_OWNER_CODE"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing (see tsevet/README.md)"
+            exit 1
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install
+        working-directory: tsevet/api
+        run: |
+          npm ci
+          node build-apps.mjs
+      - name: Deploy worker
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TG_CREATIVE_TOKEN: ${{ secrets.TG_CREATIVE_TOKEN }}
+          TG_CAMPAIGNS_TOKEN: ${{ secrets.TG_CAMPAIGNS_TOKEN }}
+          TEAM_OWNER_CODE: ${{ secrets.TEAM_OWNER_CODE }}
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: tsevet/api
+          wranglerVersion: "4.146.0"
+          secrets: |
+            ANTHROPIC_API_KEY
+            TG_CREATIVE_TOKEN
+            TG_CAMPAIGNS_TOKEN
+            TEAM_OWNER_CODE
+      - name: Connect the bots to Telegram
+        env:
+          URL: ${{ steps.deploy.outputs.deployment-url }}
+          TOKEN: ${{ secrets.TG_CREATIVE_TOKEN }}
+        run: |
+          URL="${URL:-https://tsevet-api.guygitter.workers.dev}"
+          key=$(printf 'tsevet:setup:%s' "$TOKEN" | sha256sum | cut -c1-48)
+          for i in 1 2 3 4 5; do
+            if out=$(curl -sf -X POST -H "x-setup: $key" "$URL/setup"); then
+              echo "Bots: $out" | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Could not connect the bots to Telegram"
+          exit 1

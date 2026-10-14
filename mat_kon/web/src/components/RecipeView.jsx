@@ -4,11 +4,12 @@ import {
   CalendarPlus, Plus, Printer, RotateCw, Share2, ShoppingCart, Star, Trash2, Users, X,
 } from 'lucide-react';
 import CookMode from './CookMode';
+import { isNative } from '../lib/native';
 import { missingLines } from '../lib/fridge';
 import { baseServings, formatAmount, scaleSections } from '../lib/scale';
 import { thumbnail } from '../lib/image';
 import { DAY_NAMES, MEALS, dateKey, shortDate } from '../lib/plan';
-import { emojiOf, VIDEO_LABEL, isVideo, recipeAsText, sectionsToText, shortUrl, textToSections } from '../lib/recipes';
+import { categoriesOf, emojiOf, VIDEO_LABEL, isVideo, recipeAsText, sectionsToText, shortUrl, textToSections } from '../lib/recipes';
 import { usePersistentState } from '../lib/storage';
 
 // רק נגני סרטונים מהאתרים המוכרים
@@ -26,12 +27,17 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
   const [busy, setBusy] = useState('');
   // עדכון קטן (מועדף, דירוג...): השגיאה כבר מוצגת כהודעה
   const quiet = (patch) => Promise.resolve(onUpdate(patch)).catch(() => {});
+  const cats = categoriesOf(recipe);
+  const setCats = (next) => next.length && quiet({ category: next[0], categories: next });
   const [error, setError] = useState('');
   // סימון מצרכים ושלבים בזמן הבישול - נשמר רק במכשיר הזה
   const [checked, setChecked] = usePersistentState(`matkon_checked_${recipe.id}`, {});
   const toggle = (key) => setChecked((c) => ({ ...c, [key]: !c[key] }));
 
-  useEffect(() => window.scrollTo(0, 0), [recipe.id]);
+  // בסוגריים מסולסלים: בכרום חדש scrollTo מחזיר ערך, ו-React היה מנסה להריץ אותו כ"ניקוי" ביציאה מהמסך (קריסה)
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [recipe.id]);
 
   const run = async (name, fn) => {
     setBusy(name);
@@ -160,7 +166,22 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
           </div>
         )}
 
-        {SAFE_EMBED.test(recipe.source.embed || '') ? (
+        {/* באפליקציה מהחנות נגני טיקטוק/יוטיוב חוסמים את ה-WebView ("overload-protect") – שם מציגים תמונה ופותחים את הסרטון באפליקציה שלו */}
+        {isNative() && SAFE_EMBED.test(recipe.source.embed || '') && recipe.source.url ? (
+          <a
+            href={recipe.source.url}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-3 relative block rounded-2xl overflow-hidden bg-stone-900 print:hidden aspect-video"
+            aria-label="צפייה בסרטון המקורי"
+          >
+            {recipe.image && <img src={recipe.image} alt="" referrerPolicy="no-referrer" className="absolute inset-0 w-full h-full object-cover opacity-80" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
+            <span className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white font-bold drop-shadow">
+              <PlayCircle size={56} />
+              צפייה בסרטון
+            </span>
+          </a>
+        ) : SAFE_EMBED.test(recipe.source.embed || '') ? (
           <div className={`mt-3 rounded-2xl overflow-hidden bg-black print:hidden ${recipe.source.kind === 'tiktok' ? 'aspect-[9/16] max-w-xs mx-auto' : 'aspect-video'}`}>
             <iframe
               src={recipe.source.embed}
@@ -183,20 +204,30 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
         {recipe.description && <p className="mt-2 text-stone-600 leading-relaxed">{recipe.description}</p>}
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <label className="inline-flex items-center gap-1 rounded-full bg-orange-100 text-orange-800 text-sm pr-3 pl-1 py-0.5">
-            {emojiOf(recipe.category)}
+          {/* המתכון מופיע בכל הקטגוריות שלו; הראשונה היא הראשית */}
+          {cats.map((c) => (
+            <span key={c} className="inline-flex items-center gap-1 rounded-full bg-orange-100 text-orange-800 text-sm font-medium pr-3 pl-1 py-1">
+              {emojiOf(c)} {c}
+              {cats.length > 1 && (
+                <button onClick={() => setCats(cats.filter((x) => x !== c))} className="p-0.5 rounded-full hover:bg-orange-200 print:hidden" aria-label={`הסרה מהקטגוריה ${c}`}>
+                  <X size={14} />
+                </button>
+              )}
+            </span>
+          ))}
+          {cats.length < 4 && (
             <select
-              value={recipe.category}
-              onChange={(e) => quiet({ category: e.target.value })}
-              className="bg-transparent font-medium outline-none py-1 cursor-pointer"
-              aria-label="קטגוריה"
+              value=""
+              onChange={(e) => e.target.value && setCats([...cats.filter((x) => x !== 'אחר'), e.target.value])}
+              className="rounded-full border border-dashed border-orange-300 bg-transparent text-orange-700 text-sm px-3 py-1 outline-none cursor-pointer print:hidden"
+              aria-label="הוספה לקטגוריה"
             >
-              {(categories.includes(recipe.category) ? categories : [...categories, recipe.category]).map((c) => (
+              <option value="">+ קטגוריה</option>
+              {categories.filter((c) => !cats.includes(c)).map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
-          </label>
-          <Tags tags={recipe.tags || []} onChange={(tags) => quiet({ tags })} />
+          )}
         </div>
 
         <Rating value={recipe.rating || 0} onChange={(rating) => quiet({ rating })} />
@@ -400,7 +431,9 @@ function MyNotes({ value, onSave }) {
   const [text, setText] = useState(value);
   const pending = useRef({ text: value, value, onSave });
   pending.current = { text, value, onSave };
-  useEffect(() => setText(value), [value]);
+  useEffect(() => {
+    setText(value);
+  }, [value]);
   // שמירה אחרי הפסקה קצרה בהקלדה, וגם ביציאה מהמסך (חזרה אחורה בלי לצאת מהשדה)
   useEffect(() => {
     if (text === value) return undefined;
@@ -565,49 +598,6 @@ function Rating({ value, onChange }) {
   );
 }
 
-// תגיות: הסרה ב-x, הוספה בכפתור +
-function Tags({ tags, onChange }) {
-  const [adding, setAdding] = useState(false);
-  const [text, setText] = useState('');
-  const submit = (e) => {
-    e.preventDefault();
-    const t = text.trim().replace(/^#/, '');
-    if (t && !tags.includes(t)) onChange([...tags, t]);
-    setText('');
-    setAdding(false);
-  };
-  return (
-    <>
-      {tags.map((t) => (
-        <span key={t} className="rounded-full bg-stone-100 text-stone-600 text-sm pr-3 pl-1.5 py-1 flex items-center gap-1">
-          #{t}
-          <button onClick={() => onChange(tags.filter((x) => x !== t))} className="text-stone-400 hover:text-red-500 print:hidden" aria-label={`הסרת ${t}`}>
-            <X size={13} />
-          </button>
-        </span>
-      ))}
-      {adding ? (
-        <form onSubmit={submit} className="print:hidden">
-          <input
-            autoFocus
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onBlur={submit}
-            maxLength={30}
-            placeholder="תגית"
-            className="w-28 rounded-full border border-orange-300 px-3 py-1 text-sm outline-none"
-          />
-        </form>
-      ) : (
-        <button onClick={() => setAdding(true)} className="rounded-full border border-dashed border-stone-300 text-stone-500 text-sm px-2.5 py-1 flex items-center gap-1 print:hidden">
-          <Plus size={13} /> תגית
-        </button>
-      )}
-    </>
-  );
-}
-
-// מה חסר בבית (לפי המלאי במקרר ובמזווה). מה שחסר נכנס לרשימת הקניות, ושם "איפה לקנות הכי זול" לכל הסל
 function MissingBox({ lines, pantryNames, onShop }) {
   if (!lines.length || !pantryNames.length) return null;
   const missing = missingLines(lines, pantryNames);

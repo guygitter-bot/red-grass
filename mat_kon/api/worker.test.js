@@ -1,6 +1,8 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import worker, { deps } from './worker.js';
+import { hashPassword } from './accounts.js';
+import { runBackup } from './backup.js';
 import { fakeEnv } from './fake-env.js';
 import { RECIPE_TOOL } from './extract.js';
 
@@ -368,6 +370,13 @@ test('weekly plan: saved per book and cleaned', async () => {
 });
 
 // ---------- קטגוריות משלי, חיפוש ברשת, דירוג ותגיות, גיבוי ושחזור ----------
+
+test('category prefs: order and favorites saved per book and returned by /me', async () => {
+  assert.deepEqual((await (await call('GET', '/me')).json()).categoryPrefs, { order: [], favorites: [] });
+  const res = await call('PUT', '/categories/prefs', { order: ['קינוחים', ' עוגות ', 'קינוחים', 5, ''], favorites: ['עוגות'] });
+  assert.equal(res.status, 200);
+  assert.deepEqual((await (await call('GET', '/me')).json()).categoryPrefs, { order: ['קינוחים', 'עוגות'], favorites: ['עוגות'] });
+});
 
 test('custom categories: added, offered to the agent, accepted on edit, removed to "other"', async () => {
   assert.equal((await call('POST', '/categories', { name: 'עוגות' })).status, 409);
@@ -848,6 +857,205 @@ test('rate limits on sign-in, sessions end when the owner password changes, logo
   const b2 = (await (await call('POST', '/login', { email: 'b@example.com', password: 'secret12' })).json()).session;
   assert.equal((await call('POST', '/logout-all', {}, b)).status, 200);
   assert.equal((await call('GET', '/recipes', undefined, b2)).status, 401);
+});
+
+test('quota cannot be bypassed by restoring new text over a recipe, or by re-sending new text with the same key', async () => {
+  env = fakeEnv({ FREE_RECIPES: '2' });
+  const { session } = await (await register((await invite()).token)).json();
+  const text = 'מצרכים: קמח, סוכר, ביצים. אופן ההכנה: מערבבים ואופים.';
+  const first = await (await call('POST', '/recipes/text', { key: 'wa:x', text }, session)).json();
+  assert.equal(first.user.added, 1);
+  // אותו key עם טקסט חדש הוא עבודה חדשה – נספר
+  const second = await (await call('POST', '/recipes/text', { key: 'wa:x', text: `${text} ועוד שוקולד` }, session)).json();
+  assert.equal(second.user.added, 2);
+  // שחזור לא מחליף את הטקסט שהרענון קורא
+  await call('POST', '/recipes/restore', { recipes: [{ title: 'x', ingredients: [{ title: '', items: ['x'] }], source: { kind: 'whatsapp', key: 'wa:x', text: 'טקסט אחר לגמרי של מתכון אחר לגמרי' } }] }, session);
+  const [recipe] = (await (await call('GET', '/recipes', undefined, session)).json()).recipes;
+  assert.equal(recipe.source.text, `${text} ועוד שוקולד`);
+  assert.equal((await call('POST', `/recipes/${recipe.id}/refresh`, undefined, session)).status, 200);
+  assert.match(apiCalls.at(-1).messages[0].content, /ועוד שוקולד/);
+});
+
+test('a stranger guessing passwords from many addresses cannot lock out a known device', async () => {
+  await register((await invite()).token);
+  const device = 'a'.repeat(32);
+  assert.equal((await call('POST', '/login', { email: 'dana@example.com', password: 'secret12', device })).status, 200);
+  // 100 ניסיונות שגויים מ"כתובות" שונות ממלאים את התקרה הכללית לאימייל
+  for (let i = 0; i < 101; i++) {
+    await worker.fetch(new Request('https://api.example/login', {
+      method: 'POST',
+      headers: { origin: 'https://mat-kon.pages.dev', 'content-type': 'application/json', 'cf-connecting-ip': `10.0.${i % 50}.${i}` },
+      body: JSON.stringify({ email: 'dana@example.com', password: `wrong${i}` }),
+    }), env);
+  }
+  assert.equal((await call('POST', '/login', { email: 'dana@example.com', password: 'secret12' })).status, 429);
+  assert.equal((await call('POST', '/login', { email: 'dana@example.com', password: 'secret12', device: 'b'.repeat(32) })).status, 429);
+  assert.equal((await call('POST', '/login', { email: 'dana@example.com', password: 'secret12', device })).status, 200);
+
+  env.OWNER_PASSWORD = 'owner-secret-1';
+  assert.equal((await call('POST', '/owner-login', { password: 'owner-secret-1', device })).status, 200);
+  for (let i = 0; i < 301; i++) {
+    await worker.fetch(new Request('https://api.example/owner-login', {
+      method: 'POST',
+      headers: { origin: 'https://mat-kon.pages.dev', 'content-type': 'application/json', 'cf-connecting-ip': `10.1.${i % 200}.${i % 9}` },
+      body: JSON.stringify({ password: `bad${i}` }),
+    }), env);
+  }
+  assert.equal((await call('POST', '/owner-login', { password: 'owner-secret-1' })).status, 429);
+  assert.equal((await call('POST', '/owner-login', { password: 'owner-secret-1', device })).status, 200);
+});
+
+test('change password: needs the current one, other devices are signed out; old hashes are upgraded on login', async () => {
+  const { session } = await (await register((await invite()).token)).json();
+  const other = (await (await call('POST', '/login', { email: 'dana@example.com', password: 'secret12' })).json()).session;
+  assert.equal((await call('POST', '/account/password', { current: 'wrong-one', next: 'newsecret1' }, session)).status, 401);
+  assert.equal((await call('POST', '/account/password', { current: 'secret12', next: 'short' }, session)).status, 400);
+  assert.equal((await call('POST', '/account/password', { current: 'secret12', next: 'newsecret1' }, session)).status, 200);
+  assert.equal((await call('GET', '/recipes', undefined, session)).status, 200);
+  assert.equal((await call('GET', '/recipes', undefined, other)).status, 401);
+  assert.equal((await call('POST', '/login', { email: 'dana@example.com', password: 'secret12' })).status, 401);
+  assert.equal((await call('POST', '/login', { email: 'dana@example.com', password: 'newsecret1' })).status, 200);
+
+  // סיסמה שנשמרה בשיטה הישנה (20000 סבבים, בלי iter) עדיין נכנסת, ומשודרגת
+  const accounts = [...env.ACCOUNTS.objects.values()][0];
+  const id = await accounts.storage.get('email:dana@example.com');
+  const user = await accounts.storage.get(`user:${id}`);
+  delete user.iter;
+  user.hash = await hashPassword('oldsecret1', user.salt, 20000);
+  await accounts.storage.put(`user:${id}`, user);
+  assert.equal((await call('POST', '/login', { email: 'dana@example.com', password: 'oldsecret1' })).status, 200);
+  assert.equal((await accounts.storage.get(`user:${id}`)).iter, 100000);
+  assert.equal((await call('POST', '/login', { email: 'dana@example.com', password: 'oldsecret1' })).status, 200);
+  // אותה הודעה לאימייל לא קיים ולסיסמה שגויה
+  const a = await (await call('POST', '/login', { email: 'nobody@example.com', password: 'x' })).json();
+  const b = await (await call('POST', '/login', { email: 'dana@example.com', password: 'x' })).json();
+  assert.equal(a.error, b.error);
+});
+
+test('a recipe can be in several categories: from the agent, by edit, by re-filing, and removing a custom category', async () => {
+  await call('POST', '/categories', { name: 'מנה עיקרית' });
+  reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_recipe', input: { ...recipeInput, category: 'עוף', more_categories: ['מנה עיקרית', 'לא קיימת'] } }] });
+  const { recipe } = await (await call('POST', '/recipes', { url: 'https://cake.example/chicken' })).json();
+  assert.equal(recipe.category, 'עוף');
+  assert.deepEqual(recipe.categories, ['עוף', 'מנה עיקרית']);
+  assert.ok(apiCalls[0].tools.some((t) => t.input_schema?.properties?.more_categories?.items.enum.includes('מנה עיקרית')));
+
+  // עריכה: רשימה לא מוכרת נדחית, רשימה תקינה נשמרת והראשית מתעדכנת
+  assert.equal((await call('PUT', `/recipes/${recipe.id}`, { categories: ['לא קיימת'] })).status, 400);
+  const edited = (await (await call('PUT', `/recipes/${recipe.id}`, { categories: ['מנה עיקרית', 'עוף'] })).json()).recipe;
+  assert.equal(edited.category, 'מנה עיקרית');
+  // גרסה ישנה ששולחת רק category: נכנסת ראשונה, השאר נשארות
+  const old = (await (await call('PUT', `/recipes/${recipe.id}`, { category: 'בשר' })).json()).recipe;
+  assert.deepEqual(old.categories, ['בשר', 'מנה עיקרית', 'עוף']);
+
+  // שיבוץ מחדש של מתכון קיים
+  reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_categories', input: { categories: ['עוף', 'מנה עיקרית'] } }] });
+  const sorted = (await (await call('POST', `/recipes/${recipe.id}/categorize`)).json()).recipe;
+  assert.deepEqual(sorted.categories, ['עוף', 'מנה עיקרית']);
+  assert.equal(sorted.categorized, true);
+  assert.match(apiCalls.at(-1).system, /מנה עיקרית/);
+
+  // מחיקת קטגוריה שלכם מוציאה אותה מהמתכונים, והמתכון נשאר בשאר הקטגוריות
+  await call('POST', '/categories/remove', { name: 'מנה עיקרית' });
+  const after = (await (await call('GET', '/recipes')).json()).recipes[0];
+  assert.deepEqual(after.categories, ['עוף']);
+
+  // שחזור מגיבוי שומר כמה קטגוריות (רק מוכרות)
+  await call('POST', '/recipes/restore', { recipes: [{ title: 'r', category: 'סלטים', categories: ['סלטים', 'תוספות', 'xx'], ingredients: [{ title: '', items: ['x'] }], source: { url: 'https://cake.example/r' } }] });
+  const restored = (await (await call('GET', '/recipes')).json()).recipes.find((r) => r.title === 'r');
+  assert.deepEqual(restored.categories, ['סלטים', 'תוספות']);
+});
+
+// דלי R2 מדומה (מה שהגיבוי משתמש בו)
+function fakeBucket() {
+  const files = new Map();
+  const obj = (v) => ({ json: async () => JSON.parse(new TextDecoder().decode(v.body)), arrayBuffer: async () => v.body.slice().buffer, httpMetadata: v.meta });
+  return {
+    files,
+    put: async (key, body, opts = {}) => {
+      const bytes = typeof body === 'string' ? new TextEncoder().encode(body) : new Uint8Array(body);
+      files.set(key, { body: bytes, meta: opts.httpMetadata || {} });
+    },
+    get: async (key) => (files.has(key) ? obj(files.get(key)) : null),
+    head: async (key) => (files.has(key) ? {} : null),
+    delete: async (keys) => { for (const k of [].concat(keys)) files.delete(k); },
+    list: async ({ prefix = '', delimiter } = {}) => {
+      const keys = [...files.keys()].filter((k) => k.startsWith(prefix)).sort();
+      if (!delimiter) return { objects: keys.map((key) => ({ key })), truncated: false };
+      const prefixes = [...new Set(keys.map((k) => k.slice(prefix.length)).filter((r) => r.includes(delimiter)).map((r) => prefix + r.slice(0, r.indexOf(delimiter) + 1)))];
+      return { objects: [], delimitedPrefixes: prefixes, truncated: false };
+    },
+  };
+}
+
+test('nightly backup to R2: every book and its images; the owner restores a book; old days are pruned', async () => {
+  env.BACKUPS = fakeBucket();
+  const { session } = await (await register((await invite()).token)).json();
+  const me = (await (await call('GET', '/me', undefined, session)).json()).user;
+  const manual = { title: 'עוגה של סבתא', category: 'עוגות', ingredients: [{ title: '', items: ['קמח'] }], steps: [{ title: '', items: ['אופים'] }], image: `data:image/png;base64,${PIXEL}` };
+  const { recipe } = await (await call('POST', '/recipes/manual', manual, session)).json();
+  await call('POST', '/recipes/manual', { ...manual, title: 'של הבעלים', image: null });
+
+  const summary = await runBackup(env, new Date('2026-10-01T01:17:00Z'));
+  assert.equal(summary.books, 2);
+  assert.equal(summary.newImages, 1);
+  assert.ok(env.BACKUPS.files.has('daily/2026-10-01/accounts.json'));
+  assert.ok(env.BACKUPS.files.has(`daily/2026-10-01/books/${me.id}.json`));
+  assert.ok(env.BACKUPS.files.has('daily/2026-10-01/books/book.json'));
+  // תמונה שכבר גובתה לא נשמרת שוב
+  assert.equal((await runBackup(env, new Date('2026-10-02T01:17:00Z'))).newImages, 0);
+
+  // המשתמש מוחק את המתכון; רק בעל האפליקציה יכול לשחזר
+  await call('DELETE', `/recipes/${recipe.id}`, undefined, session);
+  assert.equal((await (await call('GET', '/recipes', undefined, session)).json()).recipes.length, 0);
+  assert.equal((await call('POST', '/admin/restore', { date: '2026-10-01', book: me.id }, session)).status, 403);
+  const restored = await (await call('POST', '/admin/restore', { date: '2026-10-01', book: me.id })).json();
+  assert.equal(restored.images, 1);
+  const [back] = (await (await call('GET', '/recipes', undefined, session)).json()).recipes;
+  assert.equal(back.title, 'עוגה של סבתא');
+  const imageId = back.image.split('/').pop();
+  assert.equal((await call('GET', `/img/${me.id}/${imageId}`)).status, 200);
+  assert.equal((await call('POST', '/admin/restore', { date: '2026-09-01', book: me.id })).status, 400);
+
+  const status = await (await call('GET', '/admin/backups')).json();
+  assert.deepEqual(status.days, ['2026-10-01', '2026-10-02']);
+  // אחרי 30 יום הימים הישנים נמחקים
+  await runBackup(env, new Date('2026-11-05T01:17:00Z'));
+  assert.deepEqual((await (await call('GET', '/admin/backups')).json()).days, ['2026-11-05']);
+  const mine = () => [...env.BACKUPS.files.keys()].filter((k) => k.startsWith(`images/${me.id}/`)).length;
+  assert.equal(mine(), 1);
+
+  // מחיקת החשבון: התמונות שלו בגיבוי נמחקות כשאף יום שנשאר כבר לא מכיל את הספר; מפתחות אחרים בדלי לא נוגעים
+  await env.BACKUPS.put('signing/upload.jks', 'key');
+  await call('DELETE', '/account', undefined, session);
+  await runBackup(env, new Date('2026-11-06T01:17:00Z'));
+  assert.equal(mine(), 1);
+  await runBackup(env, new Date('2026-12-07T01:17:00Z'));
+  assert.equal(mine(), 0);
+  assert.ok(env.BACKUPS.files.has('signing/upload.jks'));
+});
+
+test('with INVITE_PLAN=paid, everyone who signs up from an invite has no recipe limit', async () => {
+  env = fakeEnv({ INVITE_PLAN: 'paid', FREE_RECIPES: '1' });
+  const { session, user } = await (await register((await invite()).token)).json();
+  assert.equal(user.plan, 'paid');
+  for (let i = 0; i < 3; i++) assert.equal((await call('POST', '/recipes', { url: `https://cake.example/p${i}` }, session)).status, 200);
+});
+
+test('switching to INVITE_PLAN=paid moves users who already signed up to the paid plan', async () => {
+  env = fakeEnv({ FREE_RECIPES: '1' });
+  const { session } = await (await register((await invite()).token)).json();
+  assert.equal((await (await call('GET', '/me', undefined, session)).json()).user.plan, 'free');
+  const fresh = fakeEnv({ INVITE_PLAN: 'paid', FREE_RECIPES: '1' });
+  for (const [name, obj] of env.ACCOUNTS.objects) {
+    obj.env = fresh;
+    obj.invitePlan = 'paid';
+    obj.cleanupChecked = false;
+    fresh.ACCOUNTS.objects.set(name, obj);
+  }
+  fresh.BOOK = env.BOOK;
+  env = fresh;
+  assert.equal((await (await call('GET', '/me', undefined, session)).json()).user.plan, 'paid');
 });
 
 test('pre-registering someone else\'s email never puts them in your book', async () => {

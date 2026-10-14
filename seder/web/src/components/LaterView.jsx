@@ -13,7 +13,7 @@ function LaterCard({ item }) {
   const link = item.links?.[0];
   const preview = item.notes && item.notes !== item.title ? item.notes.replace(/https?:\/\/\S+/g, '').trim().slice(0, 140) : '';
   return (
-    <div className={`rounded-2xl bg-white border border-stone-200 p-3 shadow-sm ${item.done ? 'opacity-50' : ''}`}>
+    <div className={`rounded-2xl bg-card border border-stone-200 p-3 shadow-sm ${item.done ? 'opacity-50' : ''}`}>
       <button onClick={() => edit(item)} className="w-full text-right">
         <div className="font-medium">{link ? (link.kind === 'video' ? '🎬 ' : '🔗 ') : '💭 '}{item.title}</div>
         {preview && <div className="text-sm text-stone-500 mt-1 line-clamp-2 whitespace-pre-line">{preview}</div>}
@@ -40,8 +40,8 @@ export default function LaterView({ seg, setSeg }) {
   return (
     <div>
       <div className="grid grid-cols-2 gap-1 rounded-2xl bg-violet-100 p-1 mt-1 lg:max-w-xl">
-        <button onClick={() => setSeg('later')} className={`rounded-xl py-2 text-sm font-medium ${seg === 'later' ? 'bg-white shadow text-violet-700' : 'text-violet-900/60'}`}>💡 לבדוק בהמשך</button>
-        <button onClick={() => setSeg('followup')} className={`rounded-xl py-2 text-sm font-medium ${seg === 'followup' ? 'bg-white shadow text-violet-700' : 'text-violet-900/60'}`}>⏳ מעקבים ותשובות</button>
+        <button onClick={() => setSeg('later')} className={`rounded-xl py-2 text-sm font-medium ${seg === 'later' ? 'bg-card shadow text-violet-700' : 'text-violet-900/60'}`}>💡 לבדוק בהמשך</button>
+        <button onClick={() => setSeg('followup')} className={`rounded-xl py-2 text-sm font-medium ${seg === 'followup' ? 'bg-card shadow text-violet-700' : 'text-violet-900/60'}`}>⏳ מעקבים ותשובות</button>
       </div>
       <p className="text-xs text-stone-500 mt-3">
         {seg === 'later' ? 'קישורים, סרטונים, המלצות ומחשבות – הכול נשמר כאן, כדי לא לשכוח איפה זה נכתב.' : 'דברים שמחכים לתשובה ממישהו (בנק, גן, רופא...) – כדי לזכור לבדוק שוב.'}

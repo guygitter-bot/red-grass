@@ -22,11 +22,12 @@ await record('recipe', async ({ page, say, tap, type, wait, card, uncard, point,
   await say('וב<b>שיתוף</b> שולחים אותו לחברים', 600);
   await point(page.getByRole('button', { name: 'שיתוף' }), 1500);
 
-  await say('לוחצים על הקטגוריה כדי להעביר את המתכון לקטגוריה אחרת', 1400);
-  const cat = page.getByRole('combobox', { name: 'קטגוריה' });
+  await say('מתכון יכול להיות בכמה קטגוריות. ב<b>+ קטגוריה</b> מוסיפים עוד אחת', 1400);
+  const cat = page.getByRole('combobox', { name: 'הוספה לקטגוריה' });
   await tap(cat, { after: 300 });
   await cat.selectOption('צמחוני וטבעוני');
   await wait(1300);
+  await say('ובאיקס שליד הקטגוריה מוציאים את המתכון ממנה', 2400);
   await hideDot();
 
   await reveal(page.getByRole('heading', { name: 'מצרכים' }), 70);

@@ -1,0 +1,17 @@
+name = "rock-city-api"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[vars]
+# האתרים שמותר להם לפנות לשרת (* = כל תת-כתובת, למקרה ש-Cloudflare Pages מוסיף סיומת לשם)
+ALLOWED_ORIGINS = "https://rock-city-school.pages.dev,https://*.rock-city-school.pages.dev,https://rock-city-school-*.pages.dev,http://localhost:5173,http://localhost:4173"
+
+# כל בית הספר – אובייקט אחד ("main")
+[[durable_objects.bindings]]
+name = "SCHOOL"
+class_name = "School"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["School"]

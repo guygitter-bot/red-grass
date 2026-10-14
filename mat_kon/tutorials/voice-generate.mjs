@@ -13,7 +13,9 @@ if (!KEY || KEY === 'none') {
 const API = 'https://texttospeech.googleapis.com/v1';
 
 async function call(path, body) {
-  const res = await fetch(`${API}${path}${path.includes('?') ? '&' : '?'}key=${KEY}`, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {});
+  // המפתח בכותרת ולא בכתובת, כדי שלא יופיע בשום לוג של כתובות
+  const headers = { 'x-goog-api-key': KEY, ...(body ? { 'content-type': 'application/json' } : {}) };
+  const res = await fetch(`${API}${path}`, body ? { method: 'POST', headers, body: JSON.stringify(body) } : { headers });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`${res.status} ${data.error?.message || ''}`);
   return data;
@@ -39,7 +41,8 @@ console.log('voice:', voice.name);
 let made = 0;
 for (const [key, text] of Object.entries(lines)) {
   const out = join(DIR, `${key}.mp3`);
-  if (existsSync(out)) continue;
+  // גיבוי בלבד: משפט שכבר יש לו הקראה של ElevenLabs לא נשלח לגוגל
+  if (existsSync(out) || existsSync(join(DIR, 'eleven', `${key}.mp3`))) continue;
   const audioConfig = { audioEncoding: 'MP3', sampleRateHertz: 24000, speakingRate: voice.speakingRate };
   let data;
   try {

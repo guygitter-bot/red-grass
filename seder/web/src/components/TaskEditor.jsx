@@ -1,18 +1,21 @@
 import { useState } from 'react';
-import { CalendarPlus, Download, ExternalLink, Plus, Share2, Trash2, X } from 'lucide-react';
+import { CalendarPlus, Download, ExternalLink, Phone, Plus, Share2, Trash2, User, X } from 'lucide-react';
 import { useStore } from '../App';
-import { PRIORITIES, REMIND_OPTIONS, TYPES, makeTask, newId, removeTask, saveTree, subtasksOf } from '../lib/store';
+import { PRIORITIES, REMIND_OPTIONS, REPEATS, TYPES, cleanContact, isRepeating, knownContacts, makeTask, newId, removeTask, repeatLabel, saveTree, subtasksOf, telUrl } from '../lib/store';
 import { addDays, shortDate, todayKey } from '../lib/dates';
 import { extractLinks, linkKind } from '../lib/parse';
 import { downloadIcs, googleCalendarUrl } from '../lib/calendar';
 import { shareText, taskText } from '../lib/share';
 import { colorOf } from '../lib/colors';
-import { Chip, Sheet } from './ui';
+import { Chip, Sheet, TimeInput } from './ui';
+import Attachments from './Attachments';
 
 // בלי שעה: התזכורת יוצאת ב-9 בבוקר של אותו יום
 const MORNING_OPTIONS = [REMIND_OPTIONS[0], { value: 0, label: 'בבוקר של אותו יום (9:00)' }];
+// תזכורת בשעה מדויקת שבוחרים (ביום של המשימה)
+const CUSTOM = { value: 'custom', label: 'בשעה שאבחר...' };
 const label = 'block text-xs font-bold text-stone-500 mb-1.5 mt-4';
-const input = 'w-full rounded-xl border border-stone-200 bg-white px-3 py-2 outline-none focus:border-violet-500';
+const input = 'w-full rounded-xl border border-stone-200 bg-card px-3 py-2 outline-none focus:border-violet-500';
 
 export default function TaskEditor({ initial, onClose }) {
   const { state, act } = useStore();
@@ -21,6 +24,7 @@ export default function TaskEditor({ initial, onClose }) {
   const [subs, setSubs] = useState(() => (existing ? subtasksOf(state.tasks, initial.id).map((s) => ({ ...s })) : []));
   const [newSub, setNewSub] = useState('');
   const [newLink, setNewLink] = useState('');
+  const [newContact, setNewContact] = useState({ name: '', phone: '' });
   const set = (patch) => setTask((t) => ({ ...t, ...patch }));
   const setSub = (id, patch) => setSubs((list) => list.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   const today = todayKey();
@@ -29,6 +33,18 @@ export default function TaskEditor({ initial, onClose }) {
     if (!newSub.trim()) return;
     setSubs((list) => [...list, { id: newId(), title: newSub.trim(), done: false, due: null, priority: 2, createdAt: Date.now() }]);
     setNewSub('');
+  };
+
+  // אנשים / גורמים לבירור: שם (חובה) וטלפון (רשות). שם שכבר הופיע במשימה אחרת – הטלפון נשלף לבד
+  const known = knownContacts(state.tasks);
+  const phoneFor = (name) => known.find((k) => k.name.toLowerCase() === name.trim().toLowerCase())?.phone || '';
+  const contacts = task.contacts || [];
+  const setContact = (i, patch) => set({ contacts: contacts.map((c, j) => (j === i ? { ...c, ...patch } : c)) });
+  const pendingContact = () => (newContact.name.trim() ? [cleanContact({ ...newContact, phone: newContact.phone || phoneFor(newContact.name) })] : []);
+  const addContact = () => {
+    if (!newContact.name.trim()) return;
+    set({ contacts: [...contacts, ...pendingContact()] });
+    setNewContact({ name: '', phone: '' });
   };
 
   const addLink = () => {
@@ -41,7 +57,8 @@ export default function TaskEditor({ initial, onClose }) {
   const commit = () => {
     if (!task.title.trim()) return;
     const pending = newSub.trim() ? [...subs, { id: newId(), title: newSub.trim(), done: false, priority: 2 }] : subs;
-    act(saveTree, { ...task, title: task.title.trim() }, pending.filter((s) => s.title.trim()));
+    const people = [...contacts, ...pendingContact()].map(cleanContact).filter((c) => c.name || c.phone);
+    act(saveTree, { ...task, title: task.title.trim(), contacts: people }, pending.filter((s) => s.title.trim()));
     onClose();
   };
 
@@ -98,11 +115,11 @@ export default function TaskEditor({ initial, onClose }) {
         <Chip active={task.due === today} onClick={() => set({ due: today })}>היום</Chip>
         <Chip active={task.due === addDays(today, 1)} onClick={() => set({ due: addDays(today, 1) })}>מחר</Chip>
         <Chip active={task.due === addDays(today, 7)} onClick={() => set({ due: addDays(today, 7) })}>בעוד שבוע</Chip>
-        <Chip active={!task.due} onClick={() => set({ due: null, time: null })}>בלי תאריך</Chip>
+        <Chip active={!task.due} onClick={() => set({ due: null, time: null, repeat: null })}>בלי תאריך</Chip>
       </div>
       <div className="flex gap-2">
         <input type="date" aria-label="תאריך" value={task.due || ''} onChange={(e) => set({ due: e.target.value || null })} className={input} />
-        <input type="time" aria-label="שעה" value={task.time || ''} onChange={(e) => set({ time: e.target.value || null, due: task.due || today, remind: !e.target.value && task.remind != null ? 0 : task.remind })} className={`${input} max-w-36`} />
+        <TimeInput aria-label="שעה" value={task.time || ''} onChange={(t) => set({ time: t || null, due: task.due || today, remind: !t && task.remind != null ? 0 : task.remind })} className={`${input} max-w-36`} />
       </div>
 
       <span className={label}>רמת חשיבות</span>
@@ -117,9 +134,36 @@ export default function TaskEditor({ initial, onClose }) {
       {task.due && (
         <>
           <span className={label}>תזכורת</span>
-          <select value={task.remind ?? ''} onChange={(e) => set({ remind: e.target.value === '' ? null : Number(e.target.value) })} className={input}>
-            {(task.time ? REMIND_OPTIONS : MORNING_OPTIONS).map((o) => <option key={String(o.value)} value={o.value ?? ''}>{o.label}</option>)}
-          </select>
+          <div className="flex gap-2">
+            <select
+              aria-label="מתי להזכיר"
+              value={task.remindTime && task.remind != null ? 'custom' : task.remind ?? ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === 'custom') set({ remind: 0, remindTime: task.remindTime || task.time || '08:00' });
+                else set({ remind: v === '' ? null : Number(v), remindTime: null });
+              }}
+              className={input}
+            >
+              {[...(task.time ? REMIND_OPTIONS : MORNING_OPTIONS), CUSTOM].map((o) => <option key={String(o.value)} value={o.value ?? ''}>{o.label}</option>)}
+            </select>
+            {task.remindTime && task.remind != null && (
+              <TimeInput aria-label="שעת התזכורת" value={task.remindTime} onChange={(t) => t && set({ remindTime: t })} className={`${input} max-w-36`} />
+            )}
+          </div>
+          {task.remind != null && <p className="mt-1 text-xs text-stone-500">ההתראה מגיעה לטלפון בזמן, גם כשהאפליקציה סגורה – אחרי "הפעלת התראות" בהגדרות (פעם אחת בכל מכשיר).</p>}
+
+          {/* משימה / תזכורת חוזרת: כשמסמנים ✓ היא עוברת לפעם הבאה, והתזכורת מגיעה בכל פעם */}
+          <span className={label}>חוזר</span>
+          <div className="flex gap-2 overflow-x-auto no-scrollbar lg:flex-wrap lg:overflow-visible">
+            <Chip active={!REPEATS[task.repeat]} onClick={() => set({ repeat: null })}>פעם אחת</Chip>
+            {Object.entries(REPEATS).map(([id, r]) => <Chip key={id} active={task.repeat === id} onClick={() => set({ repeat: id })}>🔁 {r.label}</Chip>)}
+          </div>
+          {isRepeating(task) && (
+            <p className="mt-1 text-xs text-stone-500">
+              {repeatLabel(task)}{task.remind != null ? ', עם תזכורת בכל פעם' : ''}. כשמסמנים ✓ המשימה עוברת לפעם הבאה.
+            </p>
+          )}
         </>
       )}
 
@@ -148,6 +192,42 @@ export default function TaskEditor({ initial, onClose }) {
         </div>
       </div>
 
+      <span className={label}>אנשים / גורמים לבירור</span>
+      <div className="space-y-2">
+        {contacts.map((c, i) => (
+          <div key={i} className="flex items-center gap-2 rounded-xl border border-stone-200 p-2">
+            <User size={18} className="text-stone-400 shrink-0" />
+            <input value={c.name} onChange={(e) => setContact(i, { name: e.target.value })} aria-label="שם" placeholder="שם" className="flex-1 min-w-0 bg-transparent outline-none" />
+            <input value={c.phone || ''} onChange={(e) => setContact(i, { phone: e.target.value })} aria-label="טלפון" placeholder="טלפון" type="tel" dir="ltr" className="w-28 lg:w-36 min-w-0 bg-transparent outline-none text-left text-sm text-stone-600" />
+            {telUrl(c.phone) && <a href={telUrl(c.phone)} aria-label={`חיוג ל${c.name}`} className="rounded-lg bg-emerald-50 text-emerald-700 p-1.5 shrink-0"><Phone size={16} /></a>}
+            <button type="button" aria-label="הסרה" onClick={() => set({ contacts: contacts.filter((_, j) => j !== i) })} className="text-stone-400 shrink-0"><X size={18} /></button>
+          </div>
+        ))}
+        <div className="flex gap-2">
+          <input
+            value={newContact.name}
+            onChange={(e) => setNewContact((c) => ({ ...c, name: e.target.value }))}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addContact(); } }}
+            list="seder-contacts"
+            placeholder="שם / גורם (למשל: קופת חולים)"
+            className={`${input} min-w-0`}
+          />
+          <input
+            value={newContact.phone}
+            onChange={(e) => setNewContact((c) => ({ ...c, phone: e.target.value }))}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addContact(); } }}
+            placeholder={phoneFor(newContact.name) || 'טלפון'}
+            type="tel"
+            dir="ltr"
+            className={`${input} text-left max-w-28 lg:max-w-40`}
+          />
+          <button type="button" aria-label="הוספת איש קשר" onClick={addContact} className="rounded-xl bg-violet-100 text-violet-700 px-3 shrink-0"><Plus size={20} /></button>
+        </div>
+        <datalist id="seder-contacts">
+          {known.map((k) => <option key={k.name} value={k.name}>{k.phone}</option>)}
+        </datalist>
+      </div>
+
       <span className={label}>קישורים / סרטונים</span>
       <div className="space-y-2">
         {(task.links || []).map((l, i) => (
@@ -163,6 +243,9 @@ export default function TaskEditor({ initial, onClose }) {
           <button type="button" aria-label="הוספת קישור" onClick={addLink} className="rounded-xl bg-violet-100 text-violet-700 px-3"><Plus size={20} /></button>
         </div>
       </div>
+
+      <span className={label}>תמונות וקבצים</span>
+      <Attachments files={task.attachments} onChange={(fn) => setTask((t) => ({ ...t, attachments: fn(t.attachments) }))} />
 
       <span className={label}>הערות</span>
       <textarea value={task.notes} onChange={(e) => set({ notes: e.target.value })} rows={4} placeholder="פרטים, מחשבות, ממי מחכים לתשובה..." className={`${input} resize-y`} />

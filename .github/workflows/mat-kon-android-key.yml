@@ -1,0 +1,56 @@
+name: mat-kon android key
+
+# יצירת מפתח ההעלאה לחנות Google Play – פעם אחת בלבד: Actions → mat-kon android key → Run workflow.
+# המאגר ציבורי, ולכן המפתח לא נשמר בקוד ולא ב-Artifacts: הוא נשמר בדלי הפרטי ב-R2 (mat-kon-backups/signing/upload.jks)
+# ומוגן בסיסמה מהסוד ANDROID_KEYSTORE_PASSWORD. אם המפתח כבר קיים – לא נוצר מפתח חדש (כדי לא לאבד את הקיים).
+# בסוף מודפסות רק טביעות האצבע (SHA-1 / SHA-256) – הן ציבוריות, ונדרשות ל-Google Cloud (כניסה עם גוגל).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  key:
+    if: github.actor == github.repository_owner && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Create the upload key (only if missing)
+        env:
+          STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          OBJECT: mat-kon-backups/signing/upload.jks
+        run: |
+          set -euo pipefail
+          [ -n "$STORE_PASS" ] || { echo "חסר הסוד ANDROID_KEYSTORE_PASSWORD"; exit 1; }
+          [ "${#STORE_PASS}" -ge 12 ] || { echo "הסיסמה קצרה מדי (לפחות 12 תווים)"; exit 1; }
+          W="npx --yes wrangler@4.146.0"
+          KS="$RUNNER_TEMP/upload.jks"
+          trap 'rm -f "$KS"' EXIT
+          if $W r2 object get "$OBJECT" --file "$KS" --remote > "$RUNNER_TEMP/get.log" 2>&1; then
+            echo "מפתח ההעלאה כבר קיים ב-R2 – לא נוצר מפתח חדש. טביעות האצבע שלו:"
+          elif grep -qiE 'does not exist|not found|NoSuchKey' "$RUNNER_TEMP/get.log"; then
+            rm -f "$KS"
+            keytool -genkeypair -v -storetype PKCS12 -keystore "$KS" -alias upload \
+              -keyalg RSA -keysize 4096 -validity 10000 \
+              -storepass:env STORE_PASS -keypass:env STORE_PASS \
+              -dname "CN=mat-kon, O=mat-kon, C=IL" > /dev/null
+            $W r2 object put "$OBJECT" --file "$KS" --content-type application/octet-stream --remote > /dev/null
+            # בדיקה שהמפתח באמת נשמר
+            rm -f "$KS"
+            $W r2 object get "$OBJECT" --file "$KS" --remote > /dev/null
+            echo "נוצר מפתח העלאה חדש ונשמר ב-R2. טביעות האצבע שלו:"
+          else
+            # שגיאה אחרת (הרשאות, רשת) – לא יוצרים מפתח, כדי לא לדרוס מפתח קיים
+            cat "$RUNNER_TEMP/get.log"
+            echo "לא הצלחתי לבדוק את R2 (ייתכן שלמפתח של Cloudflare חסרה הרשאת R2)"; exit 1
+          fi
+          keytool -list -v -keystore "$KS" -alias upload -storepass:env STORE_PASS | grep -E 'SHA1:|SHA256:'

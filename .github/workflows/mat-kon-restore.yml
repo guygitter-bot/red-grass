@@ -1,0 +1,41 @@
+name: mat-kon restore
+
+# שחזור ספר מתכונים אחד מהגיבוי הלילי (R2): Actions → mat-kon restore → Run workflow.
+# הספר הנוכחי מוחלף כולו בגרסה מהתאריך שנבחר (כולל התמונות). נכנס לשרת עם סיסמת הבעלים (הסוד OWNER_PASSWORD).
+on:
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "תאריך הגיבוי (YYYY-MM-DD). התאריכים הקיימים מופיעים במסך עלויות ותקלות"
+        required: true
+      book:
+        description: "הספר: book = הספר של בעל האפליקציה, או מזהה המשתמש (user id)"
+        required: true
+        default: book
+
+permissions:
+  contents: read
+
+jobs:
+  restore:
+    if: github.actor == github.repository_owner && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Restore
+        env:
+          API: https://mat-kon-api.guygitter.workers.dev
+          OWNER_PASSWORD: ${{ secrets.OWNER_PASSWORD }}
+          DATE: ${{ inputs.date }}
+          BOOK: ${{ inputs.book }}
+        run: |
+          set -euo pipefail
+          [ -n "$OWNER_PASSWORD" ] || { echo "חסר הסוד OWNER_PASSWORD"; exit 1; }
+          SESSION=$(jq -n --arg p "$OWNER_PASSWORD" '{password: $p, device: "github-restore-workflow-0000"}' \
+            | curl -sf -X POST "$API/owner-login" -H 'content-type: application/json' -H 'origin: https://mat-kon.pages.dev' --data @- | jq -r .session)
+          [ -n "$SESSION" ] && [ "$SESSION" != "null" ] || { echo "הכניסה עם סיסמת הבעלים נכשלה"; exit 1; }
+          jq -n --arg d "$DATE" --arg b "$BOOK" '{date: $d, book: $b}' \
+            | curl -s -X POST "$API/admin/restore" -H "authorization: Bearer $SESSION" -H 'content-type: application/json' -H 'origin: https://mat-kon.pages.dev' --data @- \
+            | tee result.json
+          echo
+          jq -e '.error == null' result.json > /dev/null
+          curl -s -X POST "$API/logout" -H "authorization: Bearer $SESSION" -H 'content-type: application/json' -H 'origin: https://mat-kon.pages.dev' -d '{}' > /dev/null || true

@@ -1,9 +1,14 @@
 import { record, demo } from '../kit.mjs';
 import { join, dirname } from 'node:path';
+import { copyFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CHAT = join(HERE, '..', 'whatsapp-chat.txt');
+// הקובץ נבחר בשם שווטסאפ נותן לייצוא
+const CHAT_FILE = join(HERE, '..', '.rec', 'WhatsApp Chat with Family Recipes.txt');
+mkdirSync(dirname(CHAT_FILE), { recursive: true });
+copyFileSync(CHAT, CHAT_FILE);
 
 const base = { ...demo.NEW_RECIPE, tips: [], tags: [] };
 const COOKIES = {
@@ -33,7 +38,7 @@ await record('whatsapp', async ({ page, mock, say, tap, wait, card, uncard, scro
   await point(page.locator('label:has(input[accept*=".zip"])'), 500);
   await page.evaluate(() => window.__tut.press(195, 600));
   await wait(400);
-  await page.locator('input[accept*=".zip"]').setInputFiles(join(HERE, '..', '.rec', 'WhatsApp Chat with Family Recipes.txt'));
+  await page.locator('input[accept*=".zip"]').setInputFiles(CHAT_FILE);
   await hideDot();
   await page.getByText('נסרקו').waitFor({ timeout: 10000 });
   await say('האפליקציה סורקת את הצ\'אט בטלפון ומוצאת מתכונים כתובים וקישורים', 3600, true);

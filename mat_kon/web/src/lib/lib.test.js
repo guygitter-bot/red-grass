@@ -39,6 +39,14 @@ describe('search', () => {
     expect(filterRecipes(recipes, { favorites: true }).map((r) => r.id)).toEqual([2]);
     expect(countByCategory(recipes)).toEqual({ 'עוגות': 1, 'ארוחת בוקר': 1 });
   });
+
+  it('a recipe in several categories is found and counted in each of them', () => {
+    const chicken = { id: 3, title: 'עוף בסויה', category: 'עוף', categories: ['עוף', 'מנה עיקרית'], tags: [], ingredients: [] };
+    const all = [...recipes, chicken];
+    expect(filterRecipes(all, { category: 'עוף' }).map((r) => r.id)).toEqual([3]);
+    expect(filterRecipes(all, { category: 'מנה עיקרית' }).map((r) => r.id)).toEqual([3]);
+    expect(countByCategory(all)).toEqual({ 'עוגות': 1, 'ארוחת בוקר': 1, 'עוף': 1, 'מנה עיקרית': 1 });
+  });
 });
 
 describe('editing as text', () => {
@@ -145,5 +153,15 @@ describe('round 4 fixes', () => {
     expect(lineHas('כוס חלב', 'חלבה')).toBe(false);
     expect(lineHas('100 גרם חלבה', 'חלב')).toBe(false);
     expect(lineHas('100 גרם חלבה', 'חלבה')).toBe(true);
+  });
+});
+
+import { orderCategories } from './recipes';
+describe('orderCategories', () => {
+  it('puts favorites first, then saved order, then the rest in default order', () => {
+    const list = ['עוגות', 'סלטים', 'מרקים', 'אחר', 'שלי'];
+    expect(orderCategories(list, {})).toEqual(list);
+    expect(orderCategories(list, { order: ['מרקים', 'עוגות'], favorites: ['שלי'] })).toEqual(['שלי', 'מרקים', 'עוגות', 'סלטים', 'אחר']);
+    expect(orderCategories(list, { order: ['גון'], favorites: ['לא קיים'] })).toEqual(list);
   });
 });

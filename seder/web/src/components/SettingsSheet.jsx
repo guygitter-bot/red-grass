@@ -1,17 +1,44 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bell, CalendarPlus, Cloud, CloudOff, Download, Lock, MessageSquarePlus, Upload, UserRound } from 'lucide-react';
+import { Bell, CalendarPlus, Cloud, CloudOff, Download, Lock, LogOut, MessageSquarePlus, Upload, UserRound, Users } from 'lucide-react';
+import { SPACE, leaveSpace } from '../lib/space';
 import { useStore } from '../App';
 import { normalize, setName } from '../lib/store';
 import { greeting, todayKey } from '../lib/dates';
 import { downloadIcs } from '../lib/calendar';
 import { askPermission, notificationsSupported } from '../lib/notify';
-import { Sheet } from './ui';
+import { enablePush, pushActive, pushSupported, sendTestPush } from '../lib/push';
+import { THEME_OPTIONS, setTheme, useTheme } from '../lib/theme';
+import { FONT_OPTIONS, setFont, useFont } from '../lib/fontsize';
+import { Chip, Sheet } from './ui';
 
 const row = 'w-full flex items-center gap-3 rounded-2xl bg-stone-50 p-3 text-right';
 
 export default function SettingsSheet({ onClose }) {
-  const { state, act, syncStatus, syncNow, lock, openRequests } = useStore();
+  const { state, act, syncStatus, syncNow, lock, openRequests, openSpaces } = useStore();
+  const theme = useTheme();
+  const font = useFont();
   const [perm, setPerm] = useState(() => (notificationsSupported() ? Notification.permission : 'unsupported'));
+  const [push, setPush] = useState(() => pushActive());
+  const [pushMsg, setPushMsg] = useState('');
+  const turnOn = async () => {
+    const p = await askPermission();
+    setPerm(p);
+    if (p === 'granted') setPush(await enablePush());
+  };
+  const test = async () => {
+    setPushMsg('שולח...');
+    try {
+      const r = await sendTestPush();
+      if (r.sent) setPushMsg('נשלחה! אמורה להופיע תוך כמה שניות (אפשר גם לסגור את האפליקציה ולבדוק).');
+      else if (r.devices) setPushMsg('השליחה לא הצליחה כרגע – נסי שוב בעוד דקה.');
+      else {
+        setPush(await enablePush());
+        setPushMsg('המכשיר נרשם מחדש – לחצי שוב על "התראת בדיקה".');
+      }
+    } catch (e) {
+      setPushMsg(e.message || 'השליחה נכשלה');
+    }
+  };
   const upcoming = state.tasks.filter((t) => !t.done && t.due && t.due >= todayKey());
   // השם נשמר כשיוצאים מהשדה (או בסגירת ההגדרות), לא בכל אות
   const [name, setNameDraft] = useState(state.profile?.name || '');
@@ -78,6 +105,28 @@ export default function SettingsSheet({ onClose }) {
           </span>
         </label>
 
+        <h3 className="text-sm font-bold text-stone-500 pt-3">מצב לילה</h3>
+        <div className={`${row} block`}>
+          <div className="flex gap-2">
+            {THEME_OPTIONS.map((o) => (
+              <Chip key={o.value} active={theme.pref === o.value} onClick={() => setTheme(o.value)} className="flex-1">{o.emoji} {o.label}</Chip>
+            ))}
+          </div>
+          <span className="block text-xs text-stone-500 mt-2">"אוטומטי" – לילה כשהטלפון או המחשב במצב כהה. נשמר בכל מכשיר בנפרד.</span>
+        </div>
+
+        <h3 className="text-sm font-bold text-stone-500 pt-3">גודל הטקסט</h3>
+        <div className={`${row} block`}>
+          <div className="flex gap-2">
+            {FONT_OPTIONS.map((o) => (
+              <Chip key={o.value} active={font === o.value} onClick={() => setFont(o.value)} className="flex-1 px-2! whitespace-nowrap">
+                <span style={{ fontSize: `${o.scale}em` }}>{o.label}</span>
+              </Chip>
+            ))}
+          </div>
+          <span className="block text-xs text-stone-500 mt-2">כל הטקסט באפליקציה גדל. נשמר בכל מכשיר בנפרד.</span>
+        </div>
+
         <h3 className="text-sm font-bold text-stone-500 pt-3">סנכרון בין מכשירים</h3>
         {syncStatus === 'off' ? (
           <button onClick={() => { onClose(); lock(); }} className={row}>
@@ -88,29 +137,48 @@ export default function SettingsSheet({ onClose }) {
           <div className={row}>
             <Cloud size={20} className="text-emerald-600" />
             <span className="flex-1">מחובר – המשימות מסתנכרנות<span className="block text-xs text-stone-500">{syncStatus === 'offline' ? 'אין אינטרנט כרגע – יסונכרן כשהרשת תחזור' : syncStatus === 'error' ? 'הסנכרון האחרון נכשל' : 'בטלפון ובמחשב, אוטומטית'}</span></span>
-            <button onClick={syncNow} className="text-xs rounded-lg bg-white border border-stone-200 px-2 py-1">סנכרון עכשיו</button>
+            <button onClick={syncNow} className="text-xs rounded-lg bg-card border border-stone-200 px-2 py-1">סנכרון עכשיו</button>
           </div>
         )}
         <button onClick={() => { onClose(); lock(); }} className={row}>
           <Lock size={20} className="text-violet-600" />
-          <span>נעילה עכשיו<span className="block text-xs text-stone-500">האפליקציה ננעלת בכל פתיחה, ואחרי 5 דקות ברקע</span></span>
+          <span>נעילה עכשיו<span className="block text-xs text-stone-500">בלי זה – הסיסמה נדרשת רק אחרי 10 דקות שלא משתמשים באפליקציה</span></span>
         </button>
 
-        <h3 className="text-sm font-bold text-stone-500 pt-3">שיפור האפליקציה</h3>
-        <button onClick={() => { onClose(); openRequests(); }} className={row}>
-          <MessageSquarePlus size={20} className="text-violet-600" />
-          <span>בקשה לשינוי באפליקציה<span className="block text-xs text-stone-500">כותבים מה לשנות – Claude מכין, ומאשרים כאן</span></span>
-        </button>
+        {SPACE ? (
+          // אדם נוסף: אפשר לצאת מהאפליקציה שלו במכשיר הזה (המשימות שלו נשארות בשרת)
+          <button onClick={() => { if (window.confirm('לצאת מהאפליקציה הזו במכשיר הזה? המשימות נשארות שמורות, ואפשר להיכנס שוב מהקישור.')) leaveSpace(); }} className={row}>
+            <LogOut size={20} className="text-stone-500" />
+            <span>יציאה במכשיר הזה<span className="block text-xs text-stone-500">כדי להיכנס שוב – פותחים את הקישור שקיבלת</span></span>
+          </button>
+        ) : (
+          <>
+            <h3 className="text-sm font-bold text-stone-500 pt-3">שיפור האפליקציה</h3>
+            <button onClick={() => { onClose(); openRequests(); }} className={row}>
+              <MessageSquarePlus size={20} className="text-violet-600" />
+              <span>בקשה לשינוי באפליקציה<span className="block text-xs text-stone-500">כותבים מה לשנות – Claude מכין, ומאשרים כאן</span></span>
+            </button>
+            <button onClick={() => { onClose(); openSpaces(); }} className={row}>
+              <Users size={20} className="text-violet-600" />
+              <span>אפליקציה לאדם נוסף<span className="block text-xs text-stone-500">קישור שפותח לכל אחד אפליקציה משלו – בלי לראות את המשימות שלך</span></span>
+            </button>
+          </>
+        )}
 
         <h3 className="text-sm font-bold text-stone-500 pt-3">תזכורות</h3>
-        {perm === 'granted' ? (
-          <div className={row}><Bell size={20} className="text-emerald-600" /><span>התראות מופעלות ✓<span className="block text-xs text-stone-500">מגיעות כשהאפליקציה פתוחה או ברקע</span></span></div>
-        ) : perm === 'unsupported' ? (
+        {perm === 'granted' && push ? (
+          <div className={row}>
+            <Bell size={20} className="text-emerald-600" />
+            <span className="flex-1">התראות מופעלות ✓<span className="block text-xs text-stone-500">מגיעות לטלפון בזמן – גם כשהאפליקציה סגורה</span></span>
+            <button onClick={test} className="text-xs rounded-lg bg-card border border-stone-200 px-2 py-1">התראת בדיקה</button>
+          </div>
+        ) : perm === 'unsupported' || !pushSupported() ? (
           <div className={`${row} text-sm text-stone-600`}><Bell size={20} />בדפדפן הזה אין התראות. באייפון: "הוספה למסך הבית" ופתיחה משם.</div>
         ) : (
-          <button onClick={async () => setPerm(await askPermission())} className={row}><Bell size={20} className="text-violet-600" /><span>הפעלת התראות<span className="block text-xs text-stone-500">{perm === 'denied' ? 'נחסם – אפשר לאשר בהגדרות הדפדפן' : 'כדי לקבל תזכורת על המסך'}</span></span></button>
+          <button onClick={turnOn} className={row}><Bell size={20} className="text-violet-600" /><span>הפעלת התראות<span className="block text-xs text-stone-500">{perm === 'denied' ? 'נחסם – צריך לאשר התראות לאתר בהגדרות הדפדפן' : 'תזכורות לטלפון בזמן – גם כשהאפליקציה סגורה'}</span></span></button>
         )}
-        <p className="text-xs text-stone-500 leading-relaxed">💡 הכי בטוח: לשמור אירועים חשובים גם ביומן (כפתור "ליומן" בכל משימה) – כך התזכורת מגיעה מהיומן של הטלפון גם כשהאפליקציה סגורה.</p>
+        {pushMsg && <p className="text-xs text-violet-700">{pushMsg}</p>}
+        <p className="text-xs text-stone-500 leading-relaxed">💡 צריך להפעיל פעם אחת בכל מכשיר (טלפון, מחשב). אפשר גם לשמור אירוע חשוב ביומן (כפתור "ליומן" בכל משימה).</p>
 
         <h3 className="text-sm font-bold text-stone-500 pt-3">יומן</h3>
         <button disabled={!upcoming.length} onClick={() => downloadIcs(upcoming, 'seder-upcoming')} className={`${row} disabled:opacity-50`}>

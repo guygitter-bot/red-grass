@@ -1,0 +1,12 @@
+{
+  "name": "tsevet-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "apps": "node build-apps.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0"
+  }
+}

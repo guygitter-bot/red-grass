@@ -1,4 +1,5 @@
 // הכספת: כל הרשומות (משימות ותחומים) של בעלת האפליקציה, וסנכרון בין מכשירים.
+// לכל אדם נוסף ("מרחב", ראו spaces.js) יש כספת נפרדת משלו – עם הסיסמה שלו (space).
 //
 // כל רשומה נושאת updatedAt (זמן העריכה במכשיר). כשאותה רשומה נערכה בשני מכשירים – העריכה המאוחרת גוברת.
 // מחיקה נשמרת כ"מצבה" (deleted), כדי שמכשיר שהיה כבוי ידע למחוק גם אצלו.
@@ -9,6 +10,16 @@
 //   s:<seq>        -> "r:<kind>:<id>"   (אינדקס לפי סדר השינויים)
 //   seq            -> המספר הרץ האחרון
 //   fails          -> { count, since }  (ניסיונות כניסה שגויים)
+//   vapid          -> מפתחות ההתראות של השרת (נוצרים פעם אחת)
+//   subs           -> { <id>: { endpoint, keys } }  המכשירים שהפעילו התראות
+//   tz             -> אזור הזמן של המשתמשת (לחישוב שעות התזכורות)
+//   sent           -> { <taskId>: <זמן התזכורת> }  מה כבר נשלח (שינוי שעה = תזכורת חדשה)
+//   fm:<id>, fc:<id>:<n> -> קבצים ותמונות שמצורפים למשימות (ראו files.js)
+//   space          -> רק בכספת של מרחב: השם, הסיסמה והחיבור (spaces.js)
+//   registry       -> רק בכספת של בעלת האפליקציה: רשימת המרחבים
+//
+// התזכורות: אחרי כל שינוי במשימות מחושבת התזכורת הקרובה, ו-Durable Object alarm "מעיר" את הכספת
+// בדיוק בזמן – והיא שולחת התראה לכל המכשירים, גם כשהאפליקציה סגורה.
 
 // setting – הגדרות אישיות שמסתנכרנות (למשל השם לברכה בלוח)
 export const KINDS = new Set(['task', 'category', 'setting']);
@@ -18,6 +29,17 @@ export const MAX_CHANGES = 2000;
 export const PAGE = 1000;
 const MAX_FAILS = 10;
 const FAIL_WINDOW_MS = 15 * 60 * 1000;
+
+import { createVapidKeys, sendPush, validSubscription } from './push.js';
+import { reminderTimes, validTimeZone } from './reminders.js';
+import { cleanFile, cleanupFiles, getFile, putFile } from './files.js';
+import { cleanAmount } from './costs.js';
+import { MAX_SPACES, cleanName, hashPassword, newSecret } from './spaces.js';
+
+// תזכורת שהזמן שלה עבר לפני יותר מזה – כבר לא נשלחת (למשל משימה שנוספה עם תזכורת בעבר)
+export const LATE_WINDOW_MS = 2 * 3600 * 1000;
+const PUSH_SUBJECT = 'https://seder-tasks.pages.dev';
+const MAX_SUBS = 10;
 
 const seqKey = (n) => `s:${String(n).padStart(12, '0')}`;
 const recKey = (kind, id) => `r:${kind}:${id}`;
@@ -88,12 +110,45 @@ export class Vault {
     const body = await request.json().catch(() => ({}));
     const json = (status, data) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
 
+    // ניהול מרחב (רק מהשרת עצמו – הכתובות האלה לא פתוחות מבחוץ, ראו worker.js)
+    if (url.pathname.startsWith('/space/') || url.pathname.startsWith('/registry/')) return this.admin(url.pathname, body, json);
+
+    const space = await this.storage.get('space');
+    // בקשה למרחב שנמחק (או שלא נוצר) – לא פותחים במקומו כספת ריקה
+    const forSpace = request.headers.get('x-seder-space');
+    if (forSpace && space?.id !== forSpace) return json(url.pathname === '/login' ? 404 : 401, { error: 'הקישור לא תקף (אולי נמחק). בקשו קישור חדש.' });
+    // במרחב: כל פעולה חוץ מהכניסה צריכה את החיבור של המרחב הזה
+    if (space && url.pathname !== '/login') {
+      const auth = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+      if (!space.session || !safeEqual(auth, `${space.id}.${space.session}`)) return json(401, { error: 'צריך להתחבר מחדש' });
+    }
+
     if (url.pathname === '/login') {
       const now = Date.now();
       let fails = (await this.storage.get('fails')) || { count: 0, since: now };
       if (now - fails.since > FAIL_WINDOW_MS) fails = { count: 0, since: now };
-      if (fails.count >= MAX_FAILS) return json(429, { error: 'יותר מדי ניסיונות. נסי שוב בעוד רבע שעה' });
-      if (!safeEqual(String(body.password || ''), this.env.SEDER_PASSWORD)) {
+      if (fails.count >= MAX_FAILS) return json(429, { error: 'יותר מדי ניסיונות. נסו שוב בעוד רבע שעה' });
+      const password = String(body.password || '');
+      if (space) {
+        // בלי סיסמה – רק שואלים אם כבר נבחרה סיסמה (מסך הכניסה), בלי לספור ניסיון שגוי
+        if (!password) return json(200, { needsSetup: !space.hash, name: space.name });
+        // פתיחה ראשונה של הקישור: בוחרים סיסמה
+        if (!space.hash) {
+          if (!body.setup) return json(200, { needsSetup: true, name: space.name });
+          if (password.length < 4) return json(400, { error: 'סיסמה של 4 תווים לפחות' });
+          const salt = newSecret();
+          Object.assign(space, { salt, hash: await hashPassword(password, salt), session: newSecret() });
+          await this.storage.put('space', space);
+          return json(200, { token: `${space.id}.${space.session}`, name: space.name });
+        }
+        if (!safeEqual(await hashPassword(password, space.salt), space.hash)) {
+          await this.storage.put('fails', { count: fails.count + 1, since: fails.since });
+          return json(401, { error: 'סיסמה שגויה' });
+        }
+        await this.storage.delete('fails');
+        return json(200, { token: `${space.id}.${space.session}`, name: space.name });
+      }
+      if (!safeEqual(password, this.env.SEDER_PASSWORD)) {
         await this.storage.put('fails', { count: fails.count + 1, since: fails.since });
         return json(401, { error: 'סיסמה שגויה' });
       }
@@ -104,8 +159,180 @@ export class Vault {
     if (url.pathname === '/sync') {
       const since = Number.isInteger(body.since) && body.since >= 0 ? body.since : 0;
       const changes = Array.isArray(body.changes) ? body.changes.slice(0, MAX_CHANGES) : [];
-      return json(200, await sync(this.storage, since, changes));
+      const result = await sync(this.storage, since, changes);
+      if (result.accepted) await this.schedule();
+      return json(200, result);
+    }
+
+    if (url.pathname === '/files/put') {
+      const { file, error } = cleanFile(body);
+      if (error) return json(400, { error });
+      const saved = await putFile(this.storage, file);
+      // הזדמנות לנקות קבצים שכבר לא שייכים לאף משימה
+      await cleanupFiles(this.storage);
+      return json(200, { file: saved });
+    }
+
+    if (url.pathname === '/files/get') {
+      const file = await getFile(this.storage, body.id);
+      return file ? json(200, { file }) : json(404, { error: 'הקובץ לא נמצא' });
+    }
+
+    // היתרה בחשבון הקרדיטים: בלי amount – רק קוראים; עם amount – שומרים, והחישוב מתחיל מעכשיו
+    if (url.pathname === '/credits') {
+      if (body.amount !== undefined) {
+        const amount = cleanAmount(body.amount);
+        if (amount === null) return json(400, { error: 'צריך לכתוב סכום בדולרים' });
+        await this.storage.put('credits', { amount, setAt: new Date().toISOString() });
+      }
+      return json(200, { credits: (await this.storage.get('credits')) || null });
+    }
+
+    if (url.pathname === '/push/key') return json(200, { publicKey: (await this.vapid()).publicKey });
+
+    if (url.pathname === '/push/subscribe') {
+      const sub = body.subscription;
+      if (!sub || !validSubscription(sub)) return json(400, { error: 'מכשיר לא נתמך להתראות' });
+      const subs = (await this.storage.get('subs')) || {};
+      const id = await subId(sub.endpoint);
+      subs[id] = { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth }, createdAt: subs[id]?.createdAt || Date.now() };
+      // שומרים רק את המכשירים האחרונים
+      const keep = Object.entries(subs).sort((a, b) => b[1].createdAt - a[1].createdAt).slice(0, MAX_SUBS);
+      await this.storage.put('subs', Object.fromEntries(keep));
+      if (validTimeZone(body.tz)) await this.storage.put('tz', body.tz);
+      await this.schedule();
+      return json(200, { ok: true, devices: keep.length });
+    }
+
+    if (url.pathname === '/push/unsubscribe') {
+      const subs = (await this.storage.get('subs')) || {};
+      if (typeof body.endpoint === 'string') delete subs[await subId(body.endpoint)];
+      await this.storage.put('subs', subs);
+      return json(200, { ok: true });
+    }
+
+    if (url.pathname === '/push/test') {
+      const result = await this.pushAll({ id: '', title: '🔔 התראת בדיקה', body: 'מעולה! ככה ייראו התזכורות – גם כשהאפליקציה סגורה.' });
+      return json(200, result);
+    }
+
+    return json(404, { error: 'לא נמצא' });
+  }
+
+  // מרחבים: space/* בכספת של המרחב, registry/* ברשימה שאצל בעלת האפליקציה
+  async admin(path, body, json) {
+    const space = await this.storage.get('space');
+    if (path === '/space/init') {
+      if (space) return json(409, { error: 'המרחב כבר קיים' });
+      await this.storage.put('space', { id: body.id, name: body.name, createdAt: Date.now(), salt: '', hash: '', session: '' });
+      return json(200, { ok: true });
+    }
+    if (path === '/space/info') return space ? json(200, { ready: !!space.hash, name: space.name }) : json(404, { error: 'לא נמצא' });
+    if (path === '/space/reset') {
+      if (!space) return json(404, { error: 'לא נמצא' });
+      // סיסמה חדשה בפתיחה הבאה של הקישור; כל המכשירים מתנתקים
+      await this.storage.put('space', { ...space, salt: '', hash: '', session: '' });
+      await this.storage.delete('fails');
+      return json(200, { ok: true });
+    }
+    if (path === '/space/delete') {
+      await this.storage.deleteAlarm?.();
+      await this.storage.deleteAll();
+      return json(200, { ok: true });
+    }
+    const registry = (await this.storage.get('registry')) || {};
+    if (path === '/registry/list') return json(200, { registry });
+    if (path === '/registry/add') {
+      const name = cleanName(body.name);
+      if (!name) return json(400, { error: 'צריך לכתוב שם (עד 40 תווים)' });
+      if (Object.keys(registry).length >= MAX_SPACES) return json(409, { error: `אפשר עד ${MAX_SPACES} אנשים` });
+      registry[body.id] = { name, createdAt: Date.now() };
+      await this.storage.put('registry', registry);
+      return json(200, { ok: true, name });
+    }
+    if (path === '/registry/remove') {
+      delete registry[body.id];
+      await this.storage.put('registry', registry);
+      return json(200, { ok: true });
     }
     return json(404, { error: 'לא נמצא' });
   }
+
+  async vapid() {
+    let vapid = await this.storage.get('vapid');
+    if (!vapid) {
+      vapid = await createVapidKeys();
+      await this.storage.put('vapid', vapid);
+    }
+    return vapid;
+  }
+
+  async reminders(now = Date.now()) {
+    const tz = (await this.storage.get('tz')) || 'Asia/Jerusalem';
+    const recs = await this.storage.list({ prefix: 'r:task:' });
+    const out = [];
+    for (const rec of recs.values()) {
+      if (rec.deleted) continue;
+      // תזכורת חוזרת: גם הפעם האחרונה שהגיעה וגם הבאה (כל פעם חדשה נשלחת שוב)
+      for (const at of reminderTimes(rec.data, tz, now)) out.push({ task: rec.data, at });
+    }
+    return out;
+  }
+
+  // קובע את ה"השכמה" הבאה לפי התזכורת הקרובה שעוד לא נשלחה
+  async schedule(now = Date.now()) {
+    const subs = (await this.storage.get('subs')) || {};
+    if (!Object.keys(subs).length) return null;
+    const sent = (await this.storage.get('sent')) || {};
+    let next = null;
+    for (const { task, at } of await this.reminders(now)) {
+      if (sent[task.id] === at || now - at > LATE_WINDOW_MS) continue;
+      if (next == null || at < next) next = at;
+    }
+    if (next == null) {
+      await this.storage.deleteAlarm?.();
+      return null;
+    }
+    const when = Math.max(next, now + 1000);
+    await this.storage.setAlarm(when);
+    return when;
+  }
+
+  async alarm() {
+    const now = Date.now();
+    const sent = (await this.storage.get('sent')) || {};
+    const live = new Set();
+    for (const { task, at } of await this.reminders(now)) {
+      live.add(task.id);
+      if (sent[task.id] === at || at > now || now - at > LATE_WINDOW_MS) continue;
+      await this.pushAll({ id: task.id, title: `🔔 ${task.title}`, body: task.time ? `היום ב-${task.time}` : 'תזכורת להיום' });
+      sent[task.id] = at;
+    }
+    // ניקוי: משימות שנמחקו
+    for (const id of Object.keys(sent)) if (!live.has(id)) delete sent[id];
+    await this.storage.put('sent', sent);
+    await this.schedule(now);
+  }
+
+  async pushAll(payload) {
+    const subs = (await this.storage.get('subs')) || {};
+    const vapid = await this.vapid();
+    let sent = 0;
+    let changed = false;
+    for (const [id, sub] of Object.entries(subs)) {
+      const result = await sendPush(sub, payload, vapid, PUSH_SUBJECT).catch(() => 'error');
+      if (result === 'ok') sent += 1;
+      if (result === 'gone') {
+        delete subs[id];
+        changed = true;
+      }
+    }
+    if (changed) await this.storage.put('subs', subs);
+    return { sent, devices: Object.keys(subs).length };
+  }
+}
+
+async function subId(endpoint) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(endpoint));
+  return [...new Uint8Array(digest).slice(0, 12)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }

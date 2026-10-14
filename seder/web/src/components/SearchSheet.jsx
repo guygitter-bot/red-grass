@@ -5,7 +5,7 @@ import { search, sortTasks } from '../lib/store';
 import { TaskList } from './TaskItem';
 import { Empty, Sheet } from './ui';
 
-// חיפוש בכל מקום: כותרות, הערות וקישורים ("איפה שמרתי את ההרצאה ההיא?")
+// חיפוש בכל מקום: כותרות, הערות, קישורים ואנשים לבירור ("איפה שמרתי את ההרצאה ההיא?")
 export default function SearchSheet({ onClose }) {
   const { state } = useStore();
   const [q, setQ] = useState('');

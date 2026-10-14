@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+/* מצב לילה: מחלקה dark על html (נקבעת ב-src/lib/theme.js) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* כל הצבעים במקום אחד – במצב לילה מחליפים רק אותם:
+   page = רקע המסך, card = כרטיסים, ink = טקסט, muted = טקסט משני, line = מסגרות, soft = רקע מודגש עדין */
+@theme {
+  --color-page: #f7f7fb;
+  --color-card: #ffffff;
+  --color-ink: #1e1b2e;
+  --color-muted: #6b6880;
+  --color-line: #e6e4ef;
+  --color-soft: #eef0ff;
+  --color-accent: #4f46e5;
+  --color-accent-ink: #4338ca;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-page: #12111a;
+  --color-card: #1c1b26;
+  --color-ink: #ecebf3;
+  --color-muted: #a3a1b5;
+  --color-line: #2f2d3d;
+  --color-soft: #262546;
+  --color-accent: #6d66f0;
+  --color-accent-ink: #a5a0ff;
+}
+
+html,
+body {
+  font-family: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--color-page);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* רצועת קטגוריות בטלפון – גלילה לצד בלי פס גלילה */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

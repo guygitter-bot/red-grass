@@ -15,6 +15,7 @@ function fakeStorage() {
       else map.set(k, clone(v));
     },
     async delete(k) { for (const kk of [k].flat()) map.delete(kk); },
+    async deleteAll() { map.clear(); },
     async list({ prefix = '', start = '', limit = Infinity } = {}) {
       const keys = [...map.keys()].filter((kk) => kk.startsWith(prefix) && kk >= start).sort().slice(0, limit);
       return new Map(keys.map((kk) => [kk, clone(map.get(kk))]));
@@ -24,8 +25,10 @@ function fakeStorage() {
 
 function fakeEnv(extra = {}) {
   const env = { SEDER_PASSWORD: 'סיסמה-סודית', ALLOWED_ORIGINS: 'https://seder-tasks.pages.dev', ...extra };
-  let vault;
-  env.VAULT = { idFromName: (n) => n, get: () => ({ fetch: (req) => (vault ||= new Vault({ storage: fakeStorage() }, env)).fetch(req) }) };
+  // כספת נפרדת לכל שם (main, space:<id>), כמו ב-Durable Objects
+  const vaults = new Map();
+  env.VAULT = { idFromName: (n) => n, get: (n) => ({ fetch: (req) => (vaults.get(n) || vaults.set(n, new Vault({ storage: fakeStorage() }, env)).get(n)).fetch(req) }) };
+  env.vaults = vaults;
   return env;
 }
 
@@ -152,6 +155,11 @@ function fakeGitHub() {
       issue.labels.push(...JSON.parse(init.body).labels.map((name) => ({ name })));
       return Response.json(issue.labels);
     }
+    if ((m = u.pathname.match(/^\/repos\/o\/r\/issues\/(\d+)\/labels\/(.+)$/)) && init.method === 'DELETE') {
+      const issue = issues.find((i) => i.number === Number(m[1]));
+      issue.labels = issue.labels.filter((l) => l.name !== decodeURIComponent(m[2]));
+      return Response.json(issue.labels);
+    }
     if ((m = u.pathname.match(/^\/repos\/o\/r\/pulls\/(\d+)\/merge$/))) {
       const pr = pulls.find((p) => p.number === Number(m[1]));
       if (pr.conflict) return new Response('{}', { status: 405 });
@@ -236,4 +244,107 @@ test('approve reports a conflict, and retry asks Claude again', async () => {
   } finally {
     gh.restore();
   }
+});
+
+test('a request waits for the price to be approved, and the balance goes down by what was spent', async () => {
+  const env = fakeEnv({ SEDER_GITHUB_TOKEN: 'gh-token', GITHUB_REPO: 'o/r' });
+  const token = await login(env);
+  const gh = fakeGitHub();
+  try {
+    // היתרה: עוד לא הוקלדה, סכום לא תקין נדחה
+    assert.equal((await call(env, '/requests/list', {}, token)).data.credits, null);
+    assert.equal((await call(env, '/credits', { amount: 'הרבה' }, token)).status, 400);
+    assert.equal((await call(env, '/credits', { amount: '20' })).status, 401);
+    const set = await call(env, '/credits', { amount: '20,5' }, token);
+    assert.equal(set.data.credits.amount, 20.5);
+    const setAt = Date.parse(set.data.credits.setAt);
+    const later = new Date(setAt + 60000).toISOString();
+    const before = new Date(setAt - 60000).toISOString();
+
+    await call(env, '/requests', { text: 'כפתור חדש' }, token);
+    const issue = gh.issues[0];
+    // אי אפשר לבצע לפני שיש מחיר
+    assert.equal((await call(env, '/requests/go', { number: 1 }, token)).status, 409);
+    issue.labels.push({ name: 'seder-estimating' });
+    assert.equal((await call(env, '/requests/list', {}, token)).data.requests[0].status, 'estimating');
+
+    // ה-workflow כתב הערכה (והעלות שלה), ועלות ישנה מלפני שהוקלדה היתרה לא נספרת
+    issue.body += '\n<!-- seder-estimate {"size":"small","usd":0.4,"note":"שינוי קטן"} -->'
+      + `\n<!-- seder-cost {"kind":"estimate","usd":0.01,"at":"${later}"} -->`
+      + `\n<!-- seder-cost {"kind":"work","usd":5,"at":"${before}"} -->`;
+    issue.labels = [{ name: 'seder-request' }, { name: 'seder-quote' }];
+    let list = await call(env, '/requests/list', {}, token);
+    const r = list.data.requests[0];
+    assert.equal(r.status, 'quote');
+    assert.deepEqual(r.estimate, { size: 'small', usd: 0.4, note: 'שינוי קטן' });
+    assert.equal(r.text, 'כפתור חדש');
+    assert.equal(list.data.credits.balance, 20.49);
+
+    // לבצע: Claude מתחיל
+    assert.equal((await call(env, '/requests/go', { number: 1 }, token)).status, 200);
+    assert.deepEqual(issue.labels.map((l) => l.name), ['seder-request', 'seder-go']);
+    assert.equal((await call(env, '/requests/go', { number: 1 }, token)).status, 409);
+    issue.body += `\n<!-- seder-cost {"kind":"work","usd":0.35,"at":"${later}"} -->`;
+    list = await call(env, '/requests/list', {}, token);
+    assert.equal(list.data.requests[0].status, 'working');
+    assert.equal(list.data.requests[0].cost, 5.36);
+    assert.equal(list.data.credits.balance, 20.14);
+  } finally {
+    gh.restore();
+  }
+});
+
+test('a link opens a separate app for another person, with its own password and data', async () => {
+  const env = fakeEnv();
+  const owner = await login(env);
+  await call(env, '/sync', { since: 0, changes: [task('mine', 1, 'משימה של הבעלים')] }, owner);
+
+  // יצירת קישור – רק באפליקציה הראשית
+  assert.equal((await call(env, '/spaces/create', { name: 'גיא' })).status, 401);
+  assert.equal((await call(env, '/spaces/create', { name: '  ' }, owner)).status, 400);
+  const { space } = (await call(env, '/spaces/create', { name: 'גיא' }, owner)).data;
+  assert.match(space.id, /^[\w-]{16}$/);
+  assert.deepEqual((await call(env, '/spaces/list', {}, owner)).data.spaces.map((s) => [s.name, s.ready]), [['גיא', false]]);
+
+  // פתיחה ראשונה: בוחרים סיסמה
+  assert.equal((await call(env, '/login', { space: 'לא-קיים', password: 'x' })).status, 404);
+  assert.equal((await call(env, '/login', { space: 'AAAAAAAAAAAAAAAA', password: 'x' })).status, 404);
+  const first = await call(env, '/login', { space: space.id, password: '' });
+  assert.deepEqual(first.data, { needsSetup: true, name: 'גיא' });
+  assert.equal((await call(env, '/login', { space: space.id, password: '12', setup: true })).status, 400);
+  const made = await call(env, '/login', { space: space.id, password: 'סוד-של-גיא', setup: true });
+  assert.equal(made.status, 200);
+  const guy = made.data.token;
+  assert.ok(guy.startsWith(`${space.id}.`));
+  assert.equal((await call(env, '/spaces/list', {}, owner)).data.spaces[0].ready, true);
+
+  // הנתונים נפרדים לגמרי
+  const empty = await call(env, '/sync', { since: 0, changes: [task('his', 1, 'משימה של גיא')] }, guy);
+  assert.deepEqual(empty.data.records.map((r) => r.id), ['his']);
+  const mine = await call(env, '/sync', { since: 0, changes: [] }, owner);
+  assert.deepEqual(mine.data.records.map((r) => r.id), ['mine']);
+
+  // סיסמה: שגויה נדחית, נכונה נכנסת; בחירה מחדש של סיסמה לא אפשרית
+  assert.equal((await call(env, '/login', { space: space.id, password: 'לא' })).status, 401);
+  assert.equal((await call(env, '/login', { space: space.id, password: 'אחרת', setup: true })).status, 401);
+  assert.equal((await call(env, '/login', { space: space.id, password: 'סוד-של-גיא' })).data.token, guy);
+  // חיבור מזויף, או סיסמת הבעלים – לא עובדים במרחב
+  assert.equal((await call(env, '/sync', { since: 0, changes: [] }, `${space.id}.wrong`)).status, 401);
+  assert.equal((await call(env, '/login', { space: space.id, password: 'סיסמה-סודית' })).status, 401);
+  // מה ששייך רק לאפליקציה הראשית
+  for (const path of ['/spaces/list', '/credits', '/requests/list']) assert.equal((await call(env, path, {}, guy)).status, 403);
+
+  // איפוס סיסמה: המכשירים מתנתקים, ובפתיחה הבאה בוחרים סיסמה חדשה
+  assert.equal((await call(env, '/spaces/reset', { id: space.id }, owner)).status, 200);
+  assert.equal((await call(env, '/sync', { since: 0, changes: [] }, guy)).status, 401);
+  assert.equal((await call(env, '/login', { space: space.id, password: '' })).data.needsSetup, true);
+  const again = (await call(env, '/login', { space: space.id, password: 'חדשה', setup: true })).data.token;
+  assert.deepEqual((await call(env, '/sync', { since: 0, changes: [] }, again)).data.records.map((r) => r.id), ['his']);
+
+  // מחיקה: הכול נמחק, והקישור כבר לא עובד
+  assert.equal((await call(env, '/spaces/delete', { id: space.id }, owner)).status, 200);
+  assert.deepEqual((await call(env, '/spaces/list', {}, owner)).data.spaces, []);
+  assert.equal((await call(env, '/sync', { since: 0, changes: [task('x', 2)] }, again)).status, 401);
+  assert.equal((await call(env, '/login', { space: space.id, password: 'חדשה' })).status, 404);
+  assert.equal(env.vaults.get(`space:${space.id}`).storage.map.size, 0);
 });

@@ -12,7 +12,8 @@
 //   session:<sha256> {userId, createdAt}  או  {owner: true, createdAt} – מכשיר של בעל האפליקציה (כשהספר נעול)
 //   owner-attempts   {count, since} – הגבלת ניסיונות לסיסמת הבעלים
 
-export const PBKDF2_ITERATIONS = 20000;
+export const PBKDF2_ITERATIONS = 100000; // המקסימום ב-Workers. סיסמאות ישנות (20000, בלי iter) משודרגות בכניסה הבאה
+const OLD_ITERATIONS = 20000;
 export const MAX_MEMBERS = 5; // כולל בעל הספר
 const SESSION_DAYS = 180;
 const INVITE_DAYS = 30;
@@ -32,14 +33,25 @@ export async function sha256(text) {
   return b64(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
 }
 
-export async function hashPassword(password, salt) {
+export async function hashPassword(password, salt, iterations = PBKDF2_ITERATIONS) {
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
   const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', hash: 'SHA-256', salt: new TextEncoder().encode(salt), iterations: PBKDF2_ITERATIONS },
+    { name: 'PBKDF2', hash: 'SHA-256', salt: new TextEncoder().encode(salt), iterations },
     key,
     256,
   );
   return b64(bits);
+}
+
+// בדיקת סיסמה של משתמש (לפי מספר הסבבים שבו נשמרה)
+async function passwordMatches(user, password) {
+  if (!user?.hash) return false;
+  return sameText(await hashPassword(password, user.salt, user.iter || OLD_ITERATIONS), user.hash);
+}
+
+async function newPassword(password) {
+  const salt = randomToken(16);
+  return { salt, hash: await hashPassword(password, salt), iter: PBKDF2_ITERATIONS };
 }
 
 function sameText(a, b) {
@@ -70,6 +82,8 @@ export class Accounts {
     this.storage = state.storage;
     this.env = env || {};
     this.freeLimit = Number(env?.FREE_RECIPES ?? 10);
+    // מנוי של מי שנרשם מקישור הזמנה: paid = בלי הגבלת מתכונים (ברירת המחדל), free = FREE_RECIPES בחינם
+    this.invitePlan = env?.INVITE_PLAN === 'free' ? 'free' : 'paid';
   }
 
   // ניקוי יומי: מוני הגבלת קצב ישנים, חיבורים שפגו וקישורי הצטרפות שפגו
@@ -79,14 +93,22 @@ export class Accounts {
     for (const [k, v] of await this.storage.list({ prefix: 'rate:' })) if (now - v.since > 86400000) drop.push(k);
     for (const [k, v] of await this.storage.list({ prefix: 'session:' })) if (now - Date.parse(v.createdAt) > SESSION_DAYS * 86400000) drop.push(k);
     for (const [k, v] of await this.storage.list({ prefix: 'join:' })) if (!v.usedBy && Date.parse(v.expiresAt) < now) drop.push(k);
+    for (const [k, v] of await this.storage.list({ prefix: 'device:' })) if (now - v.at > SESSION_DAYS * 86400000) drop.push(k);
     for (let i = 0; i < drop.length; i += 128) await this.storage.delete(drop.slice(i, i + 128));
     await this.storage.setAlarm?.(now + 86400000);
   }
 
   async ensureCleanup() {
-    if (this.cleanupChecked || !this.storage.getAlarm) return;
+    if (this.cleanupChecked) return;
     this.cleanupChecked = true;
-    if (!(await this.storage.getAlarm())) await this.storage.setAlarm(Date.now() + 3600000);
+    // פעם אחת: כשמוזמנים מקבלים מנוי, גם מי שכבר נרשם קודם עובר למנוי
+    if (this.invitePlan === 'paid' && !(await this.storage.get('migrated-invite-paid'))) {
+      for (const [k, u] of await this.storage.list({ prefix: 'user:' })) {
+        if (u.plan !== 'paid' && !u.bookId) await this.storage.put(k, { ...u, plan: 'paid' });
+      }
+      await this.storage.put('migrated-invite-paid', true);
+    }
+    if (this.storage.getAlarm && !(await this.storage.getAlarm())) await this.storage.setAlarm(Date.now() + 3600000);
   }
 
   // גרסת הסוד של בעל האפליקציה: החלפת הסיסמה מנתקת את כל מכשירי הבעלים
@@ -95,6 +117,18 @@ export class Accounts {
   }
 
   // הגבלת קצב: עד limit פעולות בחלון של windowSec לכל מפתח. מחזיר true אם מותר (וסופר את הפעולה)
+  // מכשיר מוכר: מזהה אקראי שהאפליקציה שומרת במכשיר, נשמר (מגובב) אחרי כניסה מוצלחת
+  async rememberDevice(scope, device) {
+    if (typeof device !== 'string' || device.length < 16 || device.length > 100) return;
+    await this.storage.put(`device:${scope}:${await sha256(device)}`, { at: Date.now() });
+  }
+
+  async knownDevice(scope, device) {
+    if (typeof scope !== 'string' || typeof device !== 'string' || device.length < 16 || device.length > 100) return false;
+    const key = scope.startsWith('e:') ? `e:${normalizeEmail(scope.slice(2))}` : scope;
+    return Boolean(await this.storage.get(`device:${key}:${await sha256(device)}`));
+  }
+
   async allow(key, limit, windowSec) {
     const now = Date.now();
     let a = (await this.storage.get(`rate:${key}`)) || { count: 0, since: now };
@@ -133,6 +167,13 @@ export class Accounts {
     const now = new Date().toISOString();
     await this.ensureCleanup();
 
+    // ---- גיבוי (רק מתוך השרת, backup.js): המשתמשים וההזמנות, בלי מוני הגבלת קצב ----
+    if (path === '/backup/export' && request.method === 'GET') {
+      const data = {};
+      for (const [k, v] of await this.storage.list()) if (!k.startsWith('rate:')) data[k] = v;
+      return json({ data });
+    }
+
     // ---- בעל האפליקציה: הזמנות ומשתמשים ----
     if (path === '/invites' && request.method === 'POST') {
       const invite = {
@@ -151,7 +192,7 @@ export class Accounts {
       const list = invites
         .map((i) => ({ ...i, user: i.userId && byId[i.userId] ? { ...byId[i.userId], members: members(i.userId) } : null }))
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-      return json({ invites: list, freeLimit: this.freeLimit });
+      return json({ invites: list, freeLimit: this.freeLimit, invitePlan: this.invitePlan });
     }
     if (path === '/invites' && request.method === 'DELETE') {
       const invite = await this.storage.get(`invite:${body.token}`);
@@ -188,7 +229,7 @@ export class Accounts {
       if (existingId) {
         const existing = await this.storage.get(`user:${existingId}`);
         // מי שהוסר מספר משותף מצטרף שוב רק אם הוכיח שזה הוא (הסיסמה הקיימת) – בלי לשנות את פרטי הכניסה
-        if (existing?.removed && body.join && existing.hash && sameText(await hashPassword(password, existing.salt), existing.hash)) {
+        if (existing?.removed && body.join && (await passwordMatches(existing, password))) {
           return this.rejoin(existing, body.join, {});
         }
         return err(409, 'האימייל הזה כבר רשום. אפשר להיכנס איתו.');
@@ -196,15 +237,19 @@ export class Accounts {
       const id = crypto.randomUUID();
       const claim = await this.claim(body, id);
       if (claim.error) return err(claim.status, claim.error);
-      const salt = randomToken(16);
-      return this.createUser(id, { name, email, salt, hash: await hashPassword(password, salt) }, claim);
+      return this.createUser(id, { name, email, ...(await newPassword(password)) }, claim);
     }
     if (path === '/login' && request.method === 'POST') {
       const id = await this.storage.get(`email:${normalizeEmail(body.email)}`);
       const user = id && (await this.storage.get(`user:${id}`));
-      const hash = await hashPassword(String(body.password || ''), user?.salt || 'none');
-      if (user && !user.hash) return err(401, 'האימייל או הסיסמה שגויים. אם נרשמתם עם גוגל – היכנסו עם הכפתור "המשך עם Google".');
-      if (!user || !sameText(hash, user.hash)) return err(401, 'האימייל או הסיסמה שגויים');
+      // אותה הודעה לכל כישלון (גם לחשבון גוגל), כדי שאי אפשר לבדוק אילו אימיילים רשומים
+      const ok = user?.hash ? await passwordMatches(user, String(body.password || '')) : await hashPassword(String(body.password || ''), 'none').then(() => false);
+      if (!ok) return err(401, 'האימייל או הסיסמה שגויים. נרשמתם עם גוגל? היכנסו עם הכפתור "המשך עם Google".');
+      if ((user.iter || OLD_ITERATIONS) < PBKDF2_ITERATIONS) {
+        Object.assign(user, await newPassword(String(body.password)));
+        await this.storage.put(`user:${user.id}`, user);
+      }
+      await this.rememberDevice(`e:${user.email}`, body.device);
       return this.signedIn(user);
     }
     // ---- ספר משותף: קישורי הצטרפות וחברים ----
@@ -310,13 +355,18 @@ export class Accounts {
 
     // ---- בעל האפליקציה: מכשיר שנכנס, והגבלת ניסיונות סיסמה (10 ברבע שעה) ----
     if (path === '/owner-session' && request.method === 'POST') {
+      await this.rememberDevice('owner', body.device);
       const token = randomToken(32);
       await this.storage.put(`session:${await sha256(token)}`, { owner: true, v: await this.ownerVersion(), createdAt: now });
       return json({ session: token, user: null, owner: true });
     }
     // הגבלת קצב כללית (ניסיונות כניסה, הרשמה...): {checks: [{key, limit, window}]} – כולם חייבים לעבור
+    // מכשיר שכבר נכנס בהצלחה לאותו חשבון (body.trust = {scope, device}) לא נחסם בתקרה הכללית (global) –
+    // כך זר שמנסה סיסמאות מהרבה כתובות לא יכול לנעול את בעל החשבון
     if (path === '/rate' && request.method === 'POST') {
+      const trusted = await this.knownDevice(body.trust?.scope, body.trust?.device);
       for (const c of Array.isArray(body.checks) ? body.checks : []) {
+        if (c.global && trusted) continue;
         if (!(await this.allow(String(c.key).slice(0, 200), Number(c.limit) || 10, Number(c.window) || 900))) {
           return err(429, body.message || 'יותר מדי ניסיונות. נסו שוב מאוחר יותר.');
         }
@@ -331,6 +381,22 @@ export class Accounts {
       const keys = [...sessions].filter(([, x]) => (current.owner ? x.owner : x.userId === current.userId)).map(([k]) => k);
       for (let i = 0; i < keys.length; i += 128) await this.storage.delete(keys.slice(i, i + 128));
       return json({ ok: true, count: keys.length });
+    }
+    // החלפת סיסמה: צריך את הסיסמה הנוכחית; כל שאר החיבורים של המשתמש מנותקים (החיבור הנוכחי נשאר)
+    if (path === '/account/password' && request.method === 'POST') {
+      const user = await this.storage.get(`user:${body.userId}`);
+      if (!user) return err(404, 'המשתמש לא נמצא');
+      const next = String(body.next || '');
+      if (next.length < 8 || next.length > 200) return err(400, 'הסיסמה החדשה צריכה להיות לפחות 8 תווים');
+      // חשבון גוגל בלי סיסמה יכול להוסיף סיסמה (הוא כבר מחובר דרך גוגל)
+      if (user.hash && !(await passwordMatches(user, String(body.current || '')))) return err(401, 'הסיסמה הנוכחית שגויה');
+      Object.assign(user, await newPassword(next));
+      await this.storage.put(`user:${user.id}`, user);
+      const keep = `session:${await sha256(String(body.session || ''))}`;
+      const sessions = await this.storage.list({ prefix: 'session:' });
+      const keys = [...sessions].filter(([k, x]) => x.userId === user.id && k !== keep).map(([k]) => k);
+      for (let i = 0; i < keys.length; i += 128) await this.storage.delete(keys.slice(i, i + 128));
+      return json({ ok: true, user: publicUser(user, this.freeLimit) });
     }
     // מחיקת חשבון עצמית: חבר בספר משותף – רק הוא; בעל ספר – גם החברים בספר וההזמנה שלו
     if (path === '/account/delete' && request.method === 'POST') {
@@ -447,7 +513,7 @@ export class Accounts {
 
   async createUser(id, fields, { invite, join }) {
     const user = {
-      id, ...fields, plan: 'free', added: 0, createdAt: new Date().toISOString(),
+      id, ...fields, plan: invite ? this.invitePlan : 'free', added: 0, createdAt: new Date().toISOString(),
       invite: invite?.token || null, ...(join ? { bookId: join.bookId } : {}),
     };
     const puts = { [`user:${user.id}`]: user, [`email:${user.email}`]: user.id };

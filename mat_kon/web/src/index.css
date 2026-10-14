@@ -14,3 +14,9 @@ body {
 .no-scrollbar {
   scrollbar-width: none;
 }
+
+/* מצב סידור במסך הקטגוריות: האריחים "רועדים" קלות, כמו במסך הבית של הטלפון */
+@keyframes wiggle {
+  from { transform: rotate(-0.7deg); }
+  to { transform: rotate(0.7deg); }
+}

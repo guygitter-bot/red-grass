@@ -1,0 +1,85 @@
+name: mat-kon android
+
+# mat-kon כאפליקציה לאנדרואיד (Capacitor, mat_kon/mobile): עוטף את אותו web/dist.
+#   app-debug.apk  – להתקנה ישירה בטלפון לבדיקה (בכל בנייה)
+#   app-release.aab – לחנות Google Play (רק מ-main, אחרי שנוצר מפתח ההעלאה ב-mat-kon-android-key.yml)
+# הקבצים מופיעים בהרצה ב-Actions, תחת Artifacts.
+on:
+  push:
+    branches: [main]
+    paths: ["mat_kon/web/**", "mat_kon/mobile/**", ".github/workflows/mat-kon-android.yml"]
+  pull_request:
+    paths: ["mat_kon/mobile/**", ".github/workflows/mat-kon-android.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mat-kon-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      # כלי אנדרואיד (SDK) כבר מותקנים בשרת של GitHub (ANDROID_HOME); Gradle מוריד לבד רכיבים חסרים
+
+      - name: Build the web app
+        working-directory: mat_kon/web
+        run: |
+          npm ci
+          npm run build
+      - name: Copy into the Android project
+        working-directory: mat_kon/mobile
+        run: |
+          npm ci
+          npx cap sync android
+          # סרטוני ההדרכה לא נארזים באפליקציה (נטענים מהאתר) – כדי שהאפליקציה תהיה קטנה
+          rm -rf android/app/src/main/assets/public/tutorials
+
+      - name: Debug APK (for testing on a phone)
+        working-directory: mat_kon/mobile/android
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 1.0.${{ github.run_number }}
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Release bundle for Google Play (signed with the upload key)
+        # רק מ-main: המפתח נשמר בדלי הפרטי ב-R2 (נוצר ב-mat-kon-android-key.yml), נמחק מהשרת מיד אחרי הבנייה
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        working-directory: mat_kon/mobile/android
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 1.0.${{ github.run_number }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: upload
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KEYSTORE_PASSWORD" ]; then echo "אין עדיין סיסמת מפתח (ANDROID_KEYSTORE_PASSWORD) – מדלגים על הקובץ לחנות"; exit 0; fi
+          KS="$RUNNER_TEMP/upload.jks"
+          trap 'rm -f "$KS"' EXIT
+          if ! npx --yes wrangler@4.146.0 r2 object get mat-kon-backups/signing/upload.jks --file "$KS" --remote > /dev/null 2>&1; then
+            echo "אין עדיין מפתח העלאה ב-R2 (מריצים פעם אחת את mat-kon android key) – מדלגים על הקובץ לחנות"; exit 0
+          fi
+          KEYSTORE_PATH="$KS" ./gradlew --no-daemon bundleRelease
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mat-kon-android-${{ github.run_number }}
+          path: |
+            mat_kon/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+            mat_kon/mobile/android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: warn
+          retention-days: 30

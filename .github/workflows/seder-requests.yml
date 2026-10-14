@@ -1,7 +1,9 @@
 name: seder requests
 
 # בקשה לשינוי מתוך אפליקציית סדר (issue עם התווית seder-request, נפתח דרך השרת seder-api):
-# Claude מבצע את השינוי, הבדיקות רצות, ונפתח PR לאישור. מיזוג ה-PR סוגר את הבקשה ומעלה את השינוי.
+# 1. estimate: הערכת מחיר (Haiku, כסנט) – נשמרת בבקשה, והבקשה מחכה לאישור באפליקציה (seder-quote).
+# 2. work: אחרי "לבצע" באפליקציה (התווית seder-go) Claude מבצע את השינוי, הבדיקות רצות, ונפתח PR לאישור.
+#    מיזוג ה-PR סוגר את הבקשה ומעלה את השינוי. העלות בפועל נשמרת בבקשה (seder/api/costs.js).
 # מופעל רק על בקשות שנפתחו בשם בעל/ת המאגר (כלומר מהאפליקציה) – לא על issues של אחרים.
 # לנסות שוב בקשה שנכשלה: מוסיפים לה את התווית seder-retry.
 on:
@@ -14,16 +16,54 @@ permissions:
   pull-requests: write
   id-token: write
 
-concurrency:
-  group: seder-request-${{ github.event.issue.number }}
-  cancel-in-progress: false
-
 jobs:
+  estimate:
+    if: >-
+      contains(github.event.issue.labels.*.name, 'seder-request') &&
+      github.event.issue.user.login == github.repository_owner &&
+      github.event.action == 'opened'
+    # ברמת ה-job: הרצות שמדלגות (שינויי תוויות) לא מבטלות הרצה אמיתית שמחכה בתור
+    concurrency:
+      group: seder-request-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      # github.token – שינויי התוויות כאן לא מפעילים את ה-workflow שוב
+      GH_TOKEN: ${{ github.token }}
+      N: ${{ github.event.issue.number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: seder
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Mark as estimating
+        run: |
+          for l in "seder-estimating:fde68a" "seder-quote:38bdf8" "seder-go:22c55e"; do
+            gh label create "${l%%:*}" --color "${l##*:}" 2>/dev/null || true
+          done
+          gh issue edit "$N" --add-label seder-estimating
+      - name: Estimate the price
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          README: ${{ github.workspace }}/seder/README.md
+        run: node seder/api/request-costs.mjs estimate
+      # גם אם ההערכה נכשלה – הבקשה מחכה לאישור (בלי מחיר), כדי שלא תיתקע
+      - name: Wait for approval in the app
+        if: always()
+        run: gh issue edit "$N" --add-label seder-quote --remove-label seder-estimating
+
   work:
     if: >-
       contains(github.event.issue.labels.*.name, 'seder-request') &&
       github.event.issue.user.login == github.repository_owner &&
-      (github.event.action == 'opened' || github.event.label.name == 'seder-retry')
+      github.event.action == 'labeled' &&
+      (github.event.label.name == 'seder-go' || github.event.label.name == 'seder-retry')
+    concurrency:
+      group: seder-request-${{ github.event.issue.number }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -53,7 +93,7 @@ jobs:
           for l in "seder-working:fbbf24" "seder-ready:8b5cf6" "seder-failed:f43f5e" "seder-retry:a8a29e"; do
             gh label create "${l%%:*}" --color "${l##*:}" 2>/dev/null || true
           done
-          gh issue edit "$N" --add-label seder-working --remove-label seder-failed --remove-label seder-retry
+          gh issue edit "$N" --add-label seder-working --remove-label seder-failed --remove-label seder-retry --remove-label seder-go --remove-label seder-quote
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -61,6 +101,7 @@ jobs:
         working-directory: seder/web
         run: npm ci
       - name: Claude makes the change
+        id: claude
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -88,6 +129,12 @@ jobs:
           claude_args: |
             --max-turns 80
             --allowedTools "Read,Edit,Write,Glob,Grep,Bash(npm test),Bash(npm run build),Bash(npx vitest:*),Bash(node --test:*),Bash(git status),Bash(git diff:*),Bash(ls:*)"
+      # כמה ההרצה עלתה בפועל – גם אם נכשלה (מוריד מהיתרה שמוצגת באפליקציה)
+      - name: Record the cost
+        if: always() && steps.claude.outcome != 'skipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node seder/api/request-costs.mjs record "${{ steps.claude.outputs.execution_file || format('{0}/claude-execution-output.json', runner.temp) }}" || true
       - name: Tests
         run: |
           (cd seder/api && npm test)
