@@ -1,5 +1,5 @@
 // מידות ביתיות (כף, כפית, כוס, יחידה...) והמרה לגרמים ולנקודות.
-import { pointsForGrams, round1 } from './points';
+import { formatQty, pointsForGrams, round1 } from './points';
 
 // הערכה כללית, רק כשאין לסוכן מידע על המאכל הספציפי. המשקל משתנה מאוד בין מאכלים
 // (כף פרמזן מגורד ~5 ג', כף שמן ~13 ג', כף דבש ~21 ג'), לכן אפשר תמיד לתקן את הגרמים.
@@ -42,4 +42,18 @@ export function portionLabel(unit, count, grams) {
   if (unit.name === GRAM_UNIT.name) return `${Math.round(grams)} ג'`;
   const n = Math.round(count * 100) / 100;
   return `${n === 1 ? '' : `${n} `}${unit.name} (${Math.round(grams)} ג')`;
+}
+
+// מה לשמור במאגר אחרי ניתוח (למשל שקית עוגיות): רק מה שבחרת (מנה / חלק ממנה) או את הכול.
+// כשאין הבדל ביניהם – אפשרות אחת, בשם המקורי.
+export function saveChoices(name, total, servings, portion) {
+  const count = servings > 0 ? servings : 1;
+  const allPoints = round1(total);
+  if (count === 1 && portion === 1) return [{ key: 'all', label: 'הכול', name, points: allPoints }];
+  const unit = count > 1 ? 'מנה' : 'מהכול';
+  const amount = portion === 1 ? unit : `${formatQty(portion)} ${unit}`;
+  return [
+    { key: 'chosen', label: `רק ${amount}`, name: `${name} (${amount})`, points: round1((total / count) * portion) },
+    { key: 'all', label: 'הכול', name: `${name} (הכול)`, points: allPoints },
+  ];
 }
