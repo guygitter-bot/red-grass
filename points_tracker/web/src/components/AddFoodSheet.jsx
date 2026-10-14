@@ -205,10 +205,10 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
       setAnalysis(await analyzeFood(settings, db, input));
     });
 
-  const onAnalysisAdd = (item, saveToDb, favorite) => {
+  const onAnalysisAdd = (item, saveToDb, favorite, toSave = item) => {
     addToPlate(item);
-    if (saveToDb || favorite) onSaveFood({ name: item.name, points: item.points, source: 'ai' });
-    if (favorite) fav?.add(item.name);
+    if (saveToDb || favorite) onSaveFood({ name: toSave.name, points: toSave.points, source: 'ai' });
+    if (favorite) fav?.add(toSave.name);
     setAnalysis(null);
     setImage(null);
     setDetails('');
