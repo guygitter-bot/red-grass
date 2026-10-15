@@ -4,6 +4,9 @@
 מדיניות פרטיות: https://mat-kon.pages.dev/privacy.html (הקובץ `web/public/privacy.html`; תקציר באפליקציה: `PrivacyView.jsx`).
 אימייל ליצירת קשר: matkon.app@gmail.com · אתר: https://mat-kon.pages.dev · חבילה: `app.matkon`.
 
+Play Console: חשבון מפתח `5027970365130667919` (https://play.google.com/console/u/1/developers/5027970365130667919/app-list) ·
+מסלול הבדיקה בקבוצה מוגדרת (Alpha) – בודקים וקישור הצטרפות: https://share.google/lcXyzr2undH04Stkl
+
 ## דף האפליקציה בחנות (Store listing)
 
 **שם האפליקציה** (עד 30 תווים):
