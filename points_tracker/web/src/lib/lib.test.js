@@ -4,7 +4,7 @@ import { addDays, greeting, weekDates } from './dates';
 import { extractUserFoods, mergeFoodDb, searchFoods, SHARED_FOODS, upsertUserFood } from './foodDb';
 import { researchToFood, scoreComponents } from './ai';
 import { parseInviteToken } from './proxy';
-import { GENERIC_UNITS, baseName, plateItem, portionLabel, portionPoints, unitsFor } from './measures';
+import { GENERIC_UNITS, baseName, plateItem, portionLabel, portionPoints, saveChoices, unitsFor } from './measures';
 
 describe('points', () => {
   // אותם מקרים בדיוק נבדקים ב-points_tracker/tests/test_points.py
@@ -154,5 +154,16 @@ describe('measures', () => {
     // כף + 2 כפיות -> פריט אחד עם התיאור המלא
     const combo = { points: 0.8, label: "כף + 2 כפית (9 ג')", parts: [{ unitName: 'כף', count: 1 }, { unitName: 'כפית', count: 2 }] };
     expect(plateItem('פרמזן', combo)).toEqual({ name: "פרמזן · כף + 2 כפית (9 ג')", points: 0.8, qty: 1 });
+  });
+
+  it('offers to save only the chosen part or the whole thing', () => {
+    // שקית שלמה (מנה אחת) ואכלתי את כולה -> אפשרות אחת בשם המקורי
+    expect(saveChoices('כל החיוכים', 20, 1, 1)).toEqual([{ key: 'all', label: 'הכול', name: 'כל החיוכים', points: 20 }]);
+    // שקית שלמה, בחרתי ¼ -> רק הרבע או כל השקית
+    const bag = saveChoices('כל החיוכים', 20, 1, 0.25);
+    expect(bag.map((c) => [c.name, c.points])).toEqual([['כל החיוכים (¼ מהכול)', 5], ['כל החיוכים (הכול)', 20]]);
+    // 10 עוגיות, בחרתי אחת -> עוגייה אחת או כל השקית
+    const cookies = saveChoices('עוגיות', 20, 10, 1);
+    expect(cookies.map((c) => [c.name, c.points])).toEqual([['עוגיות (מנה)', 2], ['עוגיות (הכול)', 20]]);
   });
 });

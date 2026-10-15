@@ -472,4 +472,4 @@ function encode(dir, frames, end, name, posterAt, voice = []) {
   console.log(`${name}: ${Math.round(sec)}s, ${(statSync(mp4).size / 1e6).toFixed(1)}MB`);
 }
 
-export { demo };
+export { demo, serve, mockApi };

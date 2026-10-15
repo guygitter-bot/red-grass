@@ -51,10 +51,11 @@ export async function runBackup(env, now = new Date()) {
   const summary = { date, at: now.toISOString(), books: books.length, newImages: images };
   await env.BACKUPS.put(`daily/${date}/done.json`, JSON.stringify(summary));
   await pruneOld(env, now);
+  await pruneImages(env, books);
   return summary;
 }
 
-// מוחק ימים ישנים מ-BACKUP_DAYS (התמונות נשארות – הן קטנות ומשותפות לכל הימים)
+// מוחק ימים ישנים מ-BACKUP_DAYS (התמונות נשארות – הן משותפות לכל הימים; של ספר שנמחק – ב-pruneImages)
 async function pruneOld(env, now) {
   const oldest = day(new Date(now.getTime() - BACKUP_DAYS * 86400000));
   for (const date of await listDays(env)) {
@@ -68,15 +69,39 @@ async function pruneOld(env, now) {
   }
 }
 
-export async function listDays(env) {
-  const days = [];
+// תמונות של ספר שנמחק (מחיקת חשבון): נמחקות כשאף יום שנשאר בגיבוי כבר לא מכיל את הספר (עד 30 יום)
+async function pruneImages(env, books) {
+  const days = await listDays(env);
+  for (const key of await listKeys(env, 'images/')) {
+    if (books.includes(key)) continue;
+    let kept = false;
+    for (const date of days) {
+      if (await env.BACKUPS.head(`daily/${date}/books/${key}.json`)) { kept = true; break; }
+    }
+    if (kept) continue;
+    let cursor;
+    do {
+      const page = await env.BACKUPS.list({ prefix: `images/${key}/`, cursor });
+      if (page.objects.length) await env.BACKUPS.delete(page.objects.map((o) => o.key));
+      cursor = page.truncated ? page.cursor : undefined;
+    } while (cursor);
+  }
+}
+
+// שמות התיקיות שמתחת ל-prefix (למשל הימים שב-daily/ או הספרים שב-images/)
+async function listKeys(env, prefix) {
+  const keys = [];
   let cursor;
   do {
-    const page = await env.BACKUPS.list({ prefix: 'daily/', delimiter: '/', cursor });
-    for (const p of page.delimitedPrefixes || []) days.push(p.slice(6, -1));
+    const page = await env.BACKUPS.list({ prefix, delimiter: '/', cursor });
+    for (const p of page.delimitedPrefixes || []) keys.push(p.slice(prefix.length, -1));
     cursor = page.truncated ? page.cursor : undefined;
   } while (cursor);
-  return days.sort();
+  return keys;
+}
+
+export async function listDays(env) {
+  return (await listKeys(env, 'daily/')).sort();
 }
 
 // הגיבויים הקיימים (למסך "עלויות ותקלות")
