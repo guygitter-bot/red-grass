@@ -1,0 +1,21 @@
+name = "harochshim-api"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[vars]
+# האתרים שמותר להם לפנות לשרת (האפליקציה ב-Cloudflare Pages ופיתוח מקומי)
+ALLOWED_ORIGINS = "https://harochshim.pages.dev,http://localhost:5173,http://localhost:4173"
+
+# כל הנתונים (קטגוריות, ספקים, הצעות, לידים) – אובייקט אחד ("main")
+[[durable_objects.bindings]]
+name = "CLUB"
+class_name = "Club"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Club"]
+
+# סודות, לא כאן (נקבעים אוטומטית מ-GitHub, ראו .github/workflows/harochshim.yml):
+#   ANTHROPIC_API_KEY – המפתח של Claude (העוזר החכם)
+#   ADMIN_PASSWORD    – הסיסמה לאפליקציית המנהל

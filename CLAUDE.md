@@ -120,6 +120,12 @@
 - בדיקה: `cd rock_city/api && npm test` · `cd rock_city/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 - הרשאות נבדקות בשרת (`api/school.js`). צבעי המותג: צהוב-זהב ושחור (`web/src/index.css`). תאריך עברי + מספר: מקף עברי (`ב־${...}`) כדי שלא יתהפך.
 
+### הרוכשים – הטבות לקבוצת רכישה (`harochshim/`)
+- תיאור: `harochshim/README.md` (אפיון: `harochshim/spec.html`). קטגוריות → ספקים → הצעות מחיר; עוזר AI לכל ספק שמעביר ליד חם לספק.
+- `harochshim/web` → https://harochshim.pages.dev (`#/admin` מנהל, `#/partner/<סוד>` ספק) · `harochshim/api` → Worker `harochshim-api` (Durable Object `Club`). עלייה: `harochshim.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd harochshim/api && npm test` · `cd harochshim/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- ספק לא נמחק – רק "מורד מהרשימה" (`active: false`). ספק רואה רק את הלידים שלו (נבדק בשרת). צבעי הלוגו ב-`web/src/index.css`.
+
 ### צוות – בוטים של שיווק ב-Telegram (`tsevet/`)
 - תיאור: `tsevet/README.md`. בוטים עם תפקידים (🎨 קריאייטיב, 📊 קמפיינים) בקבוצת Telegram עם נושאים; מדברים ביניהם (`handoff`).
 - `tsevet/api` → Worker `tsevet-api` (Durable Object `Team` אחד, עבודה ברקע ב-alarm). עלייה: `tsevet.yml` אחרי מיזוג ל-main.
