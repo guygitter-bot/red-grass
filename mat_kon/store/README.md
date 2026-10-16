@@ -4,7 +4,8 @@
 מדיניות פרטיות: https://mat-kon.pages.dev/privacy.html (הקובץ `web/public/privacy.html`; תקציר באפליקציה: `PrivacyView.jsx`).
 אימייל ליצירת קשר: matkon.app@gmail.com · אתר: https://mat-kon.pages.dev · חבילה: `app.matkon`.
 
-Play Console: חשבון מפתח `5027970365130667919` (https://play.google.com/console/u/1/developers/5027970365130667919/app-list) ·
+Play Console: חשבון מפתח `5027970365130667919`, אפליקציה `4972647337031900951`
+(חתימה: https://play.google.com/console/u/1/developers/5027970365130667919/app/4972647337031900951/keymanagement), (https://play.google.com/console/u/1/developers/5027970365130667919/app-list) ·
 מסלול הבדיקה בקבוצה מוגדרת (Alpha) – בודקים וקישור הצטרפות: https://share.google/lcXyzr2undH04Stkl
 
 ## דף האפליקציה בחנות (Store listing)
@@ -87,5 +88,6 @@ mat-kon הוא ספר מתכונים חכם בעברית: כל המתכונים 
 ## מפתחות
 
 - מפתח ההעלאה: R2 `mat-kon-backups/signing/upload.jks`, SHA-1 `80:69:C3:4F:5D:44:D1:30:BC:29:D3:24:6E:29:3E:B5:EE:5A:CF:A3`.
+- SHA-1 של App signing key (גוגל חותמת איתו את הגרסה מהחנות): `67:A1:E8:AA:F6:27:9E:97:44:72:C7:FF:F3:33:FA:0A:63:B6:B1:FC`.
 - אחרי ההעלאה הראשונה: Play Console ← בדיקה והפצה ← **App integrity** ← SHA-1 של **App signing key** – מוסיפים אותו (וגם את של מפתח
   ההעלאה) כ-Android OAuth client ב-Google Cloud, כדי שכניסה עם גוגל תעבוד בגרסה מהחנות.
