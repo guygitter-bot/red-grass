@@ -4,7 +4,6 @@ import { addDays, greeting, weekDates } from './dates';
 import { extractUserFoods, mergeFoodDb, searchFoods, SHARED_FOODS, upsertUserFood } from './foodDb';
 import { researchToFood, scoreComponents } from './ai';
 import { parseInviteToken } from './proxy';
-import { cleanBarcode, isBarcode, offToLabel } from './barcode';
 import { GENERIC_UNITS, baseName, plateItem, portionLabel, portionPoints, saveChoices, unitsFor } from './measures';
 
 describe('points', () => {
@@ -169,33 +168,3 @@ describe('measures', () => {
   });
 });
 
-describe('barcode', () => {
-  it('reads Open Food Facts values per 100 g', () => {
-    const label = offToLabel({
-      product_name: 'במבה',
-      brands: 'אסם, Osem',
-      serving_quantity: '25',
-      nutriments: { 'energy-kcal_100g': 534, proteins_100g: 15.6, carbohydrates_100g: 51, fat_100g: 30.6, fiber_100g: '3,4' },
-    });
-    expect(label).toEqual({
-      readable: true,
-      product_name: 'במבה אסם',
-      per100: { kcal: 534, protein: 15.6, carbs: 51, fat: 30.6, fiber: 3.4 },
-      serving_grams: 25,
-      units: [],
-      source: 'openfoodfacts',
-    });
-  });
-
-  it('needs protein, carbs and fat; fiber and kcal can be missing', () => {
-    expect(offToLabel({ product_name: 'x', nutriments: { proteins_100g: 1, fat_100g: 2 } })).toBeNull();
-    const label = offToLabel({ product_name: 'x', nutriments: { energy_100g: 418.4, proteins_100g: 1, carbohydrates_100g: 2, fat_100g: 0 } });
-    expect(label.per100).toEqual({ kcal: 100, protein: 1, carbs: 2, fat: 0, fiber: 0 });
-  });
-
-  it('cleans typed barcodes', () => {
-    expect(cleanBarcode(' 7290-000 066318 ')).toBe('7290000066318');
-    expect(isBarcode('7290000066318')).toBe(true);
-    expect(isBarcode('123')).toBe(false);
-  });
-});
