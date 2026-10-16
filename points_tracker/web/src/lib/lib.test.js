@@ -167,3 +167,4 @@ describe('measures', () => {
     expect(cookies.map((c) => [c.name, c.points])).toEqual([['עוגיות (מנה)', 2], ['עוגיות (הכול)', 20]]);
   });
 });
+

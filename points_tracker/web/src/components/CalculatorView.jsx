@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
-import { ScanLine, X } from 'lucide-react';
+import { Image as ImageIcon, ScanLine, X } from 'lucide-react';
 import { Button, Card, ErrorBox, Input, Label, MealPicker, Spinner } from './ui';
 import CameraCapture from './CameraCapture';
 import MeasurePicker from './MeasurePicker';
 import { plateItem, unitsFor } from '../lib/measures';
 import { aiReady, describeError, readNutritionLabel } from '../lib/ai';
+import { fileToDataUrl } from '../lib/image';
 import { formatPoints, pointsFromNutrition, round1 } from '../lib/points';
 
 const FIELDS = [
@@ -23,7 +24,7 @@ export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHom
   const [foodName, setFoodName] = useState('');
   const [meal, setMeal] = useState('בוקר');
   const [scanning, setScanning] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
@@ -33,21 +34,44 @@ export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHom
   // מידות מהתווית (כף, כפית...) או הערכה כללית; מנה מהתווית אם הודפסה
   const units = useMemo(() => unitsFor({ units: labelUnits, grams: servingGrams }), [labelUnits, servingGrams]);
 
-  const onImage = async (dataUrl) => {
+  // ממלא את השדות מהתווית שנקראה
+  const fillFrom = (label) => {
+    setValues(Object.fromEntries(FIELDS.map(([k]) => [k, String(label.per100[k] ?? '')])));
+    setServingGrams(label.serving_grams || null);
+    setLabelUnits(label.units || []);
+    if (label.product_name) setFoodName(label.product_name);
+  };
+
+  const run = async (text, fn) => {
     setScanning(false);
-    setBusy(true);
+    setBusy(text);
     setError('');
+    setMessage('');
     try {
-      const label = await readNutritionLabel(settings, dataUrl);
-      if (!label.readable) throw new Error('לא הצלחתי לקרוא את התווית. נסה לצלם מקרוב ובתאורה טובה.');
-      setValues(Object.fromEntries(FIELDS.map(([k]) => [k, String(label.per100[k] ?? '')])));
-      setServingGrams(label.serving_grams || null);
-      setLabelUnits(label.units || []);
-      if (label.product_name) setFoodName(label.product_name);
+      await fn();
     } catch (err) {
       setError(describeError(err));
     } finally {
-      setBusy(false);
+      setBusy('');
+    }
+  };
+
+  // צילום או תמונה מהגלריה של טבלת הערכים התזונתיים
+  const onImage = (dataUrl) =>
+    run('קורא את התווית...', async () => {
+      const label = await readNutritionLabel(settings, dataUrl);
+      if (!label.readable) throw new Error('לא הצלחתי לקרוא את התווית. נסה תמונה מקרוב ובתאורה טובה.');
+      fillFrom(label);
+    });
+
+  const onGallery = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      onImage(await fileToDataUrl(file));
+    } catch (err) {
+      setError(err.message);
     }
   };
 
@@ -83,20 +107,28 @@ export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHom
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <span className="font-bold">צילום טבלת ערכים תזונתיים</span>
-              <button onClick={() => setScanning(false)} className="p-1 text-slate-400">
+              <button onClick={() => setScanning(false)} className="p-1 text-slate-400" aria-label="סגור">
                 <X size={18} />
               </button>
             </div>
             <CameraCapture onCapture={onImage} hint="צלם את טבלת הסימון התזונתי מקרוב" />
           </div>
         ) : busy ? (
-          <Spinner text="קורא את התווית..." />
+          <Spinner text={busy} />
         ) : (
-          <Button variant="ai" className="w-full" onClick={() => setScanning(true)} disabled={!aiReady(settings)}>
-            <ScanLine size={18} /> סרוק תווית מהאריזה
-          </Button>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="ai" onClick={() => setScanning(true)} disabled={!aiReady(settings)}>
+              <ScanLine size={18} /> צלם תווית
+            </Button>
+            <label className={aiReady(settings) ? 'block' : 'block opacity-40 pointer-events-none'}>
+              <input type="file" accept="image/*" className="hidden" onChange={onGallery} />
+              <span className="h-full px-4 py-3 rounded-xl font-medium flex items-center justify-center gap-2 bg-violet-100 text-violet-700 cursor-pointer">
+                <ImageIcon size={18} /> תווית מהגלריה
+              </span>
+            </label>
+          </div>
         )}
-        {!aiReady(settings) && <p className="text-xs text-slate-400">סריקת תווית דורשת קוד גישה או מפתח API בהגדרות.</p>}
+        {!aiReady(settings) && <p className="text-xs text-slate-400">קריאת תווית דורשת חיבור לסוכן: קישור הזמנה או קוד גישה בהגדרות.</p>}
         <ErrorBox>{error}</ErrorBox>
 
         <p className="text-sm text-slate-500">ערכים תזונתיים ל-100 גרם</p>
