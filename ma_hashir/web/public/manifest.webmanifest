@@ -1,0 +1,20 @@
+{
+  "name": "מה השיר?",
+  "short_name": "מה השיר?",
+  "description": "משחק זיהוי שירים עם חברים – כל אחד מהטלפון שלו",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f3fb",
+  "theme_color": "#7c3aed",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
