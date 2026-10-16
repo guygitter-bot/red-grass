@@ -114,6 +114,12 @@
 - קהילות חברים + התראות "בואו לשחק" (`api/club.js`, Durable Object `Club`, Web Push ב-`api/push.js`; מפתחות ב-`~vapid`).
 - הקטגוריות ובדיקת האות כפולות ב-`api/game.js` וב-`web/src/lib/game.js` – לשנות בשניהם.
 
+### מה השיר? – זיהוי שירים (`ma_hashir/`)
+- תיאור: `ma_hashir/README.md`. משחק לכמה שחקנים בקישור (לבד או קבוצות), 5 שניות משיר ו-4 תשובות; הארכה ל-10 שניות (5 נק׳), 50:50 כל 30 נקודות.
+- `ma_hashir/web` → https://ma-hashir.pages.dev · `ma_hashir/api` → Worker `ma-hashir-api` (Durable Object `Room` לכל משחק, `Library` אחד לקטעי השירים). עלייה: `ma-hashir.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd ma_hashir/api && npm test` · `cd ma_hashir/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- רשימת השירים: `api/songs.js`; הקטעים מ-iTunes/Deezer דרך השרת (`/audio`). ההגדרות כפולות ב-`api/game.js` וב-`web/src/lib/game.js`.
+
 ### רוק סיטי – מערכת שעות (`rock_city/`)
 - תיאור: `rock_city/README.md`. מערכת שעות לבית ספר למוזיקה: שיעורים, תלמידים, מורים, חדרים, תשלומים, בקשות לשינוי והרשאות.
 - `rock_city/web` → https://rock-city-school.pages.dev · `rock_city/api` → Worker `rock-city-api` (Durable Object `School` אחד). עלייה: `rock-city.yml` אחרי מיזוג ל-main.
