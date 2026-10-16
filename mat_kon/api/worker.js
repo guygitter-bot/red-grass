@@ -42,6 +42,14 @@ function corsHeaders(request, env) {
   return headers;
 }
 
+// הרשמה בלי קישור הזמנה (OPEN_SIGNUP): "app" – רק מהאפליקציה לאנדרואיד (המקור שלה https://localhost),
+// "all" – מכל מקום, אחרת סגור. מי שנרשם כך מקבל את המסלול החינמי (FREE_RECIPES)
+const APP_ORIGIN = 'https://localhost';
+function openSignupAllowed(request, env) {
+  const mode = String(env.OPEN_SIGNUP || '');
+  return mode === 'all' || (mode === 'app' && request.headers.get('origin') === APP_ORIGIN);
+}
+
 const internal = (stub, method, path, body) =>
   stub.fetch(new Request(`https://do${path}`, {
     method,
@@ -114,6 +122,15 @@ export default {
         const limited = await rate([{ key: `signup-ip:${ip}`, limit: 30, window: 3600 }]);
         if (limited) return limited;
       }
+      // הרשמה בלי קישור הזמנה: רק כשמותר, ועם מגבלה נוספת לכל כתובת
+      const openSignup = parts[0] === 'register' && body.open === true && !body.token && !body.join;
+      delete body.open;
+      if (openSignup) {
+        if (!openSignupAllowed(request, env)) return fail(403, 'כדי להירשם צריך קישור הזמנה');
+        const limited = await rate([{ key: `open-ip:${ip}`, limit: 5, window: 3600 }], 'יותר מדי הרשמות. נסו שוב מאוחר יותר.');
+        if (limited) return limited;
+        body.open = true;
+      }
       // הצטרפות חוזרת עם סיסמה היא ניסיון סיסמה – אותן מגבלות כמו בכניסה
       if (parts[0] === 'register' && body.join) {
         const email = String(body.email || '').trim().toLowerCase();
@@ -148,7 +165,10 @@ export default {
     // בלי סיסמת בעלים ובלי חשבון גוגל של בעלים הספר נשאר סגור (כשל סגור), אלא אם הוגדר במפורש OWNER_OPEN=true
     const ownerLocked = Boolean(ownerPassword || (ownerEmail && googleClientId)) || env.OWNER_OPEN !== 'true';
     if (url.pathname === '/auth-config' && request.method === 'GET') {
-      return reply(200, { googleClientId, ownerLocked, ownerPassword: Boolean(ownerPassword) });
+      return reply(200, {
+        googleClientId, ownerLocked, ownerPassword: Boolean(ownerPassword),
+        openSignup: openSignupAllowed(request, env), freeLimit: Number(env.FREE_RECIPES ?? 10),
+      });
     }
     if (url.pathname === '/owner-login' && request.method === 'POST') {
       if (!ownerPassword) return fail(400, 'כניסת בעלים לא מוגדרת');
@@ -181,7 +201,9 @@ export default {
         return pass(await internal(accounts, 'POST', '/google/link', { userId: me.id, ...profile }));
       }
       if (ownerEmail && profile.email.toLowerCase() === ownerEmail) return pass(await internal(accounts, 'POST', '/owner-session', {}));
-      return pass(await internal(accounts, 'POST', '/google', { ...profile, token: body.token || '', join: body.join || '' }));
+      // הרשמה בלי קישור הזמנה עם גוגל (רק כשמותר; משתמש קיים פשוט נכנס)
+      const open = body.open === true && !body.token && !body.join && openSignupAllowed(request, env);
+      return pass(await internal(accounts, 'POST', '/google', { ...profile, token: body.token || '', join: body.join || '', open }));
     }
 
     // ---- מי שולח: בעל האפליקציה (בלי טוקן, או טוקן של בעלים) או משתמש שהוזמן ----

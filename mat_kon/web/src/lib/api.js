@@ -186,7 +186,7 @@ export const findStores = (s, lat, lon, items) => api(s, 'POST', '/stores', { la
 
 // כניסה עם גוגל
 export const getAuthConfig = () => api('', 'GET', '/auth-config');
-export const googleSignIn = (credential, token, join) => api('', 'POST', '/google', { credential, ...(token ? { token } : {}), ...(join ? { join } : {}) });
+export const googleSignIn = (credential, token, join, open) => api('', 'POST', '/google', { credential, ...(token ? { token } : {}), ...(join ? { join } : {}), ...(open ? { open: true } : {}) });
 
 // ספר משותף: בעל הספר מצרף בני משפחה עם קישור הצטרפות
 export const checkJoin = (join) => api('', 'POST', '/join', { join });
