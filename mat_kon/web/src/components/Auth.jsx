@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { checkInvite, checkJoin, getAuthConfig, googleSignIn, login, ownerLogin, register } from '../lib/api';
 import GoogleButton from './GoogleButton';
+import { isNative } from '../lib/native';
 
-// הרשמה מקישור הזמנה, או כניסה במכשיר נוסף
+// הרשמה מקישור הזמנה, הרשמה בלי הזמנה (רק באפליקציה לאנדרואיד, כשהשרת מאפשר), או כניסה במכשיר נוסף
 export default function Auth({ mode: initialMode, token, onDone }) {
   const [mode, setMode] = useState(initialMode);
   const [invite, setInvite] = useState(null);
@@ -21,7 +22,7 @@ export default function Auth({ mode: initialMode, token, onDone }) {
     setBusy(true);
     setError('');
     try {
-      onDone(await googleSignIn(credential, mode === 'register' ? token : '', mode === 'join' ? token : ''));
+      onDone(await googleSignIn(credential, mode === 'register' ? token : '', mode === 'join' ? token : '', mode === 'signup'));
     } catch (err) {
       setError(err.message);
       setBusy(false);
@@ -62,7 +63,8 @@ export default function Auth({ mode: initialMode, token, onDone }) {
     setBusy(true);
     setError('');
     try {
-      const res = mode === 'register' || mode === 'join'
+      const res = mode === 'signup' ? await register({ open: true, ...form })
+        : mode === 'register' || mode === 'join'
         ? await register(mode === 'join' ? { join: token, ...form } : { token, ...form })
         : mode === 'owner' ? await ownerLogin(form.password) : await login(form.email, form.password);
       onDone(res);
@@ -74,8 +76,10 @@ export default function Auth({ mode: initialMode, token, onDone }) {
   };
 
   const field = 'w-full rounded-2xl border border-stone-200 py-3 px-3 outline-none focus:border-orange-400';
-  const signup = mode === 'register' || mode === 'join';
-  const loadingInvite = signup && !invite;
+  const signup = mode === 'register' || mode === 'join' || mode === 'signup';
+  const loadingInvite = (mode === 'register' || mode === 'join') && !invite;
+  const canSignup = config.openSignup && isNative();
+  const go = (m) => () => { setMode(m); setError(''); };
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-b from-orange-50 to-amber-50">
@@ -86,7 +90,8 @@ export default function Auth({ mode: initialMode, token, onDone }) {
           <p className="text-stone-500 mb-5">
             {mode === 'join'
               ? `הוזמנתם להצטרף לספר המתכונים של ${invite?.bookName || ''}. נרשמים פעם אחת, ועובדים יחד על אותו ספר.`
-              : mode === 'register' ? 'הוזמנתם לספר מתכונים משלכם. נרשמים פעם אחת ומתחילים.' : mode === 'owner' ? 'כניסה של בעל האפליקציה' : 'כניסה לספר המתכונים שלכם'}
+              : mode === 'register' ? 'הוזמנתם לספר מתכונים משלכם. נרשמים פעם אחת ומתחילים.'
+              : mode === 'signup' ? 'פותחים ספר מתכונים משלכם. נרשמים פעם אחת ומתחילים.' : mode === 'owner' ? 'כניסה של בעל האפליקציה' : 'כניסה לספר המתכונים שלכם'}
           </p>
         </div>
 
@@ -132,10 +137,23 @@ export default function Auth({ mode: initialMode, token, onDone }) {
             {error && <p className="text-red-600 text-sm">{error}</p>}
             <button disabled={busy} className="w-full rounded-2xl bg-orange-500 text-white font-bold py-3 disabled:opacity-50 flex items-center justify-center gap-2">
               {busy && <Loader2 size={18} className="animate-spin" />}
-              {mode === 'join' ? 'הצטרפות לספר' : mode === 'register' ? 'הרשמה' : 'כניסה'}
+              {mode === 'join' ? 'הצטרפות לספר' : mode === 'register' || mode === 'signup' ? 'הרשמה' : 'כניסה'}
             </button>
             {mode === 'register' && (
               <p className="text-xs text-stone-500 text-center">{invite?.freeLimit ?? 10} המתכונים הראשונים בחינם.</p>
+            )}
+            {mode === 'signup' && (
+              <p className="text-xs text-stone-500 text-center">{config.freeLimit ?? 30} המתכונים הראשונים בחינם.</p>
+            )}
+            {mode === 'login' && canSignup && (
+              <button type="button" onClick={go('signup')} className="w-full text-sm text-orange-600 font-medium underline">
+                אין לכם חשבון? הרשמה
+              </button>
+            )}
+            {mode === 'signup' && (
+              <button type="button" onClick={go('login')} className="w-full text-sm text-stone-500 underline">
+                כבר יש לכם חשבון? כניסה
+              </button>
             )}
             {mode === 'login' && config.ownerPassword && (
               <button type="button" onClick={() => { setMode('owner'); setError(''); }} className="w-full text-xs text-stone-500 underline">

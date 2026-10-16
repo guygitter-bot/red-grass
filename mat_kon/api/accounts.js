@@ -17,6 +17,7 @@ const OLD_ITERATIONS = 20000;
 export const MAX_MEMBERS = 5; // כולל בעל הספר
 const SESSION_DAYS = 180;
 const INVITE_DAYS = 30;
+const OPEN_DAILY_MAX = 200; // הרשמות בלי קישור הזמנה ביום (סך הכול)
 // הזמנה שלא נוצלה תוך 30 יום פגה (הזמנות ישנות בלי תאריך – בלי תפוגה)
 const inviteExpired = (invite) => !invite.userId && invite.expiresAt && Date.parse(invite.expiresAt) < Date.now();
 const JOIN_DAYS = 7;
@@ -94,6 +95,8 @@ export class Accounts {
     for (const [k, v] of await this.storage.list({ prefix: 'session:' })) if (now - Date.parse(v.createdAt) > SESSION_DAYS * 86400000) drop.push(k);
     for (const [k, v] of await this.storage.list({ prefix: 'join:' })) if (!v.usedBy && Date.parse(v.expiresAt) < now) drop.push(k);
     for (const [k, v] of await this.storage.list({ prefix: 'device:' })) if (now - v.at > SESSION_DAYS * 86400000) drop.push(k);
+    const today = new Date(now).toISOString().slice(0, 10);
+    for (const k of (await this.storage.list({ prefix: 'open-day:' })).keys()) if (k.slice(9) < today) drop.push(k);
     for (let i = 0; i < drop.length; i += 128) await this.storage.delete(drop.slice(i, i + 128));
     await this.storage.setAlarm?.(now + 86400000);
   }
@@ -470,6 +473,7 @@ export class Accounts {
   // הרשמה מקישור הזמנה (ספר חדש) או מקישור הצטרפות (ספר משותף)
   // בדיקה בלבד (בלי לתפוס): האם הקישור בבקשה תקף. מחזיר שגיאה או null
   async peekClaim(body) {
+    if (body.open === true) return null;
     if (body.join) {
       const join = await this.validJoin(body.join);
       return join.error ? join : null;
@@ -483,6 +487,17 @@ export class Accounts {
   // הרשמה מקישור הזמנה (ספר חדש) או מקישור הצטרפות (ספר משותף).
   // הקישור "נתפס" מיד (באותו צעד של הבדיקה), כדי ששתי הרשמות במקביל לא ינצלו אותו פעמיים
   async claim(body, userId) {
+    // הרשמה בלי קישור הזמנה (השרת כבר בדק שמותר): נרשמת כהזמנה "פתוחה", כדי שתופיע במסך ההזמנות של הבעלים
+    // (שם אפשר לתת מנוי או למחוק). תקרה כללית ליום נגד ניצול
+    if (body.open === true) {
+      const day = new Date().toISOString().slice(0, 10);
+      const count = (await this.storage.get(`open-day:${day}`)) || 0;
+      if (count >= OPEN_DAILY_MAX) return { status: 429, error: 'ההרשמה עמוסה כרגע. נסו שוב מחר.' };
+      const now = new Date().toISOString();
+      const invite = { token: randomToken(18), name: 'הרשמה מהאפליקציה', createdAt: now, expiresAt: now, userId, open: true };
+      await this.storage.put({ [`invite:${invite.token}`]: invite, [`open-day:${day}`]: count + 1 });
+      return { invite };
+    }
     if (body.join) {
       const join = await this.validJoin(body.join);
       if (join.error) return join;
@@ -513,7 +528,7 @@ export class Accounts {
 
   async createUser(id, fields, { invite, join }) {
     const user = {
-      id, ...fields, plan: invite ? this.invitePlan : 'free', added: 0, createdAt: new Date().toISOString(),
+      id, ...fields, plan: invite && !invite.open ? this.invitePlan : 'free', added: 0, createdAt: new Date().toISOString(),
       invite: invite?.token || null, ...(join ? { bookId: join.bookId } : {}),
     };
     const puts = { [`user:${user.id}`]: user, [`email:${user.email}`]: user.id };
