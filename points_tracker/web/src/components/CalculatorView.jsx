@@ -1,12 +1,10 @@
-import { useCallback, useMemo, useState } from 'react';
-import { Barcode, Image as ImageIcon, ScanLine, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Image as ImageIcon, ScanLine, X } from 'lucide-react';
 import { Button, Card, ErrorBox, Input, Label, MealPicker, Spinner } from './ui';
 import CameraCapture from './CameraCapture';
-import BarcodeScanner from './BarcodeScanner';
 import MeasurePicker from './MeasurePicker';
 import { plateItem, unitsFor } from '../lib/measures';
-import { aiReady, describeError, readNutritionLabel, researchFood } from '../lib/ai';
-import { lookupBarcode } from '../lib/barcode';
+import { aiReady, describeError, readNutritionLabel } from '../lib/ai';
 import { fileToDataUrl } from '../lib/image';
 import { formatPoints, pointsFromNutrition, round1 } from '../lib/points';
 
@@ -25,7 +23,7 @@ export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHom
   const [favorite, setFavorite] = useState(false);
   const [foodName, setFoodName] = useState('');
   const [meal, setMeal] = useState('בוקר');
-  const [scanning, setScanning] = useState(null); // null | 'label' | 'barcode'
+  const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -36,7 +34,7 @@ export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHom
   // מידות מהתווית (כף, כפית...) או הערכה כללית; מנה מהתווית אם הודפסה
   const units = useMemo(() => unitsFor({ units: labelUnits, grams: servingGrams }), [labelUnits, servingGrams]);
 
-  // ממלא את השדות מתווית / מוצר שנמצא (אותו מבנה מכל המקורות)
+  // ממלא את השדות מהתווית שנקראה
   const fillFrom = (label) => {
     setValues(Object.fromEntries(FIELDS.map(([k]) => [k, String(label.per100[k] ?? '')])));
     setServingGrams(label.serving_grams || null);
@@ -45,7 +43,7 @@ export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHom
   };
 
   const run = async (text, fn) => {
-    setScanning(null);
+    setScanning(false);
     setBusy(text);
     setError('');
     setMessage('');
@@ -76,23 +74,6 @@ export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHom
       setError(err.message);
     }
   };
-
-  // ברקוד: קודם Open Food Facts, ואם המוצר לא שם - הסוכן מחפש את הברקוד ברשת
-  const onBarcode = useCallback(
-    (code) =>
-      run(`מחפש את המוצר ${code}...`, async () => {
-        let label = await lookupBarcode(code).catch(() => null);
-        if (!label && aiReady(settings)) {
-          const found = await researchFood(settings, `the product with barcode ${code} (EAN), sold in Israel`);
-          if (found.found) {
-            label = { per100: found.per100, serving_grams: found.serving_grams, units: found.units, product_name: found.name };
-          }
-        }
-        if (!label) throw new Error(`לא מצאתי את המוצר (ברקוד ${code}). אפשר לצלם את טבלת הערכים התזונתיים במקום.`);
-        fillFrom(label);
-      }),
-    [settings], // eslint-disable-line react-hooks/exhaustive-deps
-  );
 
   const save = (alsoLog) => {
     if (!foodName) return;
@@ -125,38 +106,29 @@ export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHom
         {scanning ? (
           <div className="space-y-2">
             <div className="flex justify-between items-center">
-              <span className="font-bold">{scanning === 'barcode' ? 'סריקת ברקוד' : 'צילום טבלת ערכים תזונתיים'}</span>
-              <button onClick={() => setScanning(null)} className="p-1 text-slate-400" aria-label="סגור">
+              <span className="font-bold">צילום טבלת ערכים תזונתיים</span>
+              <button onClick={() => setScanning(false)} className="p-1 text-slate-400" aria-label="סגור">
                 <X size={18} />
               </button>
             </div>
-            {scanning === 'barcode' ? (
-              <BarcodeScanner onCode={onBarcode} />
-            ) : (
-              <CameraCapture onCapture={onImage} hint="צלם את טבלת הסימון התזונתי מקרוב" />
-            )}
+            <CameraCapture onCapture={onImage} hint="צלם את טבלת הסימון התזונתי מקרוב" />
           </div>
         ) : busy ? (
           <Spinner text={busy} />
         ) : (
-          <div className="space-y-2">
-            <Button className="w-full" onClick={() => setScanning('barcode')}>
-              <Barcode size={18} /> סרוק ברקוד
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="ai" onClick={() => setScanning(true)} disabled={!aiReady(settings)}>
+              <ScanLine size={18} /> צלם תווית
             </Button>
-            <div className="grid grid-cols-2 gap-2">
-              <Button variant="ai" onClick={() => setScanning('label')} disabled={!aiReady(settings)}>
-                <ScanLine size={18} /> צלם תווית
-              </Button>
-              <label className={aiReady(settings) ? 'block' : 'block opacity-40 pointer-events-none'}>
-                <input type="file" accept="image/*" className="hidden" onChange={onGallery} />
-                <span className="h-full px-4 py-3 rounded-xl font-medium flex items-center justify-center gap-2 bg-violet-100 text-violet-700 cursor-pointer">
-                  <ImageIcon size={18} /> תווית מהגלריה
-                </span>
-              </label>
-            </div>
+            <label className={aiReady(settings) ? 'block' : 'block opacity-40 pointer-events-none'}>
+              <input type="file" accept="image/*" className="hidden" onChange={onGallery} />
+              <span className="h-full px-4 py-3 rounded-xl font-medium flex items-center justify-center gap-2 bg-violet-100 text-violet-700 cursor-pointer">
+                <ImageIcon size={18} /> תווית מהגלריה
+              </span>
+            </label>
           </div>
         )}
-        {!aiReady(settings) && <p className="text-xs text-slate-400">קריאת תווית דורשת קוד גישה או מפתח API בהגדרות. ברקוד עובד גם בלי.</p>}
+        {!aiReady(settings) && <p className="text-xs text-slate-400">קריאת תווית דורשת חיבור לסוכן: קישור הזמנה או קוד גישה בהגדרות.</p>}
         <ErrorBox>{error}</ErrorBox>
 
         <p className="text-sm text-slate-500">ערכים תזונתיים ל-100 גרם</p>
