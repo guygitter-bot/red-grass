@@ -178,7 +178,8 @@ export default function SettingsView({ session, isOwner, user, recipes, custom, 
               {busy === 'import' ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />} בחירת קובץ
             </button>
           )}
-          <input ref={importRef} type="file" accept=".rtk,.zip,application/zip,application/octet-stream" className="hidden" onChange={(e) => { if (e.target.files[0]) readImport(e.target.files[0]); e.target.value = ''; }} />
+          {/* בלי סינון סוג קובץ: באנדרואיד קובצי .rtk (בלי סוג מוכר) מופיעים אפורים ואי אפשר לבחור אותם. הקובץ נבדק בקריאה */}
+          <input ref={importRef} type="file" className="hidden" onChange={(e) => { if (e.target.files[0]) readImport(e.target.files[0]); e.target.value = ''; }} />
           {imported && !imported.done && (
             <div className="mt-3 rounded-xl bg-orange-50 p-3 text-sm">
               <div className="font-bold">נמצאו {imported.file.recipes.length} מתכונים</div>
