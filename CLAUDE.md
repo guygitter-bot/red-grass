@@ -47,6 +47,13 @@
   (main → https://bis-app.pages.dev). בקשות תיקון מתוך האפליקציה: `bis-fix.yml` (ענפים `bis-fix/*`).
 - סוכן המאכלים: `points-agent.yml`. הנוסחה זהה ב-`web/src/lib/points.js` וב-`points.py` – לשנות בשניהם.
 
+### ביסים – הגרסה המסחרית (`bisim/`)
+- תיאור: `bisim/README.md`. אפליקציה נפרדת לגמרי מ"ביס" (קוד, שרת `bisim-api`, מאגר ומכשירים משלה) → https://bisim.pages.dev.
+- עלייה: `bisim.yml` אחרי מיזוג ל-main (בודק ובונה גם ב-PR). שינוי בביס לא עובר לביסים לבד, ולהפך.
+- **בלי שומרי משקל:** נוסחת "ביסים" משלנו (`bisim/web/src/lib/points.js`: אנרגיה עם הנחה על חלבון וסיבים). לא להשתמש
+  בנוסחת PointsPlus, ולא בשמות, במונחים ("נקודות", Points) או בטבלאות ניקוד של שומרי משקל – לא בקוד, לא בממשק,
+  לא בשיווק ולא בהנחיות לסוכן.
+
 ### mat-kon – מתכונים (`mat_kon/`)
 ספר מתכונים בעברית (RTL, PWA) למשפחה. **לקרוא קודם את `mat_kon/README.md`**.
 - `mat_kon/web` – האפליקציה (React + Vite + Tailwind) → https://mat-kon.pages.dev.

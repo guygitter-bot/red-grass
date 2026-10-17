@@ -1,0 +1,356 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Calculator, PieChart, Plus, Settings, TrendingDown } from 'lucide-react';
+import Dashboard from './components/Dashboard';
+import AddFoodSheet from './components/AddFoodSheet';
+import CalculatorView from './components/CalculatorView';
+import WeightView from './components/WeightView';
+import SettingsView from './components/SettingsView';
+import { usePersistentState, loadJson, newId } from './lib/storage';
+import { addDays, formatDisplayDate, today } from './lib/dates';
+import { SHARED_FOODS, extractUserFoods, findByName, mergeFoodDb, normalize, upsertUserFood } from './lib/foodDb';
+import { addSharedFood, adminDeleteFood, adminUpdateFood, fetchSharedFoods, sharedAvailable } from './lib/sharedFoods';
+import { DEFAULT_MODEL } from './lib/ai';
+import { checkOwnerCode, inviteLink, isConnected, isIos, isOwner, isStandalone, loadProxyUrl, redeemInvite, takeInviteToken } from './lib/proxy';
+import IosInviteCard from './components/IosInviteCard';
+
+// סביבת בדיקות (סביבת בדיקות): פס כתום וכותרת שונה, כדי לא להתבלבל עם האפליקציה האמיתית
+const STAGING = import.meta.env.VITE_APP_ENV === 'staging';
+if (STAGING) document.title = 'ביסים · בדיקות';
+
+const DEFAULT_USER = { name: 'אורח', dailyTarget: 26, weeklyTarget: 35, startWeight: 80, currentWeight: 80, goalWeight: 70 };
+
+// גרסה קודמת שמרה את כל המאגר תחת pointsApp_foodDb - שומרים רק מה שהמשתמש הוסיף.
+function initialUserFoods() {
+  const old = loadJson('pointsApp_foodDb', null);
+  return old ? extractUserFoods(old, SHARED_FOODS) : [];
+}
+
+const sumPoints = (logs) => logs.reduce((s, l) => s + (Number(l.points) || 0), 0);
+
+export default function App() {
+  const [view, setView] = useState('dashboard');
+  const [showAdd, setShowAdd] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(today);
+
+  const [user, setUser] = usePersistentState('pointsApp_user', DEFAULT_USER);
+  const [logs, setLogs] = usePersistentState('pointsApp_logs', []);
+  const [waterLogs, setWaterLogs] = usePersistentState('pointsApp_waterLogs', {});
+  const [weightHistory, setWeightHistory] = usePersistentState('pointsApp_weights', () => [
+    { date: new Date().toISOString(), weight: DEFAULT_USER.currentWeight },
+  ]);
+  const [userFoods, setUserFoods] = usePersistentState('pointsApp_userFoods', initialUserFoods);
+  const [settings, setSettings] = usePersistentState('pointsApp_settings', { apiKey: '', model: DEFAULT_MODEL, autoAgent: true });
+
+
+  // השרת המשותף + קוד הגישה מקישור ההזמנה: כך לא צריך להדביק מפתח בכל טלפון.
+  const [proxyUrl, setProxyUrl] = useState('');
+  const [notice, setNotice] = useState(null);
+  const [iosInvite, setIosInvite] = useState(null);
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  useEffect(() => {
+    const urlReady = loadProxyUrl().then((url) => {
+      setProxyUrl(url);
+      return url;
+    });
+    // קישור הזמנה חד-פעמי: מקבלים מהשרת מפתח מכשיר קבוע, והקישור מפסיק לעבוד.
+    const applyInvite = async () => {
+      const token = takeInviteToken();
+      if (!token) return;
+      const url = await urlReady;
+      // מכשיר שכבר מחובר לא צריך את הקישור (וגם לא מנצל אותו)
+      const current = settingsRef.current;
+      if (url && (current.deviceKey || current.accessCode) && (await isConnected(url, current))) {
+        return setNotice({ ok: true, text: 'המכשיר הזה כבר מחובר ✓' });
+      }
+      // ב-Safari באייפון לא מנצלים את הקישור: מסבירים להתקין קודם ולהדביק אותו בתוך האפליקציה.
+      if (isIos() && !isStandalone()) return setIosInvite(token);
+      joinWithToken(token, url);
+    };
+    applyInvite();
+    // גם כשהאפליקציה כבר פתוחה ונפתח בה קישור הזמנה
+    window.addEventListener('hashchange', applyInvite);
+    return () => window.removeEventListener('hashchange', applyInvite);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const aiSettings = useMemo(() => ({ ...settings, proxyUrl }), [settings, proxyUrl]);
+
+  // מאמתים מול השרת שקוד הגישה נכון לפני שמציגים הגדרות של בעל האפליקציה
+  useEffect(() => {
+    const code = settings.accessCode;
+    if (!proxyUrl || !code) return;
+    const timer = setTimeout(async () => {
+      const status = await checkOwnerCode(proxyUrl, code).catch(() => 0);
+      if (status === 200) setSettings((s) => (s.accessCode === code ? { ...s, ownerChecked: code } : s));
+      if (status === 401 || status === 403) {
+        setSettings((s) => (s.accessCode === code ? { ...s, ownerChecked: undefined } : s));
+      }
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [proxyUrl, settings.accessCode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // הצטרפות עם קישור הזמנה (מהכתובת, או מהדבקה בהגדרות). מחזיר true בהצלחה.
+  async function joinWithToken(token, url = proxyUrl) {
+    if (!url) {
+      setNotice({ ok: false, text: 'השרת לא זמין כרגע. נסה/י שוב מאוחר יותר.' });
+      return false;
+    }
+    try {
+      const { deviceKey } = await redeemInvite(url, token);
+      setSettings((s) => ({ ...s, deviceKey }));
+      setIosInvite(null);
+      setNotice({ ok: true, text: 'ההזמנה התקבלה ✓ הסוכן החכם מחובר במכשיר הזה.' });
+      return true;
+    } catch (err) {
+      setNotice({ ok: false, text: err.message });
+      return false;
+    }
+  }
+
+  // המאגר המשותף בשרת (מה שכל המשתמשים הוסיפו). נשמר גם במכשיר לשימוש בלי אינטרנט.
+  const [remoteFoods, setRemoteFoods] = usePersistentState('pointsApp_sharedFoods', []);
+  // מאכלים משותפים שהמשתמש מחק אצלו בלבד
+  const [hiddenFoods, setHiddenFoods] = usePersistentState('pointsApp_hiddenFoods', []);
+  // מועדפים: אישיים לכל טלפון (שמות מנורמלים)
+  const [favorites, setFavorites] = usePersistentState('pointsApp_favorites', []);
+  const fav = {
+    has: (name) => favorites.includes(normalize(name)),
+    toggle: (name) =>
+      setFavorites((prev) => (prev.includes(normalize(name)) ? prev.filter((n) => n !== normalize(name)) : [...prev, normalize(name)])),
+    add: (name) => setFavorites((prev) => (prev.includes(normalize(name)) ? prev : [...prev, normalize(name)])),
+  };
+  const sharedOn = sharedAvailable(aiSettings);
+  const isAdmin = sharedOn && Boolean(settings.adminCode);
+  const refreshShared = () => {
+    if (!sharedAvailable(aiSettings)) return;
+    fetchSharedFoods(aiSettings)
+      .then(setRemoteFoods)
+      .catch((err) => {
+        // מכשיר שבעל האפליקציה ניתק: חוזרים למסך ההצטרפות עם קישור הזמנה
+        if (err.status === 401 && settings.deviceKey) {
+          setSettings((s) => ({ ...s, deviceKey: undefined }));
+          setNotice({ ok: false, text: 'המכשיר נותק מהסוכן החכם. כדי לחבר אותו שוב, בקש/י קישור הזמנה חדש.' });
+        }
+      });
+  };
+  useEffect(() => {
+    refreshShared();
+    const onVisible = () => document.visibilityState === 'visible' && refreshShared();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [proxyUrl, settings.accessCode, settings.deviceKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const foodDb = useMemo(() => {
+    const base = [...SHARED_FOODS, ...remoteFoods.filter((f) => !findByName(SHARED_FOODS, f.name))];
+    const hidden = new Set(hiddenFoods);
+    return mergeFoodDb(base, userFoods).filter((f) => !hidden.has(normalize(f.name)));
+  }, [remoteFoods, userFoods, hiddenFoods]);
+  const inRemote = (name) => Boolean(name && findByName(remoteFoods, name));
+
+  const dayLogs = useMemo(() => logs.filter((l) => l.date === selectedDate), [logs, selectedDate]);
+  const dailyUsed = sumPoints(dayLogs);
+
+  // מאכלים אחרונים לבחירה מהירה
+  const recent = useMemo(() => {
+    const seen = new Map();
+    for (const log of logs) {
+      const parts = log.components || [{ name: log.foodName, unitPoints: log.points }];
+      for (const c of parts) if (!seen.has(c.name)) seen.set(c.name, { name: c.name, points: c.unitPoints });
+      if (seen.size >= 6) break;
+    }
+    return [...seen.values()].slice(0, 6);
+  }, [logs]);
+
+  const addLog = (entry) => {
+    setLogs((prev) => [{ id: newId(), date: selectedDate, ...entry }, ...prev]);
+    setShowAdd(false);
+  };
+
+  // הוספה ידנית ואוטומטית (הסוכן) עובדות בנפרד: ידני גובר תמיד, והסוכן לעולם לא דורס מאכל שהוזן ידנית.
+  // מאכל חדש נשמר במכשיר וגם נשלח למאגר המשותף, כך שכולם רואים אותו.
+  // עריכה נשארת אישית - חוץ ממנהל, שעריכה שלו של מאכל משותף מתקנת אותו לכולם.
+  const saveFood = (food, oldName) => {
+    const clean = { ...food, added: today() };
+    if (oldName !== undefined && isAdmin && inRemote(oldName)) {
+      adminUpdateFood(aiSettings, clean, oldName).then(refreshShared).catch((e) => alert(e.message));
+      return;
+    }
+    const isNew = oldName === undefined && !findByName(foodDb, food.name);
+    setUserFoods((prev) => upsertUserFood(prev, clean, oldName));
+    setHiddenFoods((prev) => prev.filter((n) => n !== normalize(food.name)));
+    if (isNew && sharedOn) addSharedFood(aiSettings, clean).then(refreshShared).catch(() => {});
+  };
+
+  // שינוי שם של מאכל: השם הישן נשמר כשם נוסף, כך שהחיפוש מוצא את המאכל בשני השמות.
+  // אצל משתמש רגיל השינוי אישי; מנהל שמשנה שם של מאכל משותף משנה אותו לכולם.
+  const renameFood = (food, newName) => {
+    const name = newName.trim();
+    if (!name || normalize(name) === normalize(food.name)) return;
+    const renamed = { ...food, name, aliases: [...new Set([...(food.aliases || []), food.name])], source: 'user' };
+    delete renamed.shared;
+    if (isAdmin && inRemote(food.name)) {
+      saveFood(renamed, food.name);
+    } else {
+      setUserFoods((prev) => upsertUserFood(prev, { ...renamed, added: today() }, food.name));
+      if (!userFoods.some((f) => normalize(f.name) === normalize(food.name))) {
+        setHiddenFoods((prev) => [...new Set([...prev, normalize(food.name)])]);
+      }
+    }
+    setFavorites((prev) => prev.map((n) => (n === normalize(food.name) ? normalize(name) : n)));
+  };
+
+  const removeFood = (name) => {
+    if (isAdmin && inRemote(name)) {
+      if (!confirm(`למחוק את "${name}" מהמאגר המשותף אצל כולם?`)) return;
+      adminDeleteFood(aiSettings, name).then(refreshShared).catch((e) => alert(e.message));
+    } else if (inRemote(name)) {
+      setHiddenFoods((prev) => [...new Set([...prev, normalize(name)])]);
+    }
+    setUserFoods((prev) => prev.filter((f) => normalize(f.name) !== normalize(name)));
+  };
+
+  const water = waterLogs[selectedDate] || 0;
+  const setWater = (n) => setWaterLogs((prev) => ({ ...prev, [selectedDate]: Math.max(0, n) }));
+
+  const addWeight = (weight) => {
+    setUser((u) => ({ ...u, currentWeight: weight }));
+    setWeightHistory((h) => [...h, { date: new Date().toISOString(), weight }]);
+  };
+  const removeWeight = (idx) => {
+    const next = weightHistory.filter((_, i) => i !== idx);
+    setWeightHistory(next);
+    setUser((u) => ({ ...u, currentWeight: next[next.length - 1].weight }));
+  };
+
+  const exportData = () => {
+    const data = { version: 2, user, logs, weightHistory, userFoods, waterLogs };
+    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `bis-backup-${today()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
+  const importData = (data) => {
+    if (data.user) setUser(data.user);
+    if (data.logs) setLogs(data.logs);
+    if (data.weightHistory) setWeightHistory(data.weightHistory);
+    if (data.waterLogs) setWaterLogs(data.waterLogs);
+    if (data.userFoods) setUserFoods(data.userFoods);
+    else if (data.foodDb) setUserFoods(extractUserFoods(data.foodDb, SHARED_FOODS));
+  };
+
+  const navButton = (id, Icon, label) => (
+    <button
+      onClick={() => setView(id)}
+      className={`flex flex-col items-center gap-1 transition-colors ${view === id ? 'text-emerald-600' : 'hover:text-emerald-500'}`}
+    >
+      <Icon size={24} strokeWidth={view === id ? 2.5 : 2} />
+      {label}
+    </button>
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-24" dir="rtl">
+      {STAGING && (
+        <div className="sticky top-0 z-50 bg-orange-500 text-white text-center text-xs font-bold py-1">
+          סביבת בדיקות · הנתונים כאן נפרדים מהאפליקציה האמיתית
+        </div>
+      )}
+      <div className="max-w-md mx-auto p-4 pt-8">
+        {iosInvite && (
+          <IosInviteCard
+            link={inviteLink(iosInvite)}
+            onUseHere={() => joinWithToken(iosInvite)}
+            onClose={() => setIosInvite(null)}
+          />
+        )}
+        {notice && (
+          <div
+            className={`mb-4 rounded-xl p-3 text-sm flex justify-between items-start gap-2 ${
+              notice.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+            }`}
+          >
+            <span>{notice.text}</span>
+            <button onClick={() => setNotice(null)} aria-label="סגור" className="font-bold">
+              ×
+            </button>
+          </div>
+        )}
+        {view === 'dashboard' && (
+          <Dashboard
+            user={user}
+            selectedDate={selectedDate}
+            setSelectedDate={setSelectedDate}
+            changeDate={(n) => setSelectedDate((d) => addDays(d, n))}
+            dayLogs={dayLogs}
+            dailyUsed={dailyUsed}
+            water={water}
+            addWater={() => setWater(water + 1)}
+            removeWater={() => setWater(water - 1)}
+            removeLog={(id) => setLogs((prev) => prev.filter((l) => l.id !== id))}
+            openAdd={() => setShowAdd(true)}
+          />
+        )}
+        {view === 'calculator' && (
+          <CalculatorView settings={aiSettings} onLog={addLog} onSaveFood={saveFood} fav={fav} goHome={() => setView('dashboard')} />
+        )}
+        {view === 'weight' && <WeightView user={user} history={weightHistory} addWeight={addWeight} removeWeight={removeWeight} />}
+        {view === 'settings' && (
+          <SettingsView
+            renameFood={renameFood}
+            fav={fav}
+            user={user}
+            setUser={setUser}
+            settings={settings}
+            setSettings={setSettings}
+            proxyUrl={proxyUrl}
+            owner={isOwner(aiSettings)}
+            onJoin={joinWithToken}
+            foodDb={foodDb}
+            userFoods={userFoods}
+            saveFood={saveFood}
+            removeUserFood={removeFood}
+            remoteFoods={remoteFoods}
+            sharedOn={sharedOn}
+            isAdmin={isAdmin}
+            exportData={exportData}
+            importData={importData}
+          />
+        )}
+
+        <nav className="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex justify-between items-center text-xs font-medium text-slate-400 z-40 max-w-md mx-auto shadow-[0_-5px_20px_rgba(0,0,0,0.05)]">
+          {navButton('dashboard', PieChart, 'יומן')}
+          {navButton('calculator', Calculator, 'מחשבון')}
+          <div className="relative -top-6">
+            <button
+              onClick={() => setShowAdd(true)}
+              className="bg-emerald-500 text-white p-4 rounded-full shadow-lg shadow-emerald-200 hover:scale-105 transition-transform"
+              aria-label="הוסף אוכל"
+            >
+              <Plus size={28} />
+            </button>
+          </div>
+          {navButton('weight', TrendingDown, 'משקל')}
+          {navButton('settings', Settings, 'הגדרות')}
+        </nav>
+
+        {showAdd && (
+          <AddFoodSheet
+            db={foodDb}
+            recent={recent}
+            settings={aiSettings}
+            dateLabel={formatDisplayDate(selectedDate)}
+            onLog={addLog}
+            onSaveFood={saveFood}
+            onRename={renameFood}
+            fav={fav}
+            favorites={foodDb.filter((f) => fav.has(f.name))}
+            onClose={() => setShowAdd(false)}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
