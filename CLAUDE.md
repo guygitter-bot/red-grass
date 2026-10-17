@@ -45,7 +45,9 @@
 - תיאור: `points_tracker/README.md`. האפליקציה ב-`points_tracker/web`, השרת ב-`points_tracker/proxy`.
 - עלייה: `bis-deploy.yml` – **staging** (ענף `staging` → https://staging.bis-app.pages.dev) לפני **production**
   (main → https://bis-app.pages.dev). בקשות תיקון מתוך האפליקציה: `bis-fix.yml` (ענפים `bis-fix/*`).
-- סוכן המאכלים: `points-agent.yml`. הנוסחה זהה ב-`web/src/lib/points.js` וב-`points.py` – לשנות בשניהם.
+- סוכן המאכלים: `points-agent.yml`. נוסחת ה"ביסים" זהה ב-`web/src/lib/points.js` וב-`points.py` – לשנות בשניהם.
+- **בלי שומרי משקל:** הנוסחה משלנו (אנרגיה עם הנחה על חלבון וסיבים). לא להחזיר את נוסחת PointsPlus, ולא להשתמש
+  בשמות, במונחים ("נקודות", Points) או בטבלאות ניקוד של שומרי משקל – לא בקוד, לא בממשק ולא בהנחיות לסוכן.
 
 ### mat-kon – מתכונים (`mat_kon/`)
 ספר מתכונים בעברית (RTL, PWA) למשפחה. **לקרוא קודם את `mat_kon/README.md`**.

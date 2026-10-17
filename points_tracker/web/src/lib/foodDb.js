@@ -1,4 +1,5 @@
 import sharedDb from '../../../data/foods.json';
+import { withComputedPoints } from './points';
 
 export const SHARED_FOODS = sharedDb.foods;
 
@@ -41,9 +42,10 @@ export function findByName(db, name) {
 }
 
 // מאגר משותף (מהסוכן ב-GitHub) + מאכלים אישיים. גרסה אישית גוברת.
+// כל מאכל עם ערכים תזונתיים מחושב לפי נוסחת הביסים (גם מאכלים ששמרו בעבר).
 export function mergeFoodDb(shared, userFoods) {
-  const byName = new Map(shared.map((f) => [normalize(f.name), f]));
-  for (const f of userFoods) byName.set(normalize(f.name), { ...f, source: f.source || 'user' });
+  const byName = new Map(shared.map((f) => [normalize(f.name), withComputedPoints(f)]));
+  for (const f of userFoods) byName.set(normalize(f.name), withComputedPoints({ ...f, source: f.source || 'user' }));
   return [...byName.values()];
 }
 

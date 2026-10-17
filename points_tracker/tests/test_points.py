@@ -6,9 +6,11 @@ from points_tracker.points import points_for_grams, points_from_nutrition, round
 class PointsTest(unittest.TestCase):
     # Same cases as web/src/lib/lib.test.js: the app and the agent must agree.
     def test_formula_matches_app(self):
-        self.assertEqual(round1(points_from_nutrition({"protein": 9, "carbs": 55, "fat": 1.2, "fiber": 2})), 6.9)
+        self.assertEqual(round1(points_from_nutrition({"protein": 9, "carbs": 55, "fat": 1.2, "fiber": 2})), 6.6)
         self.assertEqual(round1(points_from_nutrition({"protein": 0, "carbs": 0, "fat": 0, "fiber": 10})), 0)
-        self.assertEqual(round1(points_for_grams({"protein": 10, "carbs": 50, "fat": 30, "fiber": 5}, 50)), 6.8)
+        self.assertEqual(round1(points_for_grams({"protein": 10, "carbs": 50, "fat": 30, "fiber": 5}, 50)), 6.6)
+        # with kcal from the label: chicken breast
+        self.assertEqual(round1(points_from_nutrition({"kcal": 165, "protein": 31, "carbs": 0, "fat": 3.6})), 2.1)
 
     def test_round_half_up_like_js(self):
         self.assertEqual(round1(0.25), 0.3)

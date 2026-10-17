@@ -47,8 +47,11 @@ function FoodLine({ food, canDelete, onSave, onRename, onDelete, fav }) {
           className="p-2 text-emerald-600 disabled:opacity-30"
           disabled={!name.trim() || points === ''}
           onClick={() => {
-            if (onRename && name.trim() !== food.name) onRename({ ...food, points: parseFloat(points) }, name.trim());
-            else onSave({ ...food, name: name.trim(), points: parseFloat(points), source: 'user' }, food.name);
+            // מספר שתוקן ידנית לא מחושב מחדש מהערכים התזונתיים
+            const edited = parseFloat(points);
+            const fixed = edited !== Number(food.points) ? { points: edited, manualPoints: true } : { points: edited };
+            if (onRename && name.trim() !== food.name) onRename({ ...food, ...fixed }, name.trim());
+            else onSave({ ...food, ...fixed, name: name.trim(), source: 'user' }, food.name);
             setEditing(false);
           }}
           aria-label="שמור"
@@ -133,7 +136,7 @@ export default function FoodDbManager({ foodDb, userFoods, remoteFoods = [], sha
           type="number"
           inputMode="decimal"
           step="0.5"
-          placeholder="נק'"
+          placeholder="ביסים"
           className="w-20 text-center"
           value={points}
           onChange={(e) => setPoints(e.target.value)}
