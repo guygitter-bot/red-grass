@@ -37,7 +37,6 @@ const JOINED = page('play.google.com/apps/testing/app.matkon', `${HDR}${APP_EN}
 const STORE = page('play.google.com/store/apps/details?id=app.matkon', `
 <div style="padding:16px 18px;color:#5f6368;display:flex;justify-content:space-between;font-size:18px"><span>←</span><span>🔍 ⋮</span></div>
 <div class="app" style="padding-top:6px"><img src="/icon.svg" alt=""><div><h2>mat-kon – ספר המתכונים שלי</h2><div style="color:#01875f;font-size:14px;margin-top:4px">mat-kon</div><div style="color:#5f6368;font-size:13px;margin-top:2px">גישה מוקדמת (בטא)</div></div></div>
-<div style="display:flex;justify-content:space-around;padding:6px 18px 4px;color:#5f6368;font-size:13px;text-align:center"><div><b style="color:#202124">4.8★</b><br>ביקורות</div><div><b style="color:#202124">10+</b><br>הורדות</div><div><b style="color:#202124">3+</b><br>גיל</div></div>
 <button class="btn" id="install" style="background:#01875f;color:#fff;margin-top:18px">התקנה</button>
 <div style="padding:8px 18px;color:#5f6368;font-size:14px;line-height:1.6">ספר מתכונים אישי: שומרים מתכונים מקישורים, מתמונות ומוואטסאפ, ומסדרים הכול במקום אחד.</div>
 <script>
