@@ -25,7 +25,7 @@ function initialUserFoods() {
   return old ? extractUserFoods(old, SHARED_FOODS) : [];
 }
 
-const sumPoints = (logs) => logs.reduce((s, l) => s + (Number(l.points) || 0), 0);
+const sumBites = (logs) => logs.reduce((s, l) => s + (Number(l.points) || 0), 0);
 
 export default function App() {
   const [view, setView] = useState('dashboard');
@@ -147,7 +147,7 @@ export default function App() {
   const inRemote = (name) => Boolean(name && findByName(remoteFoods, name));
 
   const dayLogs = useMemo(() => logs.filter((l) => l.date === selectedDate), [logs, selectedDate]);
-  const dailyUsed = sumPoints(dayLogs);
+  const dailyUsed = sumBites(dayLogs);
 
   // מאכלים אחרונים לבחירה מהירה
   const recent = useMemo(() => {
@@ -226,7 +226,7 @@ export default function App() {
     const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `bis-backup-${today()}.json`;
+    a.download = `bisim-backup-${today()}.json`;
     document.body.appendChild(a);
     a.click();
     a.remove();

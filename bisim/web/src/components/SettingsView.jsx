@@ -5,6 +5,7 @@ import { MODELS, aiReady, describeError, testApiKey } from '../lib/ai';
 import InviteManager from './InviteManager';
 import { parseInviteToken } from '../lib/proxy';
 import FoodDbManager from './FoodDbManager';
+import BitesExplainer from './BitesExplainer';
 
 function NumberField({ label, value, onChange }) {
   const [text, setText] = useState(String(value ?? ''));
@@ -89,6 +90,8 @@ export default function SettingsView({
           <NumberField label="משקל יעד" value={user.goalWeight} onChange={(v) => setUser({ ...user, goalWeight: v })} />
         </div>
       </Card>
+
+      <BitesExplainer />
 
       {proxyUrl && !owner && !invited && (
         <Card className="space-y-3 border-violet-100">

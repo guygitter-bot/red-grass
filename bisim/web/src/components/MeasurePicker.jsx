@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Minus, Plus } from 'lucide-react';
-import { GRAM_UNIT, portionPoints } from '../lib/measures';
-import { formatQty } from '../lib/points';
+import { GRAM_UNIT, portionBites } from '../lib/measures';
+import { formatQty } from '../lib/bites';
 
 // לכל מידה (כף, כפית, כוס...) כפתורי פלוס/מינוס, ואפשר לשלב: "כף + 2 כפית".
 // או להזין גרמים מדויקים במקום. onChange({ grams, points, label, parts })
@@ -24,7 +24,7 @@ export default function MeasurePicker({ per100, units, onChange }) {
     .map((u, i) => ({ unitName: u.name, count: counts[i] || 0, grams: (counts[i] || 0) * (unitGrams[i] || 0) }))
     .filter((p) => p.count > 0);
   const grams = byGrams ? exactGrams : parts.reduce((s, p) => s + p.grams, 0);
-  const points = portionPoints(per100, grams);
+  const points = portionBites(per100, grams);
   const label = byGrams
     ? `${Math.round(exactGrams)} ג'`
     : parts.length

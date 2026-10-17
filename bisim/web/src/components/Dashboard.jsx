@@ -1,13 +1,13 @@
 import { Calendar, ChevronLeft, ChevronRight, Droplets, Plus, Trash2 } from 'lucide-react';
 import { Button, Card, MEALS } from './ui';
 import { formatDisplayDate, greeting, today } from '../lib/dates';
-import { formatPoints, qtyPrefix } from '../lib/points';
+import { formatBites, qtyPrefix } from '../lib/bites';
 
 export default function Dashboard({
   user, selectedDate, setSelectedDate, changeDate, dayLogs, dailyUsed,
   water, addWater, removeWater, removeLog, openAdd,
 }) {
-  const pointsLeft = user.dailyTarget - dailyUsed;
+  const bitesLeft = user.dailyTarget - dailyUsed;
   const progress = Math.min((dailyUsed / user.dailyTarget) * 100, 100) || 0;
   const isToday = selectedDate === today();
 
@@ -30,8 +30,8 @@ export default function Dashboard({
       <Card className="relative overflow-hidden bg-gradient-to-br from-red-500 to-rose-700 text-white border-none">
         <div className="flex justify-between items-start">
           <div>
-            <p className="text-red-100 text-sm mb-1">{pointsLeft >= 0 ? 'נותרו להיום' : 'חריגה היום'}</p>
-            <div className="text-5xl font-black tracking-tight">{formatPoints(Math.abs(pointsLeft))}</div>
+            <p className="text-red-100 text-sm mb-1">{bitesLeft >= 0 ? 'נותרו להיום' : 'חריגה היום'}</p>
+            <div className="text-5xl font-black tracking-tight">{formatBites(Math.abs(bitesLeft))}</div>
             <p className="text-red-100 text-sm mt-1">מתוך {user.dailyTarget}</p>
           </div>
           <div className="h-24 w-24 relative flex items-center justify-center">
@@ -73,12 +73,12 @@ export default function Dashboard({
         {MEALS.map((meal) => {
           const mealLogs = dayLogs.filter((l) => l.mealType === meal);
           if (mealLogs.length === 0) return null;
-          const mealPoints = mealLogs.reduce((s, l) => s + Number(l.points), 0);
+          const mealBites = mealLogs.reduce((s, l) => s + Number(l.points), 0);
           return (
             <div key={meal} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
               <div className="flex justify-between items-center mb-2 border-b border-slate-50 pb-2">
                 <span className="font-bold text-slate-600">{meal}</span>
-                <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-bold">{formatPoints(mealPoints)} ביסים</span>
+                <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-bold">{formatBites(mealBites)} ביסים</span>
               </div>
               <div className="space-y-2">
                 {mealLogs.map((log) => (
@@ -86,7 +86,7 @@ export default function Dashboard({
                     <div className="flex justify-between items-center gap-2">
                       <span>{log.foodName}</span>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="font-medium">{formatPoints(log.points)}</span>
+                        <span className="font-medium">{formatBites(log.points)}</span>
                         <button onClick={() => removeLog(log.id)} className="text-red-300 hover:text-red-500 p-1" aria-label="מחק">
                           <Trash2 size={14} />
                         </button>
@@ -94,7 +94,7 @@ export default function Dashboard({
                     </div>
                     {log.components?.length > 1 && (
                       <div className="text-xs text-slate-400 pr-2">
-                        {log.components.map((c) => `${qtyPrefix(c.qty)}${c.name} (${formatPoints(c.unitPoints * c.qty)})`).join(' · ')}
+                        {log.components.map((c) => `${qtyPrefix(c.qty)}${c.name} (${formatBites(c.unitPoints * c.qty)})`).join(' · ')}
                       </div>
                     )}
                   </div>

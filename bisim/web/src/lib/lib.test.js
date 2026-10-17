@@ -1,19 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { formatQty, pointsForGrams, pointsFromNutrition, qtyPrefix, round1 } from './points';
+import { formatQty, bitesForGrams, bitesFromNutrition, qtyPrefix, round1 } from './bites';
 import { addDays, greeting, weekDates } from './dates';
 import { extractUserFoods, mergeFoodDb, searchFoods, SHARED_FOODS, upsertUserFood } from './foodDb';
 import { researchToFood, scoreComponents } from './ai';
 import { parseInviteToken } from './proxy';
-import { GENERIC_UNITS, baseName, plateItem, portionLabel, portionPoints, saveChoices, unitsFor } from './measures';
+import { steps } from '../components/BitesExplainer';
+import { GENERIC_UNITS, baseName, plateItem, portionLabel, portionBites, saveChoices, unitsFor } from './measures';
 
-describe('points', () => {
-  // נוסחת הביסים (lib/points.js)
+describe('bites', () => {
+  // נוסחת הביסים (lib/bites.js)
   it('computes bites', () => {
-    expect(round1(pointsFromNutrition({ protein: 9, carbs: 55, fat: 1.2, fiber: 2 }))).toBe(6.6);
-    expect(round1(pointsFromNutrition({ protein: 0, carbs: 0, fat: 0, fiber: 10 }))).toBe(0);
-    expect(round1(pointsForGrams({ protein: 10, carbs: 50, fat: 30, fiber: 5 }, 50))).toBe(6.6);
+    expect(round1(bitesFromNutrition({ protein: 9, carbs: 55, fat: 1.2, fiber: 2 }))).toBe(6.6);
+    expect(round1(bitesFromNutrition({ protein: 0, carbs: 0, fat: 0, fiber: 10 }))).toBe(0);
+    expect(round1(bitesForGrams({ protein: 10, carbs: 50, fat: 30, fiber: 5 }, 50))).toBe(6.6);
     // עם קלוריות מהתווית: חזה עוף
-    expect(round1(pointsFromNutrition({ kcal: 165, protein: 31, carbs: 0, fat: 3.6 }))).toBe(2.1);
+    expect(round1(bitesFromNutrition({ kcal: 165, protein: 31, carbs: 0, fat: 3.6 }))).toBe(2.1);
   });
 
   it('formats portions', () => {
@@ -105,12 +106,12 @@ describe('scoreComponents', () => {
       db,
     );
     expect(pita.points).toBe(3);
-    expect(spread.points).toBe(round1(pointsForGrams(per100, 20)));
+    expect(spread.points).toBe(round1(bitesForGrams(per100, 20)));
   });
 });
 
 describe('researchToFood', () => {
-  it('builds a clean name and computes points from per100', () => {
+  it('builds a clean name and computes bites from per100', () => {
     const food = researchToFood({
       found: true, name: 'במבה נוגט (אסם)', serving_desc: "שקית 60 ג'", serving_grams: 60, points: 8.5,
       per100: { kcal: 523, protein: 10.4, carbs: 58.6, fat: 27.4, fiber: 3.4 }, aliases: [], sources: [],
@@ -136,9 +137,9 @@ describe('measures', () => {
   const parmesan = { protein: 32, carbs: 0, fat: 23, fiber: 0 };
 
   it('computes a spoon of parmesan', () => {
-    expect(portionPoints(parmesan, 100)).toBe(6.8);
-    expect(portionPoints(parmesan, 5)).toBe(0.3); // כף פתיתים ~5 ג'
-    expect(portionPoints(parmesan, 2)).toBe(0.1); // כפית ~2 ג'
+    expect(portionBites(parmesan, 100)).toBe(6.8);
+    expect(portionBites(parmesan, 5)).toBe(0.3); // כף פתיתים ~5 ג'
+    expect(portionBites(parmesan, 2)).toBe(0.1); // כפית ~2 ג'
   });
 
   it('lists grams first, then the food units, the serving, or generic units', () => {
@@ -179,3 +180,11 @@ describe('measures', () => {
   });
 });
 
+
+describe('bites explainer', () => {
+  it('shows the same total as the app formula', () => {
+    const s = steps({ grams: 100, per100: { kcal: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0 } });
+    expect(s.net).toBe(72);
+    expect(Math.round(s.total * 10) / 10).toBe(2.1);
+  });
+});

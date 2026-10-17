@@ -1,5 +1,5 @@
 // חישוב "ביסים" – נוסחה משלנו, לא נוסחה של תוכנית דיאטה מסחרית.
-// (שמות הפונקציות נשארו "points" כדי לא לשבור קוד ונתונים קיימים.)
+// (שדה הנתונים נשאר "points" ברישומים ובמאכלים השמורים, כדי לא לשבור נתונים קיימים במכשירים ובשרת.)
 //
 // ביסים = (קלוריות − 3 × חלבון − 4 × סיבים) / 35, ל-100 גרם, לא פחות מ-0.
 // כלומר: בסיס של אנרגיה (35 קלוריות = ביס אחד), עם הנחה על חלבון ועל סיבים תזונתיים, שמשביעים יותר.
@@ -10,28 +10,28 @@ export function kcalOf({ kcal, protein = 0, carbs = 0, fat = 0 } = {}) {
   return kcal > 0 ? kcal : 4 * protein + 4 * carbs + 9 * fat;
 }
 
-export function pointsFromNutrition(per100 = {}) {
+export function bitesFromNutrition(per100 = {}) {
   const { protein = 0, fiber = 0 } = per100;
   return Math.max(0, (kcalOf(per100) - 3 * protein - 4 * fiber) / KCAL_PER_BITE);
 }
 
 // ביסים למנה לפי ערכים ל-100 גרם ומשקל המנה.
-export function pointsForGrams(per100, grams) {
+export function bitesForGrams(per100, grams) {
   if (!per100 || !(grams > 0)) return 0;
-  return pointsFromNutrition(per100) * (grams / 100);
+  return bitesFromNutrition(per100) * (grams / 100);
 }
 
 // מאכל עם ערכים תזונתיים ומשקל מקבל תמיד ערך מחושב מחדש (כך כל המאגר עובר לנוסחה החדשה לבד).
 // מאכל שהוזן ידנית רק עם מספר, או שהמספר שלו תוקן ידנית (manualPoints), נשאר כמו שהוא.
-export function withComputedPoints(food) {
+export function withComputedBites(food) {
   if (!food?.per100 || !(food.grams > 0) || food.manualPoints) return food;
-  return { ...food, points: round1(pointsForGrams(food.per100, food.grams)) };
+  return { ...food, points: round1(bitesForGrams(food.per100, food.grams)) };
 }
 
 export const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10;
 
 // 2 -> "2", 2.5 -> "2.5", 2.25 -> "2.3"
-export function formatPoints(n) {
+export function formatBites(n) {
   const r = round1(n);
   return Number.isInteger(r) ? String(r) : r.toFixed(1);
 }

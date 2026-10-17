@@ -8,7 +8,7 @@ import CameraCapture from './CameraCapture';
 import AnalysisResult from './AnalysisResult';
 import { aiReady, analyzeFood, describeError, researchFood, researchToFood } from '../lib/ai';
 import { findByName, normalize, searchFoods } from '../lib/foodDb';
-import { formatPoints, qtyPrefix, round1 } from '../lib/points';
+import { formatBites, qtyPrefix, round1 } from '../lib/bites';
 import { newId } from '../lib/storage';
 
 const AUTO_DELAY_MS = 1500;
@@ -35,7 +35,7 @@ function MeasuredFood({ item, onAdd, onDone }) {
     <div className="px-3 pb-3 space-y-3">
       <MeasurePicker per100={item.per100} units={units} onChange={setPortion} />
       <Button className="w-full py-2" disabled={!portion?.grams} onClick={add}>
-        <Plus size={18} /> הוסף לצלחת · {portion ? formatPoints(portion.points) : 0} ביסים
+        <Plus size={18} /> הוסף לצלחת · {portion ? formatBites(portion.points) : 0} ביסים
       </Button>
     </div>
   );
@@ -64,7 +64,7 @@ function FoodRow({ item, onAdd, fav, onRename }) {
             {item.name}
             {item.source === 'agent' && <Sparkles size={12} className="inline mr-1 text-violet-400" />}
           </span>
-          <span className="font-bold text-red-600 mr-2">{formatPoints(item.points)}</span>
+          <span className="font-bold text-red-600 mr-2">{formatBites(item.points)}</span>
         </button>
       </div>
       {open && onRename && (
@@ -107,7 +107,7 @@ function FoodRow({ item, onAdd, fav, onRename }) {
               setQty(1);
             }}
           >
-            <Plus size={18} /> הוסף לצלחת · {formatPoints(item.points * qty)} ביסים
+            <Plus size={18} /> הוסף לצלחת · {formatBites(item.points * qty)} ביסים
           </Button>
         </div>
       )}
@@ -137,7 +137,7 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
 
   const [search, setSearch] = useState('');
   const [customName, setCustomName] = useState('');
-  const [customPoints, setCustomPoints] = useState('');
+  const [customBites, setCustomBites] = useState('');
   const [savedMsg, setSavedMsg] = useState('');
 
   const [image, setImage] = useState(null);
@@ -334,20 +334,20 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
                   step="0.5"
                   placeholder="ביסים"
                   className="w-20 text-center"
-                  value={customPoints}
-                  onChange={(e) => setCustomPoints(e.target.value)}
+                  value={customBites}
+                  onChange={(e) => setCustomBites(e.target.value)}
                 />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   className="py-2"
-                  disabled={!customName || customPoints === ''}
+                  disabled={!customName || customBites === ''}
                   onClick={() => {
-                    const item = { name: customName, points: parseFloat(customPoints) };
+                    const item = { name: customName, points: parseFloat(customBites) };
                     addToPlate({ ...item, qty: 1 });
                     onSaveFood({ ...item, source: 'user' });
                     setSearch('');
-                    setCustomPoints('');
+                    setCustomBites('');
                   }}
                 >
                   <Plus size={18} /> לצלחת ולמאגר
@@ -355,11 +355,11 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
                 <Button
                   variant="secondary"
                   className="py-2"
-                  disabled={!customName || customPoints === ''}
+                  disabled={!customName || customBites === ''}
                   onClick={() => {
-                    onSaveFood({ name: customName, points: parseFloat(customPoints), source: 'user' });
+                    onSaveFood({ name: customName, points: parseFloat(customBites), source: 'user' });
                     setSavedMsg(`"${customName}" נשמר במאגר`);
-                    setCustomPoints('');
+                    setCustomBites('');
                   }}
                 >
                   למאגר בלבד
@@ -433,14 +433,14 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
                 {qtyPrefix(p.qty)}
                 {p.name}
               </span>
-              <span className="font-bold mx-2">{formatPoints(p.points * p.qty)}</span>
+              <span className="font-bold mx-2">{formatBites(p.points * p.qty)}</span>
               <button onClick={() => setPlate(plate.filter((x) => x.id !== p.id))} className="text-red-300 hover:text-red-500 p-1">
                 <Trash2 size={14} />
               </button>
             </div>
           ))}
           <Button onClick={logPlate} className="w-full">
-            רשום ליומן ({meal}) · {formatPoints(total)} ביסים
+            רשום ליומן ({meal}) · {formatBites(total)} ביסים
           </Button>
         </div>
       )}
