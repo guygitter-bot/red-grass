@@ -11,7 +11,7 @@ export default function PortionPicker({ value, onChange, unitLabel = 'מנה' })
             key={p}
             onClick={() => onChange(p)}
             className={`min-w-11 px-2.5 py-1.5 rounded-lg text-sm font-bold ${
-              Math.abs(p - value) < 1e-6 ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-600'
+              Math.abs(p - value) < 1e-6 ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-600'
             }`}
           >
             {formatQty(p)}

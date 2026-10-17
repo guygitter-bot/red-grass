@@ -206,7 +206,7 @@ export default function SettingsView({
           <Button variant="secondary" className="w-full" onClick={test} disabled={!aiReady(ai)}>
             בדוק חיבור
           </Button>
-          {keyStatus && <p className="text-sm text-center text-emerald-600">{keyStatus}</p>}
+          {keyStatus && <p className="text-sm text-center text-red-600">{keyStatus}</p>}
           <ErrorBox>{keyError}</ErrorBox>
         </Card>
       )}
@@ -223,10 +223,10 @@ export default function SettingsView({
         fav={fav}
       />
 
-      <Card className="bg-emerald-50 border-emerald-100 space-y-3">
-        <h3 className="font-bold text-emerald-800">גיבוי ושחזור נתונים</h3>
-        <p className="text-xs text-emerald-600">מומלץ לשמור גיבוי מדי פעם למקרה שתחליף טלפון או שהנתונים יימחקו.</p>
-        <Button onClick={exportData} variant="outline" className="w-full bg-white text-emerald-700 border-emerald-200">
+      <Card className="bg-red-50 border-red-100 space-y-3">
+        <h3 className="font-bold text-red-800">גיבוי ושחזור נתונים</h3>
+        <p className="text-xs text-red-600">מומלץ לשמור גיבוי מדי פעם למקרה שתחליף טלפון או שהנתונים יימחקו.</p>
+        <Button onClick={exportData} variant="outline" className="w-full bg-white text-red-700 border-red-200">
           <Download size={18} /> הורד קובץ גיבוי
         </Button>
         <label className="block">

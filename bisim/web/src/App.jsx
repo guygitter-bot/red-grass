@@ -244,7 +244,7 @@ export default function App() {
   const navButton = (id, Icon, label) => (
     <button
       onClick={() => setView(id)}
-      className={`flex flex-col items-center gap-1 transition-colors ${view === id ? 'text-emerald-600' : 'hover:text-emerald-500'}`}
+      className={`flex flex-col items-center gap-1 transition-colors ${view === id ? 'text-red-600' : 'hover:text-red-500'}`}
     >
       <Icon size={24} strokeWidth={view === id ? 2.5 : 2} />
       {label}
@@ -258,7 +258,12 @@ export default function App() {
           סביבת בדיקות · הנתונים כאן נפרדים מהאפליקציה האמיתית
         </div>
       )}
-      <div className="max-w-md mx-auto p-4 pt-8">
+      <div className="max-w-md mx-auto p-4 pt-6">
+        {/* הלוגו והשם בראש האפליקציה */}
+        <header className="flex items-center gap-2 mb-4">
+          <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" className="w-10 h-10 rounded-xl shadow-sm" />
+          <span className="text-2xl font-black text-red-600 tracking-tight">ביסים</span>
+        </header>
         {iosInvite && (
           <IosInviteCard
             link={inviteLink(iosInvite)}
@@ -269,7 +274,7 @@ export default function App() {
         {notice && (
           <div
             className={`mb-4 rounded-xl p-3 text-sm flex justify-between items-start gap-2 ${
-              notice.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+              notice.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'
             }`}
           >
             <span>{notice.text}</span>
@@ -326,7 +331,7 @@ export default function App() {
           <div className="relative -top-6">
             <button
               onClick={() => setShowAdd(true)}
-              className="bg-emerald-500 text-white p-4 rounded-full shadow-lg shadow-emerald-200 hover:scale-105 transition-transform"
+              className="bg-red-500 text-white p-4 rounded-full shadow-lg shadow-red-200 hover:scale-105 transition-transform"
               aria-label="הוסף אוכל"
             >
               <Plus size={28} />

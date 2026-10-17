@@ -56,7 +56,7 @@ export default function MeasurePicker({ per100, units, onChange }) {
           <span className="w-8 text-center font-bold text-lg">{formatQty(counts[i] || 0)}</span>
           <button
             onClick={() => change(i, 1)}
-            className="w-9 h-9 rounded-lg bg-emerald-500 text-white flex items-center justify-center"
+            className="w-9 h-9 rounded-lg bg-red-500 text-white flex items-center justify-center"
             aria-label={`עוד ${u.name}`}
           >
             <Plus size={16} />
@@ -93,7 +93,7 @@ export default function MeasurePicker({ per100, units, onChange }) {
         />
         ג'
       </label>
-      <p className="text-sm font-bold text-emerald-700">{grams > 0 ? `${label} = ${points} ביסים` : 'בחר/י כמות'}</p>
+      <p className="text-sm font-bold text-red-700">{grams > 0 ? `${label} = ${points} ביסים` : 'בחר/י כמות'}</p>
     </div>
   );
 }

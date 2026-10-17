@@ -15,28 +15,28 @@ export default function Dashboard({
     <div className="space-y-5 pb-20">
       <h2 className="text-2xl font-bold text-slate-700 px-1">{greeting(new Date(), user.name)} 👋</h2>
       <div className="flex justify-between items-center bg-white p-2 rounded-2xl shadow-sm border border-slate-100">
-        <button onClick={() => changeDate(1)} className="p-3 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-xl" aria-label="יום הבא">
+        <button onClick={() => changeDate(1)} className="p-3 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl" aria-label="יום הבא">
           <ChevronRight size={24} />
         </button>
         <button className="text-center flex-1 flex flex-col items-center" onClick={() => setSelectedDate(today())}>
-          <span className={`text-lg font-bold ${isToday ? 'text-emerald-600' : 'text-slate-700'}`}>{formatDisplayDate(selectedDate)}</span>
+          <span className={`text-lg font-bold ${isToday ? 'text-red-600' : 'text-slate-700'}`}>{formatDisplayDate(selectedDate)}</span>
           {!isToday && <span className="text-[10px] text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded-full mt-1">חזור להיום</span>}
         </button>
-        <button onClick={() => changeDate(-1)} className="p-3 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-xl" aria-label="יום קודם">
+        <button onClick={() => changeDate(-1)} className="p-3 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl" aria-label="יום קודם">
           <ChevronLeft size={24} />
         </button>
       </div>
 
-      <Card className="relative overflow-hidden bg-gradient-to-br from-emerald-500 to-teal-600 text-white border-none">
+      <Card className="relative overflow-hidden bg-gradient-to-br from-red-500 to-rose-700 text-white border-none">
         <div className="flex justify-between items-start">
           <div>
-            <p className="text-emerald-100 text-sm mb-1">{pointsLeft >= 0 ? 'נותרו להיום' : 'חריגה היום'}</p>
+            <p className="text-red-100 text-sm mb-1">{pointsLeft >= 0 ? 'נותרו להיום' : 'חריגה היום'}</p>
             <div className="text-5xl font-black tracking-tight">{formatPoints(Math.abs(pointsLeft))}</div>
-            <p className="text-emerald-100 text-sm mt-1">מתוך {user.dailyTarget}</p>
+            <p className="text-red-100 text-sm mt-1">מתוך {user.dailyTarget}</p>
           </div>
           <div className="h-24 w-24 relative flex items-center justify-center">
             <svg className="w-full h-full -rotate-90">
-              <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-emerald-700/30" />
+              <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-red-700/30" />
               <circle
                 cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent"
                 strokeDasharray={251.2} strokeDashoffset={251.2 - (251.2 * progress) / 100}

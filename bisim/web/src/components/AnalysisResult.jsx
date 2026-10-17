@@ -51,7 +51,7 @@ export default function AnalysisResult({ analysis, db, onAdd }) {
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full text-lg font-bold bg-transparent border-b border-dashed border-slate-300 focus:outline-none focus:border-emerald-500"
+          className="w-full text-lg font-bold bg-transparent border-b border-dashed border-slate-300 focus:outline-none focus:border-red-500"
         />
         <p className="text-xs text-slate-400">✎ אפשר לשנות את השם · {CONFIDENCE[analysis.confidence]}</p>
         {analysis.notes_he && <p className="text-xs text-slate-500">{analysis.notes_he}</p>}
@@ -81,7 +81,7 @@ export default function AnalysisResult({ analysis, db, onAdd }) {
               aria-label="גרמים"
             />
             <span className="text-xs text-slate-400">ג'</span>
-            <span className="w-10 text-center font-bold text-emerald-600">{formatPoints(c.points)}</span>
+            <span className="w-10 text-center font-bold text-red-600">{formatPoints(c.points)}</span>
             <button
               onClick={() => setRemoved(removed.map((r, j) => (j === i ? !r : r)))}
               className="text-slate-300 hover:text-red-500 p-1"
@@ -129,7 +129,7 @@ export default function AnalysisResult({ analysis, db, onAdd }) {
               type="button"
               onClick={() => setSaveKey(c.key)}
               className={`flex-1 rounded-xl border px-2 py-2 ${
-                c.key === toSave.key ? 'border-emerald-500 bg-emerald-50 text-emerald-700 font-bold' : 'border-slate-200 text-slate-600'
+                c.key === toSave.key ? 'border-red-500 bg-red-50 text-red-700 font-bold' : 'border-slate-200 text-slate-600'
               }`}
             >
               {c.label} · {formatPoints(c.points)} ביסים

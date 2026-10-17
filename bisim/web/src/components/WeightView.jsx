@@ -19,11 +19,11 @@ export default function WeightView({ user, history, addWeight, removeWeight }) {
           </div>
           <div className="text-left">
             <p className="text-slate-500 text-sm">יעד</p>
-            <div className="text-xl font-bold text-emerald-600">{user.goalWeight}</div>
+            <div className="text-xl font-bold text-red-600">{user.goalWeight}</div>
           </div>
         </div>
         <div className="h-2 bg-slate-100 rounded-full overflow-hidden mb-2">
-          <div className="h-full bg-emerald-500" style={{ width: `${progress}%` }} />
+          <div className="h-full bg-red-500" style={{ width: `${progress}%` }} />
         </div>
         <p className="text-xs text-slate-400 text-center">
           {lost >= 0 ? 'ירדת' : 'עלית'} {Math.abs(lost).toFixed(1)} ק"ג מתוך {Math.abs(goal).toFixed(1)} ק"ג
@@ -57,7 +57,7 @@ export default function WeightView({ user, history, addWeight, removeWeight }) {
                 {new Date(entry.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'short', year: 'numeric' })}
               </span>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-emerald-600">{entry.weight} ק"ג</span>
+                <span className="font-bold text-red-600">{entry.weight} ק"ג</span>
                 {history.length > 1 && (
                   <button onClick={() => removeWeight(idx)} className="text-red-300 hover:text-red-500 p-1" aria-label="מחק">
                     <Trash2 size={14} />
