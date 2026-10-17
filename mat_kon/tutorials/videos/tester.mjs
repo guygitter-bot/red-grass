@@ -56,7 +56,7 @@ await record('tester', async ({ page: pg, say, tap, type, wait, card, uncard, hi
     const p = new URL(route.request().url()).pathname;
     const h = { 'access-control-allow-origin': '*' };
     const user = { name: 'דנה', email: 'dana@example.com', plan: 'free', added: 0, freeLimit: 30 };
-    if (p === '/auth-config') return route.fulfill({ json: { googleClientId: '', openSignup: true, freeLimit: 30, ownerLocked: false }, headers: h });
+    if (p === '/auth-config') return route.fulfill({ json: { googleClientId: 'demo.apps.googleusercontent.com', openSignup: true, freeLimit: 30, ownerLocked: false }, headers: h });
     if (p === '/register') return route.fulfill({ json: { session: 'demo-session', user }, headers: h });
     if (p === '/me') return route.fulfill({ json: { user, categories: [], paymentUrl: '' }, headers: h });
     return route.fallback();
@@ -85,7 +85,10 @@ await record('tester', async ({ page: pg, say, tap, type, wait, card, uncard, hi
   await wait(800);
   await say('באפליקציה לוחצים <b>אין לכם חשבון? הרשמה</b>', 2400, true);
   await tap(pg.getByRole('button', { name: /אין לכם חשבון/ }), { after: 900 });
-  await say('כותבים שם, אימייל וסיסמה של לפחות 8 תווים', 3200, true);
+  await say('הכי פשוט: לוחצים <b>הרשמה עם Google</b> ובוחרים את החשבון שלכם', 1200, true);
+  await point(pg.getByRole('button', { name: /Google/ }), 2600);
+  await hideDot();
+  await say('או כותבים שם, אימייל וסיסמה של לפחות 8 תווים', 3200, true);
   await type(pg.locator('input[autocomplete="name"]'), 'דנה');
   await type(pg.locator('input[type="email"]'), 'dana@example.com');
   await type(pg.locator('input[type="password"]'), 'mypassword1');
