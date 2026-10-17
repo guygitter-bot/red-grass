@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
-  // נתיב יחסי: האתר יושב תחת /points/ ב-GitHub Pages
+  // נתיב יחסי: האתר עובד מכל תיקייה
   base: './',
   plugins: [react(), tailwindcss()],
   server: { fs: { allow: ['..'] } },

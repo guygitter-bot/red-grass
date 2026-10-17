@@ -1,7 +1,7 @@
 // הסוכן שבתוך האפליקציה: Claude עם חיפוש ברשת, ראייה (צילום) וקריאת מרכיבים.
 // המפתח של המשתמש נשמר רק במכשיר שלו, והקריאות יוצאות ישירות מהדפדפן ל-Anthropic.
 import Anthropic from '@anthropic-ai/sdk';
-import { pointsForGrams, round1 } from './points';
+import { bitesForGrams, round1 } from './bites';
 import { findByName } from './foodDb';
 import { authHeaders, proxyConnected } from './proxy';
 
@@ -130,8 +130,8 @@ const WEB_TOOLS = [
   { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 5 },
 ];
 
-const ANALYZE_SYSTEM = `You help an Israeli user count diet points. You break food into components \
-and estimate the weight and nutrition of each. Points are computed by the app, not by you.
+const ANALYZE_SYSTEM = `You help an Israeli user track what they eat (the app scores food in its own unit, "ביסים"). \
+You break food into components and estimate the weight and nutrition of each. The score is computed by the app, not by you.
 
 Rules:
 - Partial amounts matter: "חצי פיתה עם שוקולד" is half a pita plus the chocolate spread on it; \
@@ -229,7 +229,7 @@ function imageBlock(dataUrl) {
 }
 
 function dbContext(db) {
-  return `User database (name = points per unit in the name):\n${db
+  return `User database (name = ביסים per unit in the name):\n${db
     .map((f) => `${f.name} = ${f.points}`)
     .join('\n')}`;
 }
@@ -239,7 +239,7 @@ export function scoreComponents(components, db) {
   return components.map((c) => {
     const dbItem = c.db_name ? findByName(db, c.db_name) : null;
     const points =
-      dbItem && c.db_quantity > 0 ? Number(dbItem.points) * c.db_quantity : pointsForGrams(c.per100, c.grams);
+      dbItem && c.db_quantity > 0 ? Number(dbItem.points) * c.db_quantity : bitesForGrams(c.per100, c.grams);
     return { ...c, dbItem, points: round1(points) };
   });
 }
@@ -271,7 +271,7 @@ export async function researchFood(settings, query) {
     web: true,
     effort: 'medium',
   });
-  return { ...result, points: round1(pointsForGrams(result.per100, result.serving_grams)) };
+  return { ...result, points: round1(bitesForGrams(result.per100, result.serving_grams)) };
 }
 
 // בלי סוגריים ורווחים כפולים, כדי שהשם ייראה כמו "במבה נוגט אסם (שקית 60 ג')".

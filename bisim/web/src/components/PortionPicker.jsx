@@ -1,4 +1,4 @@
-import { PORTION_PRESETS, formatQty } from '../lib/points';
+import { PORTION_PRESETS, formatQty } from '../lib/bites';
 
 // בחירת כמות: חצי, רבע, 2 יחידות... או מספר חופשי.
 export default function PortionPicker({ value, onChange, unitLabel = 'מנה' }) {

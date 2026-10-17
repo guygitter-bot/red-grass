@@ -1,5 +1,5 @@
 // השרת המשותף שמחזיק את מפתח ה-API. הכתובת שלו נכתבת אוטומטית ל-public/proxy.json
-// כשהשרת עולה (.github/workflows/points-proxy.yml).
+// כשהשרת עולה (.github/workflows/bisim.yml).
 
 export async function loadProxyUrl() {
   if (import.meta.env.VITE_PROXY_URL) return import.meta.env.VITE_PROXY_URL;

@@ -6,7 +6,7 @@ import MeasurePicker from './MeasurePicker';
 import { plateItem, unitsFor } from '../lib/measures';
 import { aiReady, describeError, readNutritionLabel } from '../lib/ai';
 import { fileToDataUrl } from '../lib/image';
-import { formatPoints, pointsFromNutrition, round1 } from '../lib/points';
+import { formatBites, bitesFromNutrition, round1 } from '../lib/bites';
 
 // קלוריות לא חובה: בלי קלוריות הן מחושבות מהחלבון, הפחמימות והשומן
 const FIELDS = [
@@ -32,7 +32,7 @@ export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHom
 
   const nums = Object.fromEntries(FIELDS.map(([k]) => [k, parseFloat(values[k]) || 0]));
   const filled = FIELDS.some(([k]) => k !== 'kcal' && values[k] !== '');
-  const per100Points = round1(pointsFromNutrition(nums));
+  const per100Points = round1(bitesFromNutrition(nums));
   // מידות מהתווית (כף, כפית...) או הערכה כללית; מנה מהתווית אם הודפסה
   const units = useMemo(() => unitsFor({ units: labelUnits, grams: servingGrams }), [labelUnits, servingGrams]);
 
@@ -156,7 +156,7 @@ export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHom
         <Card className="bg-red-50 border-red-100 space-y-4">
           <div className="text-center">
             <p className="text-sm text-red-700 font-bold">ביסים ל-100 גרם</p>
-            <div className="text-5xl font-black text-red-600">{formatPoints(per100Points)}</div>
+            <div className="text-5xl font-black text-red-600">{formatBites(per100Points)}</div>
             <p className="text-xs text-slate-500 mt-1">ביס = 35 קלוריות, עם הנחה על חלבון וסיבים (משביעים יותר)</p>
           </div>
           <div className="border-t border-red-200 pt-4 space-y-2">
@@ -171,7 +171,7 @@ export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHom
             </div>
             <MealPicker value={meal} onChange={setMeal} />
             <Button onClick={() => save(true)} disabled={!foodName || !portion?.grams} className="w-full">
-              הוסף ליומן · {portion ? formatPoints(portion.points) : 0} ביסים (וישמור במאגר)
+              הוסף ליומן · {portion ? formatBites(portion.points) : 0} ביסים (וישמור במאגר)
             </Button>
             <label className="flex items-center gap-2 text-sm text-slate-600">
               <input type="checkbox" checked={favorite} onChange={(e) => setFavorite(e.target.checked)} />

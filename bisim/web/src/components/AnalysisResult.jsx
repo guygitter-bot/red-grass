@@ -4,7 +4,7 @@ import { Button } from './ui';
 import PortionPicker from './PortionPicker';
 import { scoreComponents } from '../lib/ai';
 import { saveChoices } from '../lib/measures';
-import { formatPoints, pointsForGrams, round1 } from '../lib/points';
+import { formatBites, bitesForGrams, round1 } from '../lib/bites';
 
 const CONFIDENCE = { high: 'ביטחון גבוה', medium: 'ביטחון בינוני', low: 'ביטחון נמוך - כדאי לבדוק' };
 
@@ -23,7 +23,7 @@ export default function AnalysisResult({ analysis, db, onAdd }) {
   const components = initial.map((c, i) => {
     const g = Number(grams[i]) || 0;
     const scale = c.grams > 0 ? g / c.grams : 0;
-    const points = c.dbItem ? c.points * scale : pointsForGrams(c.per100, g);
+    const points = c.dbItem ? c.points * scale : bitesForGrams(c.per100, g);
     return { ...c, grams: g, points: round1(points), removed: removed[i] };
   });
   const total = components.filter((c) => !c.removed).reduce((s, c) => s + c.points, 0);
@@ -38,7 +38,7 @@ export default function AnalysisResult({ analysis, db, onAdd }) {
         name: servings > 1 ? `${name} (מנה)` : name,
         points: perServing,
         qty: portion,
-        parts: components.filter((c) => !c.removed).map((c) => `${c.amount} (${formatPoints(c.points)})`),
+        parts: components.filter((c) => !c.removed).map((c) => `${c.amount} (${formatBites(c.points)})`),
       },
       saveToDb,
       favorite,
@@ -81,7 +81,7 @@ export default function AnalysisResult({ analysis, db, onAdd }) {
               aria-label="גרמים"
             />
             <span className="text-xs text-slate-400">ג'</span>
-            <span className="w-10 text-center font-bold text-red-600">{formatPoints(c.points)}</span>
+            <span className="w-10 text-center font-bold text-red-600">{formatBites(c.points)}</span>
             <button
               onClick={() => setRemoved(removed.map((r, j) => (j === i ? !r : r)))}
               className="text-slate-300 hover:text-red-500 p-1"
@@ -95,7 +95,7 @@ export default function AnalysisResult({ analysis, db, onAdd }) {
 
       <div className="flex items-center justify-between bg-slate-50 rounded-xl p-3 text-sm">
         <span>
-          סה"כ <b>{formatPoints(total)}</b> ביסים
+          סה"כ <b>{formatBites(total)}</b> ביסים
         </span>
         <label className="flex items-center gap-2">
           מספר מנות:
@@ -112,7 +112,7 @@ export default function AnalysisResult({ analysis, db, onAdd }) {
 
       <div className="space-y-2">
         <p className="text-sm font-bold text-slate-700">
-          כמה אכלת? <span className="font-normal text-slate-500">(מנה = {formatPoints(perServing)} ביסים)</span>
+          כמה אכלת? <span className="font-normal text-slate-500">(מנה = {formatBites(perServing)} ביסים)</span>
         </p>
         <PortionPicker value={portion} onChange={setPortion} unitLabel="מנה" />
       </div>
@@ -132,7 +132,7 @@ export default function AnalysisResult({ analysis, db, onAdd }) {
                 c.key === toSave.key ? 'border-red-500 bg-red-50 text-red-700 font-bold' : 'border-slate-200 text-slate-600'
               }`}
             >
-              {c.label} · {formatPoints(c.points)} ביסים
+              {c.label} · {formatBites(c.points)} ביסים
             </button>
           ))}
         </div>
@@ -143,7 +143,7 @@ export default function AnalysisResult({ analysis, db, onAdd }) {
       </label>
 
       <Button onClick={add} className="w-full" disabled={!name}>
-        <Plus size={18} /> הוסף לצלחת · {formatPoints(perServing * portion)} ביסים
+        <Plus size={18} /> הוסף לצלחת · {formatBites(perServing * portion)} ביסים
       </Button>
     </div>
   );

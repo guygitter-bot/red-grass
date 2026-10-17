@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Check, Pencil, Plus, Sparkles, Star, Trash2, X } from 'lucide-react';
 import { Button, Card, Input } from './ui';
 import { normalize, searchFoods } from '../lib/foodDb';
-import { formatPoints } from '../lib/points';
+import { formatBites } from '../lib/bites';
 
 const FILTERS = [
   { id: 'all', label: 'הכול' },
@@ -77,7 +77,7 @@ function FoodLine({ food, canDelete, onSave, onRename, onDelete, fav }) {
       )}
       <span className="flex-1 min-w-0 truncate">{food.name}</span>
       <Badge food={food} />
-      <span className="font-bold text-red-600 w-10 text-center">{formatPoints(food.points)}</span>
+      <span className="font-bold text-red-600 w-10 text-center">{formatBites(food.points)}</span>
       <button onClick={() => setEditing(true)} className="text-slate-300 hover:text-red-600 p-1" aria-label="ערוך">
         <Pencil size={14} />
       </button>

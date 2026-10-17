@@ -1,5 +1,5 @@
 // מידות ביתיות (כף, כפית, כוס, יחידה...) והמרה לגרמים ולביסים.
-import { formatQty, pointsForGrams, round1 } from './points';
+import { formatQty, bitesForGrams, round1 } from './bites';
 
 // הערכה כללית, רק כשאין לסוכן מידע על המאכל הספציפי. המשקל משתנה מאוד בין מאכלים
 // (כף פרמזן מגורד ~5 ג', כף שמן ~13 ג', כף דבש ~21 ג'), לכן אפשר תמיד לתקן את הגרמים.
@@ -24,8 +24,8 @@ export function unitsFor(food) {
   return [GRAM_UNIT, ...(list.length ? list : GENERIC_UNITS)];
 }
 
-export function portionPoints(per100, grams) {
-  return round1(pointsForGrams(per100, grams));
+export function portionBites(per100, grams) {
+  return round1(bitesForGrams(per100, grams));
 }
 
 // פריט לצלחת מתוך מנה שנבחרה: מידה אחת -> "פרמזן (כפית)" × 2; שילוב או גרמים -> פריט אחד עם התיאור המלא.
@@ -48,12 +48,12 @@ export function portionLabel(unit, count, grams) {
 // כשאין הבדל ביניהם – אפשרות אחת, בשם המקורי.
 export function saveChoices(name, total, servings, portion) {
   const count = servings > 0 ? servings : 1;
-  const allPoints = round1(total);
-  if (count === 1 && portion === 1) return [{ key: 'all', label: 'הכול', name, points: allPoints }];
+  const allBites = round1(total);
+  if (count === 1 && portion === 1) return [{ key: 'all', label: 'הכול', name, points: allBites }];
   const unit = count > 1 ? 'מנה' : 'מהכול';
   const amount = portion === 1 ? unit : `${formatQty(portion)} ${unit}`;
   return [
     { key: 'chosen', label: `רק ${amount}`, name: `${name} (${amount})`, points: round1((total / count) * portion) },
-    { key: 'all', label: 'הכול', name: `${name} (הכול)`, points: allPoints },
+    { key: 'all', label: 'הכול', name: `${name} (הכול)`, points: allBites },
   ];
 }
