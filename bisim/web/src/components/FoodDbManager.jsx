@@ -22,7 +22,7 @@ function Badge({ food }) {
         <Sparkles size={10} /> סוכן
       </span>
     );
-  if (isManual(food)) return <span className="text-[10px] bg-emerald-100 text-emerald-700 rounded px-1.5 py-0.5">ידני</span>;
+  if (isManual(food)) return <span className="text-[10px] bg-red-100 text-red-700 rounded px-1.5 py-0.5">ידני</span>;
   return null;
 }
 
@@ -44,7 +44,7 @@ function FoodLine({ food, canDelete, onSave, onRename, onDelete, fav }) {
           className="w-16 py-1.5 text-sm text-center"
         />
         <button
-          className="p-2 text-emerald-600 disabled:opacity-30"
+          className="p-2 text-red-600 disabled:opacity-30"
           disabled={!name.trim() || points === ''}
           onClick={() => {
             // מספר שתוקן ידנית לא מחושב מחדש מהערכים התזונתיים
@@ -77,8 +77,8 @@ function FoodLine({ food, canDelete, onSave, onRename, onDelete, fav }) {
       )}
       <span className="flex-1 min-w-0 truncate">{food.name}</span>
       <Badge food={food} />
-      <span className="font-bold text-emerald-600 w-10 text-center">{formatPoints(food.points)}</span>
-      <button onClick={() => setEditing(true)} className="text-slate-300 hover:text-emerald-600 p-1" aria-label="ערוך">
+      <span className="font-bold text-red-600 w-10 text-center">{formatPoints(food.points)}</span>
+      <button onClick={() => setEditing(true)} className="text-slate-300 hover:text-red-600 p-1" aria-label="ערוך">
         <Pencil size={14} />
       </button>
       {canDelete && (
@@ -145,7 +145,7 @@ export default function FoodDbManager({ foodDb, userFoods, remoteFoods = [], sha
       <Button className="w-full py-2" disabled={!name.trim() || points === ''} onClick={add}>
         <Plus size={18} /> הוסף למאגר
       </Button>
-      {msg && <p className="text-xs text-center text-emerald-600">{msg}</p>}
+      {msg && <p className="text-xs text-center text-red-600">{msg}</p>}
 
       <div className="pt-2 space-y-2">
         <Input placeholder="חיפוש במאגר..." value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -155,7 +155,7 @@ export default function FoodDbManager({ foodDb, userFoods, remoteFoods = [], sha
               key={f.id}
               onClick={() => setFilter(f.id)}
               className={`px-3 py-1 rounded-lg text-xs font-medium ${
-                filter === f.id ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-600'
+                filter === f.id ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-600'
               }`}
             >
               {f.label}

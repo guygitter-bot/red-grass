@@ -69,7 +69,7 @@ export default function InviteManager({ settings }) {
           צור ושלח
         </Button>
       </div>
-      {status && <p className="text-xs text-emerald-700 break-all">{status}</p>}
+      {status && <p className="text-xs text-red-700 break-all">{status}</p>}
       <ErrorBox>{error}</ErrorBox>
 
       <p className="text-sm font-bold text-slate-700 flex items-center gap-1 pt-2">

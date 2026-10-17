@@ -48,7 +48,7 @@ function FoodRow({ item, onAdd, fav, onRename }) {
   const [newName, setNewName] = useState(item.name);
   const isFav = fav?.has(item.name);
   return (
-    <div className="border border-slate-100 rounded-xl hover:border-emerald-200">
+    <div className="border border-slate-100 rounded-xl hover:border-red-200">
       <div className="flex items-center">
         {fav && (
           <button
@@ -64,7 +64,7 @@ function FoodRow({ item, onAdd, fav, onRename }) {
             {item.name}
             {item.source === 'agent' && <Sparkles size={12} className="inline mr-1 text-violet-400" />}
           </span>
-          <span className="font-bold text-emerald-600 mr-2">{formatPoints(item.points)}</span>
+          <span className="font-bold text-red-600 mr-2">{formatPoints(item.points)}</span>
         </button>
       </div>
       {open && onRename && (
@@ -73,7 +73,7 @@ function FoodRow({ item, onAdd, fav, onRename }) {
             <div className="flex items-center gap-1">
               <Input value={newName} onChange={(e) => setNewName(e.target.value)} className="py-1.5 text-sm" autoFocus />
               <button
-                className="p-2 text-emerald-600 disabled:opacity-30"
+                className="p-2 text-red-600 disabled:opacity-30"
                 disabled={!newName.trim()}
                 onClick={() => {
                   onRename(item, newName);
@@ -365,7 +365,7 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
                   למאגר בלבד
                 </Button>
               </div>
-              {savedMsg && <p className="text-xs text-center text-emerald-600">{savedMsg}</p>}
+              {savedMsg && <p className="text-xs text-center text-red-600">{savedMsg}</p>}
             </div>
           )}
         </div>
@@ -416,7 +416,7 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
               placeholder={
                 'מה אכלת? למשל:\nחצי פיתה עם שוקולד\n2 משולשי פיצה\n\nאו רשימת מרכיבים של מתכון:\n2 כוסות קמח, 3 ביצים, 100 גרם חמאה... יוצא 12 עוגיות'
               }
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-red-500"
             />
             <ErrorBox>{error}</ErrorBox>
             <Button variant="ai" className="w-full" disabled={!text.trim()} onClick={() => runAnalysis({ text })}>

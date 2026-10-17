@@ -7,10 +7,10 @@ export const Card = ({ children, className = '' }) => (
 );
 
 const VARIANTS = {
-  primary: 'bg-emerald-500 text-white shadow-lg shadow-emerald-200 hover:bg-emerald-600',
+  primary: 'bg-red-500 text-white shadow-lg shadow-red-200 hover:bg-red-600',
   secondary: 'bg-slate-100 text-slate-600 hover:bg-slate-200',
   danger: 'bg-red-50 text-red-500 hover:bg-red-100',
-  outline: 'border-2 border-slate-200 text-slate-600 hover:border-emerald-500 hover:text-emerald-500',
+  outline: 'border-2 border-slate-200 text-slate-600 hover:border-red-500 hover:text-red-500',
   ai: 'bg-violet-500 text-white shadow-lg shadow-violet-200 hover:bg-violet-600',
 };
 
@@ -25,7 +25,7 @@ export const Button = ({ children, variant = 'primary', className = '', ...props
 
 export const Input = ({ className = '', ...props }) => (
   <input
-    className={`w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${className}`}
+    className={`w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 focus:outline-none focus:ring-2 focus:ring-red-500 ${className}`}
     {...props}
   />
 );
@@ -50,7 +50,7 @@ export function MealPicker({ value, onChange }) {
           key={m}
           onClick={() => onChange(m)}
           className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap ${
-            value === m ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-600'
+            value === m ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-600'
           }`}
         >
           {m}
@@ -67,7 +67,7 @@ export function Sheet({ title, subtitle, onClose, children }) {
         <div className="flex justify-between items-center p-5 pb-3 border-b border-slate-100">
           <div>
             <h2 className="text-xl font-bold">{title}</h2>
-            {subtitle && <p className="text-xs text-emerald-600 font-medium">{subtitle}</p>}
+            {subtitle && <p className="text-xs text-red-600 font-medium">{subtitle}</p>}
           </div>
           <button onClick={onClose} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200" aria-label="סגור">
             <X size={18} />
@@ -87,7 +87,7 @@ export function Tabs({ tabs, value, onChange }) {
           key={id}
           onClick={() => onChange(id)}
           className={`py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-1.5 ${
-            value === id ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500'
+            value === id ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500'
           }`}
         >
           {Icon && <Icon size={16} />}

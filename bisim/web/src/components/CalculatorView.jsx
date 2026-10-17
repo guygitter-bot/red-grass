@@ -153,17 +153,17 @@ export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHom
       </Card>
 
       {filled && (
-        <Card className="bg-emerald-50 border-emerald-100 space-y-4">
+        <Card className="bg-red-50 border-red-100 space-y-4">
           <div className="text-center">
-            <p className="text-sm text-emerald-700 font-bold">ביסים ל-100 גרם</p>
-            <div className="text-5xl font-black text-emerald-600">{formatPoints(per100Points)}</div>
+            <p className="text-sm text-red-700 font-bold">ביסים ל-100 גרם</p>
+            <div className="text-5xl font-black text-red-600">{formatPoints(per100Points)}</div>
             <p className="text-xs text-slate-500 mt-1">ביס = 35 קלוריות, עם הנחה על חלבון וסיבים (משביעים יותר)</p>
           </div>
-          <div className="border-t border-emerald-200 pt-4 space-y-2">
+          <div className="border-t border-red-200 pt-4 space-y-2">
             <p className="text-sm font-bold text-slate-700">כמה שמת?</p>
             <MeasurePicker per100={nums} units={units} onChange={setPortion} />
           </div>
-          <div className="border-t border-emerald-200 pt-4 space-y-3">
+          <div className="border-t border-red-200 pt-4 space-y-3">
             <div className="space-y-1">
               <Label>שם המוצר</Label>
               <Input value={foodName} onChange={(e) => setFoodName(e.target.value)} placeholder="שם המאכל (למשל: יוגורט מולר)..." className="bg-white" />
@@ -180,7 +180,7 @@ export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHom
             <Button onClick={() => save(false)} disabled={!foodName} variant="secondary" className="w-full bg-white">
               שמור במאגר בלבד
             </Button>
-            {message && <p className="text-center text-sm text-emerald-700">{message}</p>}
+            {message && <p className="text-center text-sm text-red-700">{message}</p>}
           </div>
         </Card>
       )}
