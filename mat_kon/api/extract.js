@@ -356,6 +356,9 @@ Call submit_results.`;
 
 export async function searchRecipes(client, query) {
   const messages = [{ role: 'user', content: `Find recipes for: ${query}` }];
+  // חיפוש ברשת שנכשל לא זורק שגיאה: מגיע כבלוק תוצאה שהתוכן שלו אובייקט שגיאה (ולא רשימה)
+  const searchErrors = [];
+  let searchOk = false;
   for (let step = 0; step < 6; step++) {
     const response = await client.beta.messages.create({
       model: MODEL,
@@ -368,12 +371,22 @@ export async function searchRecipes(client, query) {
       messages,
     });
     if (response.stop_reason === 'refusal') throw new Error('הבקשה נדחתה על ידי המודל.');
+    for (const b of response.content) {
+      if (b.type !== 'web_search_tool_result') continue;
+      if (Array.isArray(b.content)) searchOk = true;
+      else searchErrors.push(b.content?.error_code || 'unknown');
+    }
     const submit = response.content.find((b) => b.type === 'tool_use' && b.name === SEARCH_TOOL.name);
     if (submit) {
-      return submit.input.results
+      const results = submit.input.results
         .filter((r) => /^https?:\/\//.test(r.url))
         .slice(0, 8)
         .map((r) => ({ title: clean(r.title), url: r.url.trim(), site: clean(r.site), description: clean(r.description) }));
+      // אין תוצאות כי החיפוש ברשת עצמו נכשל (למשל חיפוש ברשת כבוי בחשבון Anthropic) – שגיאה, לא "לא נמצא"
+      if (!results.length && searchErrors.length && !searchOk) {
+        throw new Error(`החיפוש ברשת לא זמין כרגע (${[...new Set(searchErrors)].join(', ')}). נסו שוב מאוחר יותר.`);
+      }
+      return results;
     }
     messages.push({ role: 'assistant', content: response.content });
     if (response.stop_reason === 'pause_turn') continue;

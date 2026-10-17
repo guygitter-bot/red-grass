@@ -413,6 +413,16 @@ test('web search by dish name returns recipe links', async () => {
   assert.deepEqual(res.results.map((r) => r.url), ['https://www.10dakot.co.il/recipe/x']);
   assert.ok(apiCalls[0].tools.some((t) => t.name === 'web_search'));
   assert.equal((await call('POST', '/search', { q: 'א' })).status, 400);
+
+  // החיפוש ברשת עצמו נכשל (מגיע כבלוק שגיאה, בלי חריגה): שגיאה ברורה ונרשמת, לא "לא נמצאו מתכונים"
+  reply = () => ({ stop_reason: 'tool_use', content: [
+    { type: 'server_tool_use', id: 's1', name: 'web_search', input: { query: 'x' } },
+    { type: 'web_search_tool_result', tool_use_id: 's1', content: { type: 'web_search_tool_result_error', error_code: 'unavailable' } },
+    { type: 'tool_use', name: 'submit_results', input: { results: [] } },
+  ] });
+  const failed = await call('POST', '/search', { q: 'פסטה בולונז' });
+  assert.equal(failed.status, 502);
+  assert.match((await failed.json()).error, /unavailable/);
 });
 
 test('backup restore: valid recipes saved as they were, bad ones skipped, same source updates', async () => {
