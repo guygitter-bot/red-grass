@@ -222,7 +222,7 @@
 אותה אפליקציה עטופה ב-Capacitor (`app.matkon`). לאנדרואיד: `mat-kon-android.yml` בונה בכל שינוי APK לבדיקה, ו-AAB חתום
 ל-Google Play (רק מ-main). מפתח ההעלאה (המאגר ציבורי!) לא נמצא בקוד ולא ב-Artifacts: `mat-kon-android-key.yml` (הפעלה ידנית,
 פעם אחת) יוצר אותו ושומר בדלי הפרטי `mat-kon-backups/signing/upload.jks` (alias `upload`), מוגן בסוד `ANDROID_KEYSTORE_PASSWORD`,
-ומדפיס רק SHA-1/SHA-256. הניקוי של הגיבוי נוגע רק ב-`daily/`. **לא למחוק את המפתח** – בלעדיו צריך לבקש מגוגל איפוס מפתח העלאה. באפליקציה: אין service worker, סרטוני ההדרכה נטענים מהאתר, וכפתור Google של הדפדפן מוסתר (גוגל חוסמת
+ומדפיס רק SHA-1/SHA-256. הניקוי של הגיבוי נוגע רק ב-`daily/`. **לא למחוק את המפתח** – בלעדיו צריך לבקש מגוגל איפוס מפתח העלאה. כפתור "אחורה" של אנדרואיד חוזר למסך הקודם באפליקציה (התוסף `@capacitor/app`, לפי היסטוריית הניווט), ויוצא רק מהמסך הראשון. באפליקציה: אין service worker, סרטוני ההדרכה נטענים מהאתר, וכפתור Google של הדפדפן מוסתר (גוגל חוסמת
 WebView) עד שתהיה כניסה מהטלפון. השרת מקבל גם `https://localhost` (המקור של האפליקציה באנדרואיד). אייקון ומסך פתיחה:
 `mobile/assets` → `npx @capacitor/assets generate --android`.
 - **כניסה עם Google באפליקציה:** `@capgo/capacitor-social-login` (Credential Manager) עם ה-**Web** client ID (אותו `GOOGLE_CLIENT_ID`),
