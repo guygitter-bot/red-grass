@@ -101,22 +101,24 @@ def issue_comment(report: dict) -> str:
     food = report.get("food") or {}
     if report["status"] == "added":
         lines = [
-            f'✅ נוסף למאגר: **{food["name"]}** = **{food["points"]} ביסים**',
+            f'✅ נוסף למאגר: **{food["name"]}** = **{food["points"]} נקודות**',
             f'({food["grams"]} גרם; ל-100 גרם: חלבון {food["per100"]["protein"]}, פחמימות {food["per100"]["carbs"]}, '
             f'שומן {food["per100"]["fat"]}, סיבים {food["per100"]["fiber"]})',
         ]
+        if food.get("published_points") is not None:
+            lines.append(f'ערך שפורסם ברשת: {food["published_points"]} נקודות')
         lines += [f"- {s}" for s in food.get("sources", [])]
         lines.append("\nהאפליקציה תתעדכן בעוד כמה דקות.")
         return "\n".join(lines)
     if report["status"] == "exists":
-        return f'ℹ️ כבר קיים במאגר: **{food["name"]}** = {food["points"]} ביסים'
+        return f'ℹ️ כבר קיים במאגר: **{food["name"]}** = {food["points"]} נקודות'
     if report["status"] == "not_found":
         return f'🤷 הסוכן לא מצא מידע אמין. {report.get("notes", "")}\nאפשר לפתוח בקשה חדשה עם שם מדויק יותר (כולל יצרן).'
     return f'⚠️ שגיאה בחיפוש: {report.get("error", "")}\nאנסה שוב בהרצה הבאה.'
 
 
 def summary_markdown(reports: list[dict], discovered: list[dict]) -> str:
-    rows = ["| בקשה | תוצאה | ביסים |", "|---|---|---|"]
+    rows = ["| בקשה | תוצאה | נקודות |", "|---|---|---|"]
     for r in reports:
         food = r.get("food") or {}
         rows.append(f'| {r["name"]} | {r["status"]} {food.get("name", "")} | {food.get("points", "")} |')

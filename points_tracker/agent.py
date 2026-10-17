@@ -100,6 +100,10 @@ FOOD_TOOL = {
                 "description": 'Household measures for THIS food with grams, e.g. [{"name":"כף","grams":5}]',
                 "items": _obj({"name": {"type": "string"}, "grams": {"type": "number"}}),
             },
+            "published_points": {
+                "type": ["number", "null"],
+                "description": "Points per serving if an Israeli points-diet source publishes one, else null",
+            },
             "sources": {"type": "array", "items": {"type": "string"}},
             "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
             "notes_he": {"type": "string"},
@@ -126,8 +130,8 @@ DISCOVER_TOOL = {
     ),
 }
 
-RESEARCH_SYSTEM = """You research nutrition data for an Israeli food-tracking app. The app computes \
-its own score from kcal, protein, carbs, fat and fiber per 100 g, so those numbers must be copied from a real \
+RESEARCH_SYSTEM = """You research nutrition data for an Israeli diet-points app. The app computes \
+points from protein, carbs, fat and fiber per 100 g, so those numbers must be copied from a real \
 nutrition table, not estimated.
 
 How to research:
@@ -141,6 +145,7 @@ page with web_fetch to read the table itself; a search snippet is not enough.
 barcode, foodsdictionary.co.il, open food facts (il.openfoodfacts.org).
 3. Generic foods and dishes: the Ministry of Health Tzameret data (through foodsdictionary.co.il), \
 then USDA FoodData Central. Restaurant / chain items: the chain's published nutrition values.
+4. Israeli points-diet sites and forums only for published_points, never for per100.
 
 News articles, Wikipedia and blogs are not nutrition sources. Put only the pages that contain the \
 numbers you used in sources.
@@ -161,11 +166,11 @@ A tablespoon of grated cheese is ~5 g, of oil ~13 g, of honey ~21 g; a teaspoon 
 
 Call submit_food. Do not answer in plain text."""
 
-DISCOVER_PROMPT = """Today is {today}. An Israeli food-tracking app has the food database below. \
+DISCOVER_PROMPT = """Today is {today}. An Israeli diet-points app has the food database below. \
 Scan Israeli sources to find up to {count} foods that Israelis commonly eat and that are MISSING \
 from it: new and popular supermarket products (shufersal.co.il, rami-levy.co.il, manufacturers' \
 new-product pages), popular dishes and street food, restaurant / café chain items, and foods that \
-people ask about in Israeli food and nutrition forums and groups.
+people ask about in Israeli points-diet sites, forums and groups.
 
 Rules:
 - Each name must be specific enough to look up one nutrition table (brand + product for packaged \
@@ -240,6 +245,8 @@ def to_db_entry(result: dict) -> dict | None:
     units = [u for u in result.get("units") or [] if u.get("name") and (u.get("grams") or 0) > 0]
     if units:
         entry["units"] = units[:8]
+    if result.get("published_points") is not None:
+        entry["published_points"] = result["published_points"]
     if result.get("sources"):
         entry["sources"] = result["sources"][:5]
     return entry

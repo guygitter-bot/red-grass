@@ -95,7 +95,7 @@ export default function AnalysisResult({ analysis, db, onAdd }) {
 
       <div className="flex items-center justify-between bg-slate-50 rounded-xl p-3 text-sm">
         <span>
-          סה"כ <b>{formatPoints(total)}</b> ביסים
+          סה"כ <b>{formatPoints(total)}</b> נק'
         </span>
         <label className="flex items-center gap-2">
           מספר מנות:
@@ -112,7 +112,7 @@ export default function AnalysisResult({ analysis, db, onAdd }) {
 
       <div className="space-y-2">
         <p className="text-sm font-bold text-slate-700">
-          כמה אכלת? <span className="font-normal text-slate-500">(מנה = {formatPoints(perServing)} ביסים)</span>
+          כמה אכלת? <span className="font-normal text-slate-500">(מנה = {formatPoints(perServing)} נק')</span>
         </p>
         <PortionPicker value={portion} onChange={setPortion} unitLabel="מנה" />
       </div>
@@ -132,7 +132,7 @@ export default function AnalysisResult({ analysis, db, onAdd }) {
                 c.key === toSave.key ? 'border-emerald-500 bg-emerald-50 text-emerald-700 font-bold' : 'border-slate-200 text-slate-600'
               }`}
             >
-              {c.label} · {formatPoints(c.points)} ביסים
+              {c.label} · {formatPoints(c.points)} נק'
             </button>
           ))}
         </div>
@@ -143,7 +143,7 @@ export default function AnalysisResult({ analysis, db, onAdd }) {
       </label>
 
       <Button onClick={add} className="w-full" disabled={!name}>
-        <Plus size={18} /> הוסף לצלחת · {formatPoints(perServing * portion)} ביסים
+        <Plus size={18} /> הוסף לצלחת · {formatPoints(perServing * portion)} נק'
       </Button>
     </div>
   );

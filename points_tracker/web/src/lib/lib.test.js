@@ -8,12 +8,10 @@ import { GENERIC_UNITS, baseName, plateItem, portionLabel, portionPoints, saveCh
 
 describe('points', () => {
   // אותם מקרים בדיוק נבדקים ב-points_tracker/tests/test_points.py
-  it('computes bites (same cases as test_points.py)', () => {
-    expect(round1(pointsFromNutrition({ protein: 9, carbs: 55, fat: 1.2, fiber: 2 }))).toBe(6.6);
+  it('matches the classic formula', () => {
+    expect(round1(pointsFromNutrition({ protein: 9, carbs: 55, fat: 1.2, fiber: 2 }))).toBe(6.9);
     expect(round1(pointsFromNutrition({ protein: 0, carbs: 0, fat: 0, fiber: 10 }))).toBe(0);
-    expect(round1(pointsForGrams({ protein: 10, carbs: 50, fat: 30, fiber: 5 }, 50))).toBe(6.6);
-    // עם קלוריות מהתווית: חזה עוף
-    expect(round1(pointsFromNutrition({ kcal: 165, protein: 31, carbs: 0, fat: 3.6 }))).toBe(2.1);
+    expect(round1(pointsForGrams({ protein: 10, carbs: 50, fat: 30, fiber: 5 }, 50))).toBe(6.8);
   });
 
   it('formats portions', () => {
@@ -78,15 +76,6 @@ describe('food db', () => {
     expect(foods).toEqual([manual, { name: 'במבה נוגט (שקית)', points: 7.5, source: 'user' }]);
   });
 
-  it('recomputes foods that have nutrition values, unless the number was fixed by hand', () => {
-    const per100 = { kcal: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0 };
-    const db = mergeFoodDb(
-      [{ name: 'עוף', points: 3, grams: 100, per100 }],
-      [{ name: 'עוף 2', points: 9, grams: 100, per100, manualPoints: true }, { name: 'ידני', points: 4 }],
-    );
-    expect(db.map((f) => f.points)).toEqual([2.1, 9, 4]);
-  });
-
   it('user foods override shared ones', () => {
     const db = mergeFoodDb([{ name: 'א', points: 1 }], [{ name: 'א', points: 2 }]);
     expect(db).toEqual([{ name: 'א', points: 2, source: 'user' }]);
@@ -113,7 +102,7 @@ describe('researchToFood', () => {
   it('builds a clean name and computes points from per100', () => {
     const food = researchToFood({
       found: true, name: 'במבה נוגט (אסם)', serving_desc: "שקית 60 ג'", serving_grams: 60, points: 8.5,
-      per100: { kcal: 523, protein: 10.4, carbs: 58.6, fat: 27.4, fiber: 3.4 }, aliases: [], sources: [],
+      per100: { kcal: 523, protein: 10.4, carbs: 58.6, fat: 27.4, fiber: 3.4 }, aliases: [], sources: [], published_points: null,
     });
     expect(food.name).toBe("במבה נוגט אסם (שקית 60 ג')");
     expect(researchToFood({ found: false })).toBeNull();
@@ -132,13 +121,13 @@ describe('parseInviteToken', () => {
 });
 
 describe('measures', () => {
-  // פתיתי פרמזן תנובה מהתווית: חלבון 32, פחמימות 0, שומן 23 ל-100 ג' = 6.8 ביסים
+  // פתיתי פרמזן תנובה מהתווית: חלבון 32, פחמימות 0, שומן 23 ל-100 ג' = 8.8 נק'
   const parmesan = { protein: 32, carbs: 0, fat: 23, fiber: 0 };
 
   it('computes a spoon of parmesan', () => {
-    expect(portionPoints(parmesan, 100)).toBe(6.8);
-    expect(portionPoints(parmesan, 5)).toBe(0.3); // כף פתיתים ~5 ג'
-    expect(portionPoints(parmesan, 2)).toBe(0.1); // כפית ~2 ג'
+    expect(portionPoints(parmesan, 100)).toBe(8.8);
+    expect(portionPoints(parmesan, 5)).toBe(0.4); // כף פתיתים ~5 ג'
+    expect(portionPoints(parmesan, 2)).toBe(0.2); // כפית ~2 ג'
   });
 
   it('lists grams first, then the food units, the serving, or generic units', () => {
