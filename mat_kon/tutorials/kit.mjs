@@ -310,6 +310,8 @@ export async function record(name, script, opts = {}) {
     return r.abort();
   });
   await ctx.addInitScript(`document.addEventListener('DOMContentLoaded', ${OVERLAY});`);
+  // סקריפט התחלתי נוסף (למשל לדמות אפליקציית אנדרואיד)
+  if (opts.init) await ctx.addInitScript(opts.init);
   await ctx.addInitScript((seed) => {
     if (!sessionStorage.getItem('tut-seeded')) {
       localStorage.clear();
