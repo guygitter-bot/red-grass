@@ -78,7 +78,7 @@ export default function Dashboard({
             <div key={meal} className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
               <div className="flex justify-between items-center mb-2 border-b border-slate-50 pb-2">
                 <span className="font-bold text-slate-600">{meal}</span>
-                <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-bold">{formatPoints(mealPoints)} נק'</span>
+                <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-bold">{formatPoints(mealPoints)} ביסים</span>
               </div>
               <div className="space-y-2">
                 {mealLogs.map((log) => (

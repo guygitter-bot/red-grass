@@ -35,7 +35,7 @@ function MeasuredFood({ item, onAdd, onDone }) {
     <div className="px-3 pb-3 space-y-3">
       <MeasurePicker per100={item.per100} units={units} onChange={setPortion} />
       <Button className="w-full py-2" disabled={!portion?.grams} onClick={add}>
-        <Plus size={18} /> הוסף לצלחת · {portion ? formatPoints(portion.points) : 0} נק'
+        <Plus size={18} /> הוסף לצלחת · {portion ? formatPoints(portion.points) : 0} ביסים
       </Button>
     </div>
   );
@@ -107,7 +107,7 @@ function FoodRow({ item, onAdd, fav, onRename }) {
               setQty(1);
             }}
           >
-            <Plus size={18} /> הוסף לצלחת · {formatPoints(item.points * qty)} נק'
+            <Plus size={18} /> הוסף לצלחת · {formatPoints(item.points * qty)} ביסים
           </Button>
         </div>
       )}
@@ -307,10 +307,6 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
                     <Sparkles size={12} /> {keptManual ? 'כבר במאגר (הוספת ידנית, נשמר הערך שלך):' : 'הסוכן הוסיף למאגר:'}
                   </p>
                   <FoodRow item={storedAgentFood} onAdd={addToPlate} fav={fav} onRename={onRename} />
-                  {agentFood.food.published_points != null &&
-                    Math.abs(agentFood.food.published_points - agentFood.food.points) >= 0.5 && (
-                      <p className="text-xs text-slate-500">ערך שפורסם ברשת: {agentFood.food.published_points} נק'</p>
-                    )}
                   <Sources urls={agentFood.food.sources} />
                 </div>
               ) : agentFood && normalize(agentFood.query) === normalize(search) ? (
@@ -336,7 +332,7 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
                   type="number"
                   inputMode="decimal"
                   step="0.5"
-                  placeholder="נק'"
+                  placeholder="ביסים"
                   className="w-20 text-center"
                   value={customPoints}
                   onChange={(e) => setCustomPoints(e.target.value)}
@@ -444,7 +440,7 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
             </div>
           ))}
           <Button onClick={logPlate} className="w-full">
-            רשום ליומן ({meal}) · {formatPoints(total)} נק'
+            רשום ליומן ({meal}) · {formatPoints(total)} ביסים
           </Button>
         </div>
       )}

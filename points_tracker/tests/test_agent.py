@@ -35,7 +35,6 @@ BAMBA = {
     "serving_grams": 25,
     "per100": {"kcal": 534, "protein": 15, "carbs": 41, "fat": 35, "fiber": 4},
     "units": [{"name": "חופן", "grams": 10}],
-    "published_points": 4,
     "sources": ["https://www.osem.co.il/bamba"],
     "confidence": "high",
     "notes_he": "",
@@ -64,8 +63,8 @@ class AgentLoopTest(unittest.TestCase):
     def test_db_entry_uses_formula_for_points(self):
         entry = agent.to_db_entry(BAMBA)
         self.assertEqual(entry["name"], "במבה אסם (שקית 25 ג')")
-        self.assertEqual(entry["points"], 3.6)
-        self.assertEqual(entry["published_points"], 4)
+        self.assertEqual(entry["points"], 3.4)
+        self.assertNotIn("published_points", entry)
         self.assertEqual(entry["units"], [{"name": "חופן", "grams": 10}])
         self.assertIsNone(agent.to_db_entry({**BAMBA, "found": False}))
 
@@ -92,7 +91,7 @@ class RunAgentTest(unittest.TestCase):
         db.save(data, self.tmp)
         names = [f["name"] for f in db.load(self.tmp)["foods"]]
         self.assertEqual(names, ["פיתה רגילה", "במבה אסם (שקית 25 ג')"])
-        self.assertIn("3.6", run_agent.issue_comment(reports[1]))
+        self.assertIn("3.4 ביסים", run_agent.issue_comment(reports[1]))
 
     def test_main_answers_issues_and_saves(self):
         issues = [{"number": 7, "title": "ניקוד: במבה", "author": {"login": "me"}}]
