@@ -5,7 +5,8 @@ import {
 } from 'lucide-react';
 import CookMode from './CookMode';
 import { isNative } from '../lib/native';
-import { missingLines } from '../lib/fridge';
+import { STAPLES, missingLines } from '../lib/fridge';
+import { shoppingName } from '../lib/shopping';
 import { baseServings, formatAmount, scaleSections } from '../lib/scale';
 import { thumbnail } from '../lib/image';
 import { DAY_NAMES, MEALS, dateKey, shortDate } from '../lib/plan';
@@ -19,6 +20,7 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
   const [editing, setEditing] = useState(false);
   const [planning, setPlanning] = useState(false);
   const [cooking, setCooking] = useState(false);
+  const [shopPick, setShopPick] = useState(null); // בחירת מצרכים לרשימת הקניות: { preselect }
   // מספר מנות: מכפיל לכמויות, נשמר לכל מתכון במכשיר
   const [factor, setFactor] = usePersistentState(`matkon_factor_${recipe.id}`, 1);
   const base = baseServings(recipe.servings);
@@ -258,7 +260,7 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
               title="מצרכים"
               action={(
                 <button
-                  onClick={() => onAddToShopping(ingredients.flatMap((s) => s.items))}
+                  onClick={() => setShopPick({})}
                   className="rounded-full bg-orange-50 text-orange-800 px-3 py-1.5 text-sm font-medium flex items-center gap-1.5 print:hidden"
                 >
                   <ShoppingCart size={15} /> לרשימת קניות
@@ -289,8 +291,16 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
               <MissingBox
                 lines={ingredients.flatMap((s) => s.items)}
                 pantryNames={pantryNames}
-                onShop={(lines) => onAddToShopping(lines)}
+                onShop={(lines) => setShopPick({ preselect: lines })}
               />
+              {shopPick && (
+                <ShoppingPicker
+                  lines={ingredients.flatMap((s) => s.items)}
+                  preselect={shopPick.preselect}
+                  onClose={() => setShopPick(null)}
+                  onAdd={(names) => { setShopPick(null); onAddToShopping(names); }}
+                />
+              )}
             </Section>
 
             <Section
@@ -611,6 +621,67 @@ function MissingBox({ lines, pantryNames, onShop }) {
           <ShoppingCart size={15} /> רק החסרים לרשימת הקניות
         </button>
       )}
+    </div>
+  );
+}
+
+// בחירה אילו מצרכים להוסיף לרשימת הקניות – רק שם המוצר, בלי הכמות שבמתכון.
+// ברירת מחדל: הכול חוץ ממצרכי בסיס שבדרך כלל יש בבית (מלח, שמן...), או רק "החסרים" כשנפתח משם
+function ShoppingPicker({ lines, preselect, onAdd, onClose }) {
+  const items = [];
+  for (const line of lines) {
+    const name = shoppingName(line);
+    if (!items.some((i) => i.name === name)) items.push({ name, line });
+  }
+  const [picked, setPicked] = useState(() => {
+    const pre = preselect ? new Set(preselect.map(shoppingName)) : null;
+    return new Set(items.filter((i) => (pre ? pre.has(i.name) : !STAPLES.includes(i.name))).map((i) => i.name));
+  });
+  const flip = (name) => setPicked((p) => {
+    const next = new Set(p);
+    if (next.has(name)) next.delete(name); else next.add(name);
+    return next;
+  });
+  const chosen = items.filter((i) => picked.has(i.name)).map((i) => i.name);
+  return (
+    <div className="fixed inset-0 z-30 bg-black/40 flex items-end sm:items-center justify-center print:hidden" onClick={onClose}>
+      <div
+        className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[85vh] flex flex-col pb-[env(safe-area-inset-bottom)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2 px-5 pt-5 pb-2">
+          <h2 className="flex-1 text-lg font-black">מה להוסיף לרשימת הקניות?</h2>
+          <button onClick={onClose} className="p-2 -m-2 text-stone-400" aria-label="סגירה"><X size={20} /></button>
+        </div>
+        <div className="flex gap-3 px-5 pb-2 text-sm">
+          <button onClick={() => setPicked(new Set(items.map((i) => i.name)))} className="text-orange-700 underline">הכול</button>
+          <button onClick={() => setPicked(new Set())} className="text-stone-500 underline">כלום</button>
+        </div>
+        <ul className="overflow-y-auto px-5 flex-1">
+          {items.map(({ name, line }) => (
+            <li key={name}>
+              <button onClick={() => flip(name)} className="w-full text-right flex items-start gap-3 py-2 border-b border-stone-100">
+                <span className={`mt-0.5 w-5 h-5 rounded-md border-2 shrink-0 flex items-center justify-center ${picked.has(name) ? 'bg-orange-500 border-orange-500 text-white' : 'border-stone-300'}`}>
+                  {picked.has(name) && <Check size={14} strokeWidth={3} />}
+                </span>
+                <span>
+                  <span className="font-medium text-stone-800">{name}</span>
+                  {name !== line && <span className="block text-xs text-stone-400">{line}</span>}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        <div className="p-4">
+          <button
+            disabled={!chosen.length}
+            onClick={() => onAdd(chosen)}
+            className="w-full rounded-2xl bg-orange-500 text-white font-bold py-3 disabled:opacity-40 flex items-center justify-center gap-2"
+          >
+            <ShoppingCart size={18} /> הוספה לרשימה ({chosen.length})
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
