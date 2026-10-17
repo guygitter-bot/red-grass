@@ -414,6 +414,16 @@ test('web search by dish name returns recipe links', async () => {
   assert.ok(apiCalls[0].tools.some((t) => t.name === 'web_search'));
   assert.equal((await call('POST', '/search', { q: 'א' })).status, 400);
 
+  // רשימה ריקה בלי תקלה: מבקשים פעם אחת לחפש שוב, ומחזירים את התוצאות של הניסיון השני
+  apiCalls.length = 0;
+  reply = (n) => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', id: `t${n}`, name: 'submit_results', input: { results: n === 1 ? [] : [
+    { title: 'עוגת דבש', url: 'https://www.foodis.co.il/honey', site: 'פודיס', description: 'רכה' },
+  ] } }] });
+  const again = await (await call('POST', '/search', { q: 'עוגת דבש' })).json();
+  assert.deepEqual(again.results.map((r) => r.url), ['https://www.foodis.co.il/honey']);
+  assert.equal(apiCalls.length, 2);
+  assert.equal(apiCalls[1].messages.at(-1).content[0].type, 'tool_result');
+
   // החיפוש ברשת עצמו נכשל (מגיע כבלוק שגיאה, בלי חריגה): שגיאה ברורה ונרשמת, לא "לא נמצאו מתכונים"
   reply = () => ({ stop_reason: 'tool_use', content: [
     { type: 'server_tool_use', id: 's1', name: 'web_search', input: { query: 'x' } },
