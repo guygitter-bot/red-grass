@@ -95,13 +95,17 @@ export const FOOD_TOOL = {
       serving_grams: { type: 'number' },
       per100: nutritionSchema,
       units: unitsSchema,
+      published_points: {
+        type: ['number', 'null'],
+        description: 'Points value per serving if an Israeli points-diet source publishes one, else null',
+      },
       sources: { type: 'array', items: { type: 'string' } },
       confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
       notes_he: { type: 'string' },
     },
     required: [
       'found', 'name', 'aliases', 'serving_desc', 'serving_grams', 'per100', 'units',
-      'sources', 'confidence', 'notes_he',
+      'published_points', 'sources', 'confidence', 'notes_he',
     ],
     additionalProperties: false,
   },
@@ -147,8 +151,8 @@ the number of portions the recipe makes (from the text, or your best estimate).
 and set servings to 1.
 - Write names, amounts and notes in Hebrew. Call submit_analysis. Do not answer in plain text.`;
 
-const RESEARCH_SYSTEM = `You research nutrition data for an Israeli food-tracking app. The app computes \
-its own score from kcal, protein, carbs, fat and fiber per 100 g, so those numbers must be copied from a real \
+const RESEARCH_SYSTEM = `You research nutrition data for an Israeli diet-points app. The app computes \
+points from protein, carbs, fat and fiber per 100 g, so those numbers must be copied from a real \
 nutrition table, not estimated.
 
 How to research:
@@ -162,6 +166,7 @@ page with web_fetch to read the table itself; a search snippet is not enough.
 barcode, foodsdictionary.co.il, open food facts (il.openfoodfacts.org).
 3. Generic foods and dishes: the Ministry of Health Tzameret data (through foodsdictionary.co.il), \
 then USDA FoodData Central. Restaurant / chain items: the chain's published nutrition values.
+4. Israeli points-diet sites and forums only for published_points, never for per100.
 
 News articles, Wikipedia and blogs are not nutrition sources. Put only the pages that contain the \
 numbers you used in sources.
@@ -234,7 +239,7 @@ function dbContext(db) {
     .join('\n')}`;
 }
 
-// מחשב ביסים לכל רכיב: לפי פריט במאגר אם הסוכן מצא התאמה, אחרת לפי ערכים תזונתיים.
+// מחשב נקודות לכל רכיב: לפי פריט במאגר אם הסוכן מצא התאמה, אחרת לפי ערכים תזונתיים.
 export function scoreComponents(components, db) {
   return components.map((c) => {
     const dbItem = c.db_name ? findByName(db, c.db_name) : null;
@@ -288,6 +293,7 @@ export function researchToFood(result) {
     units: result.units,
     aliases: result.aliases,
     sources: result.sources.slice(0, 5),
+    published_points: result.published_points,
     source: 'agent',
   };
 }

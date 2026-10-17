@@ -1,31 +1,15 @@
-// חישוב "ביסים" – הנוסחה של ביס. אותה נוסחה בדיוק נמצאת ב-points_tracker/points.py (הסוכן ב-GitHub).
-// (שמות הפונקציות נשארו "points" כדי לא לשבור קוד ונתונים קיימים.)
-//
-// ביסים = (קלוריות − 3 × חלבון − 4 × סיבים) / 35, ל-100 גרם, לא פחות מ-0.
-// כלומר: בסיס של אנרגיה (35 קלוריות = ביס אחד), עם הנחה על חלבון ועל סיבים תזונתיים, שמשביעים יותר.
-// אם אין קלוריות (למשל הזנה ידנית), מחשבים אותן מהמאקרו: 4 לחלבון ולפחמימות, 9 לשומן.
-export const KCAL_PER_BITE = 35;
+// חישוב נקודות. אותה נוסחה בדיוק נמצאת ב-points_tracker/points.py (הסוכן ב-GitHub).
 
-export function kcalOf({ kcal, protein = 0, carbs = 0, fat = 0 } = {}) {
-  return kcal > 0 ? kcal : 4 * protein + 4 * carbs + 9 * fat;
+// נוסחת הנקודות הקלאסית (PointsPlus): ערכים בגרמים.
+export function pointsFromNutrition({ protein = 0, carbs = 0, fat = 0, fiber = 0 } = {}) {
+  const raw = protein / 10.9375 + carbs / 9.2105 + fat / 3.8889 - fiber / 12.5;
+  return Math.max(0, raw);
 }
 
-export function pointsFromNutrition(per100 = {}) {
-  const { protein = 0, fiber = 0 } = per100;
-  return Math.max(0, (kcalOf(per100) - 3 * protein - 4 * fiber) / KCAL_PER_BITE);
-}
-
-// ביסים למנה לפי ערכים ל-100 גרם ומשקל המנה.
+// נקודות למנה לפי ערכים ל-100 גרם ומשקל המנה.
 export function pointsForGrams(per100, grams) {
   if (!per100 || !(grams > 0)) return 0;
   return pointsFromNutrition(per100) * (grams / 100);
-}
-
-// מאכל עם ערכים תזונתיים ומשקל מקבל תמיד ערך מחושב מחדש (כך כל המאגר עובר לנוסחה החדשה לבד).
-// מאכל שהוזן ידנית רק עם מספר, או שהמספר שלו תוקן ידנית (manualPoints), נשאר כמו שהוא.
-export function withComputedPoints(food) {
-  if (!food?.per100 || !(food.grams > 0) || food.manualPoints) return food;
-  return { ...food, points: round1(pointsForGrams(food.per100, food.grams)) };
 }
 
 export const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10;

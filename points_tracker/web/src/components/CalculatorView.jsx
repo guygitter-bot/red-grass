@@ -8,9 +8,7 @@ import { aiReady, describeError, readNutritionLabel } from '../lib/ai';
 import { fileToDataUrl } from '../lib/image';
 import { formatPoints, pointsFromNutrition, round1 } from '../lib/points';
 
-// קלוריות לא חובה: בלי קלוריות הן מחושבות מהחלבון, הפחמימות והשומן
 const FIELDS = [
-  ['kcal', 'קלוריות (אנרגיה)'],
   ['protein', 'חלבון'],
   ['carbs', 'פחמימות'],
   ['fat', 'שומן'],
@@ -18,7 +16,7 @@ const FIELDS = [
 ];
 
 export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHome }) {
-  const [values, setValues] = useState({ kcal: '', protein: '', carbs: '', fat: '', fiber: '' });
+  const [values, setValues] = useState({ protein: '', carbs: '', fat: '', fiber: '' });
   const [labelUnits, setLabelUnits] = useState([]);
   const [servingGrams, setServingGrams] = useState(null);
   const [portion, setPortion] = useState(null);
@@ -31,7 +29,7 @@ export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHom
   const [message, setMessage] = useState('');
 
   const nums = Object.fromEntries(FIELDS.map(([k]) => [k, parseFloat(values[k]) || 0]));
-  const filled = FIELDS.some(([k]) => k !== 'kcal' && values[k] !== '');
+  const filled = FIELDS.some(([k]) => values[k] !== '');
   const per100Points = round1(pointsFromNutrition(nums));
   // מידות מהתווית (כף, כפית...) או הערכה כללית; מנה מהתווית אם הודפסה
   const units = useMemo(() => unitsFor({ units: labelUnits, grams: servingGrams }), [labelUnits, servingGrams]);
@@ -102,7 +100,7 @@ export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHom
 
   return (
     <div className="space-y-6 pb-20">
-      <h2 className="text-2xl font-bold">מחשבון ביסים</h2>
+      <h2 className="text-2xl font-bold">מחשבון נקודות</h2>
 
       <Card className="space-y-4">
         {scanning ? (
@@ -136,7 +134,7 @@ export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHom
         <p className="text-sm text-slate-500">ערכים תזונתיים ל-100 גרם</p>
         <div className="grid grid-cols-2 gap-4">
           {FIELDS.map(([k, label]) => (
-            <div key={k} className={k === 'kcal' ? 'col-span-2' : ''}>
+            <div key={k}>
               <Label>{label}</Label>
               <Input
                 type="number"
@@ -155,9 +153,8 @@ export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHom
       {filled && (
         <Card className="bg-emerald-50 border-emerald-100 space-y-4">
           <div className="text-center">
-            <p className="text-sm text-emerald-700 font-bold">ביסים ל-100 גרם</p>
+            <p className="text-sm text-emerald-700 font-bold">נקודות ל-100 גרם</p>
             <div className="text-5xl font-black text-emerald-600">{formatPoints(per100Points)}</div>
-            <p className="text-xs text-slate-500 mt-1">ביס = 35 קלוריות, עם הנחה על חלבון וסיבים (משביעים יותר)</p>
           </div>
           <div className="border-t border-emerald-200 pt-4 space-y-2">
             <p className="text-sm font-bold text-slate-700">כמה שמת?</p>
@@ -171,7 +168,7 @@ export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHom
             </div>
             <MealPicker value={meal} onChange={setMeal} />
             <Button onClick={() => save(true)} disabled={!foodName || !portion?.grams} className="w-full">
-              הוסף ליומן · {portion ? formatPoints(portion.points) : 0} ביסים (וישמור במאגר)
+              הוסף ליומן · {portion ? formatPoints(portion.points) : 0} נק' (וישמור במאגר)
             </Button>
             <label className="flex items-center gap-2 text-sm text-slate-600">
               <input type="checkbox" checked={favorite} onChange={(e) => setFavorite(e.target.checked)} />

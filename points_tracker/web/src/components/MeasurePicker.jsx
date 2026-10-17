@@ -93,7 +93,7 @@ export default function MeasurePicker({ per100, units, onChange }) {
         />
         ג'
       </label>
-      <p className="text-sm font-bold text-emerald-700">{grams > 0 ? `${label} = ${points} ביסים` : 'בחר/י כמות'}</p>
+      <p className="text-sm font-bold text-emerald-700">{grams > 0 ? `${label} = ${points} נק'` : 'בחר/י כמות'}</p>
     </div>
   );
 }
