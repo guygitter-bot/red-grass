@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Image as ImageIcon, ScanLine, X } from 'lucide-react';
+import { Image as ImageIcon, RotateCcw, ScanLine, X } from 'lucide-react';
 import { Button, Card, ErrorBox, Input, Label, MealPicker, Spinner } from './ui';
 import CameraCapture from './CameraCapture';
 import MeasurePicker from './MeasurePicker';
@@ -27,6 +27,7 @@ export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHom
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [resetKey, setResetKey] = useState(0);
 
   const nums = Object.fromEntries(FIELDS.map(([k]) => [k, parseFloat(values[k]) || 0]));
   const filled = FIELDS.some(([k]) => values[k] !== '');
@@ -75,6 +76,19 @@ export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHom
     }
   };
 
+  // מנקה את כל הנתונים לחישוב חדש
+  const clear = () => {
+    setValues({ protein: '', carbs: '', fat: '', fiber: '' });
+    setLabelUnits([]);
+    setServingGrams(null);
+    setPortion(null);
+    setFavorite(false);
+    setFoodName('');
+    setError('');
+    setMessage('');
+    setResetKey((n) => n + 1);
+  };
+
   const save = (alsoLog) => {
     if (!foodName) return;
     // במאגר נשמר ל-100 גרם, עם הערכים התזונתיים והמידות, כדי שאפשר יהיה לבחור כף / כפית בפעם הבאה
@@ -100,7 +114,14 @@ export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHom
 
   return (
     <div className="space-y-6 pb-20">
-      <h2 className="text-2xl font-bold">מחשבון נקודות</h2>
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold">מחשבון נקודות</h2>
+        {(filled || foodName) && (
+          <button onClick={clear} className="flex items-center gap-1 text-sm text-slate-500 px-3 py-1.5 rounded-lg border border-slate-200">
+            <RotateCcw size={16} /> נקה נתונים
+          </button>
+        )}
+      </div>
 
       <Card className="space-y-4">
         {scanning ? (
@@ -158,7 +179,7 @@ export default function CalculatorView({ settings, onLog, onSaveFood, fav, goHom
           </div>
           <div className="border-t border-emerald-200 pt-4 space-y-2">
             <p className="text-sm font-bold text-slate-700">כמה שמת?</p>
-            <MeasurePicker per100={nums} units={units} onChange={setPortion} />
+            <MeasurePicker key={resetKey} per100={nums} units={units} onChange={setPortion} />
           </div>
           <div className="border-t border-emerald-200 pt-4 space-y-3">
             <div className="space-y-1">
