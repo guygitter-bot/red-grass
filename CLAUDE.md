@@ -47,6 +47,13 @@
   (main → https://bis-app.pages.dev). בקשות תיקון מתוך האפליקציה: `bis-fix.yml` (ענפים `bis-fix/*`).
 - סוכן המאכלים: `points-agent.yml`. הנוסחה זהה ב-`web/src/lib/points.js` וב-`points.py` – לשנות בשניהם.
 
+### ביסים – הגרסה המסחרית (`bisim/`)
+- תיאור: `bisim/README.md`. אפליקציה נפרדת לגמרי מ"ביס" (קוד, שרת `bisim-api`, מאגר ומכשירים משלה) → https://bisim.pages.dev.
+- עלייה: `bisim.yml` אחרי מיזוג ל-main (בודק ובונה גם ב-PR). שינוי בביס לא עובר לביסים לבד, ולהפך.
+- **בלי שומרי משקל:** נוסחת "ביסים" משלנו (`bisim/web/src/lib/bites.js`: אנרגיה עם הנחה על חלבון וסיבים). לא להשתמש
+  בנוסחת PointsPlus, ולא בשמות, במונחים ("נקודות", Points) או בטבלאות ניקוד של שומרי משקל – לא בקוד, לא בממשק,
+  לא בשיווק ולא בהנחיות לסוכן.
+
 ### mat-kon – מתכונים (`mat_kon/`)
 ספר מתכונים בעברית (RTL, PWA) למשפחה. **לקרוא קודם את `mat_kon/README.md`**.
 - `mat_kon/web` – האפליקציה (React + Vite + Tailwind) → https://mat-kon.pages.dev.
@@ -114,17 +121,36 @@
 - קהילות חברים + התראות "בואו לשחק" (`api/club.js`, Durable Object `Club`, Web Push ב-`api/push.js`; מפתחות ב-`~vapid`).
 - הקטגוריות ובדיקת האות כפולות ב-`api/game.js` וב-`web/src/lib/game.js` – לשנות בשניהם.
 
+### מה השיר? – זיהוי שירים (`ma_hashir/`)
+- תיאור: `ma_hashir/README.md`. משחק לכמה שחקנים בקישור (לבד או קבוצות), 5 שניות משיר ו-4 תשובות; הארכה ל-10 שניות (5 נק׳), 50:50 כל 30 נקודות.
+- `ma_hashir/web` → https://ma-hashir.pages.dev · `ma_hashir/api` → Worker `ma-hashir-api` (Durable Object `Room` לכל משחק, `Library` אחד לקטעי השירים). עלייה: `ma-hashir.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd ma_hashir/api && npm test` · `cd ma_hashir/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- רשימת השירים: `api/songs.js`; הקטעים מ-iTunes/Deezer דרך השרת (`/audio`). ההגדרות כפולות ב-`api/game.js` וב-`web/src/lib/game.js`.
+
 ### רוק סיטי – מערכת שעות (`rock_city/`)
 - תיאור: `rock_city/README.md`. מערכת שעות לבית ספר למוזיקה: שיעורים, תלמידים, מורים, חדרים, תשלומים, בקשות לשינוי והרשאות.
 - `rock_city/web` → https://rock-city-school.pages.dev · `rock_city/api` → Worker `rock-city-api` (Durable Object `School` אחד). עלייה: `rock-city.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd rock_city/api && npm test` · `cd rock_city/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 - הרשאות נבדקות בשרת (`api/school.js`). צבעי המותג: צהוב-זהב ושחור (`web/src/index.css`). תאריך עברי + מספר: מקף עברי (`ב־${...}`) כדי שלא יתהפך.
 
+### הרוכשים – הטבות לקבוצת רכישה (`harochshim/`)
+- תיאור: `harochshim/README.md` (אפיון: `harochshim/spec.html`). קטגוריות → ספקים → הצעות מחיר; עוזר AI לכל ספק שמעביר ליד חם לספק.
+- `harochshim/web` → https://harochshim.pages.dev (`#/admin` מנהל, `#/partner/<סוד>` ספק) · `harochshim/api` → Worker `harochshim-api` (Durable Object `Club`). עלייה: `harochshim.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd harochshim/api && npm test` · `cd harochshim/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- ספק לא נמחק – רק "מורד מהרשימה" (`active: false`). ספק רואה רק את הלידים שלו (נבדק בשרת). צבעי הלוגו ב-`web/src/index.css`.
+
 ### צוות – בוטים של שיווק ב-Telegram (`tsevet/`)
 - תיאור: `tsevet/README.md`. בוטים עם תפקידים (🎨 קריאייטיב, 📊 קמפיינים) בקבוצת Telegram עם נושאים; מדברים ביניהם (`handoff`).
 - `tsevet/api` → Worker `tsevet-api` (Durable Object `Team` אחד, עבודה ברקע ב-alarm). עלייה: `tsevet.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd tsevet/api && npm test`. בוט חדש = מפתח ב-`AGENTS` (`api/agents.js`) + סוד `TG_<KEY>_TOKEN` ב-workflow.
 - הבוטים לא מוציאים כסף בלי אישור מפורש של הבעלים (בכפתור). רק הבעלים מדבר איתם.
+
+### Isport – חנות חולצות כדורגל (`isport/`)
+- תיאור: `isport/README.md`. קטלוג חולצות בלי סליקה/עגלה: התאמה אישית -> הערה למוכר (מועתקת) -> קישור FlyLinking.
+- `isport/web` → https://isport-shop.pages.dev (`#/admin` ניהול) · `isport/api` → Worker `isport-api` (Durable Object `Shop`, תמונות ב-R2 `isport-images`). עלייה: `isport.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd isport/api && npm test` · `cd isport/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- קוד המוצר, הפאצ'ים והקטגוריות (סוגים: football / basketball / plain) כפולים ב-`api/model.js` וב-`web/src/lib/shirt.js` – לשנות בשניהם. סיסמה: סוד `ISPORT_ADMIN_PASSWORD`.
+- סרטוני הדרכה ב-`isport/tutorials` (אותו נוהל כמו mat-kon: נועה + מוזיקה, `isport-voice.yml`). **לא להקליט מחדש בלי לשאול**: אחרי שינוי במסך – לשאול את המשתמש אם לעדכן את הסרטונים.
 
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).

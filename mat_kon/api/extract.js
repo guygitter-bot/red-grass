@@ -352,28 +352,56 @@ const SEARCH_SYSTEM = `You find recipes on the web for an Israeli home cook. Sea
 return up to 6 different, well-reviewed recipe pages - direct links to a single recipe each, not list or search pages. \
 Prefer Hebrew and Israeli sites and creators (10dakot, foodis, mako food, ynet food, chef blogs), and add a couple of \
 good English recipes when they are clearly better or the dish is foreign. Write the descriptions in Hebrew. \
-Call submit_results.`;
+Always search before submitting, and try another phrasing (Hebrew "מתכון ..." and English "... recipe") if the first \
+search finds little. Common dishes always have recipes online - never submit an empty list. Call submit_results.`;
 
 export async function searchRecipes(client, query) {
   const messages = [{ role: 'user', content: `Find recipes for: ${query}` }];
+  // חיפוש ברשת שנכשל לא זורק שגיאה: מגיע כבלוק תוצאה שהתוכן שלו אובייקט שגיאה (ולא רשימה)
+  const searchErrors = [];
+  let searchOk = false;
+  let searches = 0;
+  let retried = false;
   for (let step = 0; step < 6; step++) {
     const response = await client.beta.messages.create({
       model: MODEL,
       max_tokens: 8000,
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
-      output_config: { effort: 'low' },
+      output_config: { effort: 'medium' },
       system: SEARCH_SYSTEM,
       tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 4 }, SEARCH_TOOL],
       messages,
     });
     if (response.stop_reason === 'refusal') throw new Error('הבקשה נדחתה על ידי המודל.');
+    for (const b of response.content) {
+      if (b.type === 'server_tool_use' && b.name === 'web_search') searches += 1;
+      if (b.type !== 'web_search_tool_result') continue;
+      if (Array.isArray(b.content)) searchOk = true;
+      else searchErrors.push(b.content?.error_code || 'unknown');
+    }
     const submit = response.content.find((b) => b.type === 'tool_use' && b.name === SEARCH_TOOL.name);
     if (submit) {
-      return submit.input.results
+      const results = submit.input.results
         .filter((r) => /^https?:\/\//.test(r.url))
         .slice(0, 8)
         .map((r) => ({ title: clean(r.title), url: r.url.trim(), site: clean(r.site), description: clean(r.description) }));
+      // אין תוצאות כי החיפוש ברשת עצמו נכשל (למשל חיפוש ברשת כבוי בחשבון Anthropic) – שגיאה, לא "לא נמצא"
+      if (!results.length && searchErrors.length && !searchOk) {
+        throw new Error(`החיפוש ברשת לא זמין כרגע (${[...new Set(searchErrors)].join(', ')}). נסו שוב מאוחר יותר.`);
+      }
+      // רשימה ריקה: פעם אחת מבקשים לחפש שוב בניסוח אחר (המודל לפעמים מוותר מהר מדי)
+      if (!results.length && !retried) {
+        retried = true;
+        messages.push({ role: 'assistant', content: response.content });
+        messages.push({ role: 'user', content: [{
+          type: 'tool_result', tool_use_id: submit.id, is_error: true,
+          content: 'No results were submitted. Search the web again with other phrasings (Hebrew and English) and submit at least 3 direct recipe pages.',
+        }] });
+        continue;
+      }
+      if (!results.length) throw new Error(`לא מצאתי מתכונים ברשת לחיפוש הזה (${searches} חיפושים). נסו לנסח אחרת.`);
+      return results;
     }
     messages.push({ role: 'assistant', content: response.content });
     if (response.stop_reason === 'pause_turn') continue;

@@ -413,6 +413,26 @@ test('web search by dish name returns recipe links', async () => {
   assert.deepEqual(res.results.map((r) => r.url), ['https://www.10dakot.co.il/recipe/x']);
   assert.ok(apiCalls[0].tools.some((t) => t.name === 'web_search'));
   assert.equal((await call('POST', '/search', { q: 'א' })).status, 400);
+
+  // רשימה ריקה בלי תקלה: מבקשים פעם אחת לחפש שוב, ומחזירים את התוצאות של הניסיון השני
+  apiCalls.length = 0;
+  reply = (n) => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', id: `t${n}`, name: 'submit_results', input: { results: n === 1 ? [] : [
+    { title: 'עוגת דבש', url: 'https://www.foodis.co.il/honey', site: 'פודיס', description: 'רכה' },
+  ] } }] });
+  const again = await (await call('POST', '/search', { q: 'עוגת דבש' })).json();
+  assert.deepEqual(again.results.map((r) => r.url), ['https://www.foodis.co.il/honey']);
+  assert.equal(apiCalls.length, 2);
+  assert.equal(apiCalls[1].messages.at(-1).content[0].type, 'tool_result');
+
+  // החיפוש ברשת עצמו נכשל (מגיע כבלוק שגיאה, בלי חריגה): שגיאה ברורה ונרשמת, לא "לא נמצאו מתכונים"
+  reply = () => ({ stop_reason: 'tool_use', content: [
+    { type: 'server_tool_use', id: 's1', name: 'web_search', input: { query: 'x' } },
+    { type: 'web_search_tool_result', tool_use_id: 's1', content: { type: 'web_search_tool_result_error', error_code: 'unavailable' } },
+    { type: 'tool_use', name: 'submit_results', input: { results: [] } },
+  ] });
+  const failed = await call('POST', '/search', { q: 'פסטה בולונז' });
+  assert.equal(failed.status, 502);
+  assert.match((await failed.json()).error, /unavailable/);
 });
 
 test('backup restore: valid recipes saved as they were, bad ones skipped, same source updates', async () => {
@@ -558,6 +578,63 @@ test('errors from the AI service reach the user in Hebrew, never as raw JSON', a
 
   deps.anthropic = () => ({ beta: { messages: { create: async () => { throw Object.assign(new Error('529 overloaded'), { status: 529 }); } } } });
   assert.equal((await (await call('POST', '/shopping/organize', { items: ['חלב'] })).json()).error, 'יש עומס כרגע. נסו שוב בעוד דקה.');
+});
+
+const fromApp = (method, path, body, origin = 'https://localhost', ip = '10.9.9.9') =>
+  worker.fetch(new Request(`https://api.example${path}`, {
+    method,
+    headers: { origin, 'content-type': 'application/json', 'cf-connecting-ip': ip },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  }), env);
+
+test('open signup (OPEN_SIGNUP=app): only from the Android app, free plan, listed for the owner, limited', async () => {
+  const form = { open: true, name: 'נועה', email: 'noa@example.com', password: 'secret12' };
+  // כבוי כברירת מחדל
+  assert.equal((await (await fromApp('GET', '/auth-config')).json()).openSignup, false);
+  assert.equal((await fromApp('POST', '/register', form)).status, 403);
+
+  env = fakeEnv({ OPEN_SIGNUP: 'app', INVITE_PLAN: 'paid' });
+  // מהאתר – לא
+  assert.equal((await (await call('GET', '/auth-config')).json()).openSignup, false);
+  assert.equal((await call('POST', '/register', form)).status, 403);
+  // מהאפליקציה – כן, במסלול החינמי
+  assert.equal((await (await fromApp('GET', '/auth-config')).json()).openSignup, true);
+  const res = await fromApp('POST', '/register', form);
+  assert.equal(res.status, 200);
+  const { user, session } = await res.json();
+  assert.equal(user.plan, 'free');
+  assert.equal((await call('GET', '/me', undefined, session)).status, 200);
+  // מופיע במסך ההזמנות של הבעלים, ואפשר למחוק אותו משם
+  const { invites } = await (await call('GET', '/invites')).json();
+  const mine = invites.find((i) => i.user?.id === user.id);
+  assert.equal(mine.open, true);
+  // "open" לא עוקף קישור הזמנה ולא נותן מנוי
+  const inv = await invite();
+  const withToken = await (await fromApp('POST', '/register', { ...form, token: inv.token, email: 'x@example.com' })).json();
+  assert.equal(withToken.user.plan, 'paid');
+  assert.equal((await (await call('POST', '/invite', { token: inv.token })).json()).used, true);
+  // אותו אימייל שוב – כבר רשום
+  assert.equal((await fromApp('POST', '/register', form)).status, 409);
+  // הגבלה לכל כתובת
+  for (let i = 0; i < 3; i++) assert.equal((await fromApp('POST', '/register', { ...form, email: `n${i}@example.com` })).status, 200);
+  assert.equal((await fromApp('POST', '/register', { ...form, email: 'n9@example.com' })).status, 429);
+  assert.equal((await fromApp('POST', '/register', { ...form, email: 'n9@example.com' }, 'https://localhost', '10.9.9.10')).status, 200);
+  assert.equal((await call('DELETE', `/invites/${mine.token}`)).status, 200);
+  assert.equal((await call('GET', '/me', undefined, session)).status, 401);
+});
+
+test('open signup with Google: new account only from the app with open=true; existing users just log in', async () => {
+  env.GOOGLE_CLIENT_ID = 'cid.apps.googleusercontent.com';
+  env.OPEN_SIGNUP = 'app';
+  const claims = { aud: env.GOOGLE_CLIENT_ID, iss: 'https://accounts.google.com', email_verified: 'true', exp: String(Date.now() / 1000 + 600), sub: 'g-777', email: 'tal@gmail.com', name: 'טל' };
+  deps.fetch = async (url) => Response.json(new URL(url).searchParams.get('id_token') === 'good.jwt.token' ? claims : { error: 'x' }, { status: 200 });
+  assert.equal((await call('POST', '/google', { credential: 'good.jwt.token', open: true })).status, 404);
+  assert.equal((await fromApp('POST', '/google', { credential: 'good.jwt.token' })).status, 404);
+  const res = await fromApp('POST', '/google', { credential: 'good.jwt.token', open: true });
+  assert.equal(res.status, 200);
+  const { user } = await res.json();
+  assert.equal(user.plan, 'free');
+  assert.equal((await (await call('POST', '/google', { credential: 'good.jwt.token' })).json()).user.id, user.id);
 });
 
 test('Google sign-in: registers only with an invite, then logs in; the token is verified', async () => {

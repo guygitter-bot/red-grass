@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+/* מצב לילה: מחלקה dark על html (נקבעת ב-src/lib/theme.js) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* הצבעים של הלוגו: navy (הרקע הכהה), sky (החץ), coral (הפס האדום), sun (הפס הצהוב).
+   page = רקע המסך, card = כרטיסים, ink = טקסט, muted = טקסט משני, line = מסגרות, soft = רקע מודגש עדין */
+@theme {
+  --color-navy: #0a1622;
+  --color-navy-2: #14263a;
+  --color-sky: #64c9d8;
+  --color-sky-ink: #1b7484;
+  --color-coral: #f46e70;
+  --color-coral-ink: #d9474a;
+  --color-sun: #f7df85;
+  --color-page: #f4f6f9;
+  --color-card: #ffffff;
+  --color-ink: #13202e;
+  --color-muted: #5d6a7a;
+  --color-line: #dfe5ec;
+  --color-soft: #e8f6f8;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-sky-ink: #8fdbe6;
+  --color-coral-ink: #ff9092;
+  --color-page: #08111b;
+  --color-card: #111f2e;
+  --color-ink: #e8eef4;
+  --color-muted: #98a7b8;
+  --color-line: #22354a;
+  --color-soft: #12303b;
+}
+
+html,
+body {
+  font-family: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--color-page);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

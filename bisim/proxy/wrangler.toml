@@ -1,0 +1,20 @@
+name = "bisim-api"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[vars]
+# האתרים שמותר להם לפנות לשרת (האפליקציה ב-Cloudflare Pages ופיתוח מקומי)
+ALLOWED_ORIGINS = "https://bisim.pages.dev,http://localhost:5173,http://localhost:4173"
+
+# המאגר המשותף של המאכלים (Durable Object עם SQLite, כלול בתוכנית החינמית). נפרד לגמרי מזה של ביס.
+[[durable_objects.bindings]]
+name = "FOODS"
+class_name = "SharedFoods"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SharedFoods"]
+
+# המפתח, קוד הגישה וקוד המנהל הם סודות, לא כאן:
+#   ANTHROPIC_API_KEY, ACCESS_CODE, ADMIN_CODE  (נקבעים אוטומטית מ-GitHub, ראו .github/workflows/bisim.yml)

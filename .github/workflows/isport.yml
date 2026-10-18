@@ -1,0 +1,144 @@
+name: isport
+
+# Isport – חנות חולצות כדורגל (isport/):
+#   api -> Cloudflare Worker "isport-api" (קטלוג, ניהול, השלמה אוטומטית עם Claude; תמונות בדלי R2 "isport-images")
+#   web -> Cloudflare Pages "isport-shop" -> https://isport-shop.pages.dev
+on:
+  push:
+    branches: [main]
+    paths: ["isport/**", ".github/workflows/isport.yml"]
+  pull_request:
+    paths: ["isport/**", ".github/workflows/isport.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: isport-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Server tests
+        working-directory: isport/api
+        run: |
+          npm ci
+          npm test
+      - name: App tests and build
+        working-directory: isport/web
+        run: |
+          npm ci
+          npm test
+          npm run build
+
+  api:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check secrets
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ADMIN_PW: ${{ secrets.ISPORT_ADMIN_PASSWORD }}
+        run: |
+          missing=""
+          [ -n "$CF_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -n "$CF_ACCOUNT" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          [ -n "$API_KEY" ] || missing="$missing ANTHROPIC_API_KEY"
+          [ -n "$ADMIN_PW" ] || echo "::warning::ISPORT_ADMIN_PASSWORD is not set - the admin screen will stay locked (see isport/README.md)"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing (see isport/README.md)"
+            exit 1
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install
+        working-directory: isport/api
+        run: npm ci
+      # דלי התמונות – נוצר בפעם הראשונה (אחר כך "כבר קיים" וממשיכים)
+      - name: Create the images bucket (first run only)
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: isport/api
+          wranglerVersion: "4.146.0"
+          command: r2 bucket create isport-images
+      - name: Deploy worker
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: isport/api
+          wranglerVersion: "4.146.0"
+          secrets: |
+            ANTHROPIC_API_KEY
+      # סיסמת הניהול – רק אם הוגדרה (בלעדיה מסך הניהול נשאר נעול)
+      - name: Admin password
+        working-directory: isport/api
+        env:
+          ADMIN_PASSWORD: ${{ secrets.ISPORT_ADMIN_PASSWORD }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$ADMIN_PASSWORD" ]; then
+            printf '%s' "$ADMIN_PASSWORD" | npx --yes wrangler@4.146.0 secret put ADMIN_PASSWORD
+          fi
+      - name: Summary
+        env:
+          URL: ${{ steps.deploy.outputs.deployment-url }}
+        run: |
+          echo "Worker: $URL" >> "$GITHUB_STEP_SUMMARY"
+
+  web:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build
+        working-directory: isport/web
+        run: |
+          npm ci
+          npm run build
+      - name: Create the Pages project (first run only)
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: isport/web
+          wranglerVersion: "4.146.0"
+          command: pages project create isport-shop --production-branch=main
+      - name: Publish
+        id: publish
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: isport/web
+          wranglerVersion: "4.146.0"
+          command: pages deploy dist --project-name=isport-shop --branch=main --commit-dirty=true
+      - name: Summary
+        env:
+          URL: ${{ steps.publish.outputs.deployment-url }}
+        run: |
+          echo "Published: https://isport-shop.pages.dev ($URL)" >> "$GITHUB_STEP_SUMMARY"

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Globe, Heart, LogOut, MessageCircle, PenLine, Search, Settings, X } from 'lucide-react';
 import SearchView from './components/SearchView';
 import SettingsView from './components/SettingsView';
+import { shoppingName } from './lib/shopping';
 import Auth from './components/Auth';
 import AddLink from './components/AddLink';
 import ImportView from './components/ImportView';
@@ -247,10 +248,16 @@ export default function App() {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [reload]);
 
-  // מצרכים של מתכון לרשימת הקניות, לפי מספר המנות שנבחר לו (בלי כפילויות של פריטים פתוחים)
+  // מצרכים של מתכון לרשימת הקניות: רק שם המוצר, בלי כמות ("4 ביצים" → "ביצים"), ובלי כפילויות של פריטים פתוחים
   const shoppingWith = (list, recipe, lines) => {
-    const have = new Set(list.filter((i) => i.recipeId === recipe.id && !i.checked).map((i) => i.text));
-    const fresh = lines.filter((l) => !have.has(l));
+    const key = (t) => t.trim().toLowerCase();
+    const have = new Set(list.filter((i) => !i.checked).map((i) => key(i.text)));
+    const fresh = [];
+    for (const name of lines.map(shoppingName)) {
+      if (have.has(key(name))) continue;
+      have.add(key(name));
+      fresh.push(name);
+    }
     return {
       list: [...list, ...fresh.map((text) => ({ id: `${Date.now()}-${Math.random()}`, text, checked: false, recipeId: recipe.id, recipeTitle: recipe.title }))],
       added: fresh.length,
