@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+/* מצב לילה: מחלקה dark על html (נקבעת ב-src/lib/theme.js) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* צבעי המותג: ink (שחור), lime (ירוק ניאון של הלוגו).
+   page = רקע המסך, card = כרטיסים, text = טקסט, muted = טקסט משני, line = מסגרות, soft = רקע עדין */
+@theme {
+  --font-brand: "Archivo Black", "Heebo", system-ui, sans-serif;
+  --color-ink: #0c0d0f;
+  --color-ink-2: #1b1d21;
+  --color-lime: #c4f43a;
+  --color-lime-ink: #4d6b00;
+  --color-page: #f4f4f1;
+  --color-card: #ffffff;
+  --color-text: #121316;
+  --color-muted: #63666d;
+  --color-line: #e2e2dc;
+  --color-soft: #ecece6;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-lime-ink: #c4f43a;
+  --color-page: #0b0c0e;
+  --color-card: #15171a;
+  --color-text: #eeeeea;
+  --color-muted: #9a9ca3;
+  --color-line: #2a2d32;
+  --color-soft: #1e2125;
+}
+
+html,
+body {
+  font-family: "Heebo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--color-page);
+  color: var(--color-text);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

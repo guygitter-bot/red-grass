@@ -1,0 +1,26 @@
+name = "isport-api"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[vars]
+# האתרים שמותר להם לפנות לשרת (* = כל תת-כתובת, למקרה ש-Cloudflare Pages מוסיף סיומת לשם)
+ALLOWED_ORIGINS = "https://isport-shop.pages.dev,https://*.isport-shop.pages.dev,https://isport-shop-*.pages.dev,http://localhost:5173,http://localhost:4173"
+
+# כל הנתונים (חולצות, הגדרות, כניסות) – אובייקט אחד ("main")
+[[durable_objects.bindings]]
+name = "SHOP"
+class_name = "Shop"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Shop"]
+
+# תמונות החולצות (הדלי נוצר אוטומטית ב-.github/workflows/isport.yml)
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "isport-images"
+
+# סודות, לא כאן (נקבעים אוטומטית מ-GitHub, ראו .github/workflows/isport.yml):
+#   ANTHROPIC_API_KEY – המפתח של Claude (השלמה אוטומטית וחיפוש תמונות)
+#   ADMIN_PASSWORD    – הסיסמה למסך הניהול

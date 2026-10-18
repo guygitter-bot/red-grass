@@ -145,6 +145,12 @@
 - בדיקה: `cd tsevet/api && npm test`. בוט חדש = מפתח ב-`AGENTS` (`api/agents.js`) + סוד `TG_<KEY>_TOKEN` ב-workflow.
 - הבוטים לא מוציאים כסף בלי אישור מפורש של הבעלים (בכפתור). רק הבעלים מדבר איתם.
 
+### Isport – חנות חולצות כדורגל (`isport/`)
+- תיאור: `isport/README.md`. קטלוג חולצות בלי סליקה/עגלה: התאמה אישית -> הערה למוכר (מועתקת) -> קישור FlyLinking.
+- `isport/web` → https://isport-shop.pages.dev (`#/admin` ניהול) · `isport/api` → Worker `isport-api` (Durable Object `Shop`, תמונות ב-R2 `isport-images`). עלייה: `isport.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd isport/api && npm test` · `cd isport/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- קוד המוצר והפאצ'ים כפולים ב-`api/model.js` וב-`web/src/lib/shirt.js` – לשנות בשניהם. סיסמה: סוד `ISPORT_ADMIN_PASSWORD`.
+
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).
 
