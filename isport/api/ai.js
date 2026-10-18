@@ -100,10 +100,22 @@ function describe(b) {
     .join('\n');
 }
 
+// סוכם את השימוש של כל הקריאות (כולל חיפושים ברשת), כדי לדעת כמה זה עלה
+function addUp(total, u) {
+  if (!u) return total;
+  return {
+    input_tokens: total.input_tokens + (u.input_tokens || 0),
+    output_tokens: total.output_tokens + (u.output_tokens || 0),
+    cache_read_input_tokens: total.cache_read_input_tokens + (u.cache_read_input_tokens || 0),
+    cache_creation_input_tokens: total.cache_creation_input_tokens + (u.cache_creation_input_tokens || 0),
+    web_search_requests: total.web_search_requests + (u.server_tool_use?.web_search_requests || 0),
+  };
+}
+
 // מריץ את הסוכן עד שהוא קורא לכלי הסיום (החיפוש ברשת יכול לעצור באמצע – pause_turn)
 async function run(client, { system, tool, text, effort }) {
   const messages = [{ role: 'user', content: text }];
-  let usage = null;
+  let usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, web_search_requests: 0 };
   for (let step = 0; step < 4; step++) {
     const response = await client.beta.messages.create({
       ...BASE,
@@ -113,7 +125,7 @@ async function run(client, { system, tool, text, effort }) {
       tools: [WEB_SEARCH, tool],
       messages,
     });
-    usage = response.usage || usage;
+    usage = addUp(usage, response.usage);
     if (response.stop_reason === 'refusal') throw Object.assign(new Error('לא הצלחנו להשלים את הפרטים לחולצה הזאת'), { status: 400 });
     const call = response.content.find((b) => b.type === 'tool_use' && b.name === tool.name);
     if (call) return { input: call.input || {}, usage };

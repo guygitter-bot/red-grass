@@ -7,7 +7,8 @@
 //   categories    -> [{ id, name, template, active }]   (ראו model.js; בלי – ברירת המחדל)
 //   shirt:<id>    -> חולצה (ראו model.js)
 //   day           -> { date, ai }   מגבלה יומית על הסוכן (הגנה מעלויות)
-//   usage:<YYYY-MM> -> { calls, input, output }   שימוש בסוכן לפי חודש
+//   usage:<YYYY-MM> -> { calls, enrich, images, input, output, cacheRead, cacheWrite, searches }   שימוש בסוכן לפי חודש
+//                      (העלות מחושבת באתר לפי המחירון – web/src/lib/cost.js)
 // התמונות עצמן בדלי R2 (IMAGES), בשם img-<אקראי>.<סוג>
 import Anthropic from '@anthropic-ai/sdk';
 import { aiMessage, enrich, findPages } from './ai.js';
@@ -163,6 +164,11 @@ export class Shop {
       settings: this.d.settings,
       categories: this.d.categories,
       usage: (await this.storage.get(`usage:${month}`)) || { calls: 0, input: 0, output: 0 },
+      // 12 החודשים האחרונים, החדש ראשון
+      usageMonths: [...(await this.storage.list({ prefix: 'usage:' })).entries()]
+        .map(([k, v]) => ({ month: k.slice(6), ...v }))
+        .sort((a, b) => b.month.localeCompare(a.month))
+        .slice(0, 12),
       images: Boolean(this.env.IMAGES),
     };
   }
@@ -231,13 +237,21 @@ export class Shop {
     await this.storage.put('day', day);
   }
 
-  async addUsage(u) {
+  // kind: enrich (פרטים) / images (חיפוש תמונות). חודשים ישנים: בלי הפירוט – שדה חסר = 0
+  async addUsage(u, kind) {
     if (!u) return;
     const key = `usage:${new Date(this.now()).toISOString().slice(0, 7)}`;
     const m = (await this.storage.get(key)) || { calls: 0, input: 0, output: 0 };
-    m.calls += 1;
-    m.input += (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
-    m.output += u.output_tokens || 0;
+    const add = (f, n) => {
+      m[f] = (m[f] || 0) + (n || 0);
+    };
+    add('calls', 1);
+    add(kind, 1);
+    add('input', u.input_tokens);
+    add('output', u.output_tokens);
+    add('cacheRead', u.cache_read_input_tokens);
+    add('cacheWrite', u.cache_creation_input_tokens);
+    add('searches', u.web_search_requests);
     await this.storage.put(key, m);
   }
 
@@ -250,11 +264,11 @@ export class Shop {
     try {
       if (kind === 'enrich') {
         const { details, usage } = await enrich(this.client(), basics);
-        await this.addUsage(usage);
+        await this.addUsage(usage, 'enrich');
         return { details };
       }
       const { pages, usage } = await findPages(this.client(), basics);
-      await this.addUsage(usage);
+      await this.addUsage(usage, 'images');
       const lists = await Promise.all(pages.map((p) => pageImages(this.fetcher, p)));
       const images = [];
       lists.forEach((list, i) => {

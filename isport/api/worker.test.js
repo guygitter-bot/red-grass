@@ -49,7 +49,7 @@ function fakeAI(calls = []) {
           const input = tool === 'shirt_details'
             ? { kind: 'club', team: 'Liverpool', teamHe: 'ליברפול', type: 'Home', year: '2025/26', color: 'Red', colorHe: 'אדום', country: 'England', countryHe: 'אנגליה', league: 'Premier League', leagueHe: 'הפרמייר ליג', description: 'חולצת בית אדומה עם צווארון V.', tags: ['פרמייר ליג', 'Liverpool'] }
             : { pages: ['https://shop.example.com/liverpool-home', 'http://insecure.example.com/x', 'https://kits.example.org/lfc'] };
-          return { stop_reason: 'tool_use', content: [{ type: 'tool_use', name: tool, input }], usage: { input_tokens: 50, output_tokens: 20 } };
+          return { stop_reason: 'tool_use', content: [{ type: 'tool_use', name: tool, input }], usage: { input_tokens: 50, output_tokens: 20, server_tool_use: { web_search_requests: 2 } } };
         },
       },
     },
@@ -210,8 +210,14 @@ test('auto-fill: details and image suggestions from web pages', async () => {
     'https://cdn.example.org/lfc-2.png',
   ]);
   assert.equal((await call(env, '/admin/enrich', {}, token)).status, 400);
-  const usage = (await call(env, '/admin/state', {}, token)).data.usage;
-  assert.equal(usage.calls, 2);
+  const state = (await call(env, '/admin/state', {}, token)).data;
+  assert.equal(state.usage.calls, 2);
+  assert.equal(state.usage.enrich, 1);
+  assert.equal(state.usage.images, 1);
+  assert.equal(state.usage.input, 100);
+  assert.equal(state.usage.searches, 4);
+  assert.equal(state.usageMonths.length, 1);
+  assert.equal(state.usageMonths[0].month, new Date().toISOString().slice(0, 7));
 });
 
 test('auto-fill has a daily limit', async () => {
