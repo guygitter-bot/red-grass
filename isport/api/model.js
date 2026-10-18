@@ -126,8 +126,16 @@ export function publicShirt(s, now = Date.now()) {
 
 export const DEFAULT_SETTINGS = { whatsapp: '', instagram: '', announcement: '' };
 
+// מספר וואטסאפ בפורמט בינלאומי (בלי +). מספר ישראלי שמתחיל ב-0 -> 972
+export function cleanWhatsapp(s) {
+  let n = String(s ?? '').replace(/\D/g, '').replace(/^00/, '');
+  if (n.startsWith('0')) n = `972${n.slice(1)}`;
+  if (n && (n.length < 10 || n.length > 15)) throw fail(400, 'מספר הוואטסאפ לא תקין. כתבו למשל 050-1234567');
+  return n;
+}
+
 export function cleanSettings(b) {
-  const whatsapp = String(b?.whatsapp ?? '').replace(/\D/g, '').slice(0, 15);
+  const whatsapp = cleanWhatsapp(b?.whatsapp);
   let instagram = clean(b?.instagram, 40).replace(/^@/, '');
   if (!/^[A-Za-z0-9._]*$/.test(instagram)) throw fail(400, 'שם המשתמש באינסטגרם לא תקין');
   return { whatsapp, instagram, announcement: clean(b?.announcement, 120) };

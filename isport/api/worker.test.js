@@ -221,6 +221,73 @@ test('settings are cleaned and public', async () => {
   const s = (await call(env, '/catalog')).data.settings;
   assert.deepEqual(s, { whatsapp: '972501234567', instagram: 'isport', announcement: 'משלוח חינם' });
   assert.equal((await call(env, '/admin/settings', { instagram: 'a/b' }, token)).status, 400);
+  // מספר ישראלי מקומי -> בינלאומי; מספר קצר מדי נדחה
+  await call(env, '/admin/settings', { whatsapp: '050-123-4567' }, token);
+  assert.equal((await call(env, '/catalog')).data.settings.whatsapp, '972501234567');
+  assert.equal((await call(env, '/admin/settings', { whatsapp: '12345' }, token)).status, 400);
+});
+
+test('saving from a stale screen does not overwrite newer changes', async () => {
+  const env = fakeEnv();
+  const token = await admin(env);
+  const a = (await call(env, '/admin/shirt', LIVERPOOL, token)).data.shirt;
+  const b = (await call(env, '/admin/shirt', { ...a, base: a.updatedAt, color: 'White' }, token));
+  assert.equal(b.status, 200);
+  // חלון ישן (עם ה-updatedAt הקודם) – נדחה
+  await new Promise((r) => setTimeout(r, 2));
+  const stale = await call(env, '/admin/shirt', { ...a, base: a.updatedAt, color: 'Green' }, token);
+  assert.equal(stale.status, 409);
+  // בלי base (גרסה ישנה של האתר) – עובד כמו קודם
+  assert.equal((await call(env, '/admin/shirt', { ...b.data.shirt, color: 'Blue' }, token)).status, 200);
+
+  const st = (await call(env, '/admin/state', {}, token)).data;
+  const saved = await call(env, '/admin/settings', { ...st.settings, announcement: 'א', base: st.settingsAt }, token);
+  assert.equal(saved.status, 200);
+  assert.equal((await call(env, '/admin/settings', { ...st.settings, announcement: 'ב', base: st.settingsAt }, token)).status, 409);
+  assert.equal((await call(env, '/admin/settings', { ...st.settings, announcement: 'ב', base: saved.data.settingsAt }, token)).status, 200);
+  const cats = await call(env, '/admin/categories', { categories: st.categories, base: st.categoriesAt }, token);
+  assert.equal(cats.status, 200);
+  assert.equal((await call(env, '/admin/categories', { categories: st.categories, base: st.categoriesAt }, token)).status, 409);
+});
+
+test('a failed auto-fill run is still counted in the costs', async () => {
+  const create = async () => ({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'hmm' }], usage: { input_tokens: 10, output_tokens: 5 } });
+  const env = fakeEnv({ AI_CLIENT: { beta: { messages: { create } } } });
+  const token = await admin(env);
+  assert.equal((await call(env, '/admin/enrich', { team: 'Liverpool', kind: 'x'.repeat(5000) }, token)).status, 502);
+  const usage = (await call(env, '/admin/state', {}, token)).data.usage;
+  assert.equal(usage.calls, 1);
+  assert.equal(usage.input, 40);
+});
+
+test('restore cleans the backup like a normal save', async () => {
+  const env = fakeEnv();
+  const token = await admin(env);
+  const shirt = { ...cleanShirt(LIVERPOOL), id: 'sh-aaaaaaaa', createdAt: 1, updatedAt: 1 };
+  await env.IMAGES.put('backups/2026-10-03.json', JSON.stringify({
+    format: 1,
+    shirts: [
+      shirt,
+      { ...shirt, id: 'sh-bbbbbbbb', team: 'Arsenal', flyLink: 'javascript:alert(1)' },
+      { ...shirt, id: 'sh-cccccccc', category: 'shoes', team: 'Nike', type: 'Air Max' },
+      { ...shirt, id: 'sh-dddddddd' },
+    ],
+    categories: [{ id: 'shoes', name: 'נעליים', template: 'plain', active: true }],
+    settings: { whatsapp: '0501234567', instagram: 'bad/name', announcement: 'x'.repeat(500), extra: 'y'.repeat(5000) },
+  }));
+  const res = (await call(env, '/admin/restore', { key: 'backups/2026-10-03.json' }, token)).data;
+  // הכפול (אותו קוד) לא נכנס; הקישור הזדוני נמחק והמוצר לא מפורסם
+  assert.equal(res.shirts, 3);
+  const st = (await call(env, '/admin/state', {}, token)).data;
+  const arsenal = st.shirts.find((s) => s.team === 'Arsenal');
+  assert.equal(arsenal.flyLink, '');
+  assert.equal(arsenal.published, false);
+  // קטגוריית הכדורגל חזרה כי המוצרים צריכים אותה
+  assert.deepEqual(st.categories.map((c) => c.id).sort(), ['football', 'shoes']);
+  assert.deepEqual(Object.keys(st.settings).sort(), ['announcement', 'instagram', 'whatsapp']);
+  assert.equal(st.settings.instagram, '');
+  assert.equal(st.settings.announcement.length, 120);
+  assert.equal((await call(env, '/catalog')).data.shirts.length, 2);
 });
 
 test('auto-fill: details and image suggestions from web pages', async () => {
@@ -419,7 +486,7 @@ test('backup, restore and the nightly job', async () => {
   assert.equal((await call(env, '/admin/restore', { key: 'backups/2020-01-01.json' }, token)).status, 404);
 
   // שחזור גם כשיש הרבה מוצרים (יותר מ-128)
-  const many = [...Array(150)].map((_, i) => ({ ...state.shirts[0], id: `sh-many${String(i).padStart(4, '0')}`, code: `Many-${i}` }));
+  const many = [...Array(150)].map((_, i) => ({ ...state.shirts[0], id: `sh-many${String(i).padStart(4, '0')}`, code: `Many-${i}`, codeManual: true }));
   for (const s of many) await env.shop.storage.put(`shirt:${s.id}`, s);
   await env.IMAGES.put('backups/2026-10-02.json', JSON.stringify({ format: 1, shirts: many }));
   assert.equal((await call(env, '/admin/restore', { key: 'backups/2026-10-01.json' }, token)).status, 200);

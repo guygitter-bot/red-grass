@@ -7,11 +7,12 @@ import { shrinkImage } from '../lib/api';
 import { allProducts, readExport } from '../lib/telegram';
 import { Chip, Field, TutorialVideo, inputClass } from './ui';
 
-const DAY = 24 * 60 * 60 * 1000;
 const day = (d) => String(d || '').slice(0, 10);
+// תאריך מקומי (לא UTC) בצורת YYYY-MM-DD
+const localDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const fileFor = (files, path) => files.get(path) || files.get(String(path).split('/').pop());
 
-export default function ImportTelegram({ state, categories, call, onSaved }) {
+export default function ImportTelegram({ state, categories, call, onSaved, onLost }) {
   const [files, setFiles] = useState(null);
   const [items, setItems] = useState([]);
   const [error, setError] = useState('');
@@ -77,13 +78,15 @@ export default function ImportTelegram({ state, categories, call, onSaved }) {
   const template = categories.find((c) => c.id === category)?.template;
 
   const lastDays = (n) => {
-    setTo(day(new Date().toISOString()));
-    setFrom(day(new Date(Date.now() - n * DAY).toISOString()));
+    const now = new Date();
+    setTo(localDay(now));
+    setFrom(localDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - n)));
   };
 
   const run = async () => {
     setRunning(true);
-    for (const it of chosen) {
+    const ok = [];
+    for (const [i, it] of chosen.entries()) {
       setStatus((s) => ({ ...s, [it.key]: 'busy' }));
       try {
         const images = [];
@@ -94,7 +97,12 @@ export default function ImportTelegram({ state, categories, call, onSaved }) {
         }
         let details = {};
         if (enrich) {
-          details = (await call('/admin/enrich', { category, team: it.team, type: it.type, year: it.year }).catch(() => ({ details: {} }))).details;
+          details = (
+            await call('/admin/enrich', { category, team: it.team, type: it.type, year: it.year }).catch((e) => {
+              if (e.status === 401) throw e;
+              return { details: {} };
+            })
+          ).details;
         }
         const res = await call('/admin/shirt', {
           ...details,
@@ -112,7 +120,18 @@ export default function ImportTelegram({ state, categories, call, onSaved }) {
         });
         onSaved(res.shirt);
         setStatus((s) => ({ ...s, [it.key]: 'done' }));
+        ok.push(it);
       } catch (e) {
+        // החיבור פג: עוצרים (אסימון מת לא יעבוד), ומראים מה יובא ומה לא
+        if (e.status === 401) {
+          const rest = chosen.slice(i);
+          setStatus((s) => ({ ...s, [it.key]: 'error:החיבור פג' }));
+          onLost?.(
+            `הייבוא נעצר: יובאו ${ok.length} מתוך ${chosen.length}. לא יובאו (${rest.length}): ${rest.slice(0, 8).map((x) => x.code).join(', ')}${rest.length > 8 ? '…' : ''}. אחרי הכניסה בחרו את התיקייה שוב – קודים שכבר יובאו מסומנים "הקוד כבר באתר".`,
+          );
+          setRunning(false);
+          return;
+        }
         setStatus((s) => ({ ...s, [it.key]: e.status === 409 ? 'exists' : `error:${e.message}` }));
       }
     }
