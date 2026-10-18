@@ -93,7 +93,12 @@ export default {
     const stub = env.SHOP.get(env.SHOP.idFromName('main'));
     const res = await stub.fetch(new Request(`https://shop${pathname}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: request.headers.get('authorization') || '' },
+      headers: {
+        'content-type': 'application/json',
+        authorization: request.headers.get('authorization') || '',
+        // הכתובת של המבקר (Cloudflare קובע אותה – אי אפשר לזייף) – לנעילה אחרי ניסיונות כניסה שגויים
+        'x-client-ip': request.headers.get('cf-connecting-ip') || '',
+      },
       body: text,
     }));
     return reply(res.status, await res.json());
