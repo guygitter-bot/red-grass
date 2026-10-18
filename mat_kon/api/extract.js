@@ -82,7 +82,14 @@ the most faithful recipe you can from what the caption, comments, hint and video
 from a reliable recipe for the same dish that you found with web_search. Set confidence to "low" and explain in \
 notes exactly what came from the creator and what was completed from elsewhere.
 - A website: if the page text below is missing or blocked, web_fetch the link.
-- A WhatsApp message or text the user pasted: use only that text. If it is chatter and not a recipe, set found=false.
+- A WhatsApp message or text the user pasted: build the recipe from that text. If it is chatter and not a recipe, set found=false.
+- Photos and messages: if one source has several different dishes, give each its own recipe (more_recipes) – never \
+merge two dishes into one recipe or one title.
+- Photos and messages: a handwritten note or short message often leaves out what is needed to actually cook the dish \
+(e.g. kreplach with the dough written but not the meat filling, or no cooking time). Keep everything that is written \
+exactly as written, and complete only what is missing from the standard version of that dish: put the completed \
+ingredients and steps in their own section titled "השלמה (לא מהמקור)", set confidence to "medium", and say in notes \
+what was completed. Do not change amounts that are written.
 - Choose the single best category, and in more_categories every other category that also clearly fits \
 (a recipe can be in several, e.g. chicken that is a main dish: "עוף" and the user's "מנה עיקרית"). Don't add \
 categories that only loosely fit. Desserts that are cakes → "עוגות"; cookies, rugelach, pastries → \
@@ -97,7 +104,8 @@ function material(src) {
     return [
       'Source: photos of a recipe (a cookbook page, a handwritten note, a screenshot or a printed page). Read all of them \
 - they may be several pages of the same recipe - and build the recipe from what is written. Keep the original \
-amounts. If a word is hard to read, use the most likely reading and mention it in notes.',
+amounts. If a word is hard to read, use the most likely reading and mention it in notes. A page can hold several \
+different recipes (each usually with its own heading) – return each one separately.',
       src.hint ? `The user wrote: ${src.hint}` : '',
     ].filter(Boolean).join('\n\n');
   }
@@ -275,11 +283,24 @@ export function categoryFields(list, categories = CATEGORIES) {
 
 export class NoRecipeError extends Error {}
 
-// הכלי עם רשימת הקטגוריות של הספר (הקבועות + אלה שהמשתמש הוסיף)
-export function recipeTool(categories = CATEGORIES) {
+// הכלי עם רשימת הקטגוריות של הספר (הקבועות + אלה שהמשתמש הוסיף).
+// multi: צילום / הודעה בלי קישור יכולים להכיל כמה מתכונים שונים (למשל פתק עם קניידלך וכיסוני בשר) – כל אחד נשמר בנפרד
+export function recipeTool(categories = CATEGORIES, { multi = false } = {}) {
   const tool = structuredClone(RECIPE_TOOL);
   tool.input_schema.properties.category.enum = [...new Set([...CATEGORIES, ...categories])];
   tool.input_schema.properties.more_categories.items.enum = tool.input_schema.properties.category.enum;
+  if (multi) {
+    const { found, ...one } = tool.input_schema.properties;
+    void found;
+    tool.input_schema.properties.more_recipes = {
+      type: 'array',
+      description: 'ONLY when the source has two or more DIFFERENT dishes (e.g. a note with kneidlach and kreplach): the first dish goes in the main fields, and every other dish here, each as a full separate recipe with its own title, ingredients and steps. Parts of ONE dish (a cake and its frosting, a dough and its filling) stay ONE recipe. Empty for a single dish.',
+      items: {
+        type: 'object', properties: one, required: Object.keys(one), additionalProperties: false,
+      },
+    };
+    tool.input_schema.required = [...tool.input_schema.required, 'more_recipes'];
+  }
   return tool;
 }
 
@@ -290,7 +311,9 @@ export async function extractRecipe(client, src, { categories = CATEGORIES } = {
   const text = material(src) + (custom.length
     ? `\n\nThe user added their own categories: ${custom.join(', ')}. Prefer one of them when it fits the dish better than the general ones.`
     : '');
-  const RECIPE_TOOL = recipeTool(categories);
+  // כמה מתכונים ממקור אחד: רק בצילום / הודעה בלי קישור (מתכון מקישור מזוהה לפי הקישור, ואי אפשר לשמור שניים לאותו קישור)
+  const multi = Boolean(src.images || (src.fromText && !src.url));
+  const RECIPE_TOOL = recipeTool(categories, { multi });
   const content = src.images
     ? [...src.images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.type, data: i.data } })), { type: 'text', text }]
     : text;
@@ -310,7 +333,15 @@ export async function extractRecipe(client, src, { categories = CATEGORIES } = {
     const submit = response.content.find((b) => b.type === 'tool_use' && b.name === RECIPE_TOOL.name);
     if (submit) {
       if (!submit.input.found) throw new NoRecipeError(clean(submit.input.notes) || 'לא נמצא מתכון בקישור הזה.');
-      return toRecipe(submit.input, src, recipeTool(categories).input_schema.properties.category.enum);
+      const known = RECIPE_TOOL.input_schema.properties.category.enum;
+      const recipe = toRecipe(submit.input, src, known);
+      // שאר המתכונים מאותו מקור: מפתח מקור משלהם (אחרת היו נשמרים זה על זה)
+      const more = multi ? (Array.isArray(submit.input.more_recipes) ? submit.input.more_recipes : []).slice(0, 5) : [];
+      recipe.more = more
+        .map((input) => toRecipe(input, src, known))
+        .filter((r) => r.ingredients.length || r.steps.length)
+        .map((r, i) => ({ ...r, source: { ...r.source, key: `${r.source.key}:${i + 2}` } }));
+      return recipe;
     }
     messages.push({ role: 'assistant', content: response.content });
     if (response.stop_reason === 'pause_turn') continue; // חיפוש ברשת עדיין רץ - ממשיכים

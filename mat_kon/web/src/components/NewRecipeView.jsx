@@ -69,8 +69,8 @@ function PhotoForm({ session, initialFiles, onFilesTaken, onSaved, onPaywall }) 
     setError('');
     try {
       const thumb = await thumbnail(photos[0].file).catch(() => null);
-      const { recipe, user } = await addPhotoRecipe(session, { images: photos.map((p) => dataUrlToPart(p.url)), hint, thumb });
-      onSaved(recipe, user);
+      const { recipe, user, more } = await addPhotoRecipe(session, { images: photos.map((p) => dataUrlToPart(p.url)), hint, thumb });
+      onSaved(recipe, user, more || []);
     } catch (e) {
       if (e.status === 402) onPaywall(e.data.paymentUrl || '');
       setError(e.message);

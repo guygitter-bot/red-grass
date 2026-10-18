@@ -719,9 +719,24 @@ export default {
         const f = failure(e, { isPhoto: isAddPhoto, owner: !user });
         return fail(f.status, f.error);
       }
-      recipe.image = await storeImage(recipe.image);
+      const more = (isAdd && recipe.more) || []; // ברענון – רק המתכון עצמו
+      delete recipe.more;
+      const thumb = recipe.image;
+      recipe.image = await storeImage(thumb);
       const res = await internal(book, 'POST', '/recipes', recipe);
       const data = await res.json();
+      // כמה מתכונים שונים באותו צילום/הודעה: כל אחד נשמר בנפרד (עם עותק משלו של התמונה) ונספר כמתכון
+      if (res.ok && more.length) {
+        data.more = [];
+        for (const extra of more) {
+          if (counts && !(await internal(accounts, 'POST', '/quota/take', { userId: user.id })).ok) break;
+          extra.image = await storeImage(thumb);
+          const r = await internal(book, 'POST', '/recipes', extra);
+          const d = await r.json();
+          if (r.ok) data.more.push(d.recipe);
+          if (counts && (!r.ok || !d.counted)) await giveBack();
+        }
+      }
       // מתכון שכבר היה בספר (אותו קישור) לא נספר – המכסה חוזרת
       if (counts) {
         const result = !res.ok || !data.counted ? await giveBack() : null;

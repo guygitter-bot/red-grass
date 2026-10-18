@@ -86,8 +86,10 @@ export default function ImportView({ session, user, recipes, onBack, onRecipe, o
           const res = item.type === 'link'
             ? await addRecipeAndWait(session, item.url, item.context)
             : await addTextRecipe(session, { key: item.id, text: item.text, chat: chat.name, author: item.author, date: item.date });
+          // הודעה עם כמה מתכונים שונים – כולם נוספים
+          for (const r of res.more || []) onRecipe(r, res.user);
           onRecipe(res.recipe, res.user);
-          setOne(item.id, { state: 'done', message: `${res.recipe.title} · ${res.recipe.category}`, recipeId: res.recipe.id });
+          setOne(item.id, { state: 'done', message: [res.recipe, ...(res.more || [])].map((r) => `${r.title} · ${r.category}`).join(' | '), recipeId: res.recipe.id });
         } catch (e) {
           if (e.status === 402) {
             stopRef.current = true;

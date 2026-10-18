@@ -389,10 +389,11 @@ export default function App() {
   const addSharedText = useCallback(async (text) => {
     setToast('מסדר מתכון מהטקסט ששותף…');
     try {
-      const { recipe, user: updatedUser } = await addTextRecipe(session, { text });
+      const { recipe, user: updatedUser, more = [] } = await addTextRecipe(session, { text });
+      for (const r of more) upsert(safeRecipe(r));
       upsert(safeRecipe(recipe));
       if (updatedUser) setUser(updatedUser);
-      setToast(`"${recipe.title}" נוסף ל${recipe.category}`);
+      setToast(more.length ? `נוספו ${more.length + 1} מתכונים: ${[recipe, ...more].map((r) => r.title).join(', ')}` : `"${recipe.title}" נוסף ל${recipe.category}`);
     } catch (e) {
       if (e.status === 402) setPaywall({ paymentUrl: e.data.paymentUrl || '' });
       else setToast(e.message);
@@ -716,9 +717,12 @@ export default function App() {
           session={session}
           categories={allCategories}
           onBack={() => open(null)}
-          onSaved={(recipe, updatedUser) => {
+          onSaved={(recipe, updatedUser, more) => {
+            // כמה מתכונים באותו צילום – כולם נוספו, ופותחים את הראשון
+            for (const r of more) upsert(safeRecipe(r));
             upsert(recipe);
             if (updatedUser) setUser(updatedUser);
+            if (more.length) setToast(`מהצילום נוצרו ${more.length + 1} מתכונים: ${[recipe, ...more].map((r) => r.title).join(', ')}`);
             window.location.replace(`#/r/${recipe.id}`);
           }}
           onPaywall={(url) => setPaywall({ paymentUrl: url || paymentUrl })}
