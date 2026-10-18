@@ -128,7 +128,7 @@ export default function ImportTelegram({ state, categories, call, onSaved }) {
       </a>
       <h1 className="mb-2 text-2xl font-black">ייבוא מערוץ טלגרם</h1>
       <button onClick={() => setVideo(!video)} className="mb-3 text-sm font-bold text-lime-ink hover:underline">
-        🎬 {video ? 'סגירת הסרטון' : 'סרטון הדרכה: ייבוא מטלגרם (דקה וחצי)'}
+        🎬 {video ? 'סגירת הסרטון' : 'סרטון הדרכה: ייבוא מטלגרם (שתי דקות)'}
       </button>
       {video && <TutorialVideo name="import" wide className="mb-4" />}
 
