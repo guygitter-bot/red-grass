@@ -34,5 +34,11 @@ Add League Patches                    <- רק אם נבחר פאץ'
 `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `ANTHROPIC_API_KEY` (קיימים), ו-`ISPORT_ADMIN_PASSWORD` – הסיסמה למסך הניהול.
 בלי הסיסמה מסך הניהול נעול (החנות עובדת).
 
+## סרטוני הדרכה (`tutorials/`)
+שני סרטונים: `order` (ללקוחות – בדף הבית, "איך זה עובד?") ו-`admin` (במסך הניהול). מוקלטים אוטומטית מהאתר עם השרת האמיתי בזיכרון
+(סוכן מדומה, בלי AI): `cd web && npm run build`, ואז `cd ../tutorials && node videos/<שם>.mjs`. **שינוי במסך → להקליט מחדש את הסרטון שלו.**
+קריינות כמו ב-mat-kon: משפט חדש נכנס ל-`tutorials/voice/lines.json`; דחיפה לענף עבודה מפעילה את `isport-voice.yml`, שמחזיר את קובצי ה-MP3
+(ElevenLabs, הקול "נועה"; Google TTS רק כגיבוי) לענף – ואז `git pull` ולהקליט שוב. מוזיקה: `tutorials/music.m4a` (אותה של mat-kon).
+
 ## בדיקה
 `cd isport/api && npm test` · `cd isport/web && npm test && npm run build`

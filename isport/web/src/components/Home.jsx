@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { ArrowLeft, Search, Shirt, Sparkles, Copy, X } from 'lucide-react';
 import { searchShirts } from '../lib/shirt';
 import { go } from '../lib/route';
-import { Chip, ShirtCard } from './ui';
+import { Chip, ShirtCard, TutorialVideo } from './ui';
 
 const SORTS = [
   { id: 'new', label: 'הכי חדשות' },
@@ -167,19 +167,25 @@ function Steps() {
   return (
     <section className="mt-16">
       <h2 className="mb-5 text-center text-2xl font-black">איך זה עובד?</h2>
-      <div className="grid gap-3 sm:grid-cols-3">
-        {steps.map((s, i) => (
-          <div key={s.title} className="rounded-2xl bg-card p-5 ring-1 ring-line">
-            <div className="mb-3 flex items-center gap-3">
-              <span className="grid h-10 w-10 place-items-center rounded-full bg-ink text-lime">
-                <s.icon size={20} />
-              </span>
-              <span className="text-sm font-bold text-muted">שלב {i + 1}</span>
+      <div className="grid items-center gap-6 lg:grid-cols-[1fr_auto]">
+        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+          {steps.map((s, i) => (
+            <div key={s.title} className="rounded-2xl bg-card p-5 ring-1 ring-line">
+              <div className="mb-3 flex items-center gap-3">
+                <span className="grid h-10 w-10 place-items-center rounded-full bg-ink text-lime">
+                  <s.icon size={20} />
+                </span>
+                <span className="text-sm font-bold text-muted">שלב {i + 1}</span>
+              </div>
+              <div className="text-lg font-extrabold">{s.title}</div>
+              <p className="mt-1 text-muted">{s.text}</p>
             </div>
-            <div className="text-lg font-extrabold">{s.title}</div>
-            <p className="mt-1 text-muted">{s.text}</p>
-          </div>
-        ))}
+          ))}
+        </div>
+        <div className="flex flex-col items-center gap-2">
+          <TutorialVideo name="order" />
+          <span className="text-sm text-muted">סרטון: איך מזמינים חולצה (דקה)</span>
+        </div>
       </div>
     </section>
   );

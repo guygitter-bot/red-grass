@@ -152,3 +152,17 @@ export function Chip({ active, onClick, children }) {
     </button>
   );
 }
+
+// סרטון הדרכה (נוצר אוטומטית ב-isport/tutorials, נמצא ב-public/tutorials)
+export function TutorialVideo({ name, className = '' }) {
+  return (
+    <video
+      src={`tutorials/${name}.mp4`}
+      poster={`tutorials/${name}.jpg`}
+      controls
+      playsInline
+      preload="none"
+      className={`aspect-[390/844] w-full max-w-xs rounded-2xl bg-ink object-cover shadow-lg ${className}`}
+    />
+  );
+}

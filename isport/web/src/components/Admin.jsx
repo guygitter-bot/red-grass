@@ -7,7 +7,7 @@ import { ArrowRight, Check, Eye, EyeOff, ImagePlus, Link2, LogOut, Plus, Search,
 import { api, imageUrl, load, shrinkImage, store } from '../lib/api';
 import { go } from '../lib/route';
 import { KIND_LABEL, autoCode, searchShirts } from '../lib/shirt';
-import { Chip, Field, ShirtImage, ThemeButton, inputClass } from './ui';
+import { Chip, Field, ShirtImage, ThemeButton, TutorialVideo, inputClass } from './ui';
 import Logo from './Logo';
 
 const TOKEN = 'isport_admin';
@@ -156,6 +156,7 @@ function List({ state, call, onChange }) {
   const [show, setShow] = useState('all');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [video, setVideo] = useState(false);
 
   const list = searchShirts(state.shirts, query).filter((s) => show === 'all' || (show === 'live' ? s.published : !s.published));
   const live = state.shirts.filter((s) => s.published).length;
@@ -186,6 +187,10 @@ function List({ state, call, onChange }) {
         </a>
       </div>
 
+      <button onClick={() => setVideo(!video)} className="mb-3 text-sm font-bold text-lime-ink hover:underline">
+        🎬 {video ? 'סגירת הסרטון' : 'סרטון הדרכה: איך מוסיפים חולצה'}
+      </button>
+      {video && <TutorialVideo name="admin" className="mb-4" />}
       <div className="relative">
         <Search size={18} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" />
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="חיפוש לפי קבוצה, סוג, שנה, צבע או קוד" className={`${inputClass} pr-10`} />
