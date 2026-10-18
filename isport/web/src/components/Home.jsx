@@ -130,31 +130,32 @@ function Hero({ count, categories }) {
   const others = categories.filter((c) => c.template === 'plain').map((c) => c.name);
   return (
     <section className="relative overflow-hidden bg-ink text-white">
-      {/* תמונת החנות ברקע: בטלפון חיתוך לאורך ומעט מטושטש (שהכיתוב יבלוט), במחשב התמונה המלאה */}
+      {/* תמונת החנות ברקע: בטלפון חיתוך לאורך (השלט והבובה למעלה), במחשב התמונה המלאה */}
       <picture>
         <source media="(min-width: 1024px)" srcSet="hero-lg.webp" />
         <img
           src="hero-sm.webp"
           alt=""
           fetchPriority="high"
-          className="absolute inset-0 h-full w-full scale-105 object-cover object-[50%_35%] blur-[2px] lg:scale-100 lg:object-[30%_50%] lg:blur-none"
+          className="absolute inset-0 h-full w-full object-cover object-top lg:object-[30%_50%]"
         />
       </picture>
-      {/* שכבה כהה כדי שהכיתוב יהיה קריא: בטלפון מלמעלה למטה, במחשב כהה בצד של הכיתוב (ימין) ושקופה בצד של התמונה */}
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-ink/70 via-ink/85 to-ink/95 lg:bg-gradient-to-l lg:from-ink/95 lg:via-ink/75 lg:to-ink/20" />
+      {/* שכבה כהה רק מאחורי הכיתוב: בטלפון החלק העליון שקוף (רואים את החנות) והכיתוב למטה על רקע כהה,
+          במחשב כהה בצד של הכיתוב (ימין) ושקופה בצד של התמונה */}
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent from-15% via-ink/75 via-50% to-ink/95 lg:bg-gradient-to-l lg:from-ink/90 lg:from-0% lg:via-ink/55 lg:via-45% lg:to-transparent" />
       {/* מעבר רך לתחתית, מאחורי שורת החיפוש */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-ink to-transparent" />
-      <div className="relative mx-auto grid max-w-6xl items-center gap-8 px-4 pb-20 pt-14 lg:min-h-[30rem] lg:grid-cols-2 lg:pb-28 lg:pt-20">
+      <div className="relative mx-auto grid max-w-6xl items-center gap-8 px-4 pb-20 pt-48 lg:min-h-[30rem] lg:grid-cols-2 lg:pb-28 lg:pt-20">
         <div>
           <span className="inline-block rounded-full border border-lime/50 bg-ink/60 px-3 py-1 text-xs font-bold text-lime backdrop-blur-sm">
             {count > 0 ? `${count} מוצרים באתר` : 'הקולקציה מתעדכנת'}
           </span>
-          <h1 className="mt-4 text-4xl font-black leading-tight [text-shadow:0_2px_16px_rgba(0,0,0,0.6)] lg:text-6xl">
+          <h1 className="mt-4 text-4xl font-black leading-tight [text-shadow:0_2px_18px_rgba(0,0,0,0.85)] lg:text-6xl">
             החולצה שלך.
             <br />
             <span className="text-lime">השם שלך.</span>
           </h1>
-          <p className="mt-4 max-w-md text-lg text-white/85 [text-shadow:0_1px_8px_rgba(0,0,0,0.7)]">
+          <p className="mt-4 max-w-md text-lg text-white/90 [text-shadow:0_1px_10px_rgba(0,0,0,0.9)]">
             חולצות וגופיות של הקבוצות והנבחרות הגדולות בעולם – עם השם, המספר והפאץ' שתבחרו.
             {others.length > 0 && ` וגם ${others.join(', ').replace(/, ([^,]*)$/, ' ו$1')}.`}
           </p>

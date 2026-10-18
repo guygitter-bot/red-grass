@@ -150,7 +150,7 @@
 - `isport/web` → https://isport-shop.pages.dev (`#/admin` ניהול) · `isport/api` → Worker `isport-api` (Durable Object `Shop`, תמונות ב-R2 `isport-images`). עלייה: `isport.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd isport/api && npm test` · `cd isport/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 - קוד המוצר, הפאצ'ים והקטגוריות (סוגים: football / basketball / plain) כפולים ב-`api/model.js` וב-`web/src/lib/shirt.js` – לשנות בשניהם. סיסמה: סוד `ISPORT_ADMIN_PASSWORD`.
-- סרטוני הדרכה ב-`isport/tutorials` (אותו נוהל כמו mat-kon: נועה + מוזיקה, `isport-voice.yml`). שינוי במסך → להקליט מחדש.
+- סרטוני הדרכה ב-`isport/tutorials` (אותו נוהל כמו mat-kon: נועה + מוזיקה, `isport-voice.yml`). **לא להקליט מחדש בלי לשאול**: אחרי שינוי במסך – לשאול את המשתמש אם לעדכן את הסרטונים.
 
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).

@@ -24,7 +24,7 @@ Add League Patches                    <- רק אם נבחר פאץ'
 ## מבנה
 - `api/` – Cloudflare Worker `isport-api` + Durable Object `Shop` אחד (`shop.js`). ניקוי נתונים ב-`model.js`, הסוכן ב-`ai.js`,
   תמונות ב-`images.js`. התמונות שאושרו נשמרות בדלי R2 `isport-images` ומוגשות מ-`/img/<שם>`.
-- `web/` – React + Vite + Tailwind, RTL, טלפון + מחשב + מצב לילה. צבעי המותג ב-`src/index.css`, הלוגו: `public/logo.webp` (רקע שקוף) והאייקונים `icon-192/512.png`. תמונת הפתיחה: `hero-lg.webp` (מחשב) ו-`hero-sm.webp` (טלפון, חיתוך לאורך), עם שכבה כהה כדי שהכיתוב יהיה קריא.
+- `web/` – React + Vite + Tailwind, RTL, טלפון + מחשב + מצב לילה. צבעי המותג ב-`src/index.css`, הלוגו: `public/logo.webp` (רקע שקוף) והאייקונים `icon-192/512.png`. תמונת הפתיחה: `hero-lg.webp` (מחשב) ו-`hero-sm.webp` (טלפון, חיתוך לאורך: השלט בחלק העליון השקוף והכיתוב מתחתיו), עם שכבה כהה רק מאחורי הכיתוב.
 
 ## אבטחה
 - סיסמת ניהול רק כסוד; כניסה נותנת אסימון אקראי (נשמר בשרת רק כ-hash, 30 יום). 6 ניסיונות שגויים = נעילה לחצי שעה.
@@ -39,7 +39,7 @@ Add League Patches                    <- רק אם נבחר פאץ'
 
 ## סרטוני הדרכה (`tutorials/`)
 שני סרטונים: `order` (ללקוחות – בדף הבית, "איך זה עובד?") ו-`admin` (במסך הניהול). מוקלטים אוטומטית מהאתר עם השרת האמיתי בזיכרון
-(סוכן מדומה, בלי AI): `cd web && npm run build`, ואז `cd ../tutorials && node videos/<שם>.mjs`. **שינוי במסך → להקליט מחדש את הסרטון שלו.**
+(סוכן מדומה, בלי AI): `cd web && npm run build`, ואז `cd ../tutorials && node videos/<שם>.mjs`. **לא להקליט מחדש בלי לשאול את המשתמש** (אחרי שינוי במסך – לשאול אם לעדכן את הסרטון).
 קריינות כמו ב-mat-kon: משפט חדש נכנס ל-`tutorials/voice/lines.json`; דחיפה לענף עבודה מפעילה את `isport-voice.yml`, שמחזיר את קובצי ה-MP3
 (ElevenLabs, הקול "נועה"; Google TTS רק כגיבוי) לענף – ואז `git pull` ולהקליט שוב. מוזיקה: `tutorials/music.m4a` (אותה של mat-kon).
 
