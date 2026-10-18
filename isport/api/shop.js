@@ -1,7 +1,8 @@
 // כל הנתונים של Isport – Durable Object אחד ("main"). השרת בודק הרשאות לכל פעולה.
 //
 // אחסון:
-//   meta          -> { v, fails: { count, until } }   v עולה בכל שינוי בקטלוג
+//   meta          -> { v }   v עולה בכל שינוי בקטלוג
+//   fails         -> { ips: { <כתובת>: { count, first, until } }, all: { count, first, until } }   ניסיונות כניסה שנכשלו
 //   sessions      -> { <sha256 של סוד הכניסה>: { exp, role } }   כניסות (ישן: מספר = תוקף, מפתח)
 //                    role: dev – מי שבנה את האתר (סיסמה מהסוד ADMIN_PASSWORD), client – בעל החנות (סיסמה שהמפתח קובע)
 //   clientPass    -> { salt, hash, iter }   הסיסמה של בעל החנות (PBKDF2; הסיסמה עצמה לא נשמרת)
@@ -22,6 +23,9 @@ import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS, cleanCategories, cleanSettings, c
 const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_SESSIONS = 10;
 const MAX_FAILS = 6;
+// הגנה נוספת: הרבה טעויות מהרבה כתובות שונות – נועלים לכולם (גבוה מספיק שאדם אחד לא יגיע אליו)
+const MAX_FAILS_ALL = 60;
+const MAX_FAIL_IPS = 500;
 const LOCK_MS = 30 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const BACKUP_DAYS = 30;
@@ -74,10 +78,11 @@ export class Shop {
 
   async load() {
     if (this.d) return this.d;
-    const got = await this.storage.get(['meta', 'sessions', 'settings', 'categories']);
+    const got = await this.storage.get(['meta', 'sessions', 'settings', 'categories', 'fails']);
     const shirts = await this.storage.list({ prefix: 'shirt:' });
     this.d = {
-      meta: got.get('meta') || { v: 1, fails: { count: 0, until: 0 } },
+      meta: got.get('meta') || { v: 1 },
+      fails: got.get('fails') || { ips: {}, all: {} },
       sessions: got.get('sessions') || {},
       settings: { ...DEFAULT_SETTINGS, ...(got.get('settings') || {}) },
       categories: got.get('categories') || DEFAULT_CATEGORIES,
@@ -103,7 +108,7 @@ export class Shop {
     try {
       await this.load();
       if (path === '/catalog') return json(200, this.catalog());
-      if (path === '/login') return json(200, await this.login(body));
+      if (path === '/login') return json(200, await this.login(body || {}, request.headers.get('x-client-ip') || 'unknown'));
       // רק מתוך השרת עצמו (הגיבוי הלילי); ה-Worker לא מעביר את הכתובת הזאת מבחוץ
       if (path === '/internal/nightly') return json(200, await this.nightly());
 
@@ -144,11 +149,24 @@ export class Shop {
 
   // ---------- כניסה ----------
 
-  async login({ password }) {
+  // ניסיון כניסה נרשם כטעות *לפני* בדיקת הסיסמה (בלי await באמצע), כדי שבקשות במקביל לא יעקפו את הנעילה.
+  // הצלחה מבטלת אותו. נעילה לפי כתובת – כך שמישהו אחר לא יכול לנעול את בעל החנות בחוץ.
+  async login({ password } = {}, ip = 'unknown') {
     const d = this.d;
     const now = this.now();
     if (!this.env.ADMIN_PASSWORD) throw fail(503, 'סיסמת הניהול עוד לא הוגדרה בשרת');
-    if (d.meta.fails.until > now) throw fail(429, 'יותר מדי ניסיונות. נסו שוב בעוד חצי שעה');
+    const fresh = (c) => (c && c.until <= now && now - (c.first || 0) < LOCK_MS ? c : { count: 0, first: now, until: 0 });
+    const mine = d.fails.ips[ip];
+    if ((mine && mine.until > now) || (d.fails.all.until || 0) > now) throw fail(429, 'יותר מדי ניסיונות. נסו שוב בעוד חצי שעה');
+    const byIp = fresh(mine);
+    const all = fresh(d.fails.all);
+    byIp.count += 1;
+    all.count += 1;
+    if (byIp.count >= MAX_FAILS) byIp.until = now + LOCK_MS;
+    if (all.count >= MAX_FAILS_ALL) all.until = now + LOCK_MS;
+    d.fails.ips[ip] = byIp;
+    d.fails.all = all;
+
     const pw = String(password || '');
     let role = null;
     if (safeEqual(await sha256(pw), await sha256(this.env.ADMIN_PASSWORD))) role = 'dev';
@@ -157,19 +175,22 @@ export class Shop {
       if (cp && pw && safeEqual(await pbkdf2(pw, cp.salt, cp.iter), cp.hash)) role = 'client';
     }
     if (!role) {
-      d.meta.fails.count += 1;
-      if (d.meta.fails.count >= MAX_FAILS) d.meta.fails = { count: 0, until: now + LOCK_MS };
-      await this.storage.put('meta', d.meta);
+      // רק כתובות שעדיין רלוונטיות, ולא יותר מדי
+      const live = Object.entries(d.fails.ips).filter(([, c]) => c.until > now || now - c.first < LOCK_MS);
+      d.fails.ips = Object.fromEntries(live.slice(-MAX_FAIL_IPS));
+      await this.storage.put('fails', d.fails);
       throw fail(401, 'הסיסמה לא נכונה');
     }
-    d.meta.fails = { count: 0, until: 0 };
+    // הצלחה: הניסיון לא נחשב טעות
+    delete d.fails.ips[ip];
+    d.fails.all.count = Math.max(0, d.fails.all.count - 1);
     const token = newSecret();
     const live = Object.entries(d.sessions)
       .map(([h, v]) => [h, sessionOf(v)])
       .filter(([, v]) => v.exp > now)
       .sort((a, b) => b[1].exp - a[1].exp);
     d.sessions = Object.fromEntries([[await sha256(token), { exp: now + SESSION_MS, role }], ...live.slice(0, MAX_SESSIONS - 1)]);
-    await this.storage.put({ meta: d.meta, sessions: d.sessions });
+    await this.storage.put({ fails: d.fails, sessions: d.sessions });
     return { token, role };
   }
 
@@ -342,8 +363,9 @@ export class Shop {
     const safety = await this.backup('restore');
 
     const shirts = snap.shirts.filter((s) => s && typeof s.id === 'string' && /^sh-[A-Za-z0-9_-]{6,24}$/.test(s.id) && typeof s.code === 'string');
-    const old = await this.storage.list({ prefix: 'shirt:' });
-    await this.storage.delete([...old.keys()]);
+    // מחיקה בקבוצות – Cloudflare מוחק עד 128 מפתחות בפעם אחת
+    const old = [...(await this.storage.list({ prefix: 'shirt:' })).keys()];
+    for (let i = 0; i < old.length; i += 100) await this.storage.delete(old.slice(i, i + 100));
     this.d.shirts = new Map(shirts.map((s) => [s.id, s]));
     for (let i = 0; i < shirts.length; i += 100) {
       await this.storage.put(Object.fromEntries(shirts.slice(i, i + 100).map((s) => [`shirt:${s.id}`, s])));

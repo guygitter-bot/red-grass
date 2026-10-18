@@ -19,7 +19,11 @@ function fakeStorage() {
       if (typeof k === 'object') for (const [kk, vv] of Object.entries(k)) map.set(kk, clone(vv));
       else map.set(k, clone(v));
     },
-    async delete(k) { for (const kk of [k].flat()) map.delete(kk); },
+    async delete(k) {
+      // כמו ב-Cloudflare: עד 128 מפתחות בפעם אחת
+      if ([k].flat().length > 128) throw new Error('too many keys');
+      for (const kk of [k].flat()) map.delete(kk);
+    },
     async list({ prefix = '' } = {}) {
       const keys = [...map.keys()].filter((kk) => kk.startsWith(prefix)).sort();
       return new Map(keys.map((kk) => [kk, clone(map.get(kk))]));
@@ -84,10 +88,15 @@ function fakeEnv(extra = {}) {
   return env;
 }
 
-async function call(env, path, body = {}, token, origin = ORIGIN) {
+async function call(env, path, body = {}, token, origin = ORIGIN, ip) {
   const res = await worker.fetch(new Request(`https://api.test${path}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', ...(origin ? { origin } : {}), ...(token ? { authorization: `Bearer ${token}` } : {}) },
+    headers: {
+      'content-type': 'application/json',
+      ...(origin ? { origin } : {}),
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      ...(ip ? { 'cf-connecting-ip': ip } : {}),
+    },
     body: JSON.stringify(body),
   }), env);
   return { status: res.status, data: await res.json(), headers: res.headers };
@@ -144,6 +153,23 @@ test('admin login: wrong password, lockout, no password configured', async () =>
   assert.equal((await call(env, '/login', { password: 'סוד-גדול-מאוד' })).status, 429);
   const env2 = fakeEnv({ ADMIN_PASSWORD: '' });
   assert.equal((await call(env2, '/login', { password: '' })).status, 503);
+  assert.equal((await call(env, '/login', null)).status, 429);
+});
+
+test('login lockout: parallel guesses are counted, and it is per address', async () => {
+  const env = fakeEnv();
+  const login = (password, ip) => call(env, '/login', { password }, null, ORIGIN, ip);
+  // 30 ניסיונות בבת אחת (האחרון נכון) – רק 6 נבדקים, השאר נחסמים
+  const burst = await Promise.all([...Array(30)].map((_, i) => login(i === 29 ? 'סוד-גדול-מאוד' : `guess-${i}`, '1.1.1.1')));
+  assert.equal(burst.filter((r) => r.status === 401).length, 6);
+  assert.equal(burst.filter((r) => r.status === 429).length, 24);
+  assert.equal((await login('סוד-גדול-מאוד', '1.1.1.1')).status, 429);
+  // מכתובת אחרת – בעל האתר עדיין נכנס
+  assert.equal((await login('סוד-גדול-מאוד', '2.2.2.2')).status, 200);
+  assert.equal((await login('wrong', '2.2.2.2')).status, 401);
+  // הרבה כתובות שונות – נעילה לכולם
+  for (let i = 0; i < 60; i++) await login('wrong', `10.0.${i}.1`);
+  assert.equal((await login('סוד-גדול-מאוד', '3.3.3.3')).status, 429);
 });
 
 test('admin actions need a valid session; logout ends it', async () => {
@@ -391,6 +417,13 @@ test('backup, restore and the nightly job', async () => {
   assert.equal((await call(env, '/catalog')).data.shirts.length, 1);
   assert.equal((await call(env, '/admin/restore', { key: '../secret.json' }, token)).status, 400);
   assert.equal((await call(env, '/admin/restore', { key: 'backups/2020-01-01.json' }, token)).status, 404);
+
+  // שחזור גם כשיש הרבה מוצרים (יותר מ-128)
+  const many = [...Array(150)].map((_, i) => ({ ...state.shirts[0], id: `sh-many${String(i).padStart(4, '0')}`, code: `Many-${i}` }));
+  for (const s of many) await env.shop.storage.put(`shirt:${s.id}`, s);
+  await env.IMAGES.put('backups/2026-10-02.json', JSON.stringify({ format: 1, shirts: many }));
+  assert.equal((await call(env, '/admin/restore', { key: 'backups/2026-10-01.json' }, token)).status, 200);
+  assert.equal((await call(env, '/admin/restore', { key: 'backups/2026-10-02.json' }, token)).data.shirts, 150);
 
   // אחרי יותר מ-30 יום: הגיבויים הישנים נמחקים, ותמונות מהפח נמחקות מהדלי
   const img = (await call(env, '/admin/image-upload', { data: btoa(String.fromCharCode(...PNG)) }, token)).data.key;
