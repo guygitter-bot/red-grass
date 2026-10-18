@@ -16,11 +16,15 @@ class_name = "Shop"
 tag = "v1"
 new_sqlite_classes = ["Shop"]
 
-# תמונות החולצות (הדלי נוצר אוטומטית ב-.github/workflows/isport.yml)
+# גיבוי לילי (בערך 3:30 בלילה בישראל)
+[triggers]
+crons = ["30 0 * * *"]
+
+# תמונות החולצות + הגיבויים (backups/) – הדלי נוצר אוטומטית ב-.github/workflows/isport.yml
 [[r2_buckets]]
 binding = "IMAGES"
 bucket_name = "isport-images"
 
 # סודות, לא כאן (נקבעים אוטומטית מ-GitHub, ראו .github/workflows/isport.yml):
 #   ANTHROPIC_API_KEY – המפתח של Claude (השלמה אוטומטית וחיפוש תמונות)
-#   ADMIN_PASSWORD    – הסיסמה למסך הניהול
+#   ADMIN_PASSWORD    – הסיסמה של מי שבנה את האתר (מפתח). את הסיסמה של בעל החנות המפתח קובע במסך ההגדרות
