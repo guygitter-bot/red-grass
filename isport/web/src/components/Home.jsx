@@ -5,7 +5,6 @@ import { ArrowLeft, Search, Shirt, Sparkles, Copy, X } from 'lucide-react';
 import { searchShirts } from '../lib/shirt';
 import { go } from '../lib/route';
 import { Chip, ShirtCard, ShirtImage, TutorialVideo } from './ui';
-import Logo from './Logo';
 
 const SORTS = [
   { id: 'new', label: 'הכי חדשים' },
@@ -131,22 +130,31 @@ function Hero({ count, categories }) {
   const others = categories.filter((c) => c.template === 'plain').map((c) => c.name);
   return (
     <section className="relative overflow-hidden bg-ink text-white">
-      {/* פסים אלכסוניים ברקע – כמו מגרש */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.07]"
-        style={{ backgroundImage: 'repeating-linear-gradient(115deg, #c4f43a 0 2px, transparent 2px 46px)' }}
-      />
-      <div className="relative mx-auto grid max-w-6xl items-center gap-8 px-4 pb-16 pt-10 lg:grid-cols-2 lg:pb-24 lg:pt-16">
+      {/* תמונת החנות ברקע: בטלפון חיתוך לאורך ומעט מטושטש (שהכיתוב יבלוט), במחשב התמונה המלאה */}
+      <picture>
+        <source media="(min-width: 1024px)" srcSet="hero-lg.webp" />
+        <img
+          src="hero-sm.webp"
+          alt=""
+          fetchPriority="high"
+          className="absolute inset-0 h-full w-full scale-105 object-cover object-[50%_35%] blur-[2px] lg:scale-100 lg:object-[30%_50%] lg:blur-none"
+        />
+      </picture>
+      {/* שכבה כהה כדי שהכיתוב יהיה קריא: בטלפון מלמעלה למטה, במחשב כהה בצד של הכיתוב (ימין) ושקופה בצד של התמונה */}
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-ink/70 via-ink/85 to-ink/95 lg:bg-gradient-to-l lg:from-ink/95 lg:via-ink/75 lg:to-ink/20" />
+      {/* מעבר רך לתחתית, מאחורי שורת החיפוש */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-ink to-transparent" />
+      <div className="relative mx-auto grid max-w-6xl items-center gap-8 px-4 pb-20 pt-14 lg:min-h-[30rem] lg:grid-cols-2 lg:pb-28 lg:pt-20">
         <div>
-          <span className="inline-block rounded-full border border-lime/40 px-3 py-1 text-xs font-bold text-lime">
+          <span className="inline-block rounded-full border border-lime/50 bg-ink/60 px-3 py-1 text-xs font-bold text-lime backdrop-blur-sm">
             {count > 0 ? `${count} מוצרים באתר` : 'הקולקציה מתעדכנת'}
           </span>
-          <h1 className="mt-4 text-4xl font-black leading-tight lg:text-6xl">
+          <h1 className="mt-4 text-4xl font-black leading-tight [text-shadow:0_2px_16px_rgba(0,0,0,0.6)] lg:text-6xl">
             החולצה שלך.
             <br />
             <span className="text-lime">השם שלך.</span>
           </h1>
-          <p className="mt-4 max-w-md text-lg text-white/70">
+          <p className="mt-4 max-w-md text-lg text-white/85 [text-shadow:0_1px_8px_rgba(0,0,0,0.7)]">
             חולצות וגופיות של הקבוצות והנבחרות הגדולות בעולם – עם השם, המספר והפאץ' שתבחרו.
             {others.length > 0 && ` וגם ${others.join(', ').replace(/, ([^,]*)$/, ' ו$1')}.`}
           </p>
@@ -156,9 +164,6 @@ function Hero({ count, categories }) {
           >
             לכל המוצרים <ArrowLeft size={18} />
           </button>
-        </div>
-        <div className="hidden justify-center lg:flex">
-          <Logo className="h-80 drop-shadow-[0_20px_50px_rgba(100,200,255,0.25)]" />
         </div>
       </div>
     </section>
