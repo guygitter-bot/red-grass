@@ -5,6 +5,8 @@
 //   מנהל (סיסמה -> /login -> authorization: Bearer <token>):
 //     /admin/state, /admin/shirt, /admin/shirt-delete, /admin/publish, /admin/settings, /admin/categories,
 //     /admin/enrich, /admin/find-images (הסוכן), /admin/image-import, /admin/image-upload, /logout
+//     /admin/backups, /admin/backup-now, /admin/restore (רק המפתח), /admin/client-password (רק המפתח)
+//   כל לילה (cron ב-wrangler.toml): גיבוי ל-R2, מחיקת גיבויים ישנים ותמונות מהפח
 import { Shop } from './shop.js';
 import { isImageKey } from './model.js';
 
@@ -17,6 +19,7 @@ const ROUTES = [
   '/catalog', '/login', '/logout',
   '/admin/state', '/admin/shirt', '/admin/shirt-delete', '/admin/publish', '/admin/settings', '/admin/categories',
   '/admin/enrich', '/admin/find-images', '/admin/image-import', '/admin/image-upload',
+  '/admin/backups', '/admin/backup-now', '/admin/restore', '/admin/client-password',
 ];
 
 // "https://isport-shop-*.pages.dev" = כל כתובת שמתחילה כך (Cloudflare Pages מוסיף סיומת כשהשם תפוס)
@@ -61,6 +64,16 @@ async function image(key, env) {
 }
 
 export default {
+  // הגיבוי הלילי
+  async scheduled(event, env, ctx) {
+    const stub = env.SHOP.get(env.SHOP.idFromName('main'));
+    ctx.waitUntil(
+      stub
+        .fetch(new Request('https://shop/internal/nightly', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }))
+        .then(async (res) => console.log('nightly', res.status, await res.text())),
+    );
+  },
+
   async fetch(request, env) {
     const cors = corsHeaders(request, env);
     const reply = (status, data) =>

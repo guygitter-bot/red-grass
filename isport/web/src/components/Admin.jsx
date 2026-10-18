@@ -731,6 +731,7 @@ function SettingsPage({ state, call, onSaved }) {
       </a>
       <h1 className="mb-4 text-2xl font-black">הגדרות האתר</h1>
       <Categories state={state} call={call} onSaved={(categories) => onSaved({ categories })} />
+      {state.role !== 'client' && <ClientPassword state={state} call={call} onSaved={(clientPassSet) => onSaved({ clientPassSet })} />}
       <Box title="פרטי קשר והודעה">
         <div className="space-y-3">
           <Field label="מספר וואטסאפ לשאלות" hint="עם קידומת מדינה, למשל 972501234567. ריק = בלי כפתור וואטסאפ">
@@ -749,6 +750,7 @@ function SettingsPage({ state, call, onSaved }) {
         </button>
       </Box>
 <Costs months={state.usageMonths || []} />
+      <Backups dev={state.role !== 'client'} call={call} />
     </div>
   );
 }
@@ -883,6 +885,139 @@ function Costs({ months }) {
       ) : (
         <p className="text-sm text-muted">עוד לא השתמשו בהשלמה האוטומטית.</p>
       )}
+    </section>
+  );
+}
+
+// הסיסמה של בעל החנות – רק מי שבנה את האתר קובע אותה (הסיסמה שלו עצמו נשארת ב-GitHub)
+function ClientPassword({ state, call, onSaved }) {
+  const [password, setPassword] = useState('');
+  const [msg, setMsg] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const save = async (value) => {
+    if (value === '' && !window.confirm('לבטל את הגישה של בעל החנות למסך הניהול?')) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await call('/admin/client-password', { password: value });
+      onSaved(res.clientPassSet);
+      setPassword('');
+      setMsg({ text: value ? 'נשמר ✓ הסיסמה הקודמת כבר לא עובדת' : 'הגישה בוטלה ✓' });
+    } catch (e) {
+      setMsg({ error: true, text: e.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mb-5">
+      <Box title="סיסמה לבעל החנות" sub="סיסמה נפרדת משלך. אפשר להחליף או לבטל בכל רגע – ובעל החנות מתנתק מיד. רק אתה רואה את החלק הזה.">
+        <p className="mb-3 text-sm">
+          מצב: {state.clientPassSet ? <b className="text-lime-ink">יש סיסמה לבעל החנות</b> : <b>עוד לא נקבעה</b>}
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="סיסמה חדשה (8 תווים לפחות)"
+            autoComplete="new-password"
+            dir="ltr"
+            className={inputClass}
+          />
+          <button onClick={() => save(password)} disabled={busy || password.length < 8} className="shrink-0 rounded-xl bg-ink px-4 font-bold text-white disabled:opacity-50 dark:bg-lime dark:text-ink">
+            שמירה
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-muted">שולחים לבעל החנות את הסיסמה בהודעה פרטית. הסיסמה לא נשמרת באתר אלא בצורה מוצפנת, ואי אפשר לראות אותה שוב.</p>
+        {state.clientPassSet && (
+          <button onClick={() => save('')} disabled={busy} className="mt-3 text-sm text-red-600 hover:underline dark:text-red-400">
+            ביטול הגישה של בעל החנות
+          </button>
+        )}
+        {msg && <p className={`mt-3 rounded-xl p-3 text-sm ${msg.error ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-lime/20'}`}>{msg.text}</p>}
+      </Box>
+    </div>
+  );
+}
+
+const BACKUP_KIND = (key) => (key.endsWith('-restore.json') ? 'לפני שחזור' : key.includes('T') ? 'ידני' : 'לילי');
+
+// גיבויים: כל לילה אוטומטית (30 יום אחורה) + "גיבוי עכשיו". שחזור – רק למי שבנה את האתר
+function Backups({ dev, call }) {
+  const [list, setList] = useState(null);
+  const [busy, setBusy] = useState('');
+  const [msg, setMsg] = useState(null);
+
+  const refresh = () =>
+    call('/admin/backups')
+      .then((r) => setList(r.backups))
+      .catch((e) => setMsg({ error: true, text: e.message }));
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  const backupNow = async () => {
+    setBusy('now');
+    setMsg(null);
+    try {
+      const r = await call('/admin/backup-now');
+      setMsg({ text: `גובה ✓ (${r.shirts} מוצרים)` });
+      await refresh();
+    } catch (e) {
+      setMsg({ error: true, text: e.message });
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const restore = async (b) => {
+    const when = new Date(b.at).toLocaleString('he-IL');
+    if (!window.confirm(`לשחזר את האתר למצב של ${when}?\nהמוצרים, הקטגוריות וההגדרות יוחלפו. המצב הנוכחי יגובה קודם, כך שאפשר לחזור אליו.`)) return;
+    setBusy(b.key);
+    setMsg(null);
+    try {
+      const r = await call('/admin/restore', { key: b.key });
+      setMsg({ text: `שוחזר ✓ (${r.shirts} מוצרים). טוען מחדש…` });
+      setTimeout(() => window.location.reload(), 1200);
+    } catch (e) {
+      setMsg({ error: true, text: e.message });
+      setBusy('');
+    }
+  };
+
+  return (
+    <section className="mt-5 rounded-2xl bg-card p-4 ring-1 ring-line">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-extrabold">גיבויים</h2>
+          <p className="mt-0.5 text-sm text-muted">כל לילה נשמר גיבוי של המוצרים, הקטגוריות וההגדרות, ל-30 יום. גם תמונות שנמחקו נשמרות 31 יום.</p>
+        </div>
+        <button onClick={backupNow} disabled={Boolean(busy)} className="shrink-0 rounded-full px-4 py-2 text-sm font-bold ring-1 ring-line hover:bg-soft disabled:opacity-50">
+          {busy === 'now' ? 'מגבה…' : 'גיבוי עכשיו'}
+        </button>
+      </div>
+      {msg && <p className={`mt-3 rounded-xl p-3 text-sm ${msg.error ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-lime/20'}`}>{msg.text}</p>}
+      <div className="mt-3 max-h-80 divide-y divide-line overflow-y-auto">
+        {list === null && <p className="py-3 text-sm text-muted">טוען…</p>}
+        {list?.length === 0 && <p className="py-3 text-sm text-muted">עוד אין גיבויים. הראשון ייווצר הלילה (או לחצו "גיבוי עכשיו").</p>}
+        {list?.map((b) => (
+          <div key={b.key} className="flex items-center justify-between gap-3 py-2 text-sm">
+            <div>
+              <span className="tabular-nums">{new Date(b.at).toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' })}</span>
+              <span className="ms-2 rounded-full bg-soft px-2 py-0.5 text-xs">{BACKUP_KIND(b.key)}</span>
+              <span className="ms-2 text-xs text-muted">{Math.max(1, Math.round(b.size / 1024))}KB</span>
+            </div>
+            {dev && (
+              <button onClick={() => restore(b)} disabled={Boolean(busy)} className="shrink-0 text-xs font-bold text-lime-ink hover:underline disabled:opacity-50">
+                {busy === b.key ? 'משחזר…' : 'שחזור'}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
     </section>
   );
 }

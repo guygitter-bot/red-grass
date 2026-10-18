@@ -27,14 +27,18 @@ function fakeStorage() {
   };
 }
 
-// דלי R2 מדומה
-function fakeBucket() {
+// דלי R2 מדומה (clock = השעה של ההעלאה)
+function fakeBucket(clock = () => Date.now()) {
   const map = new Map();
   return {
     map,
-    async put(k, bytes, opts) { map.set(k, { bytes, type: opts?.httpMetadata?.contentType }); },
+    async put(k, bytes, opts) { map.set(k, { bytes, type: opts?.httpMetadata?.contentType, uploaded: new Date(clock()) }); },
     async get(k) { const o = map.get(k); return o ? { body: o.bytes, httpMetadata: { contentType: o.type } } : null; },
     async delete(keys) { for (const k of [keys].flat()) map.delete(k); },
+    async list({ prefix = '' } = {}) {
+      const objects = [...map.entries()].filter(([k]) => k.startsWith(prefix)).map(([key, o]) => ({ key, size: String(o.bytes).length, uploaded: o.uploaded }));
+      return { objects, truncated: false };
+    },
   };
 }
 
@@ -246,11 +250,11 @@ test('images: import checks it is a real image, upload, serve and clean up', asy
   assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
   assert.equal((await worker.fetch(new Request('https://api.test/img/..%2Fsecret'), env)).status, 404);
 
-  // תמונה שהוסרה מהחולצה נמחקת מהדלי
+  // תמונה שהוסרה מהחולצה עוברת לפח (נמחקת מהדלי רק אחרי 31 יום, בלילה)
   const s = (await call(env, '/admin/shirt', { ...LIVERPOOL, images: [key, up.data.key] }, token)).data.shirt;
   await call(env, '/admin/shirt', { ...s, images: [up.data.key] }, token);
-  assert.equal(env.IMAGES.map.has(key), false);
-  assert.equal(env.IMAGES.map.has(up.data.key), true);
+  assert.equal(env.IMAGES.map.has(key), true);
+  assert.ok((await env.shop.storage.get('trash'))[key]);
 });
 
 test('image helpers', () => {
@@ -307,4 +311,96 @@ test('auto-fill tells the agent the category', async () => {
   assert.match(calls[0].messages[0].content, /Category: נעליים \(product\)/);
   assert.match(calls[0].messages[0].content, /Brand: Nike/);
   assert.match(calls[0].messages[0].content, /Model: Air Max 90/);
+});
+
+// שעון מדומה – לבדיקות של גיבויים ישנים
+function clockEnv() {
+  let now = Date.UTC(2026, 9, 1, 12, 0);
+  const env = fakeEnv({ NOW: () => now });
+  env.IMAGES = fakeBucket(() => now);
+  env.shop.env = env;
+  return { env, tick: (days) => { now += days * 86400000; } };
+}
+
+test('client password: set by the developer only, separate role, revoked on change', async () => {
+  const env = fakeEnv();
+  const dev = await admin(env);
+  assert.equal((await call(env, '/admin/state', {}, dev)).data.role, 'dev');
+  assert.equal((await call(env, '/admin/client-password', { password: 'short' }, dev)).status, 400);
+  assert.equal((await call(env, '/admin/client-password', { password: 'סוד-גדול-מאוד' }, dev)).status, 400);
+  await call(env, '/admin/client-password', { password: 'client-pass-1' }, dev);
+  assert.equal((await call(env, '/admin/state', {}, dev)).data.clientPassSet, true);
+  // הסיסמה עצמה לא נשמרת
+  assert.ok(!JSON.stringify(await env.shop.storage.get('clientPass')).includes('client-pass-1'));
+
+  const res = await call(env, '/login', { password: 'client-pass-1' });
+  assert.equal(res.data.role, 'client');
+  const client = res.data.token;
+  assert.equal((await call(env, '/admin/state', {}, client)).data.role, 'client');
+  assert.equal((await call(env, '/admin/shirt', LIVERPOOL, client)).status, 200);
+  assert.equal((await call(env, '/admin/client-password', { password: 'hacked-pass' }, client)).status, 403);
+  assert.equal((await call(env, '/admin/restore', { key: 'backups/2026-10-01.json' }, client)).status, 403);
+
+  // שינוי סיסמה -> בעל החנות מתנתק, המפתח נשאר מחובר
+  await call(env, '/admin/client-password', { password: 'client-pass-2' }, dev);
+  assert.equal((await call(env, '/admin/state', {}, client)).status, 401);
+  assert.equal((await call(env, '/admin/state', {}, dev)).status, 200);
+  assert.equal((await call(env, '/login', { password: 'client-pass-1' })).status, 401);
+  assert.equal((await call(env, '/login', { password: 'client-pass-2' })).data.role, 'client');
+  // ביטול הגישה
+  await call(env, '/admin/client-password', { password: '' }, dev);
+  assert.equal((await call(env, '/login', { password: 'client-pass-2' })).status, 401);
+});
+
+test('old sessions (before roles) still work as the developer', async () => {
+  const env = fakeEnv();
+  const token = await admin(env);
+  const sessions = await env.shop.storage.get('sessions');
+  const [hash] = Object.keys(sessions);
+  env.shop.d.sessions = { [hash]: Date.now() + 1e6 };
+  assert.equal((await call(env, '/admin/state', {}, token)).data.role, 'dev');
+});
+
+test('backup, restore and the nightly job', async () => {
+  const { env, tick } = clockEnv();
+  const token = await admin(env);
+  const a = (await call(env, '/admin/shirt', LIVERPOOL, token)).data.shirt;
+  await call(env, '/admin/settings', { whatsapp: '972500000000', instagram: 'isport', announcement: 'שלום' }, token);
+
+  const nightly = await env.shop.fetch(new Request('https://shop/internal/nightly', { method: 'POST', body: '{}' }));
+  assert.equal((await nightly.json()).shirts, 1);
+  // מבחוץ אי אפשר להפעיל את הלילי
+  assert.equal((await call(env, '/internal/nightly')).status, 404);
+
+  tick(1);
+  await call(env, '/admin/shirt-delete', { id: a.id }, token);
+  await call(env, '/admin/shirt', { team: 'Argentina', type: 'Home', year: '2026', color: 'Blue' }, token);
+  await call(env, '/admin/settings', { whatsapp: '', instagram: '', announcement: '' }, token);
+  const manual = (await call(env, '/admin/backup-now', {}, token)).data;
+  assert.match(manual.key, /^backups\/2026-10-02T12-00\.json$/);
+
+  const list = (await call(env, '/admin/backups', {}, token)).data.backups;
+  assert.deepEqual(list.map((b) => b.key), [manual.key, 'backups/2026-10-01.json']);
+
+  const res = (await call(env, '/admin/restore', { key: 'backups/2026-10-01.json' }, token)).data;
+  assert.equal(res.shirts, 1);
+  assert.match(res.safety, /-restore\.json$/);
+  const state = (await call(env, '/admin/state', {}, token)).data;
+  assert.deepEqual(state.shirts.map((s) => s.code), ['Liverpool-Home-26-Red']);
+  assert.equal(state.settings.announcement, 'שלום');
+  assert.equal((await call(env, '/catalog')).data.shirts.length, 1);
+  assert.equal((await call(env, '/admin/restore', { key: '../secret.json' }, token)).status, 400);
+  assert.equal((await call(env, '/admin/restore', { key: 'backups/2020-01-01.json' }, token)).status, 404);
+
+  // אחרי יותר מ-30 יום: הגיבויים הישנים נמחקים, ותמונות מהפח נמחקות מהדלי
+  const img = (await call(env, '/admin/image-upload', { data: btoa(String.fromCharCode(...PNG)) }, token)).data.key;
+  const s2 = (await call(env, '/admin/shirt', { team: 'Brazil', type: 'Home', year: '2026', color: 'Yellow', images: [img] }, token)).data.shirt;
+  await call(env, '/admin/shirt', { ...s2, images: [] }, token);
+  tick(32);
+  const done = await (await env.shop.fetch(new Request('https://shop/internal/nightly', { method: 'POST', body: '{}' }))).json();
+  assert.equal(done.removedImages, 1);
+  assert.equal(env.IMAGES.map.has(img), false);
+  // (הכניסה פגה אחרי 30 יום – נכנסים שוב)
+  const left = (await call(env, '/admin/backups', {}, await admin(env))).data.backups.map((b) => b.key);
+  assert.deepEqual(left, ['backups/2026-11-03.json']);
 });

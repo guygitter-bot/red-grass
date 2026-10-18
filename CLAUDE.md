@@ -149,7 +149,8 @@
 - תיאור: `isport/README.md`. קטלוג חולצות בלי סליקה/עגלה: התאמה אישית -> הערה למוכר (מועתקת) -> קישור FlyLinking.
 - `isport/web` → https://isport-shop.pages.dev (`#/admin` ניהול) · `isport/api` → Worker `isport-api` (Durable Object `Shop`, תמונות ב-R2 `isport-images`). עלייה: `isport.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd isport/api && npm test` · `cd isport/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
-- קוד המוצר, הפאצ'ים והקטגוריות (סוגים: football / basketball / plain) כפולים ב-`api/model.js` וב-`web/src/lib/shirt.js` – לשנות בשניהם. סיסמה: סוד `ISPORT_ADMIN_PASSWORD`.
+- קוד המוצר, הפאצ'ים והקטגוריות (סוגים: football / basketball / plain) כפולים ב-`api/model.js` וב-`web/src/lib/shirt.js` – לשנות בשניהם.
+- סיסמאות: `ISPORT_ADMIN_PASSWORD` = המשתמש (מי שבנה); לבעל החנות סיסמה נפרדת שנקבעת בהגדרות. גיבוי לילי ל-R2 (30 יום) ושחזור בהגדרות. מפתח Claude נפרד: `ISPORT_ANTHROPIC_API_KEY`.
 - סרטוני הדרכה ב-`isport/tutorials` (אותו נוהל כמו mat-kon: נועה + מוזיקה, `isport-voice.yml`). **לא להקליט מחדש בלי לשאול**: אחרי שינוי במסך – לשאול את המשתמש אם לעדכן את הסרטונים.
 
 ### טוטו (`toto_predictor/`)
