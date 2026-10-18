@@ -1,7 +1,8 @@
 // כל הנתונים של Isport – Durable Object אחד ("main"). השרת בודק הרשאות לכל פעולה.
 //
 // אחסון:
-//   meta          -> { v }   v עולה בכל שינוי בקטלוג
+//   meta          -> { v, settingsAt, categoriesAt }   v עולה בכל שינוי בקטלוג; *At – מתי נשמרו ההגדרות / הקטגוריות
+//                    (נשלחים חזרה בשמירה כ-base – אם השתנו בינתיים: 409, כמו updatedAt של חולצה)
 //   fails         -> { ips: { <כתובת>: { count, first, until } }, all: { count, first, until } }   ניסיונות כניסה שנכשלו
 //   sessions      -> { <sha256 של סוד הכניסה>: { exp, role } }   כניסות (ישן: מספר = תוקף, מפתח)
 //                    role: dev – מי שבנה את האתר (סיסמה מהסוד ADMIN_PASSWORD), client – בעל החנות (סיסמה שהמפתח קובע)
@@ -19,6 +20,9 @@ import Anthropic from '@anthropic-ai/sdk';
 import { aiMessage, enrich, findPages } from './ai.js';
 import { contentType, download, fromBase64, pageImages } from './images.js';
 import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS, cleanCategories, cleanSettings, cleanShirt, fail, isImageKey, publicShirt } from './model.js';
+
+// שמירה ממסך שנפתח לפני שינוי במכשיר אחר – לא דורסים
+const CONFLICT = 'זה שונה בינתיים (במכשיר או בחלון אחר). רעננו את הדף ונסו שוב';
 
 const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_SESSIONS = 10;
@@ -242,6 +246,8 @@ export class Shop {
       shirts: [...this.d.shirts.values()].sort((a, b) => b.createdAt - a.createdAt),
       settings: this.d.settings,
       categories: this.d.categories,
+      settingsAt: this.d.meta.settingsAt || 0,
+      categoriesAt: this.d.meta.categoriesAt || 0,
       usage: (await this.storage.get(`usage:${month}`)) || { calls: 0, input: 0, output: 0 },
       // 12 החודשים האחרונים, החדש ראשון
       usageMonths: [...(await this.storage.list({ prefix: 'usage:' })).entries()]
@@ -258,6 +264,8 @@ export class Shop {
     const d = this.d;
     const old = body?.id ? d.shirts.get(body.id) : null;
     if (body?.id && !old) throw fail(404, 'החולצה לא נמצאה');
+    // base = updatedAt של החולצה כשהעורך נפתח (גרסאות ישנות של האתר לא שולחות)
+    if (old && body.base !== undefined && body.base !== old.updatedAt) throw fail(409, CONFLICT);
     if (!old && d.shirts.size >= MAX_SHIRTS) throw fail(400, 'הגעתם למספר החולצות המרבי');
     const data = cleanShirt(body, d.categories);
     const same = [...d.shirts.values()].find((s) => s.id !== old?.id && s.code.toLowerCase() === data.code.toLowerCase());
@@ -300,14 +308,18 @@ export class Shop {
   }
 
   async saveSettings(body) {
+    if (body?.base !== undefined && body.base !== (this.d.meta.settingsAt || 0)) throw fail(409, CONFLICT);
     this.d.settings = cleanSettings(body);
-    return { v: await this.bump({ settings: this.d.settings }), settings: this.d.settings };
+    this.d.meta.settingsAt = this.now();
+    return { v: await this.bump({ settings: this.d.settings }), settings: this.d.settings, settingsAt: this.d.meta.settingsAt };
   }
 
-  async saveCategories({ categories }) {
+  async saveCategories({ categories, base }) {
+    if (base !== undefined && base !== (this.d.meta.categoriesAt || 0)) throw fail(409, CONFLICT);
     const used = new Set([...this.d.shirts.values()].map((s) => s.category || 'football'));
     this.d.categories = cleanCategories(categories, used);
-    return { v: await this.bump({ categories: this.d.categories }), categories: this.d.categories };
+    this.d.meta.categoriesAt = this.now();
+    return { v: await this.bump({ categories: this.d.categories }), categories: this.d.categories, categoriesAt: this.d.meta.categoriesAt };
   }
 
   // ---------- גיבוי ----------
@@ -362,7 +374,40 @@ export class Shop {
     if (snap?.format !== 1 || !Array.isArray(snap.shirts)) throw fail(400, 'קובץ הגיבוי פגום');
     const safety = await this.backup('restore');
 
-    const shirts = snap.shirts.filter((s) => s && typeof s.id === 'string' && /^sh-[A-Za-z0-9_-]{6,24}$/.test(s.id) && typeof s.code === 'string');
+    // הגיבוי עובר את אותן בדיקות כמו שמירה רגילה (קובץ גיבוי יכול להיות ישן או ערוך)
+    let categories;
+    try {
+      categories = cleanCategories(snap.categories);
+    } catch {
+      categories = this.d.categories;
+    }
+    categories = [...categories];
+    for (const s of snap.shirts) {
+      // קטגוריה שהמוצרים צריכים וחסרה – חוזרת (מוצגת)
+      const id = (s && s.category) || 'football';
+      if (typeof id === 'string' && !categories.some((c) => c.id === id)) {
+        const def = DEFAULT_CATEGORIES.find((c) => c.id === id);
+        if (def) categories.push({ ...def, active: true });
+      }
+    }
+    const shirts = [];
+    for (const s of snap.shirts) {
+      if (!s || typeof s.id !== 'string' || !/^sh-[A-Za-z0-9_-]{6,24}$/.test(s.id) || shirts.some((x) => x.id === s.id)) continue;
+      let data;
+      try {
+        data = cleanShirt(s, categories);
+      } catch {
+        try {
+          data = cleanShirt({ ...s, published: false, flyLink: '' }, categories);
+        } catch {
+          continue;
+        }
+      }
+      if (shirts.some((x) => x.code.toLowerCase() === data.code.toLowerCase())) continue;
+      if (shirts.length >= MAX_SHIRTS) break;
+      const at = (n) => (Number.isFinite(n) ? n : this.now());
+      shirts.push({ ...data, id: s.id, createdAt: at(s.createdAt), updatedAt: at(s.updatedAt) });
+    }
     // מחיקה בקבוצות – Cloudflare מוחק עד 128 מפתחות בפעם אחת
     const old = [...(await this.storage.list({ prefix: 'shirt:' })).keys()];
     for (let i = 0; i < old.length; i += 100) await this.storage.delete(old.slice(i, i + 100));
@@ -370,8 +415,15 @@ export class Shop {
     for (let i = 0; i < shirts.length; i += 100) {
       await this.storage.put(Object.fromEntries(shirts.slice(i, i + 100).map((s) => [`shirt:${s.id}`, s])));
     }
-    if (Array.isArray(snap.categories) && snap.categories.length) this.d.categories = snap.categories;
-    if (snap.settings && typeof snap.settings === 'object') this.d.settings = { ...DEFAULT_SETTINGS, ...snap.settings };
+    this.d.categories = categories;
+    if (snap.settings && typeof snap.settings === 'object') {
+      try {
+        this.d.settings = cleanSettings(snap.settings);
+      } catch {
+        this.d.settings = cleanSettings({ ...snap.settings, whatsapp: '', instagram: '' });
+      }
+    }
+    this.d.meta.settingsAt = this.d.meta.categoriesAt = this.now();
     // תמונות שחזרו לשימוש – יוצאות מהפח
     const used = new Set(shirts.flatMap((s) => s.images || []));
     const trash = (await this.storage.get('trash')) || {};
@@ -428,7 +480,7 @@ export class Shop {
 
   async ai(kind, body) {
     const category = this.d.categories.find((c) => c.id === (body?.category || 'football')) || DEFAULT_CATEGORIES[0];
-    const basics = { team: body?.team, type: body?.type, year: body?.year, color: body?.color, kind: body?.kind, category };
+    const basics = { team: body?.team, type: body?.type, year: body?.year, color: body?.color, kind: ['club', 'national'].includes(body?.kind) ? body.kind : '', category };
     if (!String(basics.team || '').trim()) throw fail(400, category.template === 'plain' ? 'כתבו קודם את שם המותג' : 'כתבו קודם את שם הקבוצה / הנבחרת');
     if (!this.env.ANTHROPIC_API_KEY && !this.env.AI_CLIENT) throw fail(503, 'ההשלמה האוטומטית לא מוגדרת בשרת');
     await this.countAi();
@@ -447,6 +499,8 @@ export class Shop {
       });
       return { images: images.slice(0, 12) };
     } catch (e) {
+      // גם ריצה שנכשלה עלתה כסף – נרשמת בעלויות
+      if (e.usage) await this.addUsage(e.usage, kind === 'enrich' ? 'enrich' : 'images');
       if (e.status && e.status < 500 && !e.error) throw e;
       console.error('ai failed', kind, e?.status, e?.message);
       throw fail(502, aiMessage(e));
