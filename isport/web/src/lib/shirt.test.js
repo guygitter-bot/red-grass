@@ -31,6 +31,7 @@ describe('note for the seller', () => {
     expect(cleanName('Messi<script>')).toBe('Messiscript');
     expect(cleanName("O'Neil-Smith")).toBe("O'Neil-Smith");
     expect(cleanName('ישראל')).toBe('ישראל');
+    expect(cleanName("- . '")).toBe('');
     expect(cleanNumber('1a07')).toBe('10');
   });
 });

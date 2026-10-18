@@ -88,8 +88,13 @@ export default {
     // רק מהאתר עצמו
     if (!cors['access-control-allow-origin']) return reply(403, { error: 'אסור' });
 
+    // ניהול בלי כניסה – לא קוראים בכלל את הגוף; העלאה גדולה רק למי שמחובר
+    const authed = /^Bearer\s+\S{20,}/i.test(request.headers.get('authorization') || '');
+    if (pathname.startsWith('/admin/') && !authed) return reply(401, { error: 'צריך להתחבר מחדש' });
+    const max = pathname === '/admin/image-upload' ? MAX_UPLOAD_BYTES : MAX_BODY_BYTES;
+    if (Number(request.headers.get('content-length') || 0) > max) return reply(413, { error: 'גדול מדי' });
     const text = await request.text();
-    if (text.length > (pathname === '/admin/image-upload' ? MAX_UPLOAD_BYTES : MAX_BODY_BYTES)) return reply(413, { error: 'גדול מדי' });
+    if (text.length > max) return reply(413, { error: 'גדול מדי' });
     const stub = env.SHOP.get(env.SHOP.idFromName('main'));
     const res = await stub.fetch(new Request(`https://shop${pathname}`, {
       method: 'POST',
@@ -101,6 +106,10 @@ export default {
       },
       body: text,
     }));
-    return reply(res.status, await res.json());
+    try {
+      return reply(res.status, await res.json());
+    } catch {
+      return reply(500, { error: 'שגיאה בשרת. נסו שוב' });
+    }
   },
 };

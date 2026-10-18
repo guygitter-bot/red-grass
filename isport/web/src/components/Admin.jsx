@@ -88,7 +88,11 @@ export default function Admin({ route }) {
   }, [route[0]]);
 
   useEffect(() => {
+    const prev = document.title;
     document.title = 'ניהול – Isport';
+    return () => {
+      document.title = prev;
+    };
   }, []);
 
   if (!token) {
@@ -122,7 +126,16 @@ export default function Admin({ route }) {
 
   const categories = state?.categories || DEFAULT_CATEGORIES;
   let page;
-  if (!state) page = <div className="p-10 text-center text-muted">{error || 'טוען…'}</div>;
+  if (!state) page = (
+      <div className="p-10 text-center text-muted">
+        {error || 'טוען…'}
+        {error && (
+          <div className="mt-4">
+            <button onClick={refresh} className="rounded-full bg-ink px-5 py-2.5 font-bold text-white dark:bg-lime dark:text-ink">נסו שוב</button>
+          </div>
+        )}
+      </div>
+    );
   else if (route[0] === 'edit') {
     const shirt = route[1] === 'new' ? null : state.shirts.find((s) => s.id === route[1]);
     page =
@@ -276,7 +289,7 @@ function List({ state, categories, call, onChange }) {
             <a href={`#/admin/edit/${s.id}`} className="flex min-w-0 flex-1 items-center gap-3">
               <ShirtImage shirt={s} className="h-14 w-14 shrink-0 rounded-xl" />
               <div className="min-w-0">
-                <div className="truncate font-bold">
+                <div className="line-clamp-2 break-words font-bold">
                   {s.featured && <Star size={14} className="me-1 inline fill-amber-400 text-amber-400" />}
                   {s.teamHe || s.team} · {s.type} {s.year}
                 </div>
@@ -365,7 +378,8 @@ function Editor({ shirt, categories, call, imagesReady, draftRef, onSaved, onDel
   const [imageLink, setImageLink] = useState('');
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
-  const code = form.codeManual ? form.code : autoCode(form);
+  // בלי קבוצה עוד אין קוד (אחרת היה מוצג רק "Home")
+  const code = form.codeManual ? form.code : form.team.trim() ? autoCode(form) : '';
   const full = form.images.length >= MAX_IMAGES;
   const template = categories.find((c) => c.id === form.category)?.template || 'football';
   const F = FIELDS[template];
@@ -583,7 +597,11 @@ function Editor({ shirt, categories, call, imagesReady, draftRef, onSaved, onDel
                     <ImagePlus size={22} />
                     {busy === 'upload' ? 'מעלה…' : 'מהמכשיר'}
                   </span>
-                  <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => upload(e.target.files)} />
+                  <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => {
+                      upload(e.target.files);
+                      e.target.value = '';
+                    }}
+                  />
                 </label>
               )}
             </div>
@@ -905,7 +923,7 @@ function Categories({ state, call, onSaved }) {
                 </button>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <select value={c.template} onChange={(e) => edit(i, { template: e.target.value })} className="min-w-0 flex-1 rounded-lg border border-line bg-page px-2 py-1.5 text-sm" aria-label="סוג">
+                <select value={c.template} onChange={(e) => edit(i, { template: e.target.value })} className="w-full min-w-0 rounded-lg sm:w-auto sm:flex-1 border border-line bg-page px-2 py-1.5 text-sm" aria-label="סוג">
                   {Object.entries(TEMPLATES).map(([id, t]) => (
                     <option key={id} value={id}>{t.label}</option>
                   ))}
@@ -1020,7 +1038,13 @@ function ClientPassword({ state, call, onSaved }) {
         <p className="mb-3 text-sm">
           מצב: {state.clientPassSet ? <b className="text-lime-ink">יש סיסמה לבעל החנות</b> : <b>עוד לא נקבעה</b>}
         </p>
-        <div className="flex gap-2">
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!busy && password.length >= 8) save(password);
+          }}
+        >
           <input
             type="text"
             value={password}
@@ -1030,10 +1054,10 @@ function ClientPassword({ state, call, onSaved }) {
             dir="ltr"
             className={inputClass}
           />
-          <button onClick={() => save(password)} disabled={busy || password.length < 8} className="shrink-0 rounded-xl bg-ink px-4 font-bold text-white disabled:opacity-50 dark:bg-lime dark:text-ink">
+          <button type="submit" disabled={busy || password.length < 8} className="shrink-0 rounded-xl bg-ink px-4 font-bold text-white disabled:opacity-50 dark:bg-lime dark:text-ink">
             שמירה
           </button>
-        </div>
+        </form>
         <p className="mt-2 text-xs text-muted">שולחים לבעל החנות את הסיסמה בהודעה פרטית. הסיסמה לא נשמרת באתר אלא בצורה מוצפנת, ואי אפשר לראות אותה שוב.</p>
         {state.clientPassSet && (
           <button onClick={() => save('')} disabled={busy} className="mt-3 text-sm text-red-600 hover:underline dark:text-red-400">
@@ -1045,6 +1069,13 @@ function ClientPassword({ state, call, onSaved }) {
     </div>
   );
 }
+
+// תאריך בפורמט קבוע: 18.10.2026 20:09 (בלי פסיק של ה-locale שמתהפך ב-RTL)
+const fmtWhen = (at) => {
+  const d = new Date(at);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
 
 const BACKUP_KIND = (key) => (key.endsWith('-restore.json') ? 'לפני שחזור' : key.includes('T') ? 'ידני' : 'לילי');
 
@@ -1077,7 +1108,7 @@ function Backups({ dev, call }) {
   };
 
   const restore = async (b) => {
-    const when = new Date(b.at).toLocaleString('he-IL');
+    const when = fmtWhen(b.at);
     if (!window.confirm(`לשחזר את האתר למצב של ${when}?\nהמוצרים, הקטגוריות וההגדרות יוחלפו. המצב הנוכחי יגובה קודם, כך שאפשר לחזור אליו.`)) return;
     setBusy(b.key);
     setMsg(null);
@@ -1109,7 +1140,7 @@ function Backups({ dev, call }) {
         {list?.map((b) => (
           <div key={b.key} className="flex items-center justify-between gap-3 py-2 text-sm">
             <div>
-              <span className="tabular-nums">{new Date(b.at).toLocaleString('he-IL', { dateStyle: 'short', timeStyle: 'short' })}</span>
+              <span dir="ltr" className="inline-block tabular-nums">{fmtWhen(b.at)}</span>
               <span className="ms-2 rounded-full bg-soft px-2 py-0.5 text-xs">{BACKUP_KIND(b.key)}</span>
               <span className="ms-2 text-xs text-muted">{Math.max(1, Math.round(b.size / 1024))}KB</span>
             </div>

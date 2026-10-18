@@ -153,7 +153,7 @@ test('admin login: wrong password, lockout, no password configured', async () =>
   assert.equal((await call(env, '/login', { password: 'סוד-גדול-מאוד' })).status, 429);
   const env2 = fakeEnv({ ADMIN_PASSWORD: '' });
   assert.equal((await call(env2, '/login', { password: '' })).status, 503);
-  assert.equal((await call(env, '/login', null)).status, 429);
+  assert.equal((await call(env, '/login', null)).status, 400);
 });
 
 test('login lockout: parallel guesses are counted, and it is per address', async () => {
@@ -348,6 +348,46 @@ test('images: import checks it is a real image, upload, serve and clean up', asy
   await call(env, '/admin/shirt', { ...s, images: [up.data.key] }, token);
   assert.equal(env.IMAGES.map.has(key), true);
   assert.ok((await env.shop.storage.get('trash'))[key]);
+});
+
+test('bad requests: wrong body shape, admin without login, slow image sites', async () => {
+  const env = fakeEnv();
+  const token = await admin(env);
+  for (const body of [null, [], 5]) assert.equal((await call(env, '/admin/publish', body, token)).status, 400);
+  // ניהול בלי כניסה – נדחה לפני קריאת הגוף, גם העלאה גדולה
+  assert.equal((await call(env, '/admin/image-upload', { data: 'x'.repeat(200000) })).status, 401);
+  assert.equal((await call(env, '/admin/state', {}, 'short')).status, 401);
+  // אתר ששולח כותרות מהר ואת הגוף לאט – נעצר אחרי הזמן המרבי (8 שניות)
+  const slow = fakeEnv({
+    FETCH: async () => new Response(new ReadableStream({ start(c) { c.enqueue(PNG.slice(0, 4)); } }), { headers: { 'content-type': 'image/png' } }),
+  });
+  const t = Date.now();
+  const res = await call(slow, '/admin/image-import', { url: 'https://slow.example.com/a.png' }, await admin(slow));
+  assert.equal(res.status, 504);
+  assert.ok(Date.now() - t < 9500);
+});
+
+test('sessions: new developer password logs out old developer logins; owner logins do not push out the developer', async () => {
+  const env = fakeEnv();
+  const dev = await admin(env);
+  await call(env, '/admin/client-password', { password: 'client-pass-1' }, dev);
+  for (let i = 0; i < 12; i++) assert.equal((await call(env, '/login', { password: 'client-pass-1' }, null, ORIGIN, `9.9.9.${i}`)).status, 200);
+  assert.equal((await call(env, '/admin/state', {}, dev)).status, 200);
+  env.ADMIN_PASSWORD = 'סיסמה-חדשה-לגמרי';
+  assert.equal((await call(env, '/admin/state', {}, dev)).status, 401);
+  assert.equal((await call(env, '/login', { password: 'סיסמה-חדשה-לגמרי' })).status, 200);
+});
+
+test('images that were uploaded but never saved are removed after 31 days', async () => {
+  const { env, tick } = clockEnv();
+  const token = await admin(env);
+  const kept = (await call(env, '/admin/image-upload', { data: btoa(String.fromCharCode(...PNG)) }, token)).data.key;
+  const lost = (await call(env, '/admin/image-upload', { data: btoa(String.fromCharCode(...PNG)) }, token)).data.key;
+  await call(env, '/admin/shirt', { ...LIVERPOOL, images: [kept] }, token);
+  tick(32);
+  await env.shop.fetch(new Request('https://shop/internal/nightly', { method: 'POST', body: '{}' }));
+  assert.equal(env.IMAGES.map.has(kept), true);
+  assert.equal(env.IMAGES.map.has(lost), false);
 });
 
 test('image helpers', () => {

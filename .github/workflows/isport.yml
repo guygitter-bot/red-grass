@@ -109,7 +109,8 @@ jobs:
           echo "Worker: $URL" >> "$GITHUB_STEP_SUMMARY"
 
   web:
-    needs: test
+    # האתר עולה רק אחרי שהשרת שהוא צריך כבר באוויר
+    needs: [test, api]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
