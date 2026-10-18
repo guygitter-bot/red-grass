@@ -4,19 +4,19 @@ import {
   CalendarPlus, Plus, Printer, RotateCw, Share2, ShoppingCart, Star, Trash2, Users, X,
 } from 'lucide-react';
 import CookMode from './CookMode';
-import { isNative } from '../lib/native';
+import { isNative, shareText } from '../lib/native';
 import { STAPLES, missingLines } from '../lib/fridge';
 import { shoppingName } from '../lib/shopping';
 import { baseServings, formatAmount, scaleSections } from '../lib/scale';
 import { thumbnail } from '../lib/image';
 import { DAY_NAMES, MEALS, dateKey, shortDate } from '../lib/plan';
-import { categoriesOf, emojiOf, VIDEO_LABEL, isVideo, recipeAsText, sectionsToText, shortUrl, textToSections } from '../lib/recipes';
+import { categoriesOf, emojiOf, VIDEO_LABEL, isVideo, sectionsToText, shortUrl, textToSections } from '../lib/recipes';
 import { usePersistentState } from '../lib/storage';
 
 // רק נגני סרטונים מהאתרים המוכרים
 const SAFE_EMBED = /^https:\/\/(www\.youtube-nocookie\.com\/embed\/|www\.tiktok\.com\/embed\/|www\.instagram\.com\/(p|reel|tv)\/|player\.vimeo\.com\/video\/)/;
 
-export default function RecipeView({ recipe, pantryNames = [], categories, onBack, onUpdate, onRefresh, onDelete, onAddToShopping, onAddToPlan }) {
+export default function RecipeView({ recipe, pantryNames = [], categories, onBack, onUpdate, onRefresh, onDelete, onAddToShopping, onAddToPlan, onShareLink }) {
   const [editing, setEditing] = useState(false);
   const [planning, setPlanning] = useState(false);
   const [cooking, setCooking] = useState(false);
@@ -56,19 +56,19 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
   const fromChat = recipe.source.kind === 'whatsapp';
   const [showMessage, setShowMessage] = useState(false);
 
-  const share = async () => {
-    // מתכון מווטסאפ אין לו קישור: משתפים את המתכון עצמו
-    const text = fromChat ? recipeAsText(recipe) : `${recipe.title}\n${recipe.source.url}`;
+  // שיתוף בקישור ל-mat-kon: מי שמקבל רואה תצוגה מקדימה, ואת המתכון המלא – באפליקציה (וכך מצטרף)
+  const share = () => run('share', async () => {
+    const link = await onShareLink();
+    const text = `${recipe.title} 🍲\nשלחתי לך מתכון מהספר שלי ב-mat-kon:\n${link}`;
     try {
-      if (navigator.share) await navigator.share(fromChat ? { title: recipe.title, text } : { title: recipe.title, text, url: recipe.source.url });
-      else {
-        await navigator.clipboard.writeText(fromChat ? text : recipe.source.url);
-        setError(fromChat ? 'המתכון הועתק' : 'הקישור המקורי הועתק');
+      if (!(await shareText({ title: recipe.title, text }))) {
+        await navigator.clipboard.writeText(text);
+        setError('הקישור הועתק – אפשר להדביק אותו בהודעה');
       }
     } catch {
       // המשתמש ביטל
     }
-  };
+  });
 
   const video = isVideo(recipe);
   const times = [
@@ -102,8 +102,8 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
           <button onClick={() => quiet({ favorite: !recipe.favorite })} className="p-2 rounded-full hover:bg-stone-100" aria-label="מועדף" title="מועדף">
             <Heart size={21} className={recipe.favorite ? 'text-rose-500' : ''} fill={recipe.favorite ? 'currentColor' : 'none'} />
           </button>
-          <button onClick={share} className="p-2 rounded-full hover:bg-stone-100" aria-label="שיתוף" title="שיתוף">
-            <Share2 size={20} />
+          <button onClick={share} disabled={busy === 'share'} className="p-2 rounded-full hover:bg-stone-100" aria-label="שליחת המתכון" title="שליחת המתכון">
+            {busy === 'share' ? <Loader2 size={20} className="animate-spin" /> : <Share2 size={20} />}
           </button>
         </div>
       </div>

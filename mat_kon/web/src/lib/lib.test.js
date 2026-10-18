@@ -57,7 +57,7 @@ describe('editing as text', () => {
   });
 });
 
-import { freeLeft, parseAuthHash } from './recipes';
+import { freeLeft, parseAuthHash, parseShareLink } from './recipes';
 
 describe('invites', () => {
   it('reads invite and login links', () => {
@@ -65,6 +65,14 @@ describe('invites', () => {
     expect(parseAuthHash('#login')).toEqual({ mode: 'login' });
     expect(parseAuthHash('#/r/123')).toBe(null);
     expect(parseAuthHash('')).toBe(null);
+  });
+
+  it('reads shared recipe links, on the site and in the Android app', () => {
+    const t = 'AbCdEf0123456789_-xyzAbCdEf012345';
+    expect(parseShareLink(`#recipe=${t}`)).toBe(t);
+    expect(parseShareLink(`matkon://recipe/${t}`)).toBe(t);
+    expect(parseShareLink('#recipe=short')).toBe(null);
+    expect(parseShareLink('#/r/123')).toBe(null);
   });
 
   it('counts the free recipes left', () => {

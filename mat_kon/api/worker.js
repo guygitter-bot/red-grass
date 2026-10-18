@@ -157,6 +157,21 @@ export default {
       });
     }
 
+    // ---- מתכון ששותף בקישור: תצוגה מקדימה (שם, תמונה, מי שיתף) לכל מי שיש לו את הקישור, בלי כניסה.
+    // המתכון המלא ושמירה בספר – רק אחרי כניסה לאפליקציה (ככה מי שקיבל קישור מצטרף) ----
+    const getShare = async (token, saved = false) => {
+      if (!/^[\w-]{20,64}$/.test(token)) return null;
+      const res = await internal(accounts, 'POST', '/shares/get', { token, saved });
+      return res.ok ? (await res.json()).share : null;
+    };
+    if (parts[0] === 'shares' && parts.length === 2 && request.method === 'GET') {
+      const limited = await rate([{ key: `share-view:${ip}`, limit: 120, window: 3600 }]);
+      if (limited) return limited;
+      const share = await getShare(parts[1]);
+      if (!share) return fail(404, 'הקישור לא נמצא או שפג תוקפו');
+      return reply(200, { preview: sharePreview(share) });
+    }
+
     // ---- הספר של בעל האפליקציה: פתוח, או נעול (רק במכשירים שנכנסו עם סיסמת הבעלים / חשבון הגוגל שלו) ----
     const setting = (v) => (v && v !== 'none' ? String(v) : '');
     const googleClientId = setting(env.GOOGLE_CLIENT_ID);
@@ -320,6 +335,42 @@ export default {
       } catch (e) {
         return aiFail(e, (!e.status && e.message) || 'החיפוש נכשל');
       }
+    }
+
+    // ---- מתכון ששותף בקישור: המתכון המלא, ושמירה שלו בספר שלי (נספר כמו מתכון חדש) ----
+    if (parts[0] === 'shares' && parts.length === 3 && ['full', 'save'].includes(parts[2])) {
+      if (parts[2] === 'full' && request.method === 'GET') {
+        const share = await getShare(parts[1]);
+        if (!share) return fail(404, 'הקישור לא נמצא או שפג תוקפו');
+        return reply(200, { by: share.by, recipe: share.recipe });
+      }
+      if (parts[2] === 'save' && request.method === 'POST') {
+        const limited = await rate([{ key: `share-save:${bookKeyOf(user)}`, limit: 200, window: 86400 }], 'הגעתם למגבלה היומית. נסו שוב מחר.');
+        if (limited) return limited;
+        const share = await getShare(parts[1]);
+        if (!share) return fail(404, 'הקישור לא נמצא או שפג תוקפו');
+        const recipe = restoredRecipe(share.recipe, await allCategories());
+        if (!recipe) return fail(400, 'המתכון ששותף לא תקין');
+        const counts = Boolean(user);
+        if (counts) {
+          const taken = await internal(accounts, 'POST', '/quota/take', { userId: user.id });
+          if (!taken.ok) return fail(402, `נגמרו ${user.freeLimit} המתכונים החינמיים`, { paywall: true, paymentUrl: env.PAYMENT_URL || '' });
+        }
+        recipe.image = await copyImage(recipe.image, {
+          origin: url.origin, bookKey: bookKeyOf(user), source: (k) => bookOf(k === 'book' ? null : k), target: bookStub(),
+        });
+        const res = await internal(bookStub(), 'POST', '/recipes', recipe);
+        const data = await res.json();
+        if (counts) {
+          if (!res.ok || !data.counted) await internal(accounts, 'POST', '/quota/give', { userId: user.id });
+          const fresh = await internal(accounts, 'POST', '/auth', { session });
+          data.user = fresh.ok ? (await fresh.json()).user : undefined;
+        }
+        if (res.ok && !data.updated) await getShare(parts[1], true);
+        delete data.counted;
+        return reply(res.status, data);
+      }
+      return fail(405, 'Method not allowed');
     }
 
     // ---- שיתוף הספר: בעל הספר (בעל האפליקציה או מי שנרשם מהזמנה) מצרף בני משפחה ----
@@ -682,6 +733,20 @@ export default {
       return reply(res.status, data);
     }
 
+    // שיתוף מתכון בקישור: נשמר עותק של המתכון (בלי ההערות האישיות והדירוג), ולא גישה לספר
+    if (parts.length === 3 && parts[2] === 'share' && request.method === 'POST') {
+      const limited = await rate([{ key: `share:${bookKeyOf(user)}`, limit: 100, window: 86400 }], 'הגעתם למגבלת השיתופים היומית. נסו שוב מחר.');
+      if (limited) return limited;
+      const { body, error } = await readJson();
+      if (error) return error;
+      const res = await internal(book, 'GET', `/recipes/${id}`);
+      if (!res.ok) return fail(404, 'המתכון לא נמצא');
+      const copy = sharedCopy((await res.json()).recipe, await allCategories());
+      if (!copy) return fail(400, 'אי אפשר לשתף את המתכון הזה');
+      if (JSON.stringify(copy).length > 120000) return fail(413, 'המתכון גדול מדי לשיתוף');
+      const by = String(user?.name || body.from || '').trim().slice(0, 60);
+      return pass(await internal(accounts, 'POST', '/shares/put', { recipe: copy, by, userId: user ? user.id : 'owner' }));
+    }
     if (parts.length === 1 && request.method === 'GET') return pass(await internal(book, 'GET', '/recipes'));
     if (parts.length === 2 && request.method === 'GET') return pass(await internal(book, 'GET', `/recipes/${id}`));
     if (parts.length === 2 && request.method === 'DELETE') return pass(await internal(book, 'DELETE', `/recipes/${id}`));
@@ -888,6 +953,54 @@ function restoredRecipe(r, categories) {
     source,
     ...(typeof r.createdAt === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(r.createdAt) ? { createdAt: r.createdAt } : {}),
   };
+}
+
+// מתכון לשיתוף: מה שצריך כדי לבשל, בלי מה שאישי (הערות שלי, דירוג, מועדף) ובלי טקסט המקור
+// (הודעת ווטסאפ יכולה לכלול שמות ושיחה פרטית). מתכון בלי קישור נשמר אצל המקבל כמתכון "שנכתב ידנית"
+function sharedCopy(raw, categories) {
+  const r = restoredRecipe(raw, categories);
+  if (!r) return null;
+  delete r.myNotes;
+  delete r.favorite;
+  delete r.rating;
+  delete r.createdAt;
+  const src = r.source;
+  r.source = src.url
+    ? { url: src.url, kind: src.kind, ...['title', 'author', 'site', 'embed'].reduce((o, k) => (src[k] ? { ...o, [k]: src[k] } : o), {}) }
+    : { url: null, key: src.key, kind: src.kind === 'photo' ? 'photo' : 'manual' };
+  return r;
+}
+
+// תצוגה מקדימה של מתכון ששותף (בלי מצרכים ושלבים – אותם רואים באפליקציה)
+function sharePreview(share) {
+  const r = share.recipe || {};
+  const count = (list) => (Array.isArray(list) ? list.reduce((n, s) => n + (Array.isArray(s?.items) ? s.items.length : 0), 0) : 0);
+  return {
+    title: String(r.title || ''),
+    description: String(r.description || '').slice(0, 300),
+    image: typeof r.image === 'string' && /^https:\/\//.test(r.image) ? r.image : null,
+    category: String(r.category || ''),
+    servings: String(r.servings || ''),
+    time: String(r.totalTime || r.cookTime || r.prepTime || ''),
+    ingredients: count(r.ingredients),
+    steps: count(r.steps),
+    by: share.by || '',
+  };
+}
+
+// תמונה של מתכון ששותף: עותק בספר של המקבל (כדי שלא תיעלם אם מי ששיתף ימחק את המתכון)
+async function copyImage(image, { origin, bookKey, source, target }) {
+  const m = typeof image === 'string' && image.startsWith(`${origin}/img/`) && image.slice(origin.length).match(/^\/img\/(book|[0-9a-f-]{36})\/([0-9a-f-]{36})$/);
+  if (!m) return image ?? null; // תמונה מאתר אחר נשארת קישור
+  if (m[1] === bookKey) return image; // אותו ספר – אותה תמונה
+  const res = await internal(source(m[1]), 'GET', `/img/${m[2]}`);
+  const type = res.headers.get('content-type') || '';
+  if (!res.ok || !/^image\/(jpeg|png|webp)$/.test(type)) return null;
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  const saved = await internal(target, 'POST', '/img', { type, data: btoa(bin) });
+  return saved.ok ? `${origin}/img/${bookKey}/${(await saved.json()).id}` : null;
 }
 
 // רשימת קניות: [{id, text, checked, recipeId?, recipeTitle?, group?}]

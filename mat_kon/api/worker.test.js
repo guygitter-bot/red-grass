@@ -1280,3 +1280,49 @@ test('an uploaded image cannot be pointed at from another recipe; replacing on r
   assert.equal((await worker.fetch(new Request(a.image), env)).status, 200);
   assert.equal((await worker.fetch(new Request(a.image), env)).headers.get('access-control-allow-origin'), '*');
 });
+
+test('sharing a recipe by link: a preview for anyone, the full recipe and saving only after signing in', async () => {
+  env.OWNER_PASSWORD = 'owner-secret-1';
+  const owner = (await (await call('POST', '/owner-login', { password: 'owner-secret-1' })).json()).session;
+  const { recipe } = await (await call('POST', '/recipes', { url: 'https://cake.example/share' }, owner)).json();
+  const png = `data:image/png;base64,${btoa('fake-png-bytes')}`;
+  await call('PUT', `/recipes/${recipe.id}`, { myNotes: 'סוד שלי', rating: 5, favorite: true, image: png }, owner);
+
+  const { token } = await (await call('POST', `/recipes/${recipe.id}/share`, { from: 'גיא' }, owner)).json();
+  assert.match(token, /^[\w-]{30,}$/);
+  assert.equal((await call('POST', '/recipes/nope/share', {}, owner)).status, 404);
+
+  // תצוגה מקדימה בלי כניסה: שם, תמונה ומי שיתף – בלי המצרכים עצמם
+  const { preview } = await (await call('GET', `/shares/${token}`)).json();
+  assert.deepEqual([preview.title, preview.by, preview.ingredients, preview.steps], ['עוגת שוקולד', 'גיא', 2, 2]);
+  assert.match(preview.image, /^https:\/\/api\.example\/img\/book\//);
+  assert.equal(JSON.stringify(preview).includes('ביצים'), false);
+  assert.equal((await call('GET', '/shares/not-a-real-token-123456')).status, 404);
+  assert.equal((await call('GET', `/shares/${token}/full`)).status, 401);
+
+  // משתמש אחר: רואה את המתכון בלי ההערות האישיות, ושומר עותק (עם התמונה) בספר שלו
+  const inv = await invite('דנה', owner);
+  const dana = (await (await register(inv.token)).json()).session;
+  const full = await (await call('GET', `/shares/${token}/full`, undefined, dana)).json();
+  assert.equal(full.by, 'גיא');
+  assert.deepEqual([full.recipe.myNotes, full.recipe.rating, full.recipe.favorite], [undefined, undefined, undefined]);
+  const saved = await (await call('POST', `/shares/${token}/save`, {}, dana)).json();
+  assert.equal(saved.recipe.title, 'עוגת שוקולד');
+  assert.equal(saved.recipe.source.url, 'https://cake.example/share');
+  assert.equal(saved.recipe.myNotes, '');
+  assert.match(saved.recipe.image, new RegExp(`/img/${saved.user.id}/`));
+  assert.equal((await call('GET', saved.recipe.image.replace('https://api.example', ''))).status, 200);
+  assert.equal(saved.user.added, 1);
+  // שמירה חוזרת לא מכפילה ולא נספרת
+  const again = await (await call('POST', `/shares/${token}/save`, {}, dana)).json();
+  assert.deepEqual([again.updated, again.user.added], [true, 1]);
+  assert.equal((await (await call('GET', '/recipes', undefined, dana)).json()).recipes.length, 1);
+
+  // מי שמוחק את החשבון – גם הקישורים ששיתף נמחקים
+  const mine = (await (await call('GET', '/recipes', undefined, dana)).json()).recipes[0];
+  const { token: danaToken } = await (await call('POST', `/recipes/${mine.id}/share`, {}, dana)).json();
+  assert.equal((await (await call('GET', `/shares/${danaToken}`)).json()).preview.by, 'דנה');
+  await call('DELETE', '/account', undefined, dana);
+  assert.equal((await call('GET', `/shares/${danaToken}`)).status, 404);
+  assert.equal((await call('GET', `/shares/${token}`)).status, 200);
+});

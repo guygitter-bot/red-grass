@@ -23,6 +23,7 @@ import useIdbState from './hooks/useIdbState';
 const cleanRecipes = (list) => (Array.isArray(list) ? list.filter((r) => r && typeof r === 'object' && r.id).map(safeRecipe) : []);
 import InvitesView from './components/InvitesView';
 import ShareView from './components/ShareView';
+import SharedRecipe from './components/SharedRecipe';
 import PrivacyView from './components/PrivacyView';
 import AdminView from './components/AdminView';
 import HelpView from './components/HelpView';
@@ -35,9 +36,9 @@ import { CATEGORIES } from './lib/categories';
 import { isNative } from './lib/native';
 import {
   addCategory, setCategoryPrefs, addRecipeAsync, addTextRecipe, getJob, getRecipe, deleteRecipe, removeCategory, getMe, getPlan, getShopping, listRecipes, logout as apiLogout, refreshRecipe,
-  updateRecipe, categorizeRecipe, safeRecipe, getPantry, shoppingOps, pantryOps, planOps,
+  updateRecipe, categorizeRecipe, safeRecipe, getPantry, shoppingOps, pantryOps, planOps, shareRecipe, recipeShareLink,
 } from './lib/api';
-import { SORTS, categoriesOf, countByCategory, emojiOf, filterRecipes, freeLeft, linkFromShare, orderCategories, parseAuthHash, sortRecipes } from './lib/recipes';
+import { SORTS, categoriesOf, countByCategory, emojiOf, filterRecipes, freeLeft, linkFromShare, orderCategories, parseAuthHash, parseShareLink, sortRecipes } from './lib/recipes';
 import { usePersistentState } from './lib/storage';
 
 // קישור הזמנה (#invite=...) או כניסה (#login). נלקח מהכתובת ונמחק ממנה מיד.
@@ -70,6 +71,14 @@ async function takeShared() {
 }
 
 const AUTH_LINK = takeAuthLink();
+
+// מתכון ששותף בקישור (#recipe=...). נלקח מהכתובת ונמחק ממנה מיד
+function takeShareLink() {
+  const token = parseShareLink(window.location.hash);
+  if (token) window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  return token;
+}
+const SHARE_LINK = takeShareLink();
 
 const route = () => {
   const h = window.location.hash;
@@ -133,6 +142,37 @@ export default function App() {
   // סדר הקטגוריות ומועדפות (נשמר בשרת לכל הספר)
   const [categoryPrefs, setCategoryPrefsState] = usePersistentState('matkon_category_prefs', { order: [], favorites: [] });
   const [loadError, setLoadError] = useState('');
+  // מתכון ששלחו לי בקישור: נשמר במכשיר עד שמחליטים, כדי שיחכה גם אחרי הרשמה (login: המשתמש ביקש להיכנס)
+  const [incoming, setIncoming] = usePersistentState('matkon_incoming_share', SHARE_LINK ? { token: SHARE_LINK } : null);
+  useEffect(() => {
+    if (SHARE_LINK) setIncoming({ token: SHARE_LINK });
+  }, [setIncoming]);
+  // באפליקציה לאנדרואיד: קישור matkon://recipe/... (הכפתור "פתיחה באפליקציה" באתר)
+  useEffect(() => {
+    if (!isNative()) return undefined;
+    let alive = true;
+    let handle;
+    // קישור שהאפליקציה נפתחה ממנו נשאר גם כשהיא נפתחת מחדש – מתכון שכבר טופל לא מוצג שוב
+    const take = (link, launch) => {
+      const token = parseShareLink(link);
+      if (token && alive && !(launch && token === loadJson('matkon_share_done', ''))) setIncoming({ token });
+    };
+    import('@capacitor/core')
+      .then(({ registerPlugin }) => {
+        const app = registerPlugin('App');
+        app.getLaunchUrl().then((r) => take(r?.url, true)).catch(() => {});
+        return app.addListener('appUrlOpen', (e) => take(e.url));
+      })
+      .then((h) => {
+        if (alive) handle = h;
+        else h.remove();
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+      handle?.remove();
+    };
+  }, [setIncoming]);
   const [toast, setToast] = useState('');
 
   const isOwner = !session || ownerDevice;
@@ -423,6 +463,36 @@ export default function App() {
   const current = nav.view === 'recipe' && recipes.find((r) => r.id === nav.id);
   const left = freeLeft(user);
 
+  // מתכון ששלחו לי: קודם הוא (גם לפני מסך הכניסה – תצוגה מקדימה), אלא אם ביקשו להיכנס כדי לראות אותו
+  if (incoming && !(auth && incoming.login) && auth?.mode !== 'switch') {
+    return (
+      <>
+        {paywall && <Paywall user={user} paymentUrl={paywall.paymentUrl} onClose={() => setPaywall(null)} />}
+        <SharedRecipe
+          token={incoming.token}
+          session={session}
+          onLogin={() => {
+            setIncoming({ ...incoming, login: true });
+            setAuth((a) => a || { mode: 'login' });
+          }}
+          onClose={() => {
+            saveJson('matkon_share_done', incoming.token);
+            setIncoming(null);
+          }}
+          onSaved={(data) => {
+            if (data.user && session && !ownerDevice) setUser(data.user);
+            upsert(safeRecipe(data.recipe));
+            saveJson('matkon_share_done', incoming.token);
+            setIncoming(null);
+            setToast(data.updated ? 'המתכון כבר היה בספר שלך' : 'המתכון נשמר בספר שלך');
+            open(data.recipe.id);
+          }}
+          onPaywall={(url) => setPaywall({ paymentUrl: url || paymentUrl })}
+        />
+      </>
+    );
+  }
+
   if (auth?.mode === 'switch') {
     return (
       <SwitchAccount
@@ -686,6 +756,7 @@ export default function App() {
         pantryNames={pantry.map((i) => i.name)}
         categories={allCategories}
         onBack={back}
+        onShareLink={async () => recipeShareLink(await shareRecipe(session, current.id))}
         onUpdate={async (patch) => {
           upsert({ ...current, ...patch });
           try {
