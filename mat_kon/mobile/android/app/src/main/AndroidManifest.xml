@@ -26,6 +26,14 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
             </intent-filter>
+
+            <!-- מתכון ששותף בקישור: הכפתור "פתיחה באפליקציה" באתר פותח matkon://recipe/<קוד> -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="matkon" android:host="recipe" />
+            </intent-filter>
         </activity>
 
         <provider

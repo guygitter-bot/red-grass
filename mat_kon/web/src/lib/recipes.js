@@ -129,6 +129,12 @@ export function parseAuthHash(hash) {
   return null;
 }
 
+// מתכון ששותף בקישור: #recipe=<token> באתר, או matkon://recipe/<token> כשהקישור נפתח באפליקציה לאנדרואיד
+export function parseShareLink(link) {
+  const m = String(link || '').match(/(?:[#&]recipe=|^matkon:\/\/recipe\/)([\w-]{20,64})/);
+  return m ? m[1] : null;
+}
+
 // כמה מתכונים חינמיים נשארו למשתמש שהוזמן (null = בלי הגבלה)
 export function freeLeft(user) {
   if (!user || user.plan === 'paid') return null;

@@ -114,6 +114,13 @@ export const logout = (s) => api(s, 'POST', '/logout', {}).catch(() => {});
 const appUrl = () => (isNative() ? siteAsset('') : `${window.location.origin}${window.location.pathname}`);
 export const inviteLink = (token) => `${appUrl()}#invite=${token}`;
 export const loginLink = () => `${appUrl()}#login`;
+
+// שיתוף מתכון בקישור: מי שמקבל רואה תצוגה מקדימה, ואת המתכון המלא – באפליקציה, אחרי כניסה
+export const shareRecipe = (s, id, from) => api(s, 'POST', `/recipes/${id}/share`, from ? { from } : {}).then((d) => d.token);
+export const recipeShareLink = (token) => `${appUrl()}#recipe=${token}`;
+export const getSharePreview = (token) => api('', 'GET', `/shares/${encodeURIComponent(token)}`).then((d) => d.preview);
+export const getSharedRecipe = (s, token) => api(s, 'GET', `/shares/${encodeURIComponent(token)}/full`).then((d) => ({ by: d.by, recipe: safeRecipe(d.recipe) }));
+export const saveSharedRecipe = (s, token) => api(s, 'POST', `/shares/${encodeURIComponent(token)}/save`, {});
 export const addTextRecipe = (s, item) => api(s, 'POST', '/recipes/text', item);
 
 // מתכון מתמונות / שנכתב ידנית

@@ -21,6 +21,7 @@ const OPEN_DAILY_MAX = 200; // הרשמות בלי קישור הזמנה ביו�
 // הזמנה שלא נוצלה תוך 30 יום פגה (הזמנות ישנות בלי תאריך – בלי תפוגה)
 const inviteExpired = (invite) => !invite.userId && invite.expiresAt && Date.parse(invite.expiresAt) < Date.now();
 const JOIN_DAYS = 7;
+const SHARE_DAYS = 365; // קישור לשיתוף מתכון תקף שנה
 export const OWNER_BOOK = 'owner';
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
@@ -97,6 +98,7 @@ export class Accounts {
     for (const [k, v] of await this.storage.list({ prefix: 'device:' })) if (now - v.at > SESSION_DAYS * 86400000) drop.push(k);
     const today = new Date(now).toISOString().slice(0, 10);
     for (const k of (await this.storage.list({ prefix: 'open-day:' })).keys()) if (k.slice(9) < today) drop.push(k);
+    for (const [k, v] of await this.storage.list({ prefix: 'share:' })) if (now - Date.parse(v.createdAt) > SHARE_DAYS * 86400000) drop.push(k);
     for (let i = 0; i < drop.length; i += 128) await this.storage.delete(drop.slice(i, i + 128));
     await this.storage.setAlarm?.(now + 86400000);
   }
@@ -410,6 +412,23 @@ export class Accounts {
       return json({ ok: true, deletedBook: !user.bookId });
     }
 
+    // ---- מתכון ששותף בקישור: עותק של המתכון (לא גישה לספר), עם שם מי ששיתף ----
+    if (path === '/shares/put' && request.method === 'POST') {
+      const token = randomToken(24);
+      await this.storage.put(`share:${token}`, {
+        recipe: body.recipe, by: String(body.by || '').slice(0, 60), userId: String(body.userId || ''), createdAt: now, saves: 0,
+      });
+      return json({ token });
+    }
+    if (path === '/shares/get' && request.method === 'POST') {
+      const key = `share:${String(body.token || '')}`;
+      const share = await this.storage.get(key);
+      if (!share || Date.now() - Date.parse(share.createdAt) > SHARE_DAYS * 86400000) return err(404, 'הקישור לא נמצא או שפג תוקפו');
+      // נשמר בספר של מישהו: נספר (כדי לדעת כמה שיתופים הביאו מתכונים)
+      if (body.saved) await this.storage.put(key, { ...share, saves: (share.saves || 0) + 1 });
+      return json({ share });
+    }
+
     // ---- תקלות אחרונות (למסך הניהול) ----
     // תקלות שרת ותקלות מהאפליקציה נשמרות ברשימות נפרדות (כך שדיווחים מבחוץ לא דוחקים תקלות שרת)
     if (path === '/errors/add' && request.method === 'POST') {
@@ -563,8 +582,11 @@ export class Accounts {
     const ids = new Set([userId, ...members.map((m) => m.id)]);
     const sessions = await this.storage.list({ prefix: 'session:' });
     const joins = await this.storage.list({ prefix: 'join:' });
+    const shares = await this.storage.list({ prefix: 'share:' });
     const keys = [
       ...[...sessions].filter(([, s]) => ids.has(s.userId)).map(([k]) => k),
+      // מתכונים ששיתפו בקישור נמחקים יחד עם החשבון
+      ...[...shares].filter(([, s]) => ids.has(s.userId)).map(([k]) => k),
       ...(user.bookId ? [] : [...joins].filter(([, j]) => j.bookId === userId).map(([k]) => k)),
       ...[user, ...members].flatMap((u) => [`user:${u.id}`, `email:${u.email}`]),
     ];
