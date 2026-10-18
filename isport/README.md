@@ -40,7 +40,8 @@ Add League Patches                    <- רק אם נבחר פאץ'
 - הסוכן: עד 300 הפעלות ביום. שום דבר ממנו לא נשמר בלי אישור.
 
 ## סודות ב-GitHub
-`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `ANTHROPIC_API_KEY` (קיימים), ו-`ISPORT_ADMIN_PASSWORD` – הסיסמה למסך הניהול.
+`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` (קיימים), `ISPORT_ADMIN_PASSWORD` – הסיסמה למסך הניהול, ו-`ISPORT_ANTHROPIC_API_KEY` –
+מפתח Claude נפרד לאתר (Workspace משלו ב-Anthropic Console, כדי לדעת בדיוק כמה עלה; בלעדיו – `ANTHROPIC_API_KEY` המשותף).
 בלי הסיסמה מסך הניהול נעול (החנות עובדת).
 
 ## סרטוני הדרכה (`tutorials/`)
