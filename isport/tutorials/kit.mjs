@@ -19,8 +19,9 @@ const TMP = join(HERE, '.rec');
 const API = 'https://isport-api.guygitter.workers.dev';
 const VOICE = join(HERE, 'voice');
 const MUSIC = join(HERE, 'music.m4a');
-const W = 390;
-const H = 844;
+// גודל המסך: טלפון כברירת מחדל; opts.desktop = מחשב (למשל ייבוא מטלגרם, שנעשה במחשב)
+const PHONE = { w: 390, h: 844 };
+const DESKTOP = { w: 960, h: 640 };
 export const PASSWORD = 'demo-password-2026';
 
 const { default: worker, Shop } = await import(join(HERE, '..', 'api', 'worker.js'));
@@ -255,7 +256,7 @@ export const MARK = '<img src="logo.webp" alt="">';
 // כל כתובית נקראת בקול. הקבצים: voice/eleven/<key>.mp3 (ElevenLabs) או voice/<key>.mp3 (Google TTS), נוצרים ב-GitHub Actions (isport-voice.yml),
 // והטקסטים לרשימה voice/lines.json. משפט בלי קובץ עדיין נרשם לרשימה, והסרטון נבנה בינתיים בלי הקול שלו.
 const SAY_WORDS = [
-  [/FlyLinking/g, 'פליי-לינקינג'], [/Isport/gi, 'איי-ספורט'], [/ISRAEL/g, 'ישראל'], [/WhatsApp/g, 'וואטסאפ'],
+  [/FlyLinking/g, 'פליי-לינקינג'], [/Telegram Desktop/g, 'טלגרם למחשב'], [/JSON/g, 'ג׳ייסון'], [/Photos/g, 'פוטוס'], [/Isport/gi, 'איי-ספורט'], [/ISRAEL/g, 'ישראל'], [/WhatsApp/g, 'וואטסאפ'],
   [/✕/g, 'האיקס'], [/♡/g, 'הלב'], [/\s*←\s*/g, ', ואז '],
 ];
 export function speakable(html) {
@@ -293,6 +294,7 @@ function voiceClip(text) {
 
 // הקלטה של סרטון אחד
 export async function record(name, script, opts = {}) {
+  const size = opts.desktop ? DESKTOP : PHONE;
   mkdirSync(TMP, { recursive: true });
   mkdirSync(OUT, { recursive: true });
   const server = await serve();
@@ -304,9 +306,9 @@ export async function record(name, script, opts = {}) {
   const vdir = join(TMP, name);
   rmSync(vdir, { recursive: true, force: true });
   const ctx = await browser.newContext({
-    viewport: { width: W, height: H },
-    deviceScaleFactor: 2,
-    isMobile: true,
+    viewport: { width: size.w, height: size.h },
+    deviceScaleFactor: opts.desktop ? 1.5 : 2,
+    isMobile: !opts.desktop,
     locale: 'he-IL',
     timezoneId: 'Asia/Jerusalem',
     colorScheme: opts.dark ? 'dark' : 'light',
@@ -357,7 +359,7 @@ export async function record(name, script, opts = {}) {
     frames.push({ file, t: metadata.timestamp });
     cdp.send('Page.screencastFrameAck', { sessionId }).catch(() => {});
   });
-  await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 92, maxWidth: W * 2, maxHeight: H * 2, everyNthFrame: 1 });
+  await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 92, maxWidth: size.w * 2, maxHeight: size.h * 2, everyNthFrame: 1 });
 
   const wait = (ms) => page.waitForTimeout(ms);
   const voice = [];
@@ -382,6 +384,8 @@ export async function record(name, script, opts = {}) {
     page,
     base,
     wait,
+    imgDir,
+    tmp: TMP,
     async say(html, ms = 2600, top = false) {
       await waitVoice();
       await page.evaluate(([h, t]) => window.__tut.say(h, t), [html, top]);
@@ -441,12 +445,12 @@ export async function record(name, script, opts = {}) {
     await ctx.close();
     await browser.close();
     server.close();
-    encode(vdir, frames, end, name, opts.poster ?? 1.2, voice);
+    encode(vdir, frames, end, name, opts.poster ?? 1.2, voice, opts.desktop ? 1280 : 720);
   }
 }
 
 // פריימים -> mp4 (H.264, נפתח בכל טלפון) + תמונת שער. קול בזמן של כל משפט, מוזיקה ברקע שיורדת כשמדברים
-function encode(dir, frames, end, name, posterAt, voice = []) {
+function encode(dir, frames, end, name, posterAt, voice = [], width = 720) {
   if (!frames.length) throw new Error('no frames recorded');
   const mp4 = join(OUT, `${name}.mp4`);
   const jpg = join(OUT, `${name}.jpg`);
@@ -477,7 +481,7 @@ function encode(dir, frames, end, name, posterAt, voice = []) {
   } else if (music) audioMap = '[m]';
   const audioArgs = audioMap ? ['-filter_complex', parts.join(';'), '-map', '0:v', '-map', audioMap, '-c:a', 'aac', '-b:a', '96k', '-ac', '2'] : ['-an'];
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', ...inputs, ...audioArgs,
-    '-vf', 'scale=720:-2:flags=lanczos,fps=30', '-c:v', 'libx264', '-preset', 'slow', '-crf', '26', '-pix_fmt', 'yuv420p',
+    '-vf', `scale=${width}:-2:flags=lanczos,fps=30`, '-c:v', 'libx264', '-preset', 'slow', '-crf', '26', '-pix_fmt', 'yuv420p',
     '-movflags', '+faststart', '-t', length.toFixed(2), mp4]);
   if (voice.length) console.log(`  voice: ${voice.length} lines`);
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-ss', String(posterAt), '-i', mp4, '-frames:v', '1', '-vf', 'scale=360:-2', '-q:v', '5', jpg]);

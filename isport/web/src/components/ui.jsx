@@ -156,7 +156,8 @@ export function Chip({ active, onClick, children, small }) {
 }
 
 // סרטון הדרכה (נוצר אוטומטית ב-isport/tutorials, נמצא ב-public/tutorials)
-export function TutorialVideo({ name, className = '' }) {
+// wide = סרטון שהוקלט במסך מחשב (לרוחב)
+export function TutorialVideo({ name, className = '', wide = false }) {
   return (
     <video
       src={`tutorials/${name}.mp4`}
@@ -164,7 +165,7 @@ export function TutorialVideo({ name, className = '' }) {
       controls
       playsInline
       preload="none"
-      className={`aspect-[390/844] w-full max-w-xs rounded-2xl bg-ink object-cover shadow-lg ${className}`}
+      className={`w-full rounded-2xl bg-ink object-cover shadow-lg ${wide ? 'aspect-[3/2] max-w-2xl' : 'aspect-[390/844] max-w-xs'} ${className}`}
     />
   );
 }

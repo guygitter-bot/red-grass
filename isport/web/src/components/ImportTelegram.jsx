@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Check, FolderOpen, Sparkles, X } from 'lucide-react';
 import { shrinkImage } from '../lib/api';
 import { allProducts, readExport } from '../lib/telegram';
-import { Chip, Field, inputClass } from './ui';
+import { Chip, Field, TutorialVideo, inputClass } from './ui';
 
 const DAY = 24 * 60 * 60 * 1000;
 const day = (d) => String(d || '').slice(0, 10);
@@ -22,6 +22,7 @@ export default function ImportTelegram({ state, categories, call, onSaved }) {
   const [enrich, setEnrich] = useState(false);
   const [status, setStatus] = useState({});
   const [running, setRunning] = useState(false);
+  const [video, setVideo] = useState(false);
 
   const existing = useMemo(() => new Set(state.shirts.map((s) => s.code.toLowerCase())), [state.shirts]);
 
@@ -125,7 +126,11 @@ export default function ImportTelegram({ state, categories, call, onSaved }) {
       <a href="#/admin" className="mb-3 inline-flex items-center gap-1 text-sm text-muted hover:underline">
         <ArrowRight size={16} /> לכל המוצרים
       </a>
-      <h1 className="mb-4 text-2xl font-black">ייבוא מערוץ טלגרם</h1>
+      <h1 className="mb-2 text-2xl font-black">ייבוא מערוץ טלגרם</h1>
+      <button onClick={() => setVideo(!video)} className="mb-3 text-sm font-bold text-lime-ink hover:underline">
+        🎬 {video ? 'סגירת הסרטון' : 'סרטון הדרכה: ייבוא מטלגרם (דקה וחצי)'}
+      </button>
+      {video && <TutorialVideo name="import" wide className="mb-4" />}
 
       {!files && (
         <section className="rounded-2xl bg-card p-4 ring-1 ring-line lg:p-5">
