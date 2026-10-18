@@ -4,6 +4,20 @@
 export const MAX_IMAGES = 4;
 export const KINDS = ['club', 'national'];
 
+// קטגוריות. template קובע איך מוצר בקטגוריה מתנהג (ההגדרות כפולות ב-web/src/lib/shirt.js):
+//   football   – חולצת כדורגל: שם, מספר, פאץ' ושרוול ארוך
+//   basketball – גופיית כדורסל: שם ומספר
+//   plain      – מוצר רגיל (נעליים, תיקים…): בלי התאמה אישית, ההערה למוכר = קוד המוצר
+export const TEMPLATES = ['football', 'basketball', 'plain'];
+export const MAX_CATEGORIES = 20;
+export const DEFAULT_CATEGORIES = [
+  { id: 'football', name: 'חולצות כדורגל', template: 'football', active: true },
+  { id: 'basketball', name: 'גופיות כדורסל', template: 'basketball', active: true },
+  { id: 'shoes', name: 'נעליים', template: 'plain', active: true },
+  { id: 'bags', name: 'תיקים', template: 'plain', active: true },
+];
+const isCategoryId = (s) => typeof s === 'string' && /^[a-z][a-z0-9-]{1,30}$/.test(s);
+
 export const fail = (status, message) => Object.assign(new Error(message), { status });
 
 const clean = (s, max) => String(s ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -64,11 +78,16 @@ function cleanTags(tags) {
 }
 
 // חולצה מהמנהל -> חולצה שנשמרת. שדות חסרים (חולצות ישנות) מקבלים ברירת מחדל
-export function cleanShirt(b) {
+// categories = הקטגוריות הקיימות (מוצר בלי קטגוריה – מחולצה ישנה – הוא חולצת כדורגל)
+export function cleanShirt(b, categories = DEFAULT_CATEGORIES) {
   if (!b || typeof b !== 'object') throw fail(400, 'חסרים פרטים');
+  const category = categories.find((c) => c.id === (b.category || 'football'));
+  if (!category) throw fail(400, 'הקטגוריה לא קיימת');
+  const plain = category.template === 'plain';
   const team = clean(b.team, 60);
-  if (!team) throw fail(400, 'חסר שם קבוצה / נבחרת');
+  if (!team) throw fail(400, plain ? 'חסר שם מותג' : 'חסר שם קבוצה / נבחרת');
   const shirt = {
+    category: category.id,
     team,
     teamHe: clean(b.teamHe, 60),
     kind: KINDS.includes(b.kind) ? b.kind : 'club',
@@ -82,7 +101,7 @@ export function cleanShirt(b) {
     leagueHe: clean(b.leagueHe, 50),
     description: cleanText(b.description, 800),
     tags: cleanTags(b.tags),
-    longSleeve: b.longSleeve === true,
+    longSleeve: category.template === 'football' && b.longSleeve === true,
     published: b.published === true,
     featured: b.featured === true,
     codeManual: b.codeManual === true,
@@ -94,7 +113,7 @@ export function cleanShirt(b) {
     shirt.codeManual = false;
     shirt.code = autoCode(shirt);
   }
-  if (!shirt.code) throw fail(400, 'אי אפשר ליצור קוד מוצר – כתבו את שם הקבוצה באנגלית');
+  if (!shirt.code) throw fail(400, `אי אפשר ליצור קוד מוצר – כתבו את שם ה${plain ? 'מותג' : 'קבוצה'} באנגלית`);
   if (shirt.published && !shirt.flyLink) throw fail(400, 'אי אפשר לפרסם חולצה בלי קישור FlyLinking');
   return shirt;
 }
@@ -102,7 +121,7 @@ export function cleanShirt(b) {
 // מה שהלקוחות רואים (בלי שדות פנימיים)
 export function publicShirt(s, now = Date.now()) {
   const { published, codeManual, createdAt, updatedAt, ...rest } = s;
-  return { ...rest, isNew: now - (createdAt || 0) < 21 * 24 * 60 * 60 * 1000 };
+  return { ...rest, category: s.category || 'football', isNew: now - (createdAt || 0) < 21 * 24 * 60 * 60 * 1000 };
 }
 
 export const DEFAULT_SETTINGS = { whatsapp: '', instagram: '', announcement: '' };
@@ -112,4 +131,22 @@ export function cleanSettings(b) {
   let instagram = clean(b?.instagram, 40).replace(/^@/, '');
   if (!/^[A-Za-z0-9._]*$/.test(instagram)) throw fail(400, 'שם המשתמש באינסטגרם לא תקין');
   return { whatsapp, instagram, announcement: clean(b?.announcement, 120) };
+}
+
+// רשימת הקטגוריות מהמנהל. קטגוריה שיש בה מוצרים לא נמחקת (אפשר להסתיר אותה)
+export function cleanCategories(list, used = new Set()) {
+  if (!Array.isArray(list) || !list.length) throw fail(400, 'צריך לפחות קטגוריה אחת');
+  if (list.length > MAX_CATEGORIES) throw fail(400, `אפשר עד ${MAX_CATEGORIES} קטגוריות`);
+  const out = [];
+  for (const c of list) {
+    const name = clean(c?.name, 30);
+    if (!name) throw fail(400, 'לכל קטגוריה צריך שם');
+    const id = isCategoryId(c?.id) ? c.id : '';
+    if (!id) throw fail(400, 'מזהה קטגוריה לא תקין');
+    if (out.some((x) => x.id === id)) throw fail(400, 'קטגוריה כפולה');
+    out.push({ id, name, template: TEMPLATES.includes(c.template) ? c.template : 'plain', active: c.active !== false });
+  }
+  for (const id of used) if (!out.some((c) => c.id === id)) throw fail(400, 'אי אפשר למחוק קטגוריה שיש בה מוצרים – אפשר להסתיר אותה');
+  if (!out.some((c) => c.active)) throw fail(400, 'צריך לפחות קטגוריה אחת מוצגת');
+  return out;
 }

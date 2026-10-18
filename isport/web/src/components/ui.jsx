@@ -22,7 +22,7 @@ export function ThemeButton({ className = '' }) {
   );
 }
 
-export function Header({ favCount }) {
+export function Header({ favCount, categories }) {
   return (
     <header className="sticky top-0 z-30 bg-ink text-white" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
       <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-1.5">
@@ -30,10 +30,12 @@ export function Header({ favCount }) {
           <Logo className="h-14 lg:h-16" />
         </a>
         <div className="flex-1" />
-        <nav className="hidden items-center gap-1 text-sm font-medium sm:flex">
-          <a href="#/" className="rounded-full px-3 py-1.5 hover:bg-white/10">כל החולצות</a>
-          <a href="#/club" className="rounded-full px-3 py-1.5 hover:bg-white/10">קבוצות</a>
-          <a href="#/national" className="rounded-full px-3 py-1.5 hover:bg-white/10">נבחרות</a>
+        <nav className="hidden items-center gap-1 text-sm font-medium lg:flex">
+          {categories.map((c) => (
+            <a key={c.id} href={`#/c/${c.id}`} className="whitespace-nowrap rounded-full px-3 py-1.5 hover:bg-white/10">
+              {c.name}
+            </a>
+          ))}
         </nav>
         <a href="#/favorites" className="relative rounded-full p-2 hover:bg-white/10" aria-label="המועדפים שלי">
           <Heart size={20} />
@@ -58,7 +60,7 @@ export function Footer({ settings }) {
         <div className="max-w-sm">
           <Logo className="h-28" />
           <p className="mt-3 text-sm leading-relaxed text-white/60">
-            חולצות כדורגל של קבוצות ונבחרות. בוחרים חולצה, מוסיפים שם, מספר ופאץ', ומשלימים את ההזמנה אצל המוכר.
+            חולצות, גופיות, נעליים ותיקים. בוחרים מוצר, מוסיפים שם ומספר, ומשלימים את ההזמנה אצל המוכר.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -104,7 +106,7 @@ export function ShirtCard({ shirt, fav, onFav }) {
           )}
           <div className="absolute right-2 top-2 flex flex-col items-start gap-1">
             {shirt.isNew && <span className="rounded-full bg-lime px-2 py-0.5 text-[11px] font-bold text-ink">חדש</span>}
-            {shirt.longSleeve && <span className="rounded-full bg-ink/80 px-2 py-0.5 text-[11px] font-bold text-white">גם שרוול ארוך</span>}
+            {shirt.longSleeve && shirt.template === 'football' && <span className="rounded-full bg-ink/80 px-2 py-0.5 text-[11px] font-bold text-white">גם שרוול ארוך</span>}
           </div>
         </div>
         <div className="p-3">
@@ -138,13 +140,13 @@ export function Field({ label, children, hint }) {
 
 export const inputClass = 'w-full rounded-xl border border-line bg-page px-3 py-2.5 text-base outline-none focus:border-lime-ink';
 
-export function Chip({ active, onClick, children }) {
+export function Chip({ active, onClick, children, small }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
+      className={`whitespace-nowrap rounded-full border font-medium transition ${small ? 'px-3 py-1 text-xs' : 'px-3.5 py-1.5 text-sm'} ${
         active ? 'border-ink bg-ink text-white dark:border-lime dark:bg-lime dark:text-ink' : 'border-line bg-card hover:border-muted'
       }`}
     >

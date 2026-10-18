@@ -1,18 +1,18 @@
 // מסך הניהול (#/admin, בסיסמה):
-//   #/admin              רשימת החולצות: חיפוש, פרסום/הסתרה
-//   #/admin/edit/<id>    עריכה (או new לחולצה חדשה): פרטים בסיסיים -> "מלא אוטומטית" -> מאשרים תמונות -> שומרים
-//   #/admin/settings     וואטסאפ, אינסטגרם, הודעה בראש האתר
+//   #/admin              רשימת המוצרים: חיפוש, קטגוריה, פרסום/הסתרה
+//   #/admin/edit/<id>    עריכה (או new למוצר חדש): קטגוריה ופרטים בסיסיים -> "מלא אוטומטית" -> מאשרים תמונות -> שומרים
+//   #/admin/settings     קטגוריות, וואטסאפ, אינסטגרם, הודעה בראש האתר
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Check, Eye, EyeOff, ImagePlus, Link2, LogOut, Plus, Search, Settings, Sparkles, Star, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUp, Check, Eye, EyeOff, ImagePlus, Link2, LogOut, Plus, Search, Settings, Sparkles, Star, Trash2, X } from 'lucide-react';
 import { api, imageUrl, load, shrinkImage, store } from '../lib/api';
 import { go } from '../lib/route';
-import { KIND_LABEL, autoCode, searchShirts } from '../lib/shirt';
+import { DEFAULT_CATEGORIES, KIND_LABEL, TEMPLATES, autoCode, searchShirts, withCategories } from '../lib/shirt';
 import { Chip, Field, ShirtImage, ThemeButton, TutorialVideo, inputClass } from './ui';
 import Logo from './Logo';
 
 const TOKEN = 'isport_admin';
 const MAX_IMAGES = 4;
-// הודעה שעוברת לעורך אחרי שחולצה חדשה נשמרה (העורך נפתח מחדש עם המזהה שלה)
+// הודעה שעוברת לעורך אחרי שמוצר חדש נשמר (העורך נפתח מחדש עם המזהה שלה)
 let flash = null;
 
 export default function Admin({ route }) {
@@ -65,22 +65,23 @@ export default function Admin({ route }) {
     setToken('');
   };
 
-  // עדכון חולצה אחת ברשימה בלי לטעון הכול מחדש
+  // עדכון מוצר אחד ברשימה בלי לטעון הכול מחדש
   const putShirt = (shirt) =>
     setState((s) => ({ ...s, shirts: [shirt, ...s.shirts.filter((x) => x.id !== shirt.id)].sort((a, b) => b.createdAt - a.createdAt) }));
 
+  const categories = state?.categories || DEFAULT_CATEGORIES;
   let page;
   if (!state) page = <div className="p-10 text-center text-muted">{error || 'טוען…'}</div>;
   else if (route[0] === 'edit') {
     const shirt = route[1] === 'new' ? null : state.shirts.find((s) => s.id === route[1]);
     page =
       route[1] !== 'new' && !shirt ? (
-        <div className="p-10 text-center text-muted">החולצה לא נמצאה</div>
+        <div className="p-10 text-center text-muted">המוצר לא נמצא</div>
       ) : (
-        <Editor key={route[1]} shirt={shirt} call={call} imagesReady={state.images} onSaved={putShirt} onDeleted={refresh} />
+        <Editor key={route[1]} shirt={shirt} categories={categories} call={call} imagesReady={state.images} onSaved={putShirt} onDeleted={refresh} />
       );
-  } else if (route[0] === 'settings') page = <SettingsPage state={state} call={call} onSaved={(settings) => setState((s) => ({ ...s, settings }))} />;
-  else page = <List state={state} call={call} onChange={putShirt} />;
+  } else if (route[0] === 'settings') page = <SettingsPage state={state} call={call} onSaved={(patch) => setState((s) => ({ ...s, ...patch }))} />;
+  else page = <List state={state} categories={categories} call={call} onChange={putShirt} />;
 
   return (
     <div className="min-h-dvh pb-16">
@@ -147,16 +148,18 @@ function Login({ onLogin }) {
   );
 }
 
-// ---------- רשימת החולצות ----------
+// ---------- רשימת המוצרים ----------
 
-function List({ state, call, onChange }) {
+function List({ state, categories, call, onChange }) {
   const [query, setQuery] = useState('');
   const [show, setShow] = useState('all');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [video, setVideo] = useState(false);
+  const [cat, setCat] = useState('');
 
-  const list = searchShirts(state.shirts, query).filter((s) => show === 'all' || (show === 'live' ? s.published : !s.published));
+  const all = withCategories(state.shirts, categories);
+  const list = searchShirts(all, query, { category: cat }).filter((s) => show === 'all' || (show === 'live' ? s.published : !s.published));
   const live = state.shirts.filter((s) => s.published).length;
 
   const toggle = async (s) => {
@@ -175,28 +178,37 @@ function List({ state, call, onChange }) {
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-black">החולצות</h1>
+          <h1 className="text-2xl font-black">המוצרים</h1>
           <p className="text-sm text-muted">
-            {state.shirts.length} חולצות · {live} באתר · {state.shirts.length - live} מוסתרות
+            {state.shirts.length} מוצרים · {live} באתר · {state.shirts.length - live} מוסתרים
           </p>
         </div>
-        <a href="#/admin/edit/new" className="flex items-center gap-1.5 rounded-full bg-ink px-5 py-2.5 font-bold text-white dark:bg-lime dark:text-ink">
-          <Plus size={18} /> חולצה חדשה
+        <a href={`#/admin/edit/new${cat ? `/${cat}` : ''}`} className="flex items-center gap-1.5 rounded-full bg-ink px-5 py-2.5 font-bold text-white dark:bg-lime dark:text-ink">
+          <Plus size={18} /> מוצר חדש
         </a>
       </div>
 
       <button onClick={() => setVideo(!video)} className="mb-3 text-sm font-bold text-lime-ink hover:underline">
-        🎬 {video ? 'סגירת הסרטון' : 'סרטון הדרכה: איך מוסיפים חולצה'}
+        🎬 {video ? 'סגירת הסרטון' : 'סרטון הדרכה: איך מוסיפים מוצר'}
       </button>
       {video && <TutorialVideo name="admin" className="mb-4" />}
       <div className="relative">
         <Search size={18} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted" />
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="חיפוש לפי קבוצה, סוג, שנה, צבע או קוד" className={`${inputClass} pr-10`} />
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="חיפוש לפי קבוצה, מותג, סוג, שנה, צבע או קוד" className={`${inputClass} pr-10`} />
       </div>
-      <div className="mt-3 flex gap-2">
-        <Chip active={show === 'all'} onClick={() => setShow('all')}>הכול</Chip>
-        <Chip active={show === 'live'} onClick={() => setShow('live')}>באתר</Chip>
-        <Chip active={show === 'hidden'} onClick={() => setShow('hidden')}>מוסתרות</Chip>
+      <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4">
+        <Chip active={!cat} onClick={() => setCat('')}>כל הקטגוריות</Chip>
+        {categories.map((c) => (
+          <Chip key={c.id} active={cat === c.id} onClick={() => setCat(c.id)}>
+            {c.name}
+            {!c.active && ' (מוסתרת)'}
+          </Chip>
+        ))}
+      </div>
+      <div className="mt-2 flex gap-2">
+        <Chip small active={show === 'all'} onClick={() => setShow('all')}>הכול</Chip>
+        <Chip small active={show === 'live'} onClick={() => setShow('live')}>באתר</Chip>
+        <Chip small active={show === 'hidden'} onClick={() => setShow('hidden')}>מוסתרים</Chip>
       </div>
       {error && <p className="mt-3 rounded-xl bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-300">{error}</p>}
 
@@ -211,6 +223,7 @@ function List({ state, call, onChange }) {
                   {s.teamHe || s.team} · {s.type} {s.year}
                 </div>
                 <div dir="ltr" className="truncate text-right font-mono text-xs text-muted">{s.code}</div>
+                {!cat && <div className="truncate text-xs text-muted">{s.categoryName}</div>}
                 {!s.flyLink && <div className="text-xs text-red-600 dark:text-red-400">חסר קישור FlyLinking</div>}
               </div>
             </a>
@@ -223,11 +236,11 @@ function List({ state, call, onChange }) {
               title={s.published ? 'להסתיר מהאתר' : 'לפרסם באתר'}
             >
               {s.published ? <Eye size={16} /> : <EyeOff size={16} />}
-              {s.published ? 'באתר' : 'מוסתרת'}
+              {s.published ? 'באתר' : 'מוסתר'}
             </button>
           </div>
         ))}
-        {!list.length && <div className="p-8 text-center text-muted">{state.shirts.length ? 'לא נמצאו חולצות' : 'עוד אין חולצות. לחצו "חולצה חדשה".'}</div>}
+        {!list.length && <div className="p-8 text-center text-muted">{state.shirts.length ? 'לא נמצאו מוצרים' : 'עוד אין מוצרים. לחצו "מוצר חדש".'}</div>}
       </div>
       <p className="mt-6 text-center text-xs text-muted">
         השלמה אוטומטית החודש: {state.usage.calls} פעמים
@@ -236,16 +249,42 @@ function List({ state, call, onChange }) {
   );
 }
 
-// ---------- עריכת חולצה ----------
+// ---------- עריכת מוצר ----------
+
+// השדות לפי סוג הקטגוריה (מוצר רגיל: מותג במקום קבוצה, דגם במקום סוג חולצה)
+const FIELDS = {
+  football: {
+    team: ['קבוצה / נבחרת (באנגלית)', 'Liverpool'], type: ['סוג חולצה', 'Home / Away / GK'], year: ['שנה / עונה', '2025/26'],
+    types: ['Home', 'Away', 'Third', 'GK', 'Special', 'Training', 'Retro'], teamHe: ['שם בעברית', 'ליברפול'],
+    describe: "צווארון, צבעים, עיצוב, שרוולים, סמל וכו'",
+  },
+  basketball: {
+    team: ['קבוצה / נבחרת (באנגלית)', 'Golden State Warriors'], type: ['סוג גופייה', 'Icon / Association / Statement'], year: ['שנה / עונה', '2025/26'],
+    types: ['Icon', 'Association', 'Statement', 'City', 'Classic'], teamHe: ['שם בעברית', 'גולדן סטייט ווריורס'],
+    describe: 'צבעים, עיצוב, סמל, פרטים מיוחדים',
+  },
+  plain: {
+    team: ['מותג (באנגלית)', 'Nike'], type: ['דגם', 'Air Jordan 1 Mid'], year: ['שנה (לא חובה)', '2025'],
+    types: [], teamHe: ['מותג בעברית', 'נייקי'],
+    describe: 'חומרים, צבעים, עיצוב, תכונות עיקריות',
+  },
+};
 
 const EMPTY = {
+  category: 'football',
   team: '', teamHe: '', kind: 'club', type: 'Home', year: '', color: '', colorHe: '',
   country: '', countryHe: '', league: '', leagueHe: '', description: '', tags: [],
   code: '', codeManual: false, flyLink: '', images: [], longSleeve: false, published: false, featured: false,
 };
 
-function Editor({ shirt, call, imagesReady, onSaved, onDeleted }) {
-  const [form, setForm] = useState(() => ({ ...EMPTY, ...(shirt || {}) }));
+function Editor({ shirt, categories, call, imagesReady, onSaved, onDeleted }) {
+  // מוצר חדש מתוך קטגוריה (#/admin/edit/new/<קטגוריה>)
+  const startCategory = window.location.hash.split('/')[4];
+  const [form, setForm] = useState(() => {
+    const start = categories.find((c) => c.id === startCategory);
+    const fresh = start ? { category: start.id, type: FIELDS[start.template].types[0] || '' } : {};
+    return { ...EMPTY, ...fresh, ...(shirt || {}) };
+  });
   const [tagsText, setTagsText] = useState(() => (shirt?.tags || []).join(', '));
   const [suggestions, setSuggestions] = useState([]);
   const [auto, setAuto] = useState({ details: false, images: false });
@@ -260,6 +299,16 @@ function Editor({ shirt, call, imagesReady, onSaved, onDeleted }) {
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
   const code = form.codeManual ? form.code : autoCode(form);
   const full = form.images.length >= MAX_IMAGES;
+  const template = categories.find((c) => c.id === form.category)?.template || 'football';
+  const F = FIELDS[template];
+  const plain = template === 'plain';
+
+  // החלפת קטגוריה: סוג ברירת המחדל מתאים לקטגוריה החדשה
+  const setCategory = (id) => {
+    const next = categories.find((c) => c.id === id)?.template || 'plain';
+    const defaults = Object.values(FIELDS).map((x) => x.types[0]);
+    setForm((f) => ({ ...f, category: id, type: !f.type || defaults.includes(f.type) ? FIELDS[next].types[0] || '' : f.type }));
+  };
 
   const fail = (e) => setMsg({ error: true, text: e.message });
 
@@ -268,7 +317,7 @@ function Editor({ shirt, call, imagesReady, onSaved, onDeleted }) {
     if (!form.team.trim()) return setMsg({ error: true, text: 'כתבו קודם את שם הקבוצה / הנבחרת' });
     setMsg(null);
     setAuto({ details: true, images: true });
-    const basics = { team: form.team, type: form.type, year: form.year, color: form.color };
+    const basics = { category: form.category, team: form.team, type: form.type, year: form.year, color: form.color };
     const details = call('/admin/enrich', basics)
       .then(({ details: d }) => {
         setForm((f) => ({
@@ -343,7 +392,7 @@ function Editor({ shirt, call, imagesReady, onSaved, onDeleted }) {
       const res = await call('/admin/shirt', body);
       onSaved(res.shirt);
       setForm({ ...EMPTY, ...res.shirt });
-      const done = { text: res.shirt.published ? 'נשמר ✓ החולצה מופיעה באתר' : 'נשמר ✓ (מוסתרת מהאתר)' };
+      const done = { text: res.shirt.published ? 'נשמר ✓ המוצר מופיע באתר' : 'נשמר ✓ (מוסתר מהאתר)' };
       setMsg(done);
       if (!shirt) {
         flash = done;
@@ -357,7 +406,7 @@ function Editor({ shirt, call, imagesReady, onSaved, onDeleted }) {
   };
 
   const remove = async () => {
-    if (!window.confirm('למחוק את החולצה לגמרי? (אפשר גם רק להסתיר אותה)')) return;
+    if (!window.confirm('למחוק את המוצר לגמרי? (אפשר גם רק להסתיר אותו)')) return;
     setBusy('delete');
     try {
       await call('/admin/shirt-delete', { id: shirt.id });
@@ -372,28 +421,38 @@ function Editor({ shirt, call, imagesReady, onSaved, onDeleted }) {
   return (
     <div>
       <a href="#/admin" className="mb-3 inline-flex items-center gap-1 text-sm text-muted hover:underline">
-        <ArrowRight size={16} /> לכל החולצות
+        <ArrowRight size={16} /> לכל המוצרים
       </a>
-      <h1 className="mb-4 text-2xl font-black">{shirt ? `${shirt.teamHe || shirt.team} ${shirt.type} ${shirt.year}` : 'חולצה חדשה'}</h1>
+      <h1 className="mb-4 text-2xl font-black">{shirt ? `${shirt.teamHe || shirt.team} ${shirt.type} ${shirt.year}` : 'מוצר חדש'}</h1>
 
       <div className="grid gap-5 lg:grid-cols-[1fr_22rem]">
         <div className="space-y-5">
           {/* שלב 1: פרטים בסיסיים */}
           <Box title="1. פרטים בסיסיים" sub="ממלאים את אלה, ולוחצים &quot;מלא אוטומטית&quot; – המערכת תשלים קוד, תיאור, סיווג, תגים ותמונות.">
+            <Field label="קטגוריה">
+              <select value={form.category} onChange={(e) => setCategory(e.target.value)} className={`${inputClass} mb-3`} aria-label="קטגוריה">
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                    {!c.active ? ' (מוסתרת)' : ''}
+                  </option>
+                ))}
+              </select>
+            </Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="קבוצה / נבחרת (באנגלית)">
-                <input value={form.team} onChange={(e) => set({ team: e.target.value })} placeholder="Liverpool" dir="ltr" className={inputClass} />
+              <Field label={F.team[0]}>
+                <input value={form.team} onChange={(e) => set({ team: e.target.value })} placeholder={F.team[1]} dir="ltr" className={inputClass} />
               </Field>
-              <Field label="סוג חולצה">
-                <input value={form.type} onChange={(e) => set({ type: e.target.value })} placeholder="Home / Away / GK" dir="ltr" list="types" className={inputClass} />
+              <Field label={F.type[0]}>
+                <input value={form.type} onChange={(e) => set({ type: e.target.value })} placeholder={F.type[1]} dir="ltr" list="types" className={inputClass} />
                 <datalist id="types">
-                  {['Home', 'Away', 'Third', 'GK', 'Special', 'Training', 'Retro'].map((t) => (
+                  {F.types.map((t) => (
                     <option key={t} value={t} />
                   ))}
                 </datalist>
               </Field>
-              <Field label="שנה / עונה">
-                <input value={form.year} onChange={(e) => set({ year: e.target.value })} placeholder="2025/26" dir="ltr" className={inputClass} />
+              <Field label={F.year[0]}>
+                <input value={form.year} onChange={(e) => set({ year: e.target.value })} placeholder={F.year[1]} dir="ltr" className={inputClass} />
               </Field>
               <Field label="צבע (באנגלית)">
                 <input value={form.color} onChange={(e) => set({ color: e.target.value })} placeholder="Red" dir="ltr" className={inputClass} />
@@ -502,25 +561,29 @@ function Editor({ shirt, call, imagesReady, onSaved, onDeleted }) {
           {/* שלב 3: כל הפרטים */}
           <Box title="3. פרטים, סיווג ותיאור">
             <div className="grid grid-cols-2 gap-3">
-              <Field label="שם בעברית">
-                <input value={form.teamHe} onChange={(e) => set({ teamHe: e.target.value })} placeholder="ליברפול" className={inputClass} />
+              <Field label={F.teamHe[0]}>
+                <input value={form.teamHe} onChange={(e) => set({ teamHe: e.target.value })} placeholder={F.teamHe[1]} className={inputClass} />
               </Field>
-              <Field label="קבוצה או נבחרת">
-                <select value={form.kind} onChange={(e) => set({ kind: e.target.value })} className={inputClass}>
-                  <option value="club">{KIND_LABEL.club}</option>
-                  <option value="national">{KIND_LABEL.national}</option>
-                </select>
-              </Field>
-              <Field label="מדינה (אנגלית)">
+              {plain ? (
+                <div />
+              ) : (
+                <Field label="קבוצה או נבחרת">
+                  <select value={form.kind} onChange={(e) => set({ kind: e.target.value })} className={inputClass}>
+                    <option value="club">{KIND_LABEL.club}</option>
+                    <option value="national">{KIND_LABEL.national}</option>
+                  </select>
+                </Field>
+              )}
+              <Field label={plain ? 'מדינת המותג (אנגלית)' : 'מדינה (אנגלית)'}>
                 <input value={form.country} onChange={(e) => set({ country: e.target.value })} dir="ltr" className={inputClass} />
               </Field>
-              <Field label="מדינה (עברית)">
+              <Field label={plain ? 'מדינת המותג (עברית)' : 'מדינה (עברית)'}>
                 <input value={form.countryHe} onChange={(e) => set({ countryHe: e.target.value })} className={inputClass} />
               </Field>
-              <Field label={form.kind === 'national' ? 'התאחדות (אנגלית)' : 'ליגה (אנגלית)'}>
+              <Field label={plain ? 'סדרה / ענף (אנגלית)' : form.kind === 'national' ? 'התאחדות (אנגלית)' : 'ליגה (אנגלית)'}>
                 <input value={form.league} onChange={(e) => set({ league: e.target.value })} dir="ltr" className={inputClass} />
               </Field>
-              <Field label={form.kind === 'national' ? 'התאחדות (עברית)' : 'ליגה (עברית)'}>
+              <Field label={plain ? 'סדרה / ענף (עברית)' : form.kind === 'national' ? 'התאחדות (עברית)' : 'ליגה (עברית)'}>
                 <input value={form.leagueHe} onChange={(e) => set({ leagueHe: e.target.value })} className={inputClass} />
               </Field>
               <Field label="צבע (עברית)">
@@ -528,7 +591,7 @@ function Editor({ shirt, call, imagesReady, onSaved, onDeleted }) {
               </Field>
             </div>
             <div className="mt-3 space-y-3">
-              <Field label="תיאור קצר" hint="צווארון, צבעים, עיצוב, שרוולים, סמל וכו'">
+              <Field label="תיאור קצר" hint={F.describe}>
                 <textarea value={form.description} onChange={(e) => set({ description: e.target.value })} rows={4} className={inputClass} />
               </Field>
               <Field label="תגים לחיפוש" hint="מופרדים בפסיק">
@@ -568,9 +631,9 @@ function Editor({ shirt, call, imagesReady, onSaved, onDeleted }) {
           </Box>
 
           <Box>
-            <Toggle label="יש גם גרסת שרוול ארוך" checked={form.longSleeve} onChange={(v) => set({ longSleeve: v })} />
-            <Toggle label="מומלצת (מופיעה ראשונה)" checked={form.featured} onChange={(v) => set({ featured: v })} />
-            <Toggle label="מפורסמת באתר" checked={form.published} onChange={(v) => set({ published: v })} />
+            {template === 'football' && <Toggle label="יש גם גרסת שרוול ארוך" checked={form.longSleeve} onChange={(v) => set({ longSleeve: v })} />}
+            <Toggle label="מומלץ (מופיע ראשון)" checked={form.featured} onChange={(v) => set({ featured: v })} />
+            <Toggle label="מפורסם באתר" checked={form.published} onChange={(v) => set({ published: v })} />
           </Box>
 
           {msg && (
@@ -588,7 +651,7 @@ function Editor({ shirt, call, imagesReady, onSaved, onDeleted }) {
             )}
             {shirt?.published && (
               <a href={`#/shirt/${shirt.id}`} className="py-2 text-center text-sm font-bold text-muted hover:underline">
-                צפייה בדף החולצה באתר
+                צפייה בדף המוצר באתר
               </a>
             )}
             {shirt && (
@@ -638,7 +701,7 @@ function SettingsPage({ state, call, onSaved }) {
     try {
       const { settings } = await call('/admin/settings', form);
       setForm(settings);
-      onSaved(settings);
+      onSaved({ settings });
       setMsg({ text: 'נשמר ✓' });
     } catch (e) {
       setMsg({ error: true, text: e.message });
@@ -650,10 +713,11 @@ function SettingsPage({ state, call, onSaved }) {
   return (
     <div className="max-w-lg">
       <a href="#/admin" className="mb-3 inline-flex items-center gap-1 text-sm text-muted hover:underline">
-        <ArrowRight size={16} /> לכל החולצות
+        <ArrowRight size={16} /> לכל המוצרים
       </a>
       <h1 className="mb-4 text-2xl font-black">הגדרות האתר</h1>
-      <Box>
+      <Categories state={state} call={call} onSaved={(categories) => onSaved({ categories })} />
+      <Box title="פרטי קשר והודעה">
         <div className="space-y-3">
           <Field label="מספר וואטסאפ לשאלות" hint="עם קידומת מדינה, למשל 972501234567. ריק = בלי כפתור וואטסאפ">
             <input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} dir="ltr" inputMode="tel" className={inputClass} />
@@ -673,6 +737,88 @@ function SettingsPage({ state, call, onSaved }) {
       <p className="mt-4 text-sm text-muted">
         השלמה אוטומטית החודש: {usage.calls} פעמים ({Math.round((usage.input + usage.output) / 1000)} אלף טוקנים)
       </p>
+    </div>
+  );
+}
+
+// ניהול הקטגוריות: שם, סוג (מה הלקוח יכול להתאים), סדר, הסתרה. קטגוריה עם מוצרים לא נמחקת – מסתירים אותה
+function Categories({ state, call, onSaved }) {
+  const [list, setList] = useState(() => state.categories || DEFAULT_CATEGORIES);
+  const [msg, setMsg] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const count = (id) => state.shirts.filter((s) => (s.category || 'football') === id).length;
+
+  const edit = (i, patch) => setList((l) => l.map((c, j) => (j === i ? { ...c, ...patch } : c)));
+  const move = (i, d) =>
+    setList((l) => {
+      const out = [...l];
+      [out[i], out[i + d]] = [out[i + d], out[i]];
+      return out;
+    });
+  const add = () => setList((l) => [...l, { id: `cat-${Math.random().toString(36).slice(2, 8)}`, name: '', template: 'plain', active: true }]);
+
+  const save = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const { categories } = await call('/admin/categories', { categories: list });
+      setList(categories);
+      onSaved(categories);
+      setMsg({ text: 'הקטגוריות נשמרו ✓' });
+    } catch (e) {
+      setMsg({ error: true, text: e.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mb-5">
+      <Box title="קטגוריות" sub="הסדר כאן הוא הסדר באתר. הסוג קובע מה הלקוח יכול להתאים אישית.">
+        <div className="space-y-3">
+          {list.map((c, i) => (
+            <div key={c.id} className={`rounded-xl border border-line p-3 ${c.active ? '' : 'opacity-60'}`}>
+              <div className="flex items-center gap-2">
+                <input value={c.name} onChange={(e) => edit(i, { name: e.target.value })} placeholder="שם הקטגוריה" maxLength={30} className={`${inputClass} py-2`} aria-label="שם הקטגוריה" />
+                <button onClick={() => move(i, -1)} disabled={i === 0} className="rounded-full p-1.5 hover:bg-soft disabled:opacity-30" aria-label="למעלה">
+                  <ArrowUp size={16} />
+                </button>
+                <button onClick={() => move(i, 1)} disabled={i === list.length - 1} className="rounded-full p-1.5 hover:bg-soft disabled:opacity-30" aria-label="למטה">
+                  <ArrowDown size={16} />
+                </button>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <select value={c.template} onChange={(e) => edit(i, { template: e.target.value })} className="min-w-0 flex-1 rounded-lg border border-line bg-page px-2 py-1.5 text-sm" aria-label="סוג">
+                  {Object.entries(TEMPLATES).map(([id, t]) => (
+                    <option key={id} value={id}>{t.label}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => edit(i, { active: !c.active })}
+                  className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold ${c.active ? 'bg-lime text-ink' : 'bg-soft text-muted'}`}
+                >
+                  {c.active ? <Eye size={14} /> : <EyeOff size={14} />}
+                  {c.active ? 'מוצגת' : 'מוסתרת'}
+                </button>
+                {count(c.id) ? (
+                  <span className="text-xs text-muted">{count(c.id)} מוצרים</span>
+                ) : (
+                  <button onClick={() => setList((l) => l.filter((_, j) => j !== i))} className="rounded-full p-1.5 text-red-600 hover:bg-soft dark:text-red-400" aria-label="מחיקה">
+                    <Trash2 size={15} />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        <button onClick={add} className="mt-3 flex items-center gap-1 text-sm font-bold text-lime-ink hover:underline">
+          <Plus size={16} /> קטגוריה חדשה
+        </button>
+        {msg && <p className={`mt-3 rounded-xl p-3 text-sm ${msg.error ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-lime/20'}`}>{msg.text}</p>}
+        <button onClick={save} disabled={busy} className="mt-4 w-full rounded-full bg-ink py-3 font-bold text-white disabled:opacity-50 dark:bg-lime dark:text-ink">
+          {busy ? 'שומר…' : 'שמירת הקטגוריות'}
+        </button>
+      </Box>
     </div>
   );
 }

@@ -1,16 +1,18 @@
-// סרטון ללקוחות: איך מזמינים חולצה – חיפוש, התאמה אישית, הערה למוכר והמשך ל-FlyLinking
+// סרטון ללקוחות: איך מזמינים – קטגוריות, חיפוש, התאמה אישית, הערה למוכר והמשך ל-FlyLinking
 import { MARK, record } from '../kit.mjs';
 
 await record('order', async ({ page, say, tap, type, wait, card, uncard, scroll, scrollTo, point, hideDot }) => {
   await card(MARK, 'Isport', 'איך מזמינים חולצה', 'בוחרים חולצה, מוסיפים שם ומספר, וממשיכים להזמנה');
   await uncard();
   await say('זה דף הבית של <b>Isport</b>', 2400);
-  await scroll(520, 1200);
-  await say('כאן כל החולצות – של קבוצות ושל נבחרות', 2800);
-  await say('אפשר לסנן: <b>קבוצות</b>, <b>נבחרות</b> או ליגה מסוימת', 3000, true);
+  await scroll(560, 1200);
+  await say('בוחרים קטגוריה: חולצות כדורגל, גופיות כדורסל, נעליים או תיקים', 3600, true);
+  await point(page.getByRole('link', { name: /גופיות כדורסל/ }).first(), 900);
+  await tap(page.getByRole('link', { name: /חולצות כדורגל/ }).first(), { after: 1200 });
+  await say('בחולצות אפשר לסנן: <b>קבוצות</b>, <b>נבחרות</b> או ליגה מסוימת', 3000, true);
   await point(page.getByRole('button', { name: 'נבחרות' }), 900);
   await say('או לחפש לפי שם, עונה, צבע או קוד מוצר', 2400, true);
-  await type(page.getByLabel('חיפוש חולצות'), 'ליברפול', { delay: 110, after: 900 });
+  await type(page.getByLabel('חיפוש מוצרים'), 'ליברפול', { delay: 110, after: 900 });
   await say('הנה החולצה. לוחצים עליה', 1800, true);
   await tap(page.getByRole('link', { name: /ליברפול/ }).first(), { after: 1200 });
   await say('בדף החולצה: תמונות, תיאור, ופרטים על הקבוצה', 3000, true);
@@ -33,7 +35,13 @@ await record('order', async ({ page, say, tap, type, wait, card, uncard, scroll,
   await say('שם בוחרים מידה וגרסה, ומדביקים את ההערה בשדה ההערות למוכר', 4200, true);
   await hideDot();
   await scrollTo(page.getByRole('heading', { name: 'ליברפול' }), 700);
-  await say('💡 טיפ: לוחצים על ♡ כדי לשמור חולצה במועדפים', 3200, true);
+  await say('💡 טיפ: לוחצים על ♡ כדי לשמור מוצר במועדפים', 3200, true);
   await tap(page.getByRole('button', { name: 'הוספה למועדפים' }), { after: 800 });
-  await card(MARK, 'Isport', 'זהו!', 'חולצה, שם, מספר – ולהזמנה', 2600);
+  await page.evaluate(() => { window.location.hash = '#/c/shoes'; });
+  await wait(1000);
+  await tap(page.getByRole('link', { name: /Air Max 90/ }).first(), { after: 1200 });
+  await say('בנעליים ובתיקים אין התאמה אישית: מעתיקים את קוד המוצר וממשיכים להזמנה', 4200, true);
+  await point(page.getByRole('button', { name: 'העתק קוד' }), 1200);
+  await hideDot();
+  await card(MARK, 'Isport', 'זהו!', 'בוחרים, מתאימים – וממשיכים להזמנה', 2600);
 });

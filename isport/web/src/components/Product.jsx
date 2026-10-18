@@ -1,9 +1,10 @@
-// דף חולצה: תמונות, תיאור, התאמה אישית (שם, מספר, פאץ', שרוול) והערה למוכר.
+// דף מוצר: תמונות, תיאור, התאמה אישית (לפי סוג הקטגוריה: שם, מספר, פאץ', שרוול) והערה למוכר.
+// מוצר רגיל (נעליים, תיקים…) – בלי התאמה אישית; ההערה למוכר היא קוד המוצר.
 // המידה והגרסה נבחרות ב-FlyLinking, לא כאן. "שמור" -> ההערה נוצרת ומועתקת -> "המשך ל-FlyLinking"
 import { useEffect, useRef, useState } from 'react';
 import { Check, Copy, ExternalLink, Heart, MessageCircle, Share2 } from 'lucide-react';
 import { copyText } from '../lib/api';
-import { KIND_LABEL, buildNote, cleanName, cleanNumber, displayName, patchesFor, subtitle } from '../lib/shirt';
+import { KIND_LABEL, buildNote, cleanName, cleanNumber, displayName, patchesFor, subtitle, templateInfo } from '../lib/shirt';
 import { Chip, Field, ShirtCard, ShirtImage, inputClass, whatsappLink } from './ui';
 
 export default function Product({ shirt, shirts, settings, fav, onFav }) {
@@ -16,10 +17,13 @@ export default function Product({ shirt, shirts, settings, fav, onFav }) {
   const [copied, setCopied] = useState(false);
   const noteRef = useRef(null);
 
+  const t = templateInfo(shirt.template);
   const choice = { name, number, patch, sleeve };
   const current = buildNote(shirt, choice);
   // שינוי בבחירה אחרי השמירה -> צריך לשמור שוב
-  const stale = note && note !== current;
+  const stale = t.custom && note && note !== current;
+  // בלי התאמה אישית – ההערה (הקוד) מוכנה מיד
+  const shown = t.custom ? note : current;
 
   useEffect(() => {
     document.title = `${shirt.team} ${shirt.type} ${shirt.year} – Isport`;
@@ -34,11 +38,11 @@ export default function Product({ shirt, shirts, settings, fav, onFav }) {
     setTimeout(() => noteRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
   };
 
-  const copy = async () => setCopied(await copyText(note));
+  const copy = async () => setCopied(await copyText(shown));
 
   // קישור רגיל (לא window.open) כדי שחוסם החלונות לא יעצור אותו; ההערה מועתקת שוב ברגע הלחיצה
   const proceed = () => {
-    copyText(note);
+    copyText(shown);
     setCopied(true);
   };
 
@@ -54,16 +58,16 @@ export default function Product({ shirt, shirts, settings, fav, onFav }) {
   };
 
   const related = shirts
-    .filter((s) => s.id !== shirt.id && (s.team === shirt.team || (shirt.league && s.league === shirt.league)))
+    .filter((s) => s.id !== shirt.id && s.category === shirt.category && (s.team === shirt.team || (shirt.league && s.league === shirt.league)))
     .sort((a, b) => Number(b.team === shirt.team) - Number(a.team === shirt.team))
     .slice(0, 4);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-5 lg:py-10">
       <nav className="mb-4 text-sm text-muted">
-        <a href="#/" className="hover:underline">כל החולצות</a>
+        <a href="#/" className="hover:underline">כל המוצרים</a>
         <span className="mx-1.5">/</span>
-        <a href={`#/${shirt.kind}`} className="hover:underline">{shirt.kind === 'national' ? 'נבחרות' : 'קבוצות'}</a>
+        <a href={`#/c/${shirt.category}`} className="hover:underline">{shirt.categoryName}</a>
         <span className="mx-1.5">/</span>
         <span>{displayName(shirt)}</span>
       </nav>
@@ -89,7 +93,7 @@ export default function Product({ shirt, shirts, settings, fav, onFav }) {
           </div>
 
           <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
-            <Tag>{KIND_LABEL[shirt.kind]}</Tag>
+            {t.custom && <Tag>{KIND_LABEL[shirt.kind]}</Tag>}
             {(shirt.countryHe || shirt.country) && <Tag>{shirt.countryHe || shirt.country}</Tag>}
             {(shirt.leagueHe || shirt.league) && <Tag>{shirt.leagueHe || shirt.league}</Tag>}
             {(shirt.colorHe || shirt.color) && <Tag>{shirt.colorHe || shirt.color}</Tag>}
@@ -98,48 +102,52 @@ export default function Product({ shirt, shirts, settings, fav, onFav }) {
 
           {shirt.description && <p className="mt-4 whitespace-pre-line leading-relaxed text-muted">{shirt.description}</p>}
 
-          <div className="mt-6 rounded-2xl bg-card p-4 ring-1 ring-line lg:p-5">
-            <h2 className="mb-4 text-lg font-extrabold">התאמה אישית</h2>
-            <div className="grid grid-cols-[1fr_6.5rem] gap-3">
-              <Field label="שם על הגב (לא חובה)">
-                <input value={name} onChange={(e) => setName(cleanName(e.target.value))} placeholder="ISRAEL" className={inputClass} maxLength={15} autoComplete="off" />
-              </Field>
-              <Field label="מספר (לא חובה)">
-                <input value={number} onChange={(e) => setNumber(cleanNumber(e.target.value))} placeholder="10" inputMode="numeric" className={`${inputClass} text-center`} />
-              </Field>
-            </div>
-
-            <div className="mt-4">
-              <div className="mb-1.5 text-sm font-medium text-muted">פאץ'</div>
-              <div className="flex flex-wrap gap-2">
-                {patchesFor(shirt).map((p) => (
-                  <Chip key={p.id} active={patch === p.id} onClick={() => setPatch(p.id)}>{p.he}</Chip>
-                ))}
+          {t.custom && (
+            <div className="mt-6 rounded-2xl bg-card p-4 ring-1 ring-line lg:p-5">
+              <h2 className="mb-4 text-lg font-extrabold">התאמה אישית</h2>
+              <div className="grid grid-cols-[1fr_6.5rem] gap-3">
+                <Field label="שם על הגב (לא חובה)">
+                  <input value={name} onChange={(e) => setName(cleanName(e.target.value))} placeholder="ISRAEL" className={inputClass} maxLength={15} autoComplete="off" />
+                </Field>
+                <Field label="מספר (לא חובה)">
+                  <input value={number} onChange={(e) => setNumber(cleanNumber(e.target.value))} placeholder="10" inputMode="numeric" className={`${inputClass} text-center`} />
+                </Field>
               </div>
-            </div>
 
-            {shirt.longSleeve && (
-              <div className="mt-4">
-                <div className="mb-1.5 text-sm font-medium text-muted">שרוול</div>
-                <div className="flex gap-2">
-                  <Chip active={sleeve === 'short'} onClick={() => setSleeve('short')}>שרוול קצר</Chip>
-                  <Chip active={sleeve === 'long'} onClick={() => setSleeve('long')}>שרוול ארוך</Chip>
+              {t.patches && (
+                <div className="mt-4">
+                  <div className="mb-1.5 text-sm font-medium text-muted">פאץ'</div>
+                  <div className="flex flex-wrap gap-2">
+                    {patchesFor(shirt).map((p) => (
+                      <Chip key={p.id} active={patch === p.id} onClick={() => setPatch(p.id)}>{p.he}</Chip>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {(name || number) && <BackPreview name={name} number={number} />}
+              {t.sleeves && shirt.longSleeve && (
+                <div className="mt-4">
+                  <div className="mb-1.5 text-sm font-medium text-muted">שרוול</div>
+                  <div className="flex gap-2">
+                    <Chip active={sleeve === 'short'} onClick={() => setSleeve('short')}>שרוול קצר</Chip>
+                    <Chip active={sleeve === 'long'} onClick={() => setSleeve('long')}>שרוול ארוך</Chip>
+                  </div>
+                </div>
+              )}
 
-            <button onClick={save} className="mt-5 w-full rounded-full bg-ink py-3.5 text-lg font-bold text-white hover:opacity-90 dark:bg-lime dark:text-ink">
-              {note && !stale ? 'נשמר ✓' : 'שמור'}
-            </button>
-            <p className="mt-2 text-center text-xs text-muted">את המידה והגרסה בוחרים בעמוד הבא, ב-FlyLinking</p>
-          </div>
+              {(name || number) && <BackPreview name={name} number={number} />}
 
-          {note && (
+              <button onClick={save} className="mt-5 w-full rounded-full bg-ink py-3.5 text-lg font-bold text-white hover:opacity-90 dark:bg-lime dark:text-ink">
+                {note && !stale ? 'נשמר ✓' : 'שמור'}
+              </button>
+              <p className="mt-2 text-center text-xs text-muted">את המידה והגרסה בוחרים בעמוד הבא, ב-FlyLinking</p>
+            </div>
+          )}
+
+          {shown && (
             <div ref={noteRef} className="mt-4 rounded-2xl border-2 border-lime-ink bg-card p-4 lg:p-5">
               <div className="mb-2 flex items-center justify-between">
-                <h2 className="font-extrabold">ההערה למוכר</h2>
+                <h2 className="font-extrabold">{t.custom ? 'ההערה למוכר' : 'קוד המוצר למוכר'}</h2>
                 {copied && !stale && (
                   <span className="flex items-center gap-1 text-sm font-bold text-lime-ink">
                     <Check size={16} /> הועתקה
@@ -147,15 +155,15 @@ export default function Product({ shirt, shirts, settings, fav, onFav }) {
                 )}
               </div>
               {stale && <p className="mb-2 rounded-lg bg-soft p-2 text-sm">שיניתם את הבחירה – לחצו שוב "שמור" כדי לעדכן את ההערה.</p>}
-              <pre dir="ltr" className="overflow-x-auto rounded-xl bg-page p-3 text-left font-mono text-sm leading-relaxed">{note}</pre>
+              <pre dir="ltr" className="overflow-x-auto rounded-xl bg-page p-3 text-left font-mono text-sm leading-relaxed">{shown}</pre>
               <ol className="mt-3 list-inside list-decimal space-y-0.5 text-sm text-muted">
-                <li>לוחצים "המשך ל-FlyLinking" (ההערה כבר מועתקת).</li>
-                <li>בוחרים מידה וגרסה.</li>
+                <li>לוחצים "המשך ל-FlyLinking" ({t.custom ? 'ההערה כבר מועתקת' : 'הקוד מועתק'}).</li>
+                <li>בוחרים מידה{t.custom ? ' וגרסה' : ' וצבע'}.</li>
                 <li>מדביקים את ההערה בשדה ההערות למוכר.</li>
               </ol>
               <div className="mt-4 grid gap-2 sm:grid-cols-2">
                 <button onClick={copy} disabled={stale} className="flex items-center justify-center gap-2 rounded-full py-3 font-bold ring-1 ring-line hover:bg-soft disabled:opacity-40">
-                  <Copy size={18} /> העתק הערה
+                  <Copy size={18} /> {t.custom ? 'העתק הערה' : 'העתק קוד'}
                 </button>
                 <a
                   href={stale ? undefined : shirt.flyLink}
@@ -173,12 +181,12 @@ export default function Product({ shirt, shirts, settings, fav, onFav }) {
 
           {settings.whatsapp && (
             <a
-              href={whatsappLink(settings.whatsapp, `היי, יש לי שאלה על החולצה ${shirt.code}`)}
+              href={whatsappLink(settings.whatsapp, `היי, יש לי שאלה על ${shirt.code}`)}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-4 flex items-center justify-center gap-2 text-sm text-muted hover:underline"
             >
-              <MessageCircle size={16} /> שאלה על החולצה? כתבו לנו בוואטסאפ
+              <MessageCircle size={16} /> שאלה על המוצר? כתבו לנו בוואטסאפ
             </a>
           )}
         </div>
@@ -186,7 +194,7 @@ export default function Product({ shirt, shirts, settings, fav, onFav }) {
 
       {related.length > 0 && (
         <section className="mt-14">
-          <h2 className="mb-4 text-xl font-black">עוד חולצות שאולי תאהבו</h2>
+          <h2 className="mb-4 text-xl font-black">עוד מוצרים שאולי תאהבו</h2>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-5">
             {related.map((s) => (
               <ShirtCard key={s.id} shirt={s} />

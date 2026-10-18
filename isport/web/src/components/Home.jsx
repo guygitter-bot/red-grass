@@ -1,13 +1,14 @@
-// דף הבית: פתיחה, חיפוש (קבוצה, נבחרת, סוג, שנה, צבע, קוד), סינון לפי ליגה וכל החולצות
+// דף הבית: פתיחה, קטגוריות, חיפוש (קבוצה, נבחרת, מותג, סוג, שנה, צבע, קוד), סינון וכל המוצרים.
+// category = קטגוריה מהכתובת (#/c/<id>), ריק = הכול
 import { useMemo, useState } from 'react';
 import { ArrowLeft, Search, Shirt, Sparkles, Copy, X } from 'lucide-react';
 import { searchShirts } from '../lib/shirt';
 import { go } from '../lib/route';
-import { Chip, ShirtCard, TutorialVideo } from './ui';
+import { Chip, ShirtCard, ShirtImage, TutorialVideo } from './ui';
 import Logo from './Logo';
 
 const SORTS = [
-  { id: 'new', label: 'הכי חדשות' },
+  { id: 'new', label: 'הכי חדשים' },
   { id: 'year', label: 'לפי עונה' },
   { id: 'name', label: 'לפי שם' },
 ];
@@ -20,12 +21,16 @@ function sortShirts(list, sort) {
   return out;
 }
 
-export default function Home({ shirts, loading, favorites, favs, onFav, kind }) {
+export default function Home({ shirts, categories, loading, favorites, favs, onFav, category = '', initialKind = 'all' }) {
   const [query, setQuery] = useState('');
   const [league, setLeague] = useState('');
+  const [kind, setKind] = useState(initialKind);
   const [sort, setSort] = useState('new');
 
-  const base = favorites ? shirts.filter((s) => favs.includes(s.id)) : shirts;
+  const current = categories.find((c) => c.id === category);
+  const base = (favorites ? shirts.filter((s) => favs.includes(s.id)) : shirts).filter((s) => !category || s.category === category);
+  // קבוצות / נבחרות – רק בקטגוריה של חולצות, כשיש בה את שני הסוגים
+  const showKinds = current && current.template !== 'plain' && new Set(base.map((s) => s.kind)).size > 1;
   const leagues = useMemo(() => {
     const count = {};
     for (const s of base) if (s.league && (kind === 'all' || s.kind === kind)) count[s.league] = (count[s.league] || 0) + 1;
@@ -33,28 +38,24 @@ export default function Home({ shirts, loading, favorites, favs, onFav, kind }) 
       .sort((a, b) => b[1] - a[1])
       .map(([name]) => ({ name, he: base.find((s) => s.league === name)?.leagueHe || name }));
   }, [base, kind]);
-  const list = sortShirts(searchShirts(base, query, { kind, league }), sort);
-  const showHero = !favorites && kind === 'all' && !query && !league;
+  const list = sortShirts(searchShirts(base, query, { kind: showKinds ? kind : 'all', league }), sort);
+  const showHero = !favorites && !category && !query && !league;
 
   return (
     <div>
-      {showHero && <Hero count={shirts.length} />}
+      {showHero && <Hero count={shirts.length} categories={categories} />}
       <div className="mx-auto max-w-6xl px-4">
         <div id="catalog" className={showHero ? 'relative z-10 -mt-7 scroll-mt-24' : 'pt-6'}>
-          {!showHero && (
-            <h1 className="mb-4 text-2xl font-black">
-              {favorites ? 'המועדפים שלי' : kind === 'club' ? 'חולצות קבוצות' : kind === 'national' ? 'חולצות נבחרות' : 'כל החולצות'}
-            </h1>
-          )}
+          {!showHero && <h1 className="mb-4 text-2xl font-black">{favorites ? 'המועדפים שלי' : current ? current.name : 'כל המוצרים'}</h1>}
           <div className="relative">
             <Search size={20} className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-muted" />
             <input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="חיפוש: קבוצה, נבחרת, בית/חוץ, שנה, צבע או קוד מוצר"
+              placeholder="חיפוש: קבוצה, נבחרת, מותג, שנה, צבע או קוד"
               className="w-full rounded-2xl border border-line bg-card py-4 pl-12 pr-12 text-base shadow-lg outline-none focus:border-lime-ink"
-              aria-label="חיפוש חולצות"
+              aria-label="חיפוש מוצרים"
             />
             {query && (
               <button onClick={() => setQuery('')} className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-muted hover:bg-soft" aria-label="ניקוי החיפוש">
@@ -64,23 +65,37 @@ export default function Home({ shirts, loading, favorites, favs, onFav, kind }) 
           </div>
         </div>
 
-        {!favorites && (
+        {!favorites && categories.length > 1 && (
           <div className="no-scrollbar -mx-4 mt-4 flex gap-2 overflow-x-auto px-4 pb-1">
-            <Chip active={kind === 'all'} onClick={() => go('')}>הכול</Chip>
-            <Chip active={kind === 'club'} onClick={() => go('club')}>קבוצות</Chip>
-            <Chip active={kind === 'national'} onClick={() => go('national')}>נבחרות</Chip>
-            {leagues.length > 1 && <span className="mx-1 w-px shrink-0 bg-line" />}
+            <Chip active={!category} onClick={() => go('')}>הכול</Chip>
+            {categories.map((c) => (
+              <Chip key={c.id} active={category === c.id} onClick={() => go(`c/${c.id}`)}>{c.name}</Chip>
+            ))}
+          </div>
+        )}
+        {(showKinds || leagues.length > 1) && (
+          <div className="no-scrollbar -mx-4 mt-2 flex gap-2 overflow-x-auto px-4 pb-1">
+            {showKinds && (
+              <>
+                <Chip small active={kind === 'all'} onClick={() => setKind('all')}>כולן</Chip>
+                <Chip small active={kind === 'club'} onClick={() => setKind('club')}>קבוצות</Chip>
+                <Chip small active={kind === 'national'} onClick={() => setKind('national')}>נבחרות</Chip>
+              </>
+            )}
+            {showKinds && leagues.length > 1 && <span className="mx-1 w-px shrink-0 bg-line" />}
             {leagues.length > 1 &&
               leagues.map((l) => (
-                <Chip key={l.name} active={league === l.name} onClick={() => setLeague(league === l.name ? '' : l.name)}>
+                <Chip small key={l.name} active={league === l.name} onClick={() => setLeague(league === l.name ? '' : l.name)}>
                   {l.he}
                 </Chip>
               ))}
           </div>
         )}
 
+        {showHero && categories.length > 1 && <CategoryTiles categories={categories} shirts={shirts} />}
+
         <div className="mb-3 mt-5 flex items-center justify-between gap-3 text-sm text-muted">
-          <span>{loading ? 'טוען חולצות…' : `${list.length} חולצות`}</span>
+          <span>{loading ? 'טוען…' : `${list.length} מוצרים`}</span>
           <select value={sort} onChange={(e) => setSort(e.target.value)} className="rounded-lg border border-line bg-card px-2 py-1.5 text-text" aria-label="מיון">
             {SORTS.map((s) => (
               <option key={s.id} value={s.id}>{s.label}</option>
@@ -102,7 +117,7 @@ export default function Home({ shirts, loading, favorites, favs, onFav, kind }) 
           </div>
         ) : (
           <div className="rounded-2xl bg-card p-10 text-center text-muted">
-            {favorites ? 'עוד לא סימנתם חולצות. לחצו על ♡ בחולצה שאהבתם.' : 'לא מצאנו חולצה כזאת. נסו מילה אחרת.'}
+            {favorites ? 'עוד לא סימנתם מוצרים. לחצו על ♡ במוצר שאהבתם.' : 'לא מצאנו מוצר כזה. נסו מילה אחרת.'}
           </div>
         )}
 
@@ -112,7 +127,8 @@ export default function Home({ shirts, loading, favorites, favs, onFav, kind }) 
   );
 }
 
-function Hero({ count }) {
+function Hero({ count, categories }) {
+  const others = categories.filter((c) => c.template === 'plain').map((c) => c.name);
   return (
     <section className="relative overflow-hidden bg-ink text-white">
       {/* פסים אלכסוניים ברקע – כמו מגרש */}
@@ -123,7 +139,7 @@ function Hero({ count }) {
       <div className="relative mx-auto grid max-w-6xl items-center gap-8 px-4 pb-16 pt-10 lg:grid-cols-2 lg:pb-24 lg:pt-16">
         <div>
           <span className="inline-block rounded-full border border-lime/40 px-3 py-1 text-xs font-bold text-lime">
-            {count > 0 ? `${count} חולצות באתר` : 'הקולקציה מתעדכנת'}
+            {count > 0 ? `${count} מוצרים באתר` : 'הקולקציה מתעדכנת'}
           </span>
           <h1 className="mt-4 text-4xl font-black leading-tight lg:text-6xl">
             החולצה שלך.
@@ -131,13 +147,14 @@ function Hero({ count }) {
             <span className="text-lime">השם שלך.</span>
           </h1>
           <p className="mt-4 max-w-md text-lg text-white/70">
-            חולצות של הקבוצות והנבחרות הגדולות בעולם – עם השם, המספר והפאץ' שתבחרו.
+            חולצות וגופיות של הקבוצות והנבחרות הגדולות בעולם – עם השם, המספר והפאץ' שתבחרו.
+            {others.length > 0 && ` וגם ${others.join(', ').replace(/, ([^,]*)$/, ' ו$1')}.`}
           </p>
           <button
             onClick={() => document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' })}
             className="mt-6 inline-flex items-center gap-2 rounded-full bg-lime px-6 py-3 font-bold text-ink hover:brightness-95"
           >
-            לכל החולצות <ArrowLeft size={18} />
+            לכל המוצרים <ArrowLeft size={18} />
           </button>
         </div>
         <div className="hidden justify-center lg:flex">
@@ -150,8 +167,8 @@ function Hero({ count }) {
 
 function Steps() {
   const steps = [
-    { icon: Shirt, title: 'בוחרים חולצה', text: 'מחפשים לפי קבוצה, נבחרת, עונה או צבע.' },
-    { icon: Sparkles, title: 'מתאימים אישית', text: 'שם, מספר, פאץ\' ואורך שרוול – הכול אופציונלי.' },
+    { icon: Shirt, title: 'בוחרים מוצר', text: 'מחפשים לפי קבוצה, נבחרת, מותג, עונה או צבע.' },
+    { icon: Sparkles, title: 'מתאימים אישית', text: 'בחולצות: שם, מספר, פאץ\' ואורך שרוול – הכול אופציונלי.' },
     { icon: Copy, title: 'ממשיכים להזמנה', text: 'ההערה למוכר מועתקת, ובוחרים מידה באתר ההזמנה.' },
   ];
   return (
@@ -174,9 +191,34 @@ function Steps() {
         </div>
         <div className="flex flex-col items-center gap-2">
           <TutorialVideo name="order" />
-          <span className="text-sm text-muted">סרטון: איך מזמינים חולצה (דקה)</span>
+          <span className="text-sm text-muted">סרטון: איך מזמינים (דקה וחצי)</span>
         </div>
       </div>
     </section>
+  );
+}
+
+// אריחי הקטגוריות בדף הבית (עם התמונה של המוצר הכי חדש בכל אחת)
+function CategoryTiles({ categories, shirts }) {
+  return (
+    <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-5">
+      {categories.map((c) => {
+        const items = shirts.filter((s) => s.category === c.id);
+        const cover = items.find((s) => s.images?.length);
+        return (
+          <a key={c.id} href={`#/c/${c.id}`} className="group relative overflow-hidden rounded-2xl bg-ink text-white ring-1 ring-line">
+            {cover ? (
+              <ShirtImage shirt={cover} className="aspect-[4/3] w-full opacity-90 transition duration-300 group-hover:scale-105" />
+            ) : (
+              <div className="aspect-[4/3] w-full bg-ink-2" />
+            )}
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3 pt-10">
+              <div className="text-lg font-black leading-tight">{c.name}</div>
+              <div className="text-xs text-white/70">{items.length ? `${items.length} מוצרים` : 'בקרוב'}</div>
+            </div>
+          </a>
+        );
+      })}
+    </div>
   );
 }
