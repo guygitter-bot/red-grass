@@ -37,8 +37,10 @@ export default function Home({ shirts, categories, loading, favorites, favs, onF
       .sort((a, b) => b[1] - a[1])
       .map(([name]) => ({ name, he: base.find((s) => s.league === name)?.leagueHe || name }));
   }, [base, kind]);
-  const list = sortShirts(searchShirts(base, query, { kind: showKinds ? kind : 'all', league }), sort);
-  const showHero = !favorites && !category && !query && !league;
+  // ליגה שאינה ברשימה הנוכחית (אחרי מעבר בין קבוצות / נבחרות) – מתעלמים ממנה
+  const activeLeague = leagues.some((l) => l.name === league) ? league : '';
+  const list = sortShirts(searchShirts(base, query, { kind: showKinds ? kind : 'all', league: activeLeague }), sort);
+  const showHero = !favorites && !category && !query && !activeLeague;
 
   return (
     <div>
@@ -84,7 +86,7 @@ export default function Home({ shirts, categories, loading, favorites, favs, onF
             {showKinds && leagues.length > 1 && <span className="mx-1 w-px shrink-0 bg-line" />}
             {leagues.length > 1 &&
               leagues.map((l) => (
-                <Chip small key={l.name} active={league === l.name} onClick={() => setLeague(league === l.name ? '' : l.name)}>
+                <Chip small key={l.name} active={activeLeague === l.name} onClick={() => setLeague(activeLeague === l.name ? '' : l.name)}>
                   {l.he}
                 </Chip>
               ))}
