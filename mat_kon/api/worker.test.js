@@ -1326,3 +1326,26 @@ test('sharing a recipe by link: a preview for anyone, the full recipe and saving
   assert.equal((await call('GET', `/shares/${danaToken}`)).status, 404);
   assert.equal((await call('GET', `/shares/${token}`)).status, 200);
 });
+
+test('a note with two different dishes becomes two recipes, each counted, with its own image', async () => {
+  const kreplach = { ...recipeInput, title: 'כיסוני בשר', original_title: 'כיסוני בשר', category: 'אחר', ingredients: [{ title: '', items: ['2 כוסות קמח'] }, { title: 'השלמה (לא מהמקור)', items: ['300 גרם בשר טחון'] }] };
+  delete kreplach.found;
+  reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_recipe', input: { ...recipeInput, title: 'קניידלך לפסח', more_recipes: [kreplach] } }] });
+  const inv = await invite();
+  const { session } = await (await register(inv.token)).json();
+  const png = `data:image/png;base64,${btoa('thumb')}`;
+  const data = await (await call('POST', '/recipes/photo', { images: [{ type: 'image/jpeg', data: 'AAAA' }], thumb: png }, session)).json();
+  assert.equal(data.recipe.title, 'קניידלך לפסח');
+  assert.deepEqual(data.more.map((r) => r.title), ['כיסוני בשר']);
+  assert.equal(data.more[0].source.key, `${data.recipe.source.key}:2`);
+  assert.notEqual(data.more[0].image, data.recipe.image);
+  assert.equal(data.recipe.more, undefined);
+  assert.equal(data.user.added, 2);
+  assert.equal((await (await call('GET', '/recipes', undefined, session)).json()).recipes.length, 2);
+  // הכלי מאפשר כמה מתכונים רק בצילום / בהודעה בלי קישור
+  const tool = apiCalls.at(-1).tools.find((t) => t.name === 'submit_recipe');
+  assert.ok(tool.input_schema.required.includes('more_recipes'));
+  assert.match(apiCalls.at(-1).system[0].text, /השלמה \(לא מהמקור\)/);
+  await call('POST', '/recipes', { url: 'https://cake.example/one' });
+  assert.equal(apiCalls.at(-1).tools.find((t) => t.name === 'submit_recipe').input_schema.properties.more_recipes, undefined);
+});

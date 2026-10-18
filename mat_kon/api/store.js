@@ -75,6 +75,7 @@ export class RecipeBook {
     try {
       const client = trackedClient(this.env, (u) => self('/costs/add', { month, ...u }));
       const recipe = await buildRecipe(this.env, client, job.input, job.categories);
+      delete recipe.more; // מקישור – תמיד מתכון אחד
       const res = await self('/recipes', recipe);
       const data = await res.json();
       if (!data.counted) await giveBack();
