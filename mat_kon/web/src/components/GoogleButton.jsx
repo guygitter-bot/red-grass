@@ -34,8 +34,10 @@ function NativeGoogleButton({ clientId, text = 'continue_with', onCredential, on
     try {
       const { SocialLogin } = await import('@capgo/capacitor-social-login');
       await SocialLogin.initialize({ google: { webClientId: clientId } });
+      // מנקים את הבחירה הקודמת, כדי שתמיד תופיע בחירת חשבון (ולא ייבחר אוטומטית חשבון העבודה, למשל)
+      await SocialLogin.logout({ provider: 'google' }).catch(() => {});
       // בלי scopes: אימייל ופרופיל כבר כלולים (scopes נוספים דורשים שינוי ב-MainActivity)
-      const res = await SocialLogin.login({ provider: 'google', options: {} });
+      const res = await SocialLogin.login({ provider: 'google', options: { autoSelectEnabled: false, filterByAuthorizedAccounts: false } });
       const token = res?.result?.idToken;
       if (!token) throw new Error('לא התקבל אישור מגוגל');
       await onCredential(token);
