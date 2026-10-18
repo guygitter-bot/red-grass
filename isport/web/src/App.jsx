@@ -84,7 +84,7 @@ export default function App() {
       {settings.announcement && (
         <div className="bg-lime px-4 py-1.5 text-center text-sm font-bold text-ink">{settings.announcement}</div>
       )}
-      <Header favCount={favs.length} categories={categories} />
+      <Header favCount={favs.filter((id) => shirts.some((s) => s.id === id)).length} categories={categories} />
       {error && !catalog && <div className="mx-auto mt-6 max-w-md rounded-xl bg-card p-4 text-center text-muted">{error}. נסו לרענן את הדף.</div>}
       <main className="flex-1">{page}</main>
       <Footer settings={settings} />

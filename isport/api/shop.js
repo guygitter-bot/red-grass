@@ -57,6 +57,9 @@ async function pbkdf2(password, salt, iter = PBKDF2_ITER) {
   return [...new Uint8Array(bits)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+// התאריך בישראל (YYYY-MM-DD) – למגבלה היומית ולעלויות לפי חודש
+export const israelDate = (ms) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date(ms));
+
 const sessionOf = (v) => (typeof v === 'number' ? { exp: v, role: 'dev' } : v || { exp: 0, role: 'dev' });
 
 function safeEqual(a, b) {
@@ -109,6 +112,7 @@ export class Shop {
     } catch {
       return json(400, { error: 'בקשה לא תקינה' });
     }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return json(400, { error: 'בקשה לא תקינה' });
     try {
       await this.load();
       if (path === '/catalog') return json(200, this.catalog());
@@ -189,11 +193,15 @@ export class Shop {
     delete d.fails.ips[ip];
     d.fails.all.count = Math.max(0, d.fails.all.count - 1);
     const token = newSecret();
+    // עד MAX_SESSIONS לכל תפקיד (כניסות של בעל החנות לא מנתקות את המפתח)
     const live = Object.entries(d.sessions)
       .map(([h, v]) => [h, sessionOf(v)])
       .filter(([, v]) => v.exp > now)
       .sort((a, b) => b[1].exp - a[1].exp);
-    d.sessions = Object.fromEntries([[await sha256(token), { exp: now + SESSION_MS, role }], ...live.slice(0, MAX_SESSIONS - 1)]);
+    const keep = [...live.filter(([, v]) => v.role === role).slice(0, MAX_SESSIONS - 1), ...live.filter(([, v]) => v.role !== role).slice(0, MAX_SESSIONS)];
+    // כניסת מפתח קשורה לסיסמה: כשמחליפים את ADMIN_PASSWORD – כל כניסות המפתח הישנות מתבטלות
+    const session = { exp: now + SESSION_MS, role, ...(role === 'dev' ? { pw: await this.devMark() } : {}) };
+    d.sessions = Object.fromEntries([[await sha256(token), session], ...keep]);
     await this.storage.put({ fails: d.fails, sessions: d.sessions });
     return { token, role };
   }
@@ -202,7 +210,15 @@ export class Shop {
   async who(token) {
     if (!token || token.length < 20 || token.length > 100) return null;
     const v = sessionOf(this.d.sessions[await sha256(token)]);
-    return v.exp > this.now() ? { role: v.role } : null;
+    if (!(v.exp > this.now())) return null;
+    // (כניסות ישנות בלי pw – עדיין עובדות)
+    if (v.role === 'dev' && v.pw && v.pw !== (await this.devMark())) return null;
+    return { role: v.role };
+  }
+
+  // סימן קצר של סיסמת המפתח (לא הסיסמה עצמה)
+  async devMark() {
+    return (await sha256(`isport-dev:${this.env.ADMIN_PASSWORD || ''}`)).slice(0, 16);
   }
 
   // הסיסמה של בעל החנות (רק המפתח קובע). ריק = לבטל. בכל שינוי – כל החיבורים של בעל החנות מתנתקים
@@ -240,7 +256,7 @@ export class Shop {
   // ---------- ניהול ----------
 
   async adminState(me = { role: 'dev' }) {
-    const month = new Date(this.now()).toISOString().slice(0, 7);
+    const month = israelDate(this.now()).slice(0, 7);
     return {
       v: this.d.meta.v,
       shirts: [...this.d.shirts.values()].sort((a, b) => b.createdAt - a.createdAt),
@@ -310,7 +326,7 @@ export class Shop {
   async saveSettings(body) {
     if (body?.base !== undefined && body.base !== (this.d.meta.settingsAt || 0)) throw fail(409, CONFLICT);
     this.d.settings = cleanSettings(body);
-    this.d.meta.settingsAt = this.now();
+    this.d.meta.settingsAt = Math.max(this.now(), (this.d.meta.settingsAt || 0) + 1);
     return { v: await this.bump({ settings: this.d.settings }), settings: this.d.settings, settingsAt: this.d.meta.settingsAt };
   }
 
@@ -318,7 +334,7 @@ export class Shop {
     if (base !== undefined && base !== (this.d.meta.categoriesAt || 0)) throw fail(409, CONFLICT);
     const used = new Set([...this.d.shirts.values()].map((s) => s.category || 'football'));
     this.d.categories = cleanCategories(categories, used);
-    this.d.meta.categoriesAt = this.now();
+    this.d.meta.categoriesAt = Math.max(this.now(), (this.d.meta.categoriesAt || 0) + 1);
     return { v: await this.bump({ categories: this.d.categories }), categories: this.d.categories, categoriesAt: this.d.meta.categoriesAt };
   }
 
@@ -452,7 +468,7 @@ export class Shop {
   // ---------- הסוכן ----------
 
   async countAi() {
-    const date = new Date(this.now()).toISOString().slice(0, 10);
+    const date = israelDate(this.now());
     let day = (await this.storage.get('day')) || { date };
     if (day.date !== date) day = { date };
     if ((day.ai || 0) >= MAX_AI_PER_DAY) throw fail(429, 'הגעתם למגבלה היומית של ההשלמה האוטומטית. נסו שוב מחר');
@@ -463,7 +479,7 @@ export class Shop {
   // kind: enrich (פרטים) / images (חיפוש תמונות). חודשים ישנים: בלי הפירוט – שדה חסר = 0
   async addUsage(u, kind) {
     if (!u) return;
-    const key = `usage:${new Date(this.now()).toISOString().slice(0, 7)}`;
+    const key = `usage:${israelDate(this.now()).slice(0, 7)}`;
     const m = (await this.storage.get(key)) || { calls: 0, input: 0, output: 0 };
     const add = (f, n) => {
       m[f] = (m[f] || 0) + (n || 0);
@@ -513,6 +529,11 @@ export class Shop {
     if (!this.env.IMAGES) throw fail(503, 'אחסון התמונות לא מוגדר בשרת');
     const key = `img-${newSecret(12)}.${ext}`;
     await this.env.IMAGES.put(key, bytes, { httpMetadata: { contentType: contentType(ext) } });
+    // תמונה חדשה נכנסת לפח מיד: אם אף מוצר לא ישתמש בה (הועלתה ולא נשמרה) – תימחק בניקוי הלילי אחרי 31 יום.
+    // תמונה שמוצר משתמש בה יוצאת מהפח בניקוי הלילי ולא נמחקת
+    const trash = (await this.storage.get('trash')) || {};
+    trash[key] = this.now();
+    await this.storage.put('trash', trash);
     return { key };
   }
 

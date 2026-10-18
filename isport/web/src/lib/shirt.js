@@ -69,7 +69,11 @@ export const patchesFor = (shirt) =>
   templateInfo(shirt?.template || 'football').patches ? PATCHES[shirt?.kind === 'national' ? 'national' : 'club'] : [];
 
 // שם להדפסה: אותיות (כל שפה), רווח, נקודה, גרש ומקף. עד 15 תווים
-export const cleanName = (s) => String(s ?? '').replace(/[^\p{L} .'-]/gu, '').replace(/\s{2,}/g, ' ').slice(0, 15);
+// שם בלי אות אחת לפחות (רק סימנים כמו "- . '") נחשב ריק
+export const cleanName = (s) => {
+  const v = String(s ?? '').replace(/[^\p{L} .'-]/gu, '').replace(/\s{2,}/g, ' ').slice(0, 15);
+  return /\p{L}/u.test(v) ? v : '';
+};
 // מספר: עד שתי ספרות
 export const cleanNumber = (s) => String(s ?? '').replace(/\D/g, '').slice(0, 2);
 

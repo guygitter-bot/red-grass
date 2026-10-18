@@ -64,12 +64,12 @@ export default function Product({ shirt, shirts, settings, fav, onFav }) {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-5 lg:py-10">
-      <nav className="mb-4 text-sm text-muted">
+      <nav className="mb-4 break-words text-sm text-muted">
         <a href="#/" className="hover:underline">כל המוצרים</a>
         <span className="mx-1.5">/</span>
         <a href={`#/c/${shirt.category}`} className="hover:underline">{shirt.categoryName}</a>
         <span className="mx-1.5">/</span>
-        <span>{displayName(shirt)}</span>
+        <span className="break-words">{displayName(shirt)}</span>
       </nav>
 
       <div className="grid gap-6 lg:grid-cols-2 lg:gap-12">
@@ -77,10 +77,10 @@ export default function Product({ shirt, shirts, settings, fav, onFav }) {
 
         <div>
           <div className="flex items-start justify-between gap-3">
-            <div>
-              <h1 className="text-3xl font-black leading-tight lg:text-4xl">{displayName(shirt)}</h1>
+            <div className="min-w-0">
+              <h1 className="break-words text-3xl font-black leading-tight lg:text-4xl">{displayName(shirt)}</h1>
               {shirt.teamHe && <div dir="ltr" className="text-right font-brand text-lg text-muted">{shirt.team.toUpperCase()}</div>}
-              <div className="mt-1 text-lg">{subtitle(shirt)}</div>
+              <div className="mt-1 break-words text-lg">{subtitle(shirt)}</div>
             </div>
             <div className="flex shrink-0 gap-1">
               <button onClick={share} className="rounded-full p-2.5 ring-1 ring-line hover:bg-soft" aria-label="שיתוף">
@@ -100,7 +100,7 @@ export default function Product({ shirt, shirts, settings, fav, onFav }) {
             <Tag mono>{shirt.code}</Tag>
           </div>
 
-          {shirt.description && <p className="mt-4 whitespace-pre-line leading-relaxed text-muted">{shirt.description}</p>}
+          {shirt.description && <p className="mt-4 whitespace-pre-line break-words leading-relaxed text-muted">{shirt.description}</p>}
 
           {t.custom && (
             <div className="mt-6 rounded-2xl bg-card p-4 ring-1 ring-line lg:p-5">
@@ -155,7 +155,7 @@ export default function Product({ shirt, shirts, settings, fav, onFav }) {
                 )}
               </div>
               {stale && <p className="mb-2 rounded-lg bg-soft p-2 text-sm">שיניתם את הבחירה – לחצו שוב "שמור" כדי לעדכן את ההערה.</p>}
-              <pre dir="ltr" className="overflow-x-auto rounded-xl bg-page p-3 text-left font-mono text-sm leading-relaxed">{shown}</pre>
+              <pre dir="ltr" className="overflow-x-auto whitespace-pre-wrap break-all rounded-xl bg-page p-3 text-left font-mono text-sm leading-relaxed">{shown}</pre>
               <ol className="mt-3 list-inside list-decimal space-y-0.5 text-sm text-muted">
                 <li>לוחצים "המשך ל-FlyLinking" ({t.custom ? 'ההערה כבר מועתקת' : 'הקוד מועתק'}).</li>
                 <li>בוחרים מידה{t.custom ? ' וגרסה' : ' וצבע'}.</li>
@@ -165,6 +165,14 @@ export default function Product({ shirt, shirts, settings, fav, onFav }) {
                 <button onClick={copy} disabled={stale} className="flex items-center justify-center gap-2 rounded-full py-3 font-bold ring-1 ring-line hover:bg-soft disabled:opacity-40">
                   <Copy size={18} /> {t.custom ? 'העתק הערה' : 'העתק קוד'}
                 </button>
+                {!shirt.flyLink ? (
+                  <div className="text-center">
+                    <button type="button" disabled className="flex w-full items-center justify-center gap-2 rounded-full bg-lime py-3 font-bold text-ink opacity-40">
+                      המשך ל-FlyLinking <ExternalLink size={18} />
+                    </button>
+                    <p className="mt-1.5 text-xs text-muted">הקישור להזמנה עוד לא מוכן – פנו אלינו בוואטסאפ</p>
+                  </div>
+                ) : (
                 <a
                   href={stale ? undefined : shirt.flyLink}
                   onClick={proceed}
@@ -175,6 +183,7 @@ export default function Product({ shirt, shirts, settings, fav, onFav }) {
                 >
                   המשך ל-FlyLinking <ExternalLink size={18} />
                 </a>
+                )}
               </div>
             </div>
           )}
@@ -208,7 +217,7 @@ export default function Product({ shirt, shirts, settings, fav, onFav }) {
 
 function Tag({ children, mono }) {
   return (
-    <span dir={mono ? 'ltr' : undefined} className={`rounded-full bg-soft px-2.5 py-1 font-medium ${mono ? 'font-mono' : ''}`}>
+    <span dir={mono ? 'ltr' : undefined} className={`max-w-full break-all rounded-full bg-soft px-2.5 py-1 font-medium ${mono ? 'font-mono' : ''}`}>
       {children}
     </span>
   );
