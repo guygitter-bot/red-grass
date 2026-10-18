@@ -25,9 +25,9 @@ export function ThemeButton({ className = '' }) {
 export function Header({ favCount }) {
   return (
     <header className="sticky top-0 z-30 bg-ink text-white" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
-      <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-3">
+      <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-1.5">
         <a href="#/" aria-label="Isport – דף הבית">
-          <Logo />
+          <Logo className="h-14 lg:h-16" />
         </a>
         <div className="flex-1" />
         <nav className="hidden items-center gap-1 text-sm font-medium sm:flex">
@@ -56,7 +56,7 @@ export function Footer({ settings }) {
     <footer className="mt-16 bg-ink text-white/80" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-10 lg:flex-row lg:items-start lg:justify-between">
         <div className="max-w-sm">
-          <Logo size="text-xl" mark="h-8 w-8" />
+          <Logo className="h-28" />
           <p className="mt-3 text-sm leading-relaxed text-white/60">
             חולצות כדורגל של קבוצות ונבחרות. בוחרים חולצה, מוסיפים שם, מספר ופאץ', ומשלימים את ההזמנה אצל המוכר.
           </p>
