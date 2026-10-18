@@ -38,6 +38,8 @@ Add League Patches                    <- רק אם נבחר פאץ'
 - השרת עונה רק לאתר עצמו (CORS), עם מגבלת גודל לכל בקשה. CSP ושאר הכותרות ב-`web/public/_headers`.
 - תמונות מהרשת: רק https לכתובת ציבורית, עד 6MB, ונבדק שהקובץ באמת תמונה (לפי הבייטים). מוגשות עם `nosniff` ו-sandbox.
 - הסוכן: עד 300 הפעלות ביום. שום דבר ממנו לא נשמר בלי אישור.
+- עלויות: השרת סופר לכל חודש טוקנים, חיפושים ברשת ומספר הפעלות (`usage:<YYYY-MM>`); בהגדרות טבלה חודשית בשקלים
+  לפי המחירון (`web/src/lib/cost.js` – לעדכן אם המודל או המחיר משתנים). החשבון המדויק: Anthropic Console, מפתח `ISPORT_ANTHROPIC_API_KEY`.
 
 ## סודות ב-GitHub
 `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` (קיימים), `ISPORT_ADMIN_PASSWORD` – הסיסמה למסך הניהול, ו-`ISPORT_ANTHROPIC_API_KEY` –

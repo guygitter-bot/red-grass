@@ -3,9 +3,10 @@
 //   #/admin/edit/<id>    עריכה (או new למוצר חדש): קטגוריה ופרטים בסיסיים -> "מלא אוטומטית" -> מאשרים תמונות -> שומרים
 //   #/admin/settings     קטגוריות, וואטסאפ, אינסטגרם, הודעה בראש האתר
 //   #/admin/import       ייבוא מערוץ טלגרם (ImportTelegram.jsx)
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowDown, ArrowRight, ArrowUp, Check, Eye, EyeOff, ImagePlus, Link2, LogOut, Plus, Search, Send, Settings, Sparkles, Star, Trash2, X } from 'lucide-react';
 import { api, imageUrl, load, shrinkImage, store } from '../lib/api';
+import { USD_ILS, money, monthCost, monthName } from '../lib/cost';
 import { go } from '../lib/route';
 import { DEFAULT_CATEGORIES, KIND_LABEL, TEMPLATES, autoCode, searchShirts, withCategories } from '../lib/shirt';
 import { Chip, Field, ShirtImage, ThemeButton, TutorialVideo, inputClass } from './ui';
@@ -45,6 +46,11 @@ export default function Admin({ route }) {
   useEffect(() => {
     if (token) refresh();
   }, [token]);
+
+  // בכניסה להגדרות – נתונים עדכניים (העלויות משתנות אחרי כל השלמה אוטומטית)
+  useEffect(() => {
+    if (token && route[0] === 'settings') refresh();
+  }, [route[0]]);
 
   useEffect(() => {
     document.title = 'ניהול – Isport';
@@ -251,7 +257,8 @@ function List({ state, categories, call, onChange }) {
         {!list.length && <div className="p-8 text-center text-muted">{state.shirts.length ? 'לא נמצאו מוצרים' : 'עוד אין מוצרים. לחצו "מוצר חדש".'}</div>}
       </div>
       <p className="mt-6 text-center text-xs text-muted">
-        השלמה אוטומטית החודש: {state.usage.calls} פעמים
+        השלמה אוטומטית החודש: {state.usage.calls} פעמים · בערך {money(monthCost(state.usage).ils)} ·{' '}
+        <a href="#/admin/settings" className="underline">פירוט</a>
       </p>
     </div>
   );
@@ -701,7 +708,6 @@ function SettingsPage({ state, call, onSaved }) {
   const [form, setForm] = useState(state.settings);
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
-  const usage = useMemo(() => state.usage, [state.usage]);
 
   const save = async () => {
     setBusy(true);
@@ -742,9 +748,7 @@ function SettingsPage({ state, call, onSaved }) {
           {busy ? 'שומר…' : 'שמירה'}
         </button>
       </Box>
-      <p className="mt-4 text-sm text-muted">
-        השלמה אוטומטית החודש: {usage.calls} פעמים ({Math.round((usage.input + usage.output) / 1000)} אלף טוקנים)
-      </p>
+<Costs months={state.usageMonths || []} />
     </div>
   );
 }
@@ -828,5 +832,57 @@ function Categories({ state, call, onSaved }) {
         </button>
       </Box>
     </div>
+  );
+}
+
+// עלויות ההשלמה האוטומטית לפי חודש – הערכה לפי המחירון (לגבייה מהלקוח: החשבון המדויק ב-Anthropic Console)
+function Costs({ months }) {
+  const total = months.reduce((sum, m) => sum + monthCost(m).ils, 0);
+  return (
+    <section className="mt-5 rounded-2xl bg-card p-4 ring-1 ring-line">
+      <h2 className="font-extrabold">עלות ההשלמה האוטומטית</h2>
+      <p className="mb-3 mt-0.5 text-sm text-muted">הערכה לפי המחירון של Claude (דולר ≈ {USD_ILS} ₪). התצוגה בלבד – לא נגבה כאן כסף.</p>
+      {months.length ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-right text-muted">
+              <tr className="border-b border-line">
+                <th className="py-2 font-medium">חודש</th>
+                <th className="py-2 font-medium">מוצרים שמולאו</th>
+                <th className="py-2 font-medium">חיפושי תמונות</th>
+                <th className="py-2 font-medium">חיפושים ברשת</th>
+                <th className="py-2 text-left font-medium">עלות</th>
+              </tr>
+            </thead>
+            <tbody>
+              {months.map((m) => {
+                const c = monthCost(m);
+                return (
+                  <tr key={m.month} className="border-b border-line last:border-0">
+                    <td className="py-2">{monthName(m.month)}</td>
+                    <td className="py-2 tabular-nums">{m.enrich ?? m.calls}</td>
+                    <td className="py-2 tabular-nums">{m.images ?? '–'}</td>
+                    <td className="py-2 tabular-nums">{m.searches ?? '–'}</td>
+                    <td className="py-2 text-left font-bold tabular-nums">
+                      {money(c.ils)} <span className="font-normal text-muted">({money(c.usd, '$')})</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            {months.length > 1 && (
+              <tfoot>
+                <tr className="border-t-2 border-line">
+                  <td className="py-2 font-bold" colSpan={4}>סה"כ</td>
+                  <td className="py-2 text-left font-bold tabular-nums">{money(total)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      ) : (
+        <p className="text-sm text-muted">עוד לא השתמשו בהשלמה האוטומטית.</p>
+      )}
+    </section>
   );
 }
