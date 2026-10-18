@@ -4,6 +4,7 @@ import { ArrowLeft, Search, Shirt, Sparkles, Copy, X } from 'lucide-react';
 import { searchShirts } from '../lib/shirt';
 import { go } from '../lib/route';
 import { Chip, ShirtCard, TutorialVideo } from './ui';
+import Logo from './Logo';
 
 const SORTS = [
   { id: 'new', label: 'הכי חדשות' },
@@ -140,21 +141,10 @@ function Hero({ count }) {
           </button>
         </div>
         <div className="hidden justify-center lg:flex">
-          <BigShirt />
+          <Logo className="h-80 drop-shadow-[0_20px_50px_rgba(100,200,255,0.25)]" />
         </div>
       </div>
     </section>
-  );
-}
-
-// החולצה הגדולה בפתיחה (במחשב)
-function BigShirt() {
-  return (
-    <svg viewBox="0 0 64 64" className="h-72 w-72 drop-shadow-[0_20px_40px_rgba(196,244,58,0.25)]" aria-hidden="true">
-      <path d="M24 10 L13 14.5 L6 26 L13.5 31 L17 27 L17 54 L47 54 L47 27 L50.5 31 L58 26 L51 14.5 L40 10 C38.5 13.5 35.5 15.5 32 15.5 C28.5 15.5 25.5 13.5 24 10 Z" fill="#c4f43a" />
-      <text x="32" y="25" textAnchor="middle" fontFamily="Archivo Black, sans-serif" fontSize="5" fill="#0c0d0f">ISPORT</text>
-      <text x="32" y="45" textAnchor="middle" fontFamily="Archivo Black, sans-serif" fontSize="17" fill="#0c0d0f">10</text>
-    </svg>
   );
 }
 

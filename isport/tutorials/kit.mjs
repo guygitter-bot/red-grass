@@ -25,7 +25,7 @@ export const PASSWORD = 'demo-password-2026';
 
 const { default: worker, Shop } = await import(join(HERE, '..', 'api', 'worker.js'));
 
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.jpg': 'image/jpeg', '.mp4': 'video/mp4' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.jpg': 'image/jpeg', '.mp4': 'video/mp4', '.webp': 'image/webp' };
 
 function serve() {
   const server = createServer((req, res) => {
@@ -183,7 +183,7 @@ const OVERLAY = () => {
   #tut-card h1{font-size:34px;font-weight:900;line-height:1.2;margin:0}
   #tut-card p{font-size:18px;line-height:1.5;margin:0;opacity:.8;max-width:320px}
   #tut-card .e{font-size:72px;line-height:1}
-  #tut-card .e svg{width:96px;height:96px}
+  #tut-card .e img{width:220px;height:auto;display:block}
   `;
   document.documentElement.appendChild(css);
   const cap = document.createElement('div');
@@ -221,8 +221,8 @@ const OVERLAY = () => {
   };
 };
 
-// הלוגו לכרטיס הפתיחה
-export const MARK = '<svg viewBox="0 0 64 64"><path d="M24 10 L13 14.5 L6 26 L13.5 31 L17 27 L17 54 L47 54 L47 27 L50.5 31 L58 26 L51 14.5 L40 10 C38.5 13.5 35.5 15.5 32 15.5 C28.5 15.5 25.5 13.5 24 10 Z" fill="#c4f43a"/><circle cx="32" cy="25" r="3.6" fill="#0c0d0f"/><path d="M29 31.5 H35.5 L33.5 47 H27 Z" fill="#0c0d0f"/></svg>';
+// הלוגו לכרטיס הפתיחה (מהאתר עצמו)
+export const MARK = '<img src="logo.webp" alt="">';
 
 // ---------- הקראה ----------
 // כל כתובית נקראת בקול. הקבצים: voice/eleven/<key>.mp3 (ElevenLabs) או voice/<key>.mp3 (Google TTS), נוצרים ב-GitHub Actions (isport-voice.yml),

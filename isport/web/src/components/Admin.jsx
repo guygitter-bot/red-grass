@@ -87,7 +87,7 @@ export default function Admin({ route }) {
       <header className="sticky top-0 z-30 bg-ink text-white" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3">
           <a href="#/admin" aria-label="ניהול">
-            <Logo size="text-xl" mark="h-8 w-8" />
+            <Logo className="h-12" />
           </a>
           <span className="rounded-full bg-lime px-2 py-0.5 text-xs font-bold text-ink">ניהול</span>
           <div className="flex-1" />
@@ -124,11 +124,9 @@ function Login({ onLogin }) {
     }
   };
   return (
-    <div className="grid min-h-dvh place-items-center bg-ink px-4">
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-ink px-4">
+      <Logo className="h-36" />
       <form onSubmit={submit} className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-xl">
-        <div className="mb-5 flex justify-center text-text">
-          <Logo />
-        </div>
         <h1 className="mb-4 text-center text-lg font-bold">כניסה לניהול</h1>
         <input
           type="password"

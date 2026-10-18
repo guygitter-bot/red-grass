@@ -21,7 +21,7 @@ Add League Patches                    <- רק אם נבחר פאץ'
 ## מבנה
 - `api/` – Cloudflare Worker `isport-api` + Durable Object `Shop` אחד (`shop.js`). ניקוי נתונים ב-`model.js`, הסוכן ב-`ai.js`,
   תמונות ב-`images.js`. התמונות שאושרו נשמרות בדלי R2 `isport-images` ומוגשות מ-`/img/<שם>`.
-- `web/` – React + Vite + Tailwind, RTL, טלפון + מחשב + מצב לילה. צבעי המותג ב-`src/index.css`, הלוגו ב-`src/components/Logo.jsx` + `public/icon.svg`.
+- `web/` – React + Vite + Tailwind, RTL, טלפון + מחשב + מצב לילה. צבעי המותג ב-`src/index.css`, הלוגו: `public/logo.webp` (רקע שקוף) והאייקונים `icon-192/512.png`.
 
 ## אבטחה
 - סיסמת ניהול רק כסוד; כניסה נותנת אסימון אקראי (נשמר בשרת רק כ-hash, 30 יום). 6 ניסיונות שגויים = נעילה לחצי שעה.
