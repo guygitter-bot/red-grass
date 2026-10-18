@@ -257,3 +257,48 @@ test('image helpers', () => {
   const html = '<meta content="https://x.example.com/a.jpg" name="twitter:image"><meta property="og:image" content="https://x.example.com/logo.svg">';
   assert.deepEqual(imagesFromHtml(html, 'https://x.example.com/'), ['https://x.example.com/a.jpg']);
 });
+
+test('categories: defaults, old shirts, products by category, managing the list', async () => {
+  const env = fakeEnv();
+  const token = await admin(env);
+  // חולצה ישנה (בלי קטגוריה) = חולצת כדורגל
+  await env.shop.storage.put('shirt:sh-old1234567', { id: 'sh-old1234567', team: 'Arsenal', kind: 'club', type: 'Home', year: '2024', color: 'Red', code: 'Arsenal-Home-24-Red', images: [], tags: [], flyLink: 'https://x.example/p', published: true, createdAt: 1 });
+  env.shop.d = null;
+  let cat = (await call(env, '/catalog')).data;
+  assert.deepEqual(cat.categories.map((c) => c.id), ['football', 'basketball', 'shoes', 'bags']);
+  assert.equal(cat.shirts[0].category, 'football');
+
+  // נעליים: בלי שרוול ארוך, קוד מותג-דגם-צבע
+  const shoe = (await call(env, '/admin/shirt', { category: 'shoes', team: 'Nike', type: 'Air Jordan 1 Mid', color: 'Black White', longSleeve: true, flyLink: 'https://x.example/s', published: true }, token)).data.shirt;
+  assert.equal(shoe.code, 'Nike-AirJordan1Mid-BlackWhite');
+  assert.equal(shoe.longSleeve, false);
+  assert.equal((await call(env, '/admin/shirt', { category: 'nope', team: 'Nike' }, token)).status, 400);
+  assert.equal((await call(env, '/admin/shirt', { category: 'shoes' }, token)).data.error, 'חסר שם מותג');
+
+  // קטגוריה חדשה, הסתרה ושינוי סדר
+  const list = (await call(env, '/admin/state', {}, token)).data.categories;
+  const next = [...list.map((c) => (c.id === 'shoes' ? { ...c, active: false } : c)), { id: 'balls', name: 'כדורים', template: 'plain' }];
+  const saved = (await call(env, '/admin/categories', { categories: next }, token)).data.categories;
+  assert.equal(saved.at(-1).active, true);
+  cat = (await call(env, '/catalog')).data;
+  assert.ok(!cat.categories.some((c) => c.id === 'shoes'));
+  assert.ok(!cat.shirts.some((s) => s.id === shoe.id));
+
+  // אי אפשר למחוק קטגוריה שיש בה מוצרים, ולא לשבור את הרשימה
+  const res = await call(env, '/admin/categories', { categories: next.filter((c) => c.id !== 'shoes') }, token);
+  assert.equal(res.status, 400);
+  assert.match(res.data.error, /להסתיר/);
+  assert.equal((await call(env, '/admin/categories', { categories: [] }, token)).status, 400);
+  assert.equal((await call(env, '/admin/categories', { categories: [{ id: 'Bad Id', name: 'x' }] }, token)).status, 400);
+  assert.equal((await call(env, '/admin/categories', { categories: next.map((c) => ({ ...c, active: false })) }, token)).status, 400);
+});
+
+test('auto-fill tells the agent the category', async () => {
+  const calls = [];
+  const env = fakeEnv({ AI_CLIENT: fakeAI(calls) });
+  const token = await admin(env);
+  await call(env, '/admin/enrich', { category: 'shoes', team: 'Nike', type: 'Air Max 90' }, token);
+  assert.match(calls[0].messages[0].content, /Category: נעליים \(product\)/);
+  assert.match(calls[0].messages[0].content, /Brand: Nike/);
+  assert.match(calls[0].messages[0].content, /Model: Air Max 90/);
+});

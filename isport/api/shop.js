@@ -4,6 +4,7 @@
 //   meta          -> { v, fails: { count, until } }   v עולה בכל שינוי בקטלוג
 //   sessions      -> { <sha256 של סוד הכניסה>: תוקף }   כניסות של המנהל (סיסמה מהסוד ADMIN_PASSWORD)
 //   settings      -> { whatsapp, instagram, announcement }
+//   categories    -> [{ id, name, template, active }]   (ראו model.js; בלי – ברירת המחדל)
 //   shirt:<id>    -> חולצה (ראו model.js)
 //   day           -> { date, ai }   מגבלה יומית על הסוכן (הגנה מעלויות)
 //   usage:<YYYY-MM> -> { calls, input, output }   שימוש בסוכן לפי חודש
@@ -11,7 +12,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { aiMessage, enrich, findPages } from './ai.js';
 import { contentType, download, fromBase64, pageImages } from './images.js';
-import { DEFAULT_SETTINGS, cleanSettings, cleanShirt, fail, isImageKey, publicShirt } from './model.js';
+import { DEFAULT_CATEGORIES, DEFAULT_SETTINGS, cleanCategories, cleanSettings, cleanShirt, fail, isImageKey, publicShirt } from './model.js';
 
 const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_SESSIONS = 10;
@@ -54,12 +55,13 @@ export class Shop {
 
   async load() {
     if (this.d) return this.d;
-    const got = await this.storage.get(['meta', 'sessions', 'settings']);
+    const got = await this.storage.get(['meta', 'sessions', 'settings', 'categories']);
     const shirts = await this.storage.list({ prefix: 'shirt:' });
     this.d = {
       meta: got.get('meta') || { v: 1, fails: { count: 0, until: 0 } },
       sessions: got.get('sessions') || {},
       settings: { ...DEFAULT_SETTINGS, ...(got.get('settings') || {}) },
+      categories: got.get('categories') || DEFAULT_CATEGORIES,
       shirts: new Map([...shirts.values()].map((s) => [s.id, s])),
     };
     return this.d;
@@ -96,6 +98,7 @@ export class Shop {
         '/admin/image-import': () => this.importImage(body),
         '/admin/image-upload': () => this.uploadImage(body),
         '/admin/settings': () => this.saveSettings(body),
+        '/admin/categories': () => this.saveCategories(body),
         '/logout': () => this.logout(token),
       }[path];
       if (!handler) return json(404, { error: 'לא נמצא' });
@@ -142,11 +145,12 @@ export class Shop {
 
   catalog() {
     const now = this.now();
+    const categories = this.d.categories.filter((c) => c.active);
     const shirts = [...this.d.shirts.values()]
-      .filter((s) => s.published)
+      .filter((s) => s.published && categories.some((c) => c.id === (s.category || 'football')))
       .sort((a, b) => b.createdAt - a.createdAt)
       .map((s) => publicShirt(s, now));
-    return { v: this.d.meta.v, shirts, settings: this.d.settings };
+    return { v: this.d.meta.v, shirts, categories, settings: this.d.settings };
   }
 
   // ---------- ניהול ----------
@@ -157,6 +161,7 @@ export class Shop {
       v: this.d.meta.v,
       shirts: [...this.d.shirts.values()].sort((a, b) => b.createdAt - a.createdAt),
       settings: this.d.settings,
+      categories: this.d.categories,
       usage: (await this.storage.get(`usage:${month}`)) || { calls: 0, input: 0, output: 0 },
       images: Boolean(this.env.IMAGES),
     };
@@ -167,7 +172,7 @@ export class Shop {
     const old = body?.id ? d.shirts.get(body.id) : null;
     if (body?.id && !old) throw fail(404, 'החולצה לא נמצאה');
     if (!old && d.shirts.size >= MAX_SHIRTS) throw fail(400, 'הגעתם למספר החולצות המרבי');
-    const data = cleanShirt(body);
+    const data = cleanShirt(body, d.categories);
     const same = [...d.shirts.values()].find((s) => s.id !== old?.id && s.code.toLowerCase() === data.code.toLowerCase());
     if (same) throw fail(409, `קוד המוצר ${data.code} כבר קיים (${same.team} ${same.type} ${same.year})`);
     const now = this.now();
@@ -209,6 +214,12 @@ export class Shop {
     return { v: await this.bump({ settings: this.d.settings }), settings: this.d.settings };
   }
 
+  async saveCategories({ categories }) {
+    const used = new Set([...this.d.shirts.values()].map((s) => s.category || 'football'));
+    this.d.categories = cleanCategories(categories, used);
+    return { v: await this.bump({ categories: this.d.categories }), categories: this.d.categories };
+  }
+
   // ---------- הסוכן ----------
 
   async countAi() {
@@ -231,8 +242,9 @@ export class Shop {
   }
 
   async ai(kind, body) {
-    const basics = { team: body?.team, type: body?.type, year: body?.year, color: body?.color, kind: body?.kind };
-    if (!String(basics.team || '').trim()) throw fail(400, 'כתבו קודם את שם הקבוצה / הנבחרת');
+    const category = this.d.categories.find((c) => c.id === (body?.category || 'football')) || DEFAULT_CATEGORIES[0];
+    const basics = { team: body?.team, type: body?.type, year: body?.year, color: body?.color, kind: body?.kind, category };
+    if (!String(basics.team || '').trim()) throw fail(400, category.template === 'plain' ? 'כתבו קודם את שם המותג' : 'כתבו קודם את שם הקבוצה / הנבחרת');
     if (!this.env.ANTHROPIC_API_KEY && !this.env.AI_CLIENT) throw fail(503, 'ההשלמה האוטומטית לא מוגדרת בשרת');
     await this.countAi();
     try {

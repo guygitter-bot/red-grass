@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoCode, buildNote, cleanName, cleanNumber, patchesFor, searchShirts } from './shirt';
+import { autoCode, buildNote, cleanName, cleanNumber, patchesFor, searchShirts, withCategories } from './shirt';
 
 const LFC = { id: '1', team: 'Liverpool', teamHe: 'ליברפול', kind: 'club', type: 'Home', year: '2025/26', color: 'Red', colorHe: 'אדום', code: 'Liverpool-Home-26-Red', league: 'Premier League', leagueHe: 'הפרמייר ליג', country: 'England', longSleeve: true, tags: [] };
 const ARG = { id: '2', team: 'Argentina', teamHe: 'ארגנטינה', kind: 'national', type: 'Away', year: '2026', color: 'Navy', code: 'Argentina-Away-26-Navy', league: 'CONMEBOL', longSleeve: false, tags: ['מונדיאל'] };
@@ -50,5 +50,29 @@ describe('search', () => {
   it('filters', () => {
     expect(searchShirts(all, '', { kind: 'club' }).map((s) => s.id)).toEqual(['1']);
     expect(searchShirts(all, '', { league: 'CONMEBOL' }).map((s) => s.id)).toEqual(['2']);
+  });
+});
+
+describe('categories', () => {
+  const [lfc, shoe, jersey] = withCategories([
+    { ...LFC, category: undefined },
+    { id: '3', category: 'shoes', team: 'Nike', type: 'Air Max 90', color: 'White', code: 'Nike-AirMax90-White', kind: 'club', tags: [] },
+    { id: '4', category: 'basketball', team: 'Golden State Warriors', type: 'Icon', year: '2025/26', color: 'Blue', code: 'GoldenStateWarriors-Icon-26-Blue', kind: 'club', longSleeve: true, tags: [] },
+  ]);
+  it('old products are football shirts', () => {
+    expect(lfc.category).toBe('football');
+    expect(lfc.template).toBe('football');
+  });
+  it('plain products: the note is only the code, no patches', () => {
+    expect(buildNote(shoe, { name: 'X', number: '9', patch: 'league' })).toBe('Nike-AirMax90-White');
+    expect(patchesFor(shoe)).toEqual([]);
+  });
+  it('basketball: name and number, no patches or sleeves', () => {
+    expect(buildNote(jersey, { name: 'Curry', number: '30', patch: 'league', sleeve: 'long' })).toBe('GoldenStateWarriors-Icon-26-Blue\nName: Curry\nNumber: 30');
+  });
+  it('search by category name and filter by category', () => {
+    expect(searchShirts([lfc, shoe, jersey], 'נעליים').map((s) => s.id)).toEqual(['3']);
+    expect(searchShirts([lfc, shoe, jersey], '', { category: 'basketball' }).map((s) => s.id)).toEqual(['4']);
+    expect(searchShirts([lfc, shoe, jersey], 'קבוצה').map((s) => s.id)).toEqual(['1', '4']);
   });
 });

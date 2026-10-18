@@ -1,9 +1,9 @@
 // השרת של Isport (Cloudflare Worker): קטלוג החולצות, תמונות ומסך הניהול.
 //   ללקוחות (בלי כניסה):
-//     POST /catalog            -> { v, shirts, settings }   רק חולצות שפורסמו
+//     POST /catalog            -> { v, shirts, categories, settings }   רק מוצרים שפורסמו, בקטגוריות מוצגות
 //     GET  /img/<שם>           -> תמונה של חולצה (מהדלי, נשמרת במטמון לתמיד)
 //   מנהל (סיסמה -> /login -> authorization: Bearer <token>):
-//     /admin/state, /admin/shirt, /admin/shirt-delete, /admin/publish, /admin/settings,
+//     /admin/state, /admin/shirt, /admin/shirt-delete, /admin/publish, /admin/settings, /admin/categories,
 //     /admin/enrich, /admin/find-images (הסוכן), /admin/image-import, /admin/image-upload, /logout
 import { Shop } from './shop.js';
 import { isImageKey } from './model.js';
@@ -15,7 +15,7 @@ const MAX_BODY_BYTES = 100 * 1024;
 const MAX_UPLOAD_BYTES = 8.5 * 1024 * 1024;
 const ROUTES = [
   '/catalog', '/login', '/logout',
-  '/admin/state', '/admin/shirt', '/admin/shirt-delete', '/admin/publish', '/admin/settings',
+  '/admin/state', '/admin/shirt', '/admin/shirt-delete', '/admin/publish', '/admin/settings', '/admin/categories',
   '/admin/enrich', '/admin/find-images', '/admin/image-import', '/admin/image-upload',
 ];
 

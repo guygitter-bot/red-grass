@@ -1,16 +1,18 @@
-// סרטון לבעל האתר: איך מוסיפים חולצה חדשה – פרטים בסיסיים, "מלא אוטומטית", אישור תמונות, קישור ופרסום
+// סרטון לבעל האתר: איך מוסיפים מוצר חדש – קטגוריה ופרטים בסיסיים, "מלא אוטומטית", אישור תמונות, קישור ופרסום
 import { MARK, PASSWORD, record } from '../kit.mjs';
 
 await record('admin', async ({ page, say, tap, type, wait, card, uncard, scrollTo, point, hideDot }) => {
-  await card(MARK, 'ניהול', 'איך מוסיפים חולצה', 'כמה פרטים בסיסיים – והמערכת משלימה את השאר');
+  await card(MARK, 'ניהול', 'איך מוסיפים מוצר', 'כמה פרטים בסיסיים – והמערכת משלימה את השאר');
   await uncard();
   await say('נכנסים למסך הניהול עם הסיסמה', 2400);
   await type(page.getByPlaceholder('סיסמה'), PASSWORD, { delay: 40 });
   await tap(page.getByRole('button', { name: 'כניסה' }), { after: 1200 });
-  await say('כאן כל החולצות, ומה מופיע באתר', 2600, true);
-  await say('לוחצים <b>חולצה חדשה</b>', 1500, true);
-  await tap(page.getByRole('link', { name: 'חולצה חדשה' }), { after: 1000 });
-  await say('ממלאים רק ארבעה דברים: קבוצה, סוג, עונה וצבע', 3000, true);
+  await say('כאן כל המוצרים, לפי קטגוריות, ומה מופיע באתר', 3000, true);
+  await say('לוחצים <b>מוצר חדש</b>', 1500, true);
+  await tap(page.getByRole('link', { name: 'מוצר חדש' }), { after: 1000 });
+  await say('בוחרים קטגוריה. בנעליים ובתיקים ממלאים מותג ודגם', 3400, true);
+  await point(page.getByLabel('קטגוריה'), 1000);
+  await say('בחולצה ממלאים רק ארבעה דברים: קבוצה, סוג, עונה וצבע', 3000, true);
   await type(page.getByPlaceholder('Liverpool'), 'Real Madrid', { delay: 80 });
   await page.getByPlaceholder('Home / Away / GK').fill('');
   await type(page.getByPlaceholder('Home / Away / GK'), 'Home', { delay: 90 });
@@ -47,7 +49,7 @@ await record('admin', async ({ page, say, tap, type, wait, card, uncard, scrollT
   await wait(1200);
   await say('ברשימה אפשר להסתיר חולצה מהאתר, או לפרסם אותה שוב, בלחיצה', 3400, true);
   await point(page.getByRole('button', { name: 'באתר' }).first(), 1400);
-  await say('💡 טיפ: בגלגל השיניים – מספר וואטסאפ, אינסטגרם והודעה בראש האתר', 4000, true);
+  await say('💡 טיפ: בגלגל השיניים – קטגוריות, וואטסאפ, אינסטגרם והודעה בראש האתר', 4200, true);
   await point(page.getByRole('link', { name: 'הגדרות' }), 1400);
-  await card(MARK, 'ניהול', 'זהו!', 'חולצה חדשה באתר בפחות מדקה', 2600);
+  await card(MARK, 'ניהול', 'זהו!', 'מוצר חדש באתר בפחות מדקה', 2600);
 }, { start: '#/admin' });

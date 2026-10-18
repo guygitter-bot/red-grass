@@ -43,9 +43,31 @@ function serve() {
 }
 
 // ---------- חולצות לדוגמה ----------
-// ציור פשוט של חולצה (צבע ראשי, צבע משני, דוגמה)
-function shirtSvg({ c1, c2, style = 'plain', num }) {
-  const body = 'M24 10 L13 14.5 L6 26 L13.5 31 L17 27 L17 54 L47 54 L47 27 L50.5 31 L58 26 L51 14.5 L40 10 C38.5 13.5 35.5 15.5 32 15.5 C28.5 15.5 25.5 13.5 24 10 Z';
+// ציור פשוט של מוצר: חולצה / גופייה (צבע ראשי, צבע משני, דוגמה), נעל או תיק
+function shoeSvg({ c1, c2, num }) {
+  const flip = num ? 'transform="translate(64 0) scale(-1 1)"' : '';
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 64 64"><rect width="64" height="64" fill="#fff"/><g ${flip}>
+  <path d="M6 40 C6 34 9 30 14 29 L24 24 C27 22 30 22 32 25 L36 30 C40 33 48 34 54 36 C58 37 59 40 58 43 L58 45 L6 45 Z" fill="${c1}" stroke="#0003" stroke-width=".4"/>
+  <path d="M6 44 H58 V47 C58 48 57 49 56 49 H8 C7 49 6 48 6 47 Z" fill="${c2}"/>
+  <path d="M14 36 C22 33 30 34 40 38" fill="none" stroke="${c2}" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M25 26 L29 30 M28 24.5 L32 28.5" stroke="${c2}" stroke-width=".9"/></g></svg>`;
+}
+
+function bagSvg({ c1, c2, num }) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 64 64"><rect width="64" height="64" fill="#fff"/>
+  <path d="M20 22 C20 12 44 12 44 22" fill="none" stroke="${c2}" stroke-width="2.5"/>
+  <rect x="12" y="22" width="40" height="32" rx="6" fill="${c1}" stroke="#0003" stroke-width=".4"/>
+  <rect x="12" y="32" width="40" height="3" fill="${c2}"/>
+  ${num ? '<rect x="22" y="40" width="20" height="9" rx="2" fill="#0002"/>' : `<circle cx="32" cy="44" r="3" fill="${c2}"/>`}</svg>`;
+}
+
+function shirtSvg(look) {
+  if (look.shape === 'shoe') return shoeSvg(look);
+  if (look.shape === 'bag') return bagSvg(look);
+  const { c1, c2, style = 'plain', num } = look;
+  const body = look.shape === 'tank'
+    ? 'M23 9 L18 10 L18 20 C18 24 16 26 15 27 L15 55 L49 55 L49 27 C48 26 46 24 46 20 L46 10 L41 9 C39.5 14 36 17 32 17 C28 17 24.5 14 23 9 Z'
+    : 'M24 10 L13 14.5 L6 26 L13.5 31 L17 27 L17 54 L47 54 L47 27 L50.5 31 L58 26 L51 14.5 L40 10 C38.5 13.5 35.5 15.5 32 15.5 C28.5 15.5 25.5 13.5 24 10 Z';
   const pattern = {
     plain: '',
     band: `<path d="M17 30 H47 V34 H17Z" fill="${c2}"/>`,
@@ -56,8 +78,8 @@ function shirtSvg({ c1, c2, style = 'plain', num }) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 64 64"><rect width="64" height="64" fill="#fff"/>
   <defs><clipPath id="c"><path d="${body}"/></clipPath></defs>
   <path d="${body}" fill="${c1}"/><g clip-path="url(#c)">${pattern}</g>
-  <path d="M26.5 11.3 C28 13.8 30 14.8 32 14.8 C34 14.8 36 13.8 37.5 11.3" fill="none" stroke="${c2}" stroke-width="1.2"/>
-  <path d="M6.6 25 L13.4 29.5 M57.4 25 L50.6 29.5" stroke="${c2}" stroke-width="1.2"/>
+  ${look.shape === 'tank' ? '' : `<path d="M26.5 11.3 C28 13.8 30 14.8 32 14.8 C34 14.8 36 13.8 37.5 11.3" fill="none" stroke="${c2}" stroke-width="1.2"/>
+  <path d="M6.6 25 L13.4 29.5 M57.4 25 L50.6 29.5" stroke="${c2}" stroke-width="1.2"/>`}
   ${num ? `<text x="32" y="44" text-anchor="middle" font-size="16" font-family="Arial Black,Arial" font-weight="900" fill="${c2}">${num}</text>` : `<circle cx="38.5" cy="22" r="2.2" fill="${c2}"/>`}
   <path d="${body}" fill="none" stroke="#0002" stroke-width=".35"/></svg>`;
 }
@@ -71,6 +93,11 @@ export const SHIRTS = [
   { team: 'AC Milan', teamHe: 'מילאן', kind: 'club', type: 'Home', year: '2025/26', color: 'Red Black', colorHe: 'אדום-שחור', country: 'Italy', countryHe: 'איטליה', league: 'Serie A', leagueHe: 'הסרייה A', look: { c1: '#111111', c2: '#d71920', style: 'stripes' }, description: 'פסים אדומים ושחורים, צווארון עגול שחור.' },
   { team: 'Israel', teamHe: 'ישראל', kind: 'national', type: 'Home', year: '2026', color: 'Blue', colorHe: 'כחול', country: 'Israel', countryHe: 'ישראל', league: 'UEFA', leagueHe: 'אופ"א', look: { c1: '#0038b8', c2: '#ffffff', style: 'band' }, description: 'חולצת הבית הכחולה של נבחרת ישראל, עם פס לבן על החזה.' },
   { team: 'Maccabi Haifa', teamHe: 'מכבי חיפה', kind: 'club', type: 'Home', year: '2025/26', color: 'Green', colorHe: 'ירוק', country: 'Israel', countryHe: 'ישראל', league: 'Ligat HaAl', leagueHe: 'ליגת העל', look: { c1: '#00843d', c2: '#ffffff', style: 'sash' }, description: 'ירוק עם אלכסון לבן, צווארון עגול לבן.' },
+  { category: 'basketball', team: 'Golden State Warriors', teamHe: 'גולדן סטייט ווריורס', kind: 'club', type: 'Icon', year: '2025/26', color: 'Blue', colorHe: 'כחול', country: 'USA', countryHe: 'ארה"ב', league: 'NBA', leagueHe: 'NBA', look: { c1: '#1d428a', c2: '#ffc72c', shape: 'tank', style: 'band' }, description: 'גופיית Icon כחולה עם עיטורים צהובים בצוואר ובכתפיים.' },
+  { category: 'basketball', team: 'Maccabi Tel Aviv', teamHe: 'מכבי תל אביב', kind: 'club', type: 'Home', year: '2025/26', color: 'Yellow', colorHe: 'צהוב', country: 'Israel', countryHe: 'ישראל', league: 'EuroLeague', leagueHe: 'יורוליג', look: { c1: '#ffd200', c2: '#003b7a', shape: 'tank' }, description: 'הגופייה הצהובה עם עיטורים כחולים.' },
+  { category: 'shoes', team: 'Nike', teamHe: 'נייקי', kind: 'club', type: 'Air Max 90', year: '', color: 'White Red', colorHe: 'לבן-אדום', country: 'USA', countryHe: 'ארה"ב', league: 'Running', leagueHe: 'ריצה', look: { c1: '#f4f4f4', c2: '#d7262e', shape: 'shoe' }, description: 'נעל ריצה קלאסית בלבן עם פסים אדומים וסוליית אוויר.' },
+  { category: 'shoes', team: 'Adidas', teamHe: 'אדידס', kind: 'club', type: 'Samba', year: '', color: 'Black', colorHe: 'שחור', country: 'Germany', countryHe: 'גרמניה', league: 'Originals', leagueHe: 'אוריג׳ינלס', look: { c1: '#1a1a1a', c2: '#e8e1cf', shape: 'shoe' }, description: 'נעל סמבה שחורה עם שלושת הפסים וסוליית גומי.' },
+  { category: 'bags', team: 'Nike', teamHe: 'נייקי', kind: 'club', type: 'Brasilia Duffel', year: '', color: 'Black', colorHe: 'שחור', country: 'USA', countryHe: 'ארה"ב', league: 'Training', leagueHe: 'אימון', look: { c1: '#222222', c2: '#c4f43a', shape: 'bag' }, description: 'תיק ספורט בינוני עם תא נעליים ורצועת כתף.' },
 ];
 
 // הסוכן המדומה: מכיר את ריאל מדריד (לסרטון הניהול)
