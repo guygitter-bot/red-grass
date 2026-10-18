@@ -2,13 +2,15 @@
 //   #/admin              רשימת המוצרים: חיפוש, קטגוריה, פרסום/הסתרה
 //   #/admin/edit/<id>    עריכה (או new למוצר חדש): קטגוריה ופרטים בסיסיים -> "מלא אוטומטית" -> מאשרים תמונות -> שומרים
 //   #/admin/settings     קטגוריות, וואטסאפ, אינסטגרם, הודעה בראש האתר
+//   #/admin/import       ייבוא מערוץ טלגרם (ImportTelegram.jsx)
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowDown, ArrowRight, ArrowUp, Check, Eye, EyeOff, ImagePlus, Link2, LogOut, Plus, Search, Settings, Sparkles, Star, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUp, Check, Eye, EyeOff, ImagePlus, Link2, LogOut, Plus, Search, Send, Settings, Sparkles, Star, Trash2, X } from 'lucide-react';
 import { api, imageUrl, load, shrinkImage, store } from '../lib/api';
 import { go } from '../lib/route';
 import { DEFAULT_CATEGORIES, KIND_LABEL, TEMPLATES, autoCode, searchShirts, withCategories } from '../lib/shirt';
 import { Chip, Field, ShirtImage, ThemeButton, TutorialVideo, inputClass } from './ui';
 import Logo from './Logo';
+import ImportTelegram from './ImportTelegram';
 
 const TOKEN = 'isport_admin';
 const MAX_IMAGES = 4;
@@ -80,7 +82,8 @@ export default function Admin({ route }) {
       ) : (
         <Editor key={route[1]} shirt={shirt} categories={categories} call={call} imagesReady={state.images} onSaved={putShirt} onDeleted={refresh} />
       );
-  } else if (route[0] === 'settings') page = <SettingsPage state={state} call={call} onSaved={(patch) => setState((s) => ({ ...s, ...patch }))} />;
+  } else if (route[0] === 'import') page = <ImportTelegram state={state} categories={categories} call={call} onSaved={putShirt} />;
+  else if (route[0] === 'settings') page = <SettingsPage state={state} call={call} onSaved={(patch) => setState((s) => ({ ...s, ...patch }))} />;
   else page = <List state={state} categories={categories} call={call} onChange={putShirt} />;
 
   return (
@@ -183,9 +186,14 @@ function List({ state, categories, call, onChange }) {
             {state.shirts.length} מוצרים · {live} באתר · {state.shirts.length - live} מוסתרים
           </p>
         </div>
-        <a href={`#/admin/edit/new${cat ? `/${cat}` : ''}`} className="flex items-center gap-1.5 rounded-full bg-ink px-5 py-2.5 font-bold text-white dark:bg-lime dark:text-ink">
-          <Plus size={18} /> מוצר חדש
-        </a>
+        <div className="flex gap-2">
+          <a href="#/admin/import" className="flex items-center gap-1.5 rounded-full px-4 py-2.5 font-bold ring-1 ring-line hover:bg-soft">
+            <Send size={16} /> ייבוא מטלגרם
+          </a>
+          <a href={`#/admin/edit/new${cat ? `/${cat}` : ''}`} className="flex items-center gap-1.5 rounded-full bg-ink px-5 py-2.5 font-bold text-white dark:bg-lime dark:text-ink">
+            <Plus size={18} /> מוצר חדש
+          </a>
+        </div>
       </div>
 
       <button onClick={() => setVideo(!video)} className="mb-3 text-sm font-bold text-lime-ink hover:underline">
