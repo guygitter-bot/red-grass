@@ -81,6 +81,9 @@ and web_search for the creator's written recipe (dish + creator name, in Hebrew 
 the most faithful recipe you can from what the caption, comments, hint and video title say, filling the gaps \
 from a reliable recipe for the same dish that you found with web_search. Set confidence to "low" and explain in \
 notes exactly what came from the creator and what was completed from elsewhere.
+- A Pinterest pin: the recipe is usually on the site the pin links to ("Linked page" below) – build it from there. \
+If that page could not be read, web_fetch it; if the pin has no link, use the pin's title and description, and \
+web_search for the recipe (title + site/creator) to complete what is missing.
 - A website: if the page text below is missing or blocked, web_fetch the link.
 - A WhatsApp message or text the user pasted: build the recipe from that text. If it is chatter and not a recipe, set found=false.
 - Photos and messages: if one source has several different dishes, give each its own recipe (more_recipes) – never \

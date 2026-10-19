@@ -46,6 +46,7 @@ export function sourceKind(url) {
   if (host === 'instagram.com') return 'instagram';
   if (host === 'facebook.com' || host === 'fb.watch') return 'facebook';
   if (host === 'vimeo.com') return 'vimeo';
+  if (host === 'pin.it' || /(^|\.)pinterest\.[a-z.]+$/.test(host)) return 'pinterest';
   return 'page';
 }
 
@@ -299,6 +300,16 @@ export async function gatherSource(url, fetchFn = fetch, { hint = '', igDocId } 
     out.debug.push(`instagram: ${ig.tried.join(', ')}`);
   }
 
+  // פינטרסט: בפין עצמו יש רק תמונה ותיאור, והמתכון נמצא באתר שהפין מקשר אליו – קוראים גם אותו
+  if (kind === 'pinterest') {
+    try {
+      await pinterest(fetchFn, url, out);
+    } catch (e) {
+      out.warnings.push(`pinterest: ${e.message}`);
+    }
+    return out;
+  }
+
   if (kind === 'facebook') {
     try {
       const fb = await facebook(fetchFn, url);
@@ -373,6 +384,70 @@ export async function gatherSource(url, fetchFn = fetch, { hint = '', igDocId } 
     }
   }
   return out;
+}
+
+// פין: התיאור, התמונה והקישור לאתר המקורי (מהממשק הציבורי של הווידג'טים, ואם לא – מתוך הדף).
+// קישור מקוצר (pin.it) נפתח קודם לכתובת הפין המלאה
+const PIN_ID = /\/pin\/(?:[\w-]*--)?(\d{5,25})/;
+async function pinterest(fetchFn, url, out) {
+  let html = '';
+  let pinUrl = url;
+  if (!PIN_ID.test(new URL(url).pathname)) {
+    // צריך רק את הכתובת שאליה הקישור המקוצר מפנה (גם אם הדף עצמו חסום)
+    const page = await safeFetch(fetchFn, url, { headers: { 'user-agent': UA, accept: 'text/html' } }, { maxBytes: MAX_HTML });
+    pinUrl = page.finalUrl;
+    if (page.res.ok) html = await page.text();
+  }
+  const id = (new URL(pinUrl).pathname.match(PIN_ID) || [])[1];
+  let link = '';
+  if (id) {
+    const info = await getJson(fetchFn, `https://widgets.pinterest.com/v3/pidgets/pins/info/?pin_ids=${id}`);
+    const pin = Array.isArray(info?.data) ? info.data[0] : null;
+    if (pin) {
+      out.title = String(pin.grid_title || pin.title || '').trim();
+      out.description = String(pin.description || pin.closeup_description || '').trim();
+      out.author = String(pin.pinner?.full_name || '').trim();
+      const images = pin.images || {};
+      out.image = images.orig?.url || images['736x']?.url || images['564x']?.url || images['237x']?.url || null;
+      link = String(pin.link || '');
+      out.debug.push('pinterest: widgets');
+    }
+  }
+  if (!out.description || !link) {
+    if (!html) html = await get(fetchFn, pinUrl).then((p) => p.text).catch((e) => {
+      out.warnings.push(`pin page: ${e.message}`);
+      return '';
+    });
+    const meta = metaTags(html);
+    out.title = out.title || meta['og:title'] || '';
+    out.description = out.description || meta['og:description'] || meta.description || '';
+    out.image = out.image || meta['og:image'] || null;
+    // הקישור לאתר המקורי מופיע בנתונים של הדף ("link":"https://...")
+    if (!link) {
+      for (const m of html.matchAll(/"link"\s*:\s*"(https?:[^"]{8,500})"/g)) {
+        const candidate = m[1].replace(/\\\//g, '/').replace(/\\u002F/gi, '/');
+        if (!/pinterest\.|pin\.it/i.test(candidate)) {
+          link = candidate;
+          break;
+        }
+      }
+    }
+    out.recipes = findJsonLdRecipes(html).map(compactRecipe);
+  }
+  out.siteName = 'Pinterest';
+  // האתר המקורי של הפין, ואחריו קישורים מהתיאור
+  const links = [...new Set([...(link && isPublicUrl(link) ? [link] : []), ...linksIn([out.description], 2)])].slice(0, 2);
+  for (const l of links) {
+    try {
+      const { text: page } = await get(fetchFn, l);
+      const recipes = findJsonLdRecipes(page).map(compactRecipe);
+      out.linked.push({ url: l, recipes, text: recipes.length ? '' : pageText(page).slice(0, 8000) });
+      if (!out.image) out.image = metaTags(page)['og:image'] || recipes[0]?.image || null;
+    } catch (e) {
+      out.warnings.push(`linked ${l}: ${e.message}`);
+    }
+  }
+  if (!out.linked.length && !link) out.warnings.push('pinterest: the pin has no link to the original site');
 }
 
 // קישורים לאתרים שמופיעים בכיתוב או בתגובות של היוצר (למשל "המתכון המלא בבלוג"): קוראים עד 2

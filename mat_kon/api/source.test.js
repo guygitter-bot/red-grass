@@ -81,3 +81,40 @@ test('a blocked page is a warning, not a crash', async () => {
   assert.equal(src.kind, 'page');
   assert.deepEqual(src.warnings, ['page: HTTP 403']);
 });
+
+test('a Pinterest pin: reads the pin and the recipe on the site it links to', async () => {
+  assert.equal(sourceKind('https://pin.it/3abcDEF'), 'pinterest');
+  assert.equal(sourceKind('https://il.pinterest.com/pin/123456789/'), 'pinterest');
+  assert.equal(sourceKind('https://www.pinterest.co.uk/pin/123456789/'), 'pinterest');
+  const recipePage = `<html><head><meta property="og:image" content="https://blog.example/cake.jpg"></head><body>
+    <script type="application/ld+json">{"@type":"Recipe","name":"Lemon cake","recipeIngredient":["2 eggs","1 cup flour"],"recipeInstructions":["Mix","Bake"]}</script></body></html>`;
+  const seen = [];
+  const fetchFn = async (url) => {
+    seen.push(String(url));
+    if (url === 'https://pin.it/3abcDEF') return new Response('', { status: 302, headers: { location: 'https://www.pinterest.com/pin/987654321/sent/' } });
+    if (String(url).startsWith('https://widgets.pinterest.com/')) {
+      return Response.json({ data: [{ id: '987654321', grid_title: 'עוגת לימון', description: 'הכי טעימה', link: 'https://blog.example/lemon', pinner: { full_name: 'Dana' }, images: { '564x': { url: 'https://i.pinimg.com/564x/a.jpg' } } }] });
+    }
+    if (url === 'https://blog.example/lemon') return new Response(recipePage);
+    return new Response('', { status: 404 });
+  };
+  const src = await gatherSource('https://pin.it/3abcDEF', fetchFn);
+  assert.equal(src.kind, 'pinterest');
+  assert.deepEqual([src.title, src.description, src.author, src.image], ['עוגת לימון', 'הכי טעימה', 'Dana', 'https://i.pinimg.com/564x/a.jpg']);
+  assert.equal(src.linked[0].url, 'https://blog.example/lemon');
+  assert.equal(src.linked[0].recipes[0].ingredients.length, 2);
+  assert.ok(seen.includes('https://widgets.pinterest.com/v3/pidgets/pins/info/?pin_ids=987654321'));
+  assert.equal(looksComplete(src), true);
+
+  // בלי הממשק הציבורי: התיאור והקישור נלקחים מתוך דף הפין
+  const pinHtml = `<html><head><meta property="og:title" content="Pasta"><meta property="og:description" content="Easy pasta"></head>
+    <body><script>{"link":"https:\\/\\/www.pinterest.com\\/x","other":1,"link":"https:\\/\\/food.example\\/pasta"}</script></body></html>`;
+  const src2 = await gatherSource('https://www.pinterest.com/pin/111222333/', async (url) => {
+    if (url === 'https://www.pinterest.com/pin/111222333/') return new Response(pinHtml);
+    if (url === 'https://food.example/pasta') return new Response('<html><body><p>Boil pasta with garlic and oil</p></body></html>');
+    return new Response('', { status: 500 });
+  });
+  assert.deepEqual([src2.title, src2.description], ['Pasta', 'Easy pasta']);
+  assert.equal(src2.linked[0].url, 'https://food.example/pasta');
+  assert.match(src2.linked[0].text, /Boil pasta/);
+});
