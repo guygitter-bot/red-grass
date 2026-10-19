@@ -153,6 +153,10 @@
 - סיסמאות: `ISPORT_ADMIN_PASSWORD` = המשתמש (מי שבנה); לבעל החנות סיסמה נפרדת שנקבעת בהגדרות. גיבוי לילי ל-R2 (30 יום) ושחזור בהגדרות. מפתח Claude נפרד: `ISPORT_ANTHROPIC_API_KEY`.
 - סרטוני הדרכה ב-`isport/tutorials` (אותו נוהל כמו mat-kon: נועה + מוזיקה, `isport-voice.yml`). **לא להקליט מחדש בלי לשאול**: אחרי שינוי במסך – לשאול את המשתמש אם לעדכן את הסרטונים.
 
+### ווטסאפ ל-Claude (`whatsapp_mcp/`)
+- תיאור: `whatsapp_mcp/README.md`. סקריפטי התקנה למחשב של המשתמש (מק/ווינדוס) ל-[lharries/whatsapp-mcp](https://github.com/lharries/whatsapp-mcp) בגרסה קבועה. לא רץ בענן.
+- `configure.py` סוגר את הגשר ל-`127.0.0.1` (במקור פתוח לכל הרשת) – לשמור על זה גם כשמעדכנים גרסה.
+
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).
 
