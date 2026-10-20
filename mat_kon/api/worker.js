@@ -7,7 +7,7 @@
 //   - משתמש שהוזמן (Authorization: Bearer <session>): נרשם מקישור הזמנה, מקבל ספר ריק משלו
 //     (user:<id>), ו-FREE_RECIPES מתכונים בחינם. אחר כך צריך מנוי (plan=paid).
 import { deps, trackedClient } from './deps.js';
-import { buildRecipe, failure } from './jobs.js';
+import { buildRecipe, errorGroup, failure } from './jobs.js';
 import { RecipeBook } from './store.js';
 import { Accounts, canAdd } from './accounts.js';
 import { gatherSource, normalizeUrl, sourceKind } from './source.js';
@@ -251,10 +251,11 @@ export default {
     const month = () => new Date().toISOString().slice(0, 7);
     const ai = () => trackedClient(env, (u) => internal(bookFor(user), 'POST', '/costs/add', { month: month(), ...u }).catch(() => {}));
     // תקלות נשמרות (50 אחרונות) כדי שבעל האפליקציה יראה אותן במסך הניהול
-    const recordError = (where, e) => {
+    const recordError = (where, e, group = '') => {
       console.error(where, e);
       return internal(accounts, 'POST', '/errors/add', {
         where, message: String(e?.message || e).slice(0, 300), status: e?.status || null, user: user?.email || (user ? user.id : 'owner'),
+        ...(group ? { group } : {}),
       }).catch(() => {});
     };
 
@@ -405,7 +406,8 @@ export default {
         const { body, error } = await readJson();
         if (error) return error;
         const reason = ['not-recipe', 'offensive', 'personal', 'copied', 'other'].includes(body.reason) ? body.reason : 'other';
-        await internal(stub, 'POST', '/community/report', { key: parts[1], rater: bookKeyOf(user), reason });
+        const reported = await (await internal(stub, 'POST', '/community/report', { key: parts[1], rater: bookKeyOf(user), reason })).json();
+        if (reported.justHidden) await internal(accounts, 'POST', '/admin/notify', { title: '🚩 מתכון הוסתר אחרי דיווחים', body: reported.title, tag: `report-${parts[1]}`, url: '#content' });
         return reply(200, { ok: true });
       }
       if (parts.length === 3 && parts[2] === 'save' && request.method === 'POST') {
@@ -693,6 +695,17 @@ export default {
         return pass(await internal(accounts, 'POST', '/admin/issues/update', { sig: parts[2], status: body.status, note: body.note }));
       }
       if (url.pathname === '/admin/security' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/admin/security'));
+      // התראות לטלפון של בעל האפליקציה
+      if (parts[1] === 'push' && parts.length === 3) {
+        if (parts[2] === 'key' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/admin/push/key'));
+        if (parts[2] === 'status' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/admin/push/status'));
+        if (parts[2] === 'test' && request.method === 'POST') return pass(await internal(accounts, 'POST', '/admin/push/test', {}));
+        if (parts[2] === 'subscribe' && request.method === 'POST') {
+          const { body, error } = await readJson();
+          if (error) return error;
+          return pass(await internal(accounts, 'POST', '/admin/push/subscribe', { subscription: body.subscription }));
+        }
+      }
       // דיווחים ומתכונים שבדיקת ה-AI לא הייתה בטוחה לגביהם: אישור / הסרה / חסימת המפרסם
       const community = env.BOOK.get(env.BOOK.idFromName('community'));
       if (url.pathname === '/admin/reports' && request.method === 'GET') return pass(await internal(community, 'POST', '/community/reports', {}));
@@ -842,7 +855,7 @@ export default {
         recipe = await buildRecipe(env, ai(), { link, text, hint }, categories);
       } catch (e) {
         await giveBack();
-        await recordError('extract', e);
+        await recordError('extract', e, link ? errorGroup(link, e) : '');
         const f = failure(e, { isPhoto: isAddPhoto, owner: !user });
         return fail(f.status, f.error);
       }
@@ -909,6 +922,7 @@ export default {
       await internal(comm, 'POST', '/community/publish', {
         key, recipe: copy, author: { id: user?.id || 'owner', name: profile.displayName }, flagged: review.decision === 'review', reason: review.reason,
       });
+      if (review.decision === 'review') await internal(accounts, 'POST', '/admin/notify', { title: '👀 מתכון חדש בקהילה מחכה לבדיקה', body: `${copy.title} – ${review.reason || ''}`, tag: `review-${key}`, url: '#content' });
       const saved = await (await internal(book, 'PUT', `/recipes/${id}`, { published: key })).json();
       return reply(200, { ...saved, review: { decision: review.decision, imageRemoved: Boolean(image && !review.imageOk), reason: review.reason } });
     }

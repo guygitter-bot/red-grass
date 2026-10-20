@@ -1601,3 +1601,35 @@ test('community: publishing a personal recipe with a display name, AI check, rep
   assert.equal((await (await call('GET', '/community?q=שמרים', undefined, ron)).json()).results.length, 0);
   assert.equal((await call('POST', `/recipes/${mine.id}/publish`, {}, dana)).status, 403);
 });
+
+test('admin push: owner registers a phone, gets a push for a new issue (once an hour per kind), errors group by site', async () => {
+  env.OWNER_PASSWORD = 'owner-secret-1';
+  const owner = (await (await call('POST', '/owner-login', { password: 'owner-secret-1' })).json()).session;
+  const accounts = env.ACCOUNTS.objects.get('accounts');
+  const pushes = [];
+  accounts.pushFetch = async (url, init) => { pushes.push({ url, init }); return new Response('', { status: 201 }); };
+  const { publicKey } = await (await call('GET', '/admin/push/key', undefined, owner)).json();
+  assert.ok(publicKey.length > 40);
+  // מכשיר אמיתי: מפתח ציבורי P-256 ו-auth של 16 בתים
+  const pair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+  const raw = new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey));
+  const b64 = (b) => btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const subscription = { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: { p256dh: b64(raw), auth: b64(crypto.getRandomValues(new Uint8Array(16))) } };
+  assert.equal((await call('POST', '/admin/push/subscribe', { subscription: { endpoint: 'https://evil.example/x', keys: subscription.keys } }, owner)).status, 400);
+  assert.equal((await (await call('POST', '/admin/push/subscribe', { subscription }, owner)).json()).devices, 1);
+  assert.equal((await (await call('POST', '/admin/push/test', {}, owner)).json()).sent, 1);
+
+  // שתי תקלות פייסבוק עם נוסח שונה – תקלה אחת והתראה אחת
+  deps.fetch = async () => new Response('', { status: 400 });
+  reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_recipe', input: { ...recipeInput, found: false, notes: `פייסבוק חסם ${Math.random()}` } }] });
+  await call('POST', '/recipes', { url: 'https://www.facebook.com/share/r/aaa/' }, owner);
+  await call('POST', '/recipes', { url: 'https://m.facebook.com/share/r/bbb/' }, owner);
+  const { issues } = await (await call('GET', '/admin/issues', undefined, owner)).json();
+  assert.equal(issues.filter((i) => i.where === 'extract').length, 1, JSON.stringify(issues));
+  assert.equal(issues.find((i) => i.where === 'extract').count, 2);
+  assert.equal(pushes.length, 2); // בדיקה + תקלה חדשה אחת
+  assert.equal(pushes[1].url, subscription.endpoint);
+  assert.equal(pushes[1].init.headers['content-encoding'], 'aes128gcm');
+  const ron = (await (await register((await invite('רון', owner)).token)).json()).session;
+  assert.equal((await call('GET', '/admin/push/status', undefined, ron)).status, 403);
+});

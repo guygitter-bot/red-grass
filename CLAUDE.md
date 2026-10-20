@@ -106,6 +106,8 @@
 #### אפליקציית הניהול (`mat_kon/admin`)
 - → https://mat-kon-admin.pages.dev, רק לבעלים (סיסמת הבעלים), מותקנת מהדפדפן (לא דרך Google Play). עולה ב-`mat-kon.yml` (job `admin`).
 - נתונים מ-`/admin/overview`, `/admin/issues`, `/admin/security`, `/admin/settings` (בדיקה בשרת: רק session של בעלים). תקלות מקובצות לפי סוג עם סטטוס (`issue:` ב-Accounts).
+- התראות לטלפון (Web Push, `api/push.js`, מפתחות ב-`admin-vapid` ב-Accounts): תקלה חדשה/שחזרה, מתכון בקהילה שהוסתר או מחכה לבדיקה.
+  לכל היותר התראה אחת בשעה לכל נושא. תקלות מקישורים מקובצות לפי סוג השגיאה והאתר (`errorGroup`), לא לפי הנוסח של ה-AI.
 - בדיקה: `cd mat_kon/admin && npm test && npm run build`. טלפון + מחשב + מצב לילה (`bg-card` / `bg-page`).
 
 #### גיבוי
