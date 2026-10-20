@@ -108,6 +108,8 @@
 - נתונים מ-`/admin/overview`, `/admin/issues`, `/admin/security`, `/admin/settings` (בדיקה בשרת: רק session של בעלים). תקלות מקובצות לפי סוג עם סטטוס (`issue:` ב-Accounts).
 - התראות לטלפון (Web Push, `api/push.js`, מפתחות ב-`admin-vapid` ב-Accounts): תקלה חדשה/שחזרה, מתכון בקהילה שהוסתר או מחכה לבדיקה.
   לכל היותר התראה אחת בשעה לכל נושא. תקלות מקישורים מקובצות לפי סוג השגיאה והאתר (`errorGroup`), לא לפי הנוסח של ה-AI.
+- "שלח ל-Claude לטיפול" בתקלה: `api/fixes.js` פותח issue עם התווית `matkon-fix` (בלי אימיילים, קישורים רק כשם אתר – המאגר ציבורי),
+  `mat-kon-fix.yml` + `mat_kon/fixbot/` מריצים את Claude ופותחים PR מ-`matkon-fix/<n>`; "לאשר ולהעלות" ממזג. טוקן: `MATKON_GITHUB_TOKEN` או `POINTS_GITHUB_TOKEN`.
 - בדיקה: `cd mat_kon/admin && npm test && npm run build`. טלפון + מחשב + מצב לילה (`bg-card` / `bg-page`).
 
 #### גיבוי

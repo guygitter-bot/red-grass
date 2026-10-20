@@ -6,6 +6,7 @@ workers_dev = true
 [vars]
 # האתרים שמותר להם לפנות לשרת (האפליקציה ב-Cloudflare Pages ופיתוח מקומי)
 ALLOWED_ORIGINS = "https://mat-kon.pages.dev,https://localhost,https://mat-kon-admin.pages.dev" # https://localhost = האפליקציה מהחנות (Capacitor באנדרואיד). לפיתוח מקומי: .dev.vars
+GITHUB_REPO = "guygitter-bot/red-grass" # "שלח ל-Claude לטיפול" – issues ו-PR מהמאגר הזה
 # כמה מתכונים מקבלים בחינם במסלול החינמי (למשל מי שנרשם בלי הזמנה) לפני שצריך מנוי
 FREE_RECIPES = "30"
 # מי שנרשם מקישור הזמנה: "paid" = מנוי בלי הגבלה (וגם מי שכבר נרשם עובר למנוי), "free" = FREE_RECIPES בחינם

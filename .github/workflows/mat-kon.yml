@@ -85,6 +85,8 @@ jobs:
           # נעילת הספר של בעל האפליקציה (לא חובה): סיסמת בעלים, ו/או האימייל של חשבון הגוגל שלו
           OWNER_PASSWORD: ${{ secrets.OWNER_PASSWORD || 'none' }}
           OWNER_EMAIL: ${{ vars.OWNER_EMAIL || secrets.OWNER_EMAIL || 'none' }}
+          # "שלח ל-Claude לטיפול" באפליקציית הניהול: פותח issue ומאשר את ה-PR (אותו טוקן של ביס)
+          FIX_GITHUB_TOKEN: ${{ secrets.MATKON_GITHUB_TOKEN || secrets.POINTS_GITHUB_TOKEN || 'none' }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -96,6 +98,7 @@ jobs:
             GOOGLE_CLIENT_ID
             OWNER_PASSWORD
             OWNER_EMAIL
+            FIX_GITHUB_TOKEN
       - name: Summary
         env:
           URL: ${{ steps.deploy.outputs.deployment-url }}

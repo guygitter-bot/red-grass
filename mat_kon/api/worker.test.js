@@ -1633,3 +1633,57 @@ test('admin push: owner registers a phone, gets a push for a new issue (once an 
   const ron = (await (await register((await invite('רון', owner)).token)).json()).session;
   assert.equal((await call('GET', '/admin/push/status', undefined, ron)).status, 403);
 });
+
+test('admin app: "send to Claude" opens a GitHub issue without user details, shows the status, and approving merges', async () => {
+  env.OWNER_PASSWORD = 'owner-secret-1';
+  env.FIX_GITHUB_TOKEN = 'gh-token';
+  env.GITHUB_REPO = 'me/repo';
+  const owner = (await (await call('POST', '/owner-login', { password: 'owner-secret-1' })).json()).session;
+  const inv = await invite('דנה', owner);
+  const dana = (await (await register(inv.token)).json()).session;
+  await call('POST', '/client-error', { where: 'RecipeView', message: 'boom at https://www.site.example/secret/path?x=1 for dana@mail.com' }, dana);
+  const { issues } = await (await call('GET', '/admin/issues', undefined, owner)).json();
+  const sig = issues[0].sig;
+
+  const gh = [];
+  const ghIssue = { number: 77, state: 'open', html_url: 'https://github.com/me/repo/issues/77', labels: [{ name: 'matkon-fix' }, { name: 'matkon-ready' }] };
+  deps.fetch = async (url, init = {}) => {
+    const u = new URL(url);
+    const body = init.body ? JSON.parse(init.body) : null;
+    gh.push({ method: init.method || 'GET', path: u.pathname + u.search, body, auth: init.headers?.authorization });
+    if (u.pathname === '/repos/me/repo/issues' && init.method === 'POST') return Response.json({ number: 77 }, { status: 201 });
+    if (u.pathname === '/repos/me/repo/issues/77' && (init.method || 'GET') === 'GET') return Response.json(ghIssue);
+    if (u.pathname === '/repos/me/repo/issues/77/comments') return Response.json([{ user: { login: 'github-actions[bot]' }, body: '✅ תיקנתי את המסך. (עלות משוערת: $0.40)' }]);
+    if (u.pathname === '/repos/me/repo/pulls' && (init.method || 'GET') === 'GET') return Response.json([{ number: 78 }]);
+    if (u.pathname === '/repos/me/repo/pulls/78/merge') return Response.json({ merged: true });
+    return Response.json({});
+  };
+
+  // רק בעל האפליקציה
+  assert.equal((await call('POST', `/admin/issues/${sig}/fix`, {}, dana)).status, 403);
+  const sent = (await (await call('POST', `/admin/issues/${sig}/fix`, { note: 'קורה במסך המתכון https://x.example/a/b' }, owner)).json()).issue;
+  assert.deepEqual([sent.fix, sent.status], [77, 'working']);
+  const created = gh.find((c) => c.path === '/repos/me/repo/issues');
+  assert.equal(created.auth, 'Bearer gh-token');
+  assert.deepEqual(created.body.labels, ['matkon-fix']);
+  const text = created.body.title + created.body.body;
+  // המאגר ציבורי: בלי אימייל ובלי הקישור המלא
+  assert.ok(!/dana|@mail|secret\/path|\/a\/b/.test(text), text);
+  assert.match(text, /site\.example/);
+  assert.match(text, /RecipeView/);
+  // כבר בטיפול – לא שולחים שוב
+  ghIssue.labels = [{ name: 'matkon-fix' }, { name: 'matkon-working' }];
+  assert.equal((await call('POST', `/admin/issues/${sig}/fix`, {}, owner)).status, 409);
+
+  ghIssue.labels = [{ name: 'matkon-fix' }, { name: 'matkon-ready' }];
+  const st = await (await call('GET', '/admin/fix/77', undefined, owner)).json();
+  assert.deepEqual([st.status, st.message], ['ready', '✅ תיקנתי את המסך.']);
+  // מספר שלא נשלח מתקלה – לא נגישים אליו
+  assert.equal((await call('GET', '/admin/fix/5', undefined, owner)).status, 404);
+
+  assert.equal((await call('POST', '/admin/fix/77/approve', {}, owner)).status, 200);
+  assert.ok(gh.some((c) => c.path === '/repos/me/repo/pulls/78/merge' && c.method === 'PUT'));
+  assert.ok(gh.some((c) => c.path === '/repos/me/repo/issues/77' && c.method === 'PATCH' && c.body.state === 'closed'));
+  const after = (await (await call('GET', '/admin/issues', undefined, owner)).json()).issues[0];
+  assert.equal(after.status, 'fixed');
+});

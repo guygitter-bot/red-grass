@@ -177,7 +177,7 @@ export class Accounts {
     const now = entry.at;
     const next = old
       ? { ...old, count: old.count + 1, lastAt: now, message: entry.message, users: [...new Set([entry.user, ...(old.users || [])])].filter(Boolean).slice(0, 5) }
-      : { sig, list, where: entry.where, message: entry.message, count: 1, firstAt: now, lastAt: now, status: 'new', note: '', users: entry.user ? [entry.user] : [] };
+      : { sig, list, where: entry.where, ...(entry.group ? { group: entry.group } : {}), message: entry.message, count: 1, firstAt: now, lastAt: now, status: 'new', note: '', users: entry.user ? [entry.user] : [] };
     // תקלה שסומנה "תוקנה" וחזרה – נפתחת מחדש
     if (old?.status === 'fixed') Object.assign(next, { status: 'new', reopened: true });
     await this.storage.put(key, next);
@@ -595,6 +595,9 @@ export class Accounts {
       if (!issue) return err(404, 'התקלה לא נמצאה');
       if (['new', 'working', 'fixed'].includes(body.status)) issue.status = body.status;
       if (typeof body.note === 'string') issue.note = body.note.slice(0, 500);
+      // "שלח ל-Claude לטיפול": מספר הבקשה ב-GitHub (null = הבקשה נדחתה)
+      if (body.fix === null) delete issue.fix;
+      else if (Number.isInteger(body.fix) && body.fix > 0) issue.fix = body.fix;
       if (issue.status === 'fixed') Object.assign(issue, { fixedAt: now, reopened: false });
       await this.storage.put(key, issue);
       return json({ issue });

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  AlertTriangle, Bug, CheckCircle2, ChefHat, DollarSign, LayoutDashboard, Loader2, LogOut, RefreshCw, Shield, Star, Users,
+  AlertTriangle, Bot, Bug, CheckCircle2, ChefHat, DollarSign, LayoutDashboard, Loader2, LogOut, RefreshCw, Shield, Star, Users,
 } from 'lucide-react';
 import { ISSUE_STATUS, SECURITY, SOURCES, ago, api, lastDays, usd } from './lib';
 
@@ -495,7 +495,108 @@ function Issue({ i, session, reload }) {
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="הערה (מה צריך לתקן / מה תוקן)" className="flex-1 min-w-0 rounded-xl border border-line bg-page px-3 py-1.5 text-sm" />
         {note !== (i.note || '') && <button disabled={busy} onClick={() => update({ note })} className="text-sm rounded-xl bg-brand text-white px-3">שמירה</button>}
       </div>
+      {i.status !== 'fixed' && <ClaudeFix i={i} session={session} reload={reload} />}
     </Card>
+  );
+}
+
+// "שלח ל-Claude לטיפול": התקלה נפתחת ב-GitHub (בלי פרטי משתמשים), Claude חוקר ומכין תיקון,
+// וכאן רואים את ההסבר שלו ומאשרים ("לאשר ולהעלות" ממזג והשינוי עולה לאוויר) או דוחים
+const FIX_STATUS = {
+  received: 'נשלח – Claude עוד מעט מתחיל', working: 'Claude עובד על זה… (כמה דקות)', ready: 'יש תיקון מוכן לאישור',
+  question: 'ל-Claude יש שאלה', nobug: 'Claude בדק – זה לא באג בקוד', failed: 'הטיפול נכשל', done: 'התיקון עלה ✓', rejected: 'נדחה', closed: 'נסגר',
+};
+function ClaudeFix({ i, session, reload }) {
+  const [fix, setFix] = useState(null);
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    if (!i.fix) return;
+    try {
+      setFix(await api(session, 'GET', `/admin/fix/${i.fix}`));
+    } catch (e) {
+      setError(e.message);
+    }
+  }, [i.fix, session]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  // בזמן ש-Claude עובד – בודקים שוב כל חצי דקה
+  useEffect(() => {
+    if (!fix || !['received', 'working'].includes(fix.status)) return undefined;
+    const t = setInterval(load, 30000);
+    return () => {
+      clearInterval(t);
+    };
+  }, [fix, load]);
+  const run = async (method, path, body) => {
+    setBusy(true);
+    setError('');
+    try {
+      await api(session, method, path, body);
+      setText('');
+      setOpen(false);
+      await reload();
+      await load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const btn = 'text-sm rounded-full px-3 py-1 disabled:opacity-50';
+  if (!i.fix) {
+    return (
+      <div className="mt-3 border-t border-line pt-3">
+        {!open ? (
+          <button onClick={() => setOpen(true)} className={`${btn} bg-brand text-white inline-flex items-center gap-1`}><Bot size={15} /> שלח ל-Claude לטיפול</button>
+        ) : (
+          <div className="space-y-2">
+            <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder="פרטים נוספים ל-Claude (לא חובה): מתי זה קורה, מה ציפית שיקרה" className="w-full rounded-xl border border-line bg-page px-3 py-2 text-sm" />
+            <p className="text-xs text-muted">Claude יחקור, יתקן ויריץ בדיקות (בערך 5–15 דקות). שום דבר לא עולה לאוויר בלי האישור שלך. פרטי המשתמשים לא נשלחים.</p>
+            <div className="flex gap-2">
+              <button disabled={busy} onClick={() => run('POST', `/admin/issues/${i.sig}/fix`, { note: text })} className={`${btn} bg-brand text-white inline-flex items-center gap-1`}>
+                {busy ? <Loader2 size={15} className="animate-spin" /> : <Bot size={15} />} שליחה
+              </button>
+              <button onClick={() => setOpen(false)} className={`${btn} border border-line`}>ביטול</button>
+            </div>
+          </div>
+        )}
+        {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
+      </div>
+    );
+  }
+  const s = fix?.status;
+  return (
+    <div className="mt-3 border-t border-line pt-3 space-y-2">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        {!fix || ['received', 'working'].includes(s) ? <Loader2 size={15} className="animate-spin text-brand" /> : <Bot size={15} className="text-brand" />}
+        {fix ? FIX_STATUS[s] || s : 'טוען…'}
+      </div>
+      {fix?.message && <p className="text-sm whitespace-pre-line rounded-xl bg-page p-3 break-words" dir="auto">{fix.message.replace(/\nhttps:\/\/github\.com\S+/g, '')}</p>}
+      {s && !['received', 'working', 'done', 'rejected', 'closed'].includes(s) && (
+        <div className="flex flex-wrap gap-2">
+          {s === 'ready' && (
+            <button disabled={busy} onClick={() => run('POST', `/admin/fix/${i.fix}/approve`)} className={`${btn} bg-emerald-600 text-white inline-flex items-center gap-1`}>
+              {busy ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />} לאשר ולהעלות
+            </button>
+          )}
+          {['failed', 'question', 'ready', 'nobug'].includes(s) && <button disabled={busy} onClick={() => run('POST', `/admin/fix/${i.fix}/retry`)} className={`${btn} border border-line`}>לנסות שוב</button>}
+          <button disabled={busy} onClick={() => setOpen((o) => !o)} className={`${btn} border border-line`}>{s === 'question' ? 'לענות' : 'לכתוב ל-Claude'}</button>
+          <button disabled={busy} onClick={() => run('POST', `/admin/fix/${i.fix}/reject`)} className={`${btn} border border-line text-muted`}>{s === 'nobug' ? 'סגירה' : 'לדחות'}</button>
+        </div>
+      )}
+      {open && (
+        <div className="flex gap-2">
+          <input value={text} onChange={(e) => setText(e.target.value)} placeholder="התשובה שלך ל-Claude" className="flex-1 min-w-0 rounded-xl border border-line bg-page px-3 py-1.5 text-sm" />
+          <button disabled={busy || !text.trim()} onClick={() => run('POST', `/admin/fix/${i.fix}/reply`, { text })} className="text-sm rounded-xl bg-brand text-white px-3 disabled:opacity-50">שליחה</button>
+        </div>
+      )}
+      {s === 'done' && <p className="text-xs text-muted">השינוי עולה לאוויר בדקות הקרובות. אחר כך לסגור ולפתוח את האפליקציה.</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+    </div>
   );
 }
 
