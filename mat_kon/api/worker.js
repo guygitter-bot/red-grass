@@ -976,6 +976,7 @@ function restoredRecipe(r, categories) {
     steps,
     tips: strList(r.tips, 30),
     nutrition: cleanNutrition(r.nutrition),
+    ...(['source', 'completed', 'guessed'].includes(r.basis) ? { basis: r.basis } : {}),
     confidence: ['high', 'medium', 'low'].includes(r.confidence) ? r.confidence : 'medium',
     notes: str(r.notes, 1000),
     myNotes: str(r.myNotes, 5000),
