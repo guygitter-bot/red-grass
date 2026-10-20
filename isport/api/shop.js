@@ -4,7 +4,7 @@
 //   meta          -> { v, settingsAt, categoriesAt }   v עולה בכל שינוי בקטלוג; *At – מתי נשמרו ההגדרות / הקטגוריות
 //                    (נשלחים חזרה בשמירה כ-base – אם השתנו בינתיים: 409, כמו updatedAt של חולצה)
 //   fails         -> { ips: { <כתובת>: { count, first, until } }, all: { count, first, until } }   ניסיונות כניסה שנכשלו
-//   sessions      -> { <sha256 של סוד הכניסה>: { exp, role } }   כניסות (ישן: מספר = תוקף, מפתח)
+//   sessions      -> { <sha256 של סוד הכניסה>: { exp, role, pw } }   כניסות (pw – סימן של סיסמת המפתח; החלפת הסיסמה מנתקת)
 //                    role: dev – מי שבנה את האתר (סיסמה מהסוד ADMIN_PASSWORD), client – בעל החנות (סיסמה שהמפתח קובע)
 //   clientPass    -> { salt, hash, iter }   הסיסמה של בעל החנות (PBKDF2; הסיסמה עצמה לא נשמרת)
 //   trash         -> { <שם תמונה>: מתי הוסרה }   תמונות שהוסרו נמחקות מהדלי רק אחרי 31 יום (כדי שגיבוי ישן יעבוד)
@@ -211,8 +211,8 @@ export class Shop {
     if (!token || token.length < 20 || token.length > 100) return null;
     const v = sessionOf(this.d.sessions[await sha256(token)]);
     if (!(v.exp > this.now())) return null;
-    // (כניסות ישנות בלי pw – עדיין עובדות)
-    if (v.role === 'dev' && v.pw && v.pw !== (await this.devMark())) return null;
+    // כניסת מפתח בלי pw (מלפני שהכניסות נקשרו לסיסמה) – כבר לא תקפה, צריך להיכנס מחדש
+    if (v.role === 'dev' && v.pw !== (await this.devMark())) return null;
     return { role: v.role };
   }
 

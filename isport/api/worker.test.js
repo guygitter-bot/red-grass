@@ -485,13 +485,17 @@ test('client password: set by the developer only, separate role, revoked on chan
   assert.equal((await call(env, '/login', { password: 'client-pass-2' })).status, 401);
 });
 
-test('old sessions (before roles) still work as the developer', async () => {
+test('old developer logins (not tied to the password) must log in again', async () => {
   const env = fakeEnv();
   const token = await admin(env);
   const sessions = await env.shop.storage.get('sessions');
   const [hash] = Object.keys(sessions);
-  env.shop.d.sessions = { [hash]: Date.now() + 1e6 };
-  assert.equal((await call(env, '/admin/state', {}, token)).data.role, 'dev');
+  // לפני התפקידים: רק תוקף; אחרי התפקידים ולפני הקישור לסיסמה: בלי pw
+  for (const old of [Date.now() + 1e6, { exp: Date.now() + 1e6, role: 'dev' }]) {
+    env.shop.d.sessions = { [hash]: old };
+    assert.equal((await call(env, '/admin/state', {}, token)).status, 401);
+  }
+  assert.equal((await call(env, '/admin/state', {}, await admin(env))).data.role, 'dev');
 });
 
 test('backup, restore and the nightly job', async () => {
