@@ -1690,3 +1690,21 @@ test('admin app: "send to Claude" opens a GitHub issue without user details, sho
   const after = (await (await call('GET', '/admin/issues', undefined, owner)).json()).issues[0];
   assert.equal(after.status, 'fixed');
 });
+
+test('admin app: turning on Bis scoring for one user by email', async () => {
+  env.OWNER_PASSWORD = 'owner-secret-1';
+  const owner = (await (await call('POST', '/owner-login', { password: 'owner-secret-1' })).json()).session;
+  const inv = await invite('דנה', owner);
+  const dana = (await (await register(inv.token)).json()).session;
+  const email = (await (await call('GET', '/me', undefined, dana)).json()).user.email;
+  assert.equal((await (await call('GET', '/me', undefined, dana)).json()).user.features, undefined);
+  // רק בעל האפליקציה, ורק תכונות מוכרות
+  assert.equal((await call('POST', '/admin/features', { email, feature: 'bis', on: true }, dana)).status, 403);
+  assert.equal((await call('POST', '/admin/features', { email, feature: 'admin', on: true }, owner)).status, 400);
+  assert.equal((await call('POST', '/admin/features', { email: 'nobody@x.com', feature: 'bis', on: true }, owner)).status, 404);
+  assert.equal((await call('POST', '/admin/features', { email: email.toUpperCase(), feature: 'bis', on: true }, owner)).status, 200);
+  assert.deepEqual((await (await call('GET', '/me', undefined, dana)).json()).user.features, { bis: true });
+  assert.deepEqual((await (await call('GET', '/admin/features', undefined, owner)).json()).users.map((u) => u.email), [email]);
+  await call('POST', '/admin/features', { email, feature: 'bis', on: false }, owner);
+  assert.equal((await (await call('GET', '/me', undefined, dana)).json()).user.features, undefined);
+});

@@ -793,6 +793,7 @@ export default function App() {
         onBack={back}
         onShareLink={async () => recipeShareLink(await shareRecipe(session, current.id))}
         onEstimateNutrition={async () => upsert(await estimateNutrition(session, current.id))}
+        bis={Boolean(user?.features?.bis)}
         community={{
           getProfile: () => getProfile(session),
           setProfile: (name, terms) => setProfile(session, name, terms),
