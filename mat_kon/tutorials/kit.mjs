@@ -99,6 +99,20 @@ function mockApi(opts = {}) {
       state.recipes = [r, ...state.recipes];
       return { recipe: r };
     }
+    // פרסום לקהילה: בפעם הראשונה צריך שם תצוגה ואישור תנאים
+    if (p === '/profile') {
+      if (method === 'PUT') state.profile = { displayName: body.displayName, terms: Boolean(body.acceptTerms) };
+      return state.profile || { displayName: '', terms: false };
+    }
+    m = p.match(/^\/recipes\/([\w-]+)\/publish$/);
+    if (m) {
+      const r = state.recipes.find((x) => x.id === m[1]);
+      if (method === 'DELETE') { r.published = false; return { recipe: r }; }
+      if (!state.profile?.terms) return [409, { error: 'צריך לבחור שם תצוגה ולאשר את תנאי השימוש', needProfile: true }];
+      await sleep(1500);
+      r.published = true;
+      return { recipe: r, review: { decision: 'publish', imageRemoved: false } };
+    }
     m = p.match(/^\/recipes\/([\w-]+)(\/refresh)?$/);
     if (m) {
       const r = state.recipes.find((x) => x.id === m[1]);
