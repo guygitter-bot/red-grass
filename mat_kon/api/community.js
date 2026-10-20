@@ -2,6 +2,9 @@
 // נשמר במופע אחד של RecipeBook בשם community. מתכון אישי (צילום, כתיבה ידנית, ווטסאפ, טקסט שהודבק) לא נכנס,
 // וגם לא הערות, דירוג אישי או עריכות של משתמש.
 import { normalizeUrl, youtubeId } from './source.js';
+import { dietInfo, matchesDiets, recipeDiet, recipeMinutes } from './diet.js';
+
+export { parseMinutes, recipeMinutes } from './diet.js';
 
 export const MIN_RATINGS = 3; // ממוצע מוצג רק מ-3 דירוגים
 export const HIDE_AT_REPORTS = 3; // מתכון שפורסם ע"י משתמש מוסתר אחרי 3 דיווחים, עד שבעל האפליקציה בודק
@@ -43,43 +46,13 @@ export function publicCopy(r, { keepImage = false } = {}) {
   };
 }
 
-// זמן הכנה בדקות מתוך טקסט בעברית ("45 דקות", "שעה וחצי", "1.5 שעות")
-export function parseMinutes(text) {
-  const t = String(text || '');
-  if (!t) return null;
-  let minutes = 0;
-  const hours = t.match(/(\d+(?:\.\d+)?)\s*(?:שעות|שעה|ש['׳]|hours?|h\b)/i);
-  if (hours) minutes += Number(hours[1]) * 60;
-  else if (/שעתיים/.test(t)) minutes += 120;
-  else if (/שעה/.test(t)) minutes += 60;
-  if (/וחצי/.test(t) && /שע/.test(t)) minutes += 30;
-  if (/ורבע/.test(t) && /שע/.test(t)) minutes += 15;
-  const mins = t.match(/(\d+)\s*(?:דקות|דק['׳]?|דקה|min)/i);
-  if (mins) minutes += Number(mins[1]);
-  return minutes || null;
-}
-
-export function recipeMinutes(r) {
-  const total = parseMinutes(r.totalTime);
-  if (total) return total;
-  const parts = [parseMinutes(r.prepTime), parseMinutes(r.cookTime)].filter(Boolean);
-  return parts.length ? parts.reduce((a, b) => a + b, 0) : null;
-}
-
-// כשרות ותזונה לפי המצרכים (הערכה – מוצג כ"לפי המצרכים")
-const MEAT = /(בשר|עוף|עופות|פרגית|חזה|שוקיים|כנפיים|הודו|כבש|טלה|בקר|אנטריקוט|סינטה|נקניק|קבב|שניצל|קציצ|המבורגר|כבד|פסטרמה|סלמי|ציר עוף|מרק עוף|אווז|ברווז)/;
-const DAIRY = /(גבינ|חמאה|שמנת|יוגורט|קוטג|לבנה|פרמזן|מוצרלה|ריקוטה|מסקרפונה|צהובה|בולגרית|פטה|חלב(?!\s*(קוקוס|שקדים|סויה|שיבולת|אורז|צמחי)))/;
-const ANIMAL = /(ביצ|דבש|דג|סלמון|טונה|אנשובי|סרדינ|שרימפ|פירות ים|ג'לטין|ז'לטין)/;
-const GLUTEN = /(קמח(?!\s*(תירס|אורז|שקדים|כוסמת|תפוח|חומוס|קוקוס))|לחם|פסטה|ספגטי|אטריות|פירורי|סולת|בורגול|קוסקוס|פתיתים|בצק|טורטי|פיתה|לחמני|פריכיות|שיבולת שועל|קוואקר|שעורה|כוסמין|שמרים|בירה|רוטב סויה)/;
-
+// כשרות ותזונה לפי המצרכים (הערכה – מוצג כ"לפי המצרכים"). השדות האלה נשמרים בסיכום בשביל גרסאות ישנות של האפליקציה
 export function dietOf(r) {
-  const text = (r.ingredients || []).flatMap((s) => s.items || []).join(' \n ');
-  const meat = MEAT.test(text);
-  const dairy = DAIRY.test(text);
+  const d = recipeDiet(r);
   return {
-    kosher: meat && dairy ? 'mixed' : meat ? 'meat' : dairy ? 'dairy' : 'parve',
-    vegan: !meat && !dairy && !ANIMAL.test(text),
-    glutenFree: !GLUTEN.test(text),
+    kosher: d.meat ? 'meat' : d.dairy ? 'dairy' : d.parve ? 'parve' : 'mixed',
+    vegan: d.vegan,
+    glutenFree: d.gf,
   };
 }
 
@@ -96,6 +69,8 @@ export function summarize(key, r, stats = { saves: 0, ratingSum: 0, ratingCount:
     ingredients,
     minutes: recipeMinutes(r),
     calories: Number(r.nutrition?.calories) || null,
+    protein: Number.isFinite(Number(r.nutrition?.protein)) && r.nutrition?.protein !== null ? Number(r.nutrition.protein) : null,
+    carbs: Number.isFinite(Number(r.nutrition?.carbs)) && r.nutrition?.carbs !== null ? Number(r.nutrition.carbs) : null,
     ...dietOf(r),
     basis: r.basis || 'source',
     credit: author ? `מתכון של ${author.name}` : r.source?.author || r.source?.site || '',
@@ -130,6 +105,8 @@ export function searchCommunity(summaries, q, filters = {}) {
     if (filters.kosher && s.kosher !== filters.kosher) continue;
     if (filters.vegan && !s.vegan) continue;
     if (filters.glutenFree && !s.glutenFree) continue;
+    // סינונים לפי המצרכים (מחושב כאן, כך שגם מתכונים ישנים במאגר נכנסים)
+    if (filters.diets?.length && !matchesDiets(dietInfo(String(s.ingredients || '').split(' · '), { nutrition: { calories: s.calories, protein: s.protein, carbs: s.carbs }, minutes: s.minutes }), filters.diets)) continue;
     const title = norm(s.title);
     const rest = norm(`${s.tags.join(' ')} ${s.category} ${s.description} ${s.ingredients}`);
     if (!words.every((w) => title.includes(w) || rest.includes(w))) continue;

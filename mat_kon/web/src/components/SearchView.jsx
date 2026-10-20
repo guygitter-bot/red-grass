@@ -3,12 +3,8 @@ import { ArrowRight, Check, Clock, ExternalLink, Flame, Globe, Loader2, Plus, Se
 import { searchCommunity, searchRecipes } from '../lib/api';
 import { hostOf } from '../lib/recipes';
 import { CommunityStats } from './SharedRecipe';
+import DietFilter from './DietFilter';
 
-// סינונים לחיפוש בקהילה (כשרות ותזונה – לפי המצרכים)
-const FILTERS = [
-  ['minutes', 'עד 30 דק׳'], ['kosher:parve', 'פרווה'], ['kosher:dairy', 'חלבי'], ['kosher:meat', 'בשרי'],
-  ['vegan', 'טבעוני'], ['gf', 'ללא גלוטן'], ['calories', 'עד 400 קלוריות'],
-];
 const KOSHER = { parve: 'פרווה', dairy: 'חלבי', meat: 'בשרי' };
 const urlKey = (url) => {
   try {
@@ -18,11 +14,11 @@ const urlKey = (url) => {
   }
 };
 
+// diets: אותו סינון כמו בספר (כשר, ללא גלוטן…), נשמר במכשיר
 // חיפוש מתכון: קודם במאגר הקהילה (מיד ובחינם, לפי דירוג ומספר שמירות), ואחר כך – אם צריך – הסוכן מחפש ברשת
-export default function SearchView({ session, initialQuery, onAdd, onBack, onPaywall, savedUrls, onOpenCommunity }) {
+export default function SearchView({ session, initialQuery, onAdd, onBack, onPaywall, savedUrls, onOpenCommunity, diets = [], onDiets }) {
   const [query, setQuery] = useState(initialQuery || '');
   const [asked, setAsked] = useState(initialQuery || '');
-  const [filters, setFilters] = useState({});
   const [community, setCommunity] = useState(null);
   const [results, setResults] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -51,11 +47,11 @@ export default function SearchView({ session, initialQuery, onAdd, onBack, onPay
   useEffect(() => {
     let alive = true;
     setCommunity(null);
-    searchCommunity(session, asked.trim(), filters)
+    searchCommunity(session, asked.trim(), { diets })
       .then((list) => {
         if (!alive) return;
         setCommunity(list);
-        if (!list.length && asked.trim().length >= 2 && !Object.values(filters).some(Boolean) && webStarted.current !== asked) runWeb(asked);
+        if (!list.length && asked.trim().length >= 2 && !diets.length && webStarted.current !== asked) runWeb(asked);
       })
       .catch(() => {
         if (alive) setCommunity([]);
@@ -63,22 +59,13 @@ export default function SearchView({ session, initialQuery, onAdd, onBack, onPay
     return () => {
       alive = false;
     };
-  }, [asked, filters, session]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [asked, diets.join(','), session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = (q) => {
     setResults(null);
     setError('');
     setAsked(q);
   };
-  const toggle = (id) => {
-    const [k, v] = id.split(':');
-    setFilters((f) => (v ? { ...f, [k]: f[k] === v ? '' : v } : { ...f, [k]: !f[k] }));
-  };
-  const isOn = (id) => {
-    const [k, v] = id.split(':');
-    return v ? filters[k] === v : Boolean(filters[k]);
-  };
-
   return (
     <div className="min-h-screen pb-16">
       <div className="sticky top-0 z-10 bg-[#fffbf5]/90 backdrop-blur border-b border-stone-100 pt-[env(safe-area-inset-top)]">
@@ -103,16 +90,8 @@ export default function SearchView({ session, initialQuery, onAdd, onBack, onPay
           <button disabled={query.trim().length < 2} className="rounded-2xl bg-orange-500 text-white px-4 font-bold shrink-0 disabled:opacity-40">חיפוש</button>
         </form>
 
-        <div className="mt-3 flex gap-2 overflow-x-auto no-scrollbar lg:flex-wrap">
-          {FILTERS.map(([id, label]) => (
-            <button
-              key={id}
-              onClick={() => toggle(id)}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-sm border ${isOn(id) ? 'bg-orange-500 border-orange-500 text-white' : 'bg-white border-stone-200 text-stone-700'}`}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <DietFilter value={diets} onChange={onDiets} />
         </div>
 
         {/* מהקהילה */}
@@ -151,7 +130,7 @@ export default function SearchView({ session, initialQuery, onAdd, onBack, onPay
             );
           })}
         </ul>
-        {Object.values(filters).some(Boolean) && <p className="mt-2 text-xs text-stone-400">כשרות, טבעוני וללא גלוטן – הערכה לפי המצרכים.</p>}
+        {diets.length > 0 && <p className="mt-2 text-xs text-stone-400">הסינון – הערכה לפי המצרכים.</p>}
 
         {/* ברשת */}
         <h2 className="mt-7 mb-2 font-black text-stone-900 flex items-center gap-2">

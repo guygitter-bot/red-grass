@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Globe, Heart, LogOut, MessageCircle, PenLine, Search, Settings, X } from 'lucide-react';
 import SearchView from './components/SearchView';
+import DietFilter from './components/DietFilter';
 import SettingsView from './components/SettingsView';
 import { shoppingName } from './lib/shopping';
 import Auth from './components/Auth';
@@ -132,6 +133,8 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState(null);
   const [favorites, setFavorites] = useState(false);
+  // סינון לפי כשרות / רגישויות / תזונה – נשמר במכשיר (מי שצליאקי רוצה אותו תמיד)
+  const [diets, setDiets] = usePersistentState('matkon_diets', []);
   // תמונות שצולמו מהמסך הראשי ("צילום מתכון"), עוברות למסך בניית המתכון
   const [photoFiles, setPhotoFiles] = useState(null);
   const takePhotos = (files) => {
@@ -449,8 +452,8 @@ export default function App() {
 
   const counts = useMemo(() => countByCategory(recipes), [recipes]);
   const visible = useMemo(
-    () => sortRecipes(filterRecipes(recipes, { query, category, favorites }), sort),
-    [recipes, query, category, favorites, sort],
+    () => sortRecipes(filterRecipes(recipes, { query, category, favorites, diets: Array.isArray(diets) ? diets : [] }), sort),
+    [recipes, query, category, favorites, diets, sort],
   );
   // כל הקטגוריות: הקבועות, אחריהן שלי, ו"אחר" בסוף
   const allCategories = [...CATEGORIES.filter((c) => c !== 'אחר'), ...custom, 'אחר'];
@@ -685,6 +688,8 @@ export default function App() {
         {paywall && <Paywall user={user} paymentUrl={paywall.paymentUrl} onClose={() => setPaywall(null)} />}
         <SearchView
           onOpenCommunity={setCommunityOpen}
+          diets={Array.isArray(diets) ? diets : []}
+          onDiets={setDiets}
           key={nav.q}
           session={session}
           initialQuery={nav.q}
@@ -976,6 +981,7 @@ export default function App() {
                   {emojiOf(c)} {c}
                 </Chip>
               ))}
+              <DietFilter value={Array.isArray(diets) ? diets : []} onChange={setDiets} />
             </div>
 
             <div className="mt-2 flex items-center justify-end gap-1 text-sm text-stone-500">
@@ -990,7 +996,10 @@ export default function App() {
         {recipes.length === 0 && !pending.length && !loadError && <Empty />}
 
         {recipes.length > 0 && visible.length === 0 && (
-          <p className="text-center text-stone-500 mt-10">לא נמצאו מתכונים</p>
+          <p className="text-center text-stone-500 mt-10">
+            לא נמצאו מתכונים
+            {Array.isArray(diets) && diets.length > 0 && <button onClick={() => setDiets([])} className="block mx-auto mt-2 text-orange-700 underline">ביטול הסינון (כשר, ללא גלוטן…)</button>}
+          </p>
         )}
 
         <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">

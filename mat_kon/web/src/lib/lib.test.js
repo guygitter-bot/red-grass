@@ -37,6 +37,8 @@ describe('search', () => {
     expect(filterRecipes(recipes, { query: 'הלבן' }).map((r) => r.id)).toEqual([2]);
     expect(filterRecipes(recipes, { category: 'עוגות' }).map((r) => r.id)).toEqual([1]);
     expect(filterRecipes(recipes, { favorites: true }).map((r) => r.id)).toEqual([2]);
+    expect(filterRecipes(recipes, { diets: ['parve', 'celiac'] }).map((r) => r.id)).toEqual([1, 2]);
+    expect(filterRecipes(recipes, { diets: ['vegan'] }).map((r) => r.id)).toEqual([]);
     expect(countByCategory(recipes)).toEqual({ 'עוגות': 1, 'ארוחת בוקר': 1 });
   });
 

@@ -131,6 +131,7 @@ export const searchCommunity = (s, q, filters = {}) => {
   if (filters.kosher) p.set('kosher', filters.kosher);
   if (filters.vegan) p.set('vegan', '1');
   if (filters.gf) p.set('gf', '1');
+  if (filters.diets?.length) p.set('diets', filters.diets.join(','));
   return api(s, 'GET', `/community?${p}`).then((d) => d.results || []);
 };
 export const getCommunityRecipe = (s, key) => api(s, 'GET', `/community/${encodeURIComponent(key)}`).then((d) => ({ by: '', recipe: safeRecipe(d.recipe), summary: d.summary }));
