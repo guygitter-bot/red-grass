@@ -82,6 +82,8 @@ export const refreshRecipe = (s, id) => api(s, 'POST', `/recipes/${id}/refresh`)
 export const updateRecipe = (s, id, patch) => api(s, 'PUT', `/recipes/${id}`, patch).then((d) => d.recipe);
 // הסוכן משבץ מתכון קיים בכל הקטגוריות שמתאימות לו
 export const categorizeRecipe = (s, id) => api(s, 'POST', `/recipes/${id}/categorize`).then((d) => d.recipe);
+// הערכה תזונתית למנה (מתכון ישן, או אחרי עריכת המצרכים)
+export const estimateNutrition = (s, id) => api(s, 'POST', `/recipes/${id}/nutrition`).then((d) => safeRecipe(d.recipe));
 export const deleteRecipe = (s, id) => api(s, 'DELETE', `/recipes/${id}`);
 
 // הזמנות (בעל האפליקציה). כשהספר נעול, המכשיר של הבעלים שולח את ה-session שלו

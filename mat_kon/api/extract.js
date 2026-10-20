@@ -20,6 +20,38 @@ const sectionList = (what) => ({
   },
 });
 
+// הערכה תזונתית למנה (הערכה בלבד – לפי המצרכים והכמויות)
+export const NUTRIENTS = ['calories', 'protein', 'carbs', 'sugar', 'fat', 'saturated_fat', 'fiber', 'sodium'];
+const NUTRITION_SCHEMA = {
+  type: 'object',
+  description: 'Estimated nutrition for ONE serving, calculated from the ingredients and their amounts (standard food composition values). Grams, except calories (kcal) and sodium (mg).',
+  properties: {
+    per: { type: 'string', description: 'Hebrew: what one serving is, e.g. "למנה (מתוך 6)", "לעוגייה (מתוך 20)", "לפרוסה (מתוך 12)". When the yield is not written, assume a reasonable one and say so, e.g. "למנה (בהנחה של 4 מנות)"' },
+    calories: { type: 'number' },
+    protein: { type: 'number' },
+    carbs: { type: 'number' },
+    sugar: { type: 'number' },
+    fat: { type: 'number' },
+    saturated_fat: { type: 'number' },
+    fiber: { type: 'number' },
+    sodium: { type: 'number' },
+  },
+  required: ['per', ...NUTRIENTS],
+  additionalProperties: false,
+};
+
+// ערכים תזונתיים שנשמרים במתכון: מספרים סבירים בלבד (או null אם אין)
+export function cleanNutrition(n) {
+  if (!n || typeof n !== 'object') return null;
+  const out = { per: String(n.per || '').trim().slice(0, 80) };
+  for (const k of NUTRIENTS) {
+    const v = Number(n[k]);
+    if (!Number.isFinite(v) || v < 0 || v > 100000) return null;
+    out[k] = Math.round(v * 10) / 10;
+  }
+  return out.calories > 0 ? out : null;
+}
+
 export const RECIPE_TOOL = {
   name: 'submit_recipe',
   description: 'Submit the complete recipe, written in Hebrew.',
@@ -44,6 +76,7 @@ export const RECIPE_TOOL = {
       ingredients: sectionList('Ingredients, each with its amount, e.g. "2 כוסות קמח"'),
       steps: sectionList('Preparation steps in order, one action per item, without numbering'),
       tips: { type: 'array', items: { type: 'string' }, description: 'Hebrew tips, storage, substitutions from the source' },
+      nutrition: NUTRITION_SCHEMA,
       confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
       notes: {
         type: 'string',
@@ -52,7 +85,7 @@ export const RECIPE_TOOL = {
     },
     required: [
       'found', 'title', 'original_title', 'description', 'category', 'more_categories', 'tags', 'servings', 'prep_time',
-      'cook_time', 'total_time', 'ingredients', 'steps', 'tips', 'confidence', 'notes',
+      'cook_time', 'total_time', 'ingredients', 'steps', 'tips', 'nutrition', 'confidence', 'notes',
     ],
     additionalProperties: false,
   },
@@ -100,6 +133,8 @@ categories that only loosely fit. Desserts that are cakes → "עוגות"; cook
 a vegetarian main dish → "צמחוני וטבעוני" unless it is clearly a salad/soup/pasta.
 - Set found=false ONLY when the link is clearly not about food or cooking, or nothing at all identifies a \
 dish (not even the title or caption). Explain why in notes.
+- nutrition: estimate it for one serving from the final ingredient list and amounts (standard food composition \
+values), counting only what is eaten (e.g. not all the frying oil). If the yield is not written, assume a reasonable one.
 - When done, call submit_recipe. Do not write anything else.`;
 
 function material(src) {
@@ -168,6 +203,7 @@ export function toRecipe(input, src, categories = CATEGORIES) {
     ingredients: cleanSections(input.ingredients),
     steps: cleanSections(input.steps),
     tips: cleanList(input.tips),
+    nutrition: cleanNutrition(input.nutrition),
     confidence: ['high', 'medium', 'low'].includes(input.confidence) ? input.confidence : 'medium',
     notes: clean(input.notes),
     source: src.images ? { url: null, key: src.key, kind: 'photo' } : src.fromText ? {
@@ -273,6 +309,34 @@ export async function suggestCategories(client, recipe, categories = CATEGORIES)
   const submit = response.content.find((b) => b.type === 'tool_use' && b.name === tool.name);
   if (!submit) throw new Error('לא הצלחתי לסדר את הקטגוריות. נסו שוב.');
   return categoryFields(submit.input.categories, names);
+}
+
+// הערכה תזונתית למתכון קיים (מתכונים ישנים, או אחרי עריכת המצרכים): AI קצר, בלי רשת
+export async function estimateNutrition(client, recipe) {
+  const tool = {
+    name: 'submit_nutrition',
+    description: 'Submit the estimated nutrition for one serving.',
+    strict: true,
+    input_schema: { type: 'object', properties: { nutrition: NUTRITION_SCHEMA }, required: ['nutrition'], additionalProperties: false },
+  };
+  const list = (sections) => (sections || []).flatMap((g) => [g.title ? `[${g.title}]` : null, ...(g.items || [])]).filter(Boolean).slice(0, 80);
+  const response = await client.beta.messages.create({
+    model: MODEL,
+    max_tokens: 2000,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: { effort: 'low' },
+    system: 'You estimate nutrition for home recipes. Use the ingredients and their amounts with standard food composition values, account for what is actually eaten (e.g. frying oil that stays in the pan, optional garnish), and divide by the yield. Call submit_nutrition.',
+    tools: [tool],
+    messages: [{
+      role: 'user',
+      content: `Recipe: ${recipe.title || ''}\nYield: ${recipe.servings || 'not written'}\nIngredients:\n${list(recipe.ingredients).map((i) => `- ${i}`).join('\n')}\nSteps:\n${list(recipe.steps).slice(0, 30).join('\n')}`,
+    }],
+  });
+  const submit = response.content.find((b) => b.type === 'tool_use' && b.name === tool.name);
+  const nutrition = submit && cleanNutrition(submit.input.nutrition);
+  if (!nutrition) throw new Error('לא הצלחתי להעריך את הערכים התזונתיים. נסו שוב.');
+  return nutrition;
 }
 
 // קטגוריות של מתכון: category = הראשית (גם בשביל מתכונים ונתונים ישנים), categories = כולן, הראשית ראשונה

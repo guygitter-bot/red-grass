@@ -11,7 +11,7 @@ import { buildRecipe, failure } from './jobs.js';
 import { RecipeBook } from './store.js';
 import { Accounts, canAdd } from './accounts.js';
 import { gatherSource, normalizeUrl, sourceKind } from './source.js';
-import { NoRecipeError, aiMessage, categoryFields, extractRecipe, ideasFromPantry, organizeShopping, scanPantry, searchRecipes, suggestCategories } from './extract.js';
+import { NoRecipeError, aiMessage, categoryFields, cleanNutrition, estimateNutrition, extractRecipe, ideasFromPantry, organizeShopping, scanPantry, searchRecipes, suggestCategories } from './extract.js';
 import { findStores } from './stores.js';
 import { CATEGORIES } from './categories.js';
 import { backupStatus, restoreBook, runBackup } from './backup.js';
@@ -779,9 +779,25 @@ export default {
         return aiFail(e, (!e.status && e.message) || 'לא הצלחתי לסדר את הקטגוריות');
       }
     }
+    // הערכה תזונתית למתכון קיים (מתכון ישן, או אחרי עריכת המצרכים): AI קצר, בלי מכסת מתכונים – רק בתקציב היומי
+    if (parts.length === 3 && parts[2] === 'nutrition' && request.method === 'POST') {
+      const res = await internal(book, 'GET', `/recipes/${id}`);
+      if (!res.ok) return fail(404, 'המתכון לא נמצא');
+      const { recipe } = await res.json();
+      const limited = await aiBudget();
+      if (limited) return limited;
+      try {
+        return pass(await internal(book, 'PUT', `/recipes/${id}`, { nutrition: await estimateNutrition(ai(), recipe) }));
+      } catch (e) {
+        return aiFail(e, (!e.status && e.message) || 'לא הצלחתי להעריך את הערכים התזונתיים');
+      }
+    }
     if (parts.length === 2 && request.method === 'PUT') {
       const { body: patch, error } = await readJson(MAX_EDIT_BYTES);
       if (error) return error;
+      // ערכים תזונתיים: רק בצורה הנכונה. שינוי במצרכים או במספר המנות – ההערכה הישנה כבר לא נכונה
+      if ('nutrition' in patch) patch.nutrition = cleanNutrition(patch.nutrition);
+      else if ('ingredients' in patch || 'servings' in patch) patch.nutrition = null;
       if ('categories' in patch) {
         const known = await allCategories();
         if (!Array.isArray(patch.categories) || !patch.categories.length || patch.categories.some((c) => !known.includes(c))) return fail(400, 'קטגוריה לא מוכרת');
@@ -959,6 +975,7 @@ function restoredRecipe(r, categories) {
     ingredients,
     steps,
     tips: strList(r.tips, 30),
+    nutrition: cleanNutrition(r.nutrition),
     confidence: ['high', 'medium', 'low'].includes(r.confidence) ? r.confidence : 'medium',
     notes: str(r.notes, 1000),
     myNotes: str(r.myNotes, 5000),

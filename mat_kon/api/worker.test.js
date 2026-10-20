@@ -1349,3 +1349,25 @@ test('a note with two different dishes becomes two recipes, each counted, with i
   await call('POST', '/recipes', { url: 'https://cake.example/one' });
   assert.equal(apiCalls.at(-1).tools.find((t) => t.name === 'submit_recipe').input_schema.properties.more_recipes, undefined);
 });
+
+test('nutrition: estimated with a new recipe, on request for an old one, and cleared when the ingredients change', async () => {
+  const per = { per: 'לפרוסה (מתוך 12)', calories: 250.44, protein: 4, carbs: 30, sugar: 20, fat: 12, saturated_fat: 5, fiber: 1, sodium: 120 };
+  reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_recipe', input: { ...recipeInput, nutrition: per } }] });
+  const { recipe } = await (await call('POST', '/recipes', { url: 'https://cake.example/n' })).json();
+  assert.deepEqual(recipe.nutrition, { ...per, calories: 250.4 });
+  assert.ok(apiCalls.at(-1).tools.find((t) => t.name === 'submit_recipe').input_schema.required.includes('nutrition'));
+
+  // עריכת המצרכים: ההערכה הישנה נמחקת
+  const edited = await (await call('PUT', `/recipes/${recipe.id}`, { ingredients: [{ title: '', items: ['3 ביצים'] }] })).json();
+  assert.equal(edited.recipe.nutrition, null);
+  // ערכים לא תקינים לא נשמרים
+  assert.equal((await (await call('PUT', `/recipes/${recipe.id}`, { nutrition: { calories: 'הרבה' } })).json()).recipe.nutrition, null);
+
+  // חישוב מחדש לפי בקשה
+  reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_nutrition', input: { nutrition: { ...per, calories: 300 } } }] });
+  const again = await (await call('POST', `/recipes/${recipe.id}/nutrition`)).json();
+  assert.equal(again.recipe.nutrition.calories, 300);
+  assert.match(apiCalls.at(-1).messages[0].content, /3 ביצים/);
+  assert.equal(again.recipe.edited.nutrition, undefined);
+  assert.equal((await call('POST', '/recipes/nope/nutrition')).status, 404);
+});
