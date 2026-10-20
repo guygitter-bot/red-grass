@@ -185,3 +185,17 @@ test('Facebook group post through the preview bot', async () => {
   // רק הכותרת (בלי JSON): לפחות תחילת הפוסט
   assert.equal(readFacebookPage(html.split('<script>')[0]).caption, '3 קילו בשר מפורק');
 });
+
+test('facebook: tries other identities when one is refused, and reads the creator of a reel', async () => {
+  const { facebook } = await import('./social.js');
+  const page = `<html><head><meta property="og:title" content="&#x200f;94K&#x200f; צפיות · 476 רגשות | Reel by נועה אברהם דיאטנית קלינית" />
+    <meta property="og:description" content="מצרכים: חצי כרוב לבן, חופן קשיו, חצי פומלית. אופן ההכנה: מערבבים את כל המרכיבים בקערה גדולה ומתבלים בשמן זית, מלח ולימון. סלט כרוב רענן שתמיד מתחסל, עם כוסברה ונענע קצוצים." /></head></html>`;
+  const seen = [];
+  const fb = await facebook(async (url, init) => {
+    seen.push(init.headers['user-agent']);
+    return seen.length === 1 ? new Response('err', { status: 400 }) : new Response(page);
+  }, 'https://www.facebook.com/share/r/1GAcYBF3oJ/');
+  assert.ok(seen.length >= 2);
+  assert.match(fb.caption, /חצי כרוב לבן/);
+  assert.equal(fb.group, 'נועה אברהם דיאטנית קלינית');
+});
