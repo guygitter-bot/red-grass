@@ -1,5 +1,6 @@
 import { buildRecipe, failure } from './jobs.js';
 import { trackedClient } from './deps.js';
+import { communityIdentity, communityKey, publicCopy, searchCommunity, summarize } from './community.js';
 // ספר המתכונים: Durable Object אחד שמחזיק את כל המתכונים (כל מתכון במפתח r:<id>).
 
 const PREFIX = 'r:';
@@ -21,6 +22,80 @@ export class RecipeBook {
     this.state = state;
     this.storage = state.storage;
     this.env = env || {};
+  }
+
+  // ---- המאגר עצמו: cs:<key> סיכום לחיפוש, cr:<key> המתכון המלא, rt:<key>:<ספר> דירוג ----
+  async summaries() {
+    if (!this.index) this.index = new Map([...(await this.storage.list({ prefix: 'cs:' })).values()].map((s) => [s.key, s]));
+    return this.index;
+  }
+
+  async communityRoute(url, request) {
+    const body = request.method === 'POST' ? await request.json() : {};
+    const index = await this.summaries();
+    const save = async (s) => {
+      index.set(s.key, s);
+      await this.storage.put(`cs:${s.key}`, s);
+    };
+    if (url.pathname === '/community/add') {
+      for (const { key, recipe } of (body.items || []).slice(0, 2000)) {
+        const s = index.get(key);
+        if (s) await save({ ...s, saves: s.saves + 1 });
+        else if (recipe) {
+          await this.storage.put(`cr:${key}`, recipe);
+          await save(summarize(key, recipe, { saves: 1, ratingSum: 0, ratingCount: 0 }));
+        }
+      }
+      return json({ ok: true });
+    }
+    if (url.pathname === '/community/remove') {
+      const s = index.get(body.key);
+      if (s) {
+        const rated = await this.storage.get(`rt:${body.key}:${body.rater}`);
+        if (rated) await this.storage.delete(`rt:${body.key}:${body.rater}`);
+        await save({ ...s, saves: Math.max(0, s.saves - 1), ratingSum: s.ratingSum - (rated || 0), ratingCount: Math.max(0, s.ratingCount - (rated ? 1 : 0)) });
+      }
+      return json({ ok: true });
+    }
+    if (url.pathname === '/community/rate') {
+      const s = index.get(body.key);
+      const rating = Number.isInteger(body.rating) && body.rating >= 0 && body.rating <= 5 ? body.rating : 0;
+      if (s) {
+        const k = `rt:${body.key}:${String(body.rater).slice(0, 100)}`;
+        const prev = (await this.storage.get(k)) || 0;
+        if (rating) await this.storage.put(k, rating);
+        else await this.storage.delete(k);
+        await save({ ...s, ratingSum: s.ratingSum - prev + rating, ratingCount: s.ratingCount - (prev ? 1 : 0) + (rating ? 1 : 0) });
+      }
+      return json({ ok: true });
+    }
+    if (url.pathname === '/community/search') return json({ results: searchCommunity([...index.values()], body.q || '', body.filters || {}) });
+    if (url.pathname === '/community/get') {
+      const s = index.get(body.key);
+      const recipe = s && s.saves && (await this.storage.get(`cr:${body.key}`));
+      return recipe ? json({ recipe, summary: s }) : json({ error: 'not found' }, 404);
+    }
+    return json({ error: 'not found' }, 404);
+  }
+
+  // מאגר הקהילה (מופע community): כל ספר מדווח על מתכונים מקישורים שנשמרו/נמחקו ועל הדירוג שלו – בלי שמות.
+  // תקלה במאגר לא עוצרת את העבודה בספר
+  async community(path, body) {
+    const stub = this.env.BOOK?.get(this.env.BOOK.idFromName('community'));
+    if (!stub) return;
+    try {
+      await stub.fetch(new Request(`https://do${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }));
+    } catch (e) {
+      console.error('community', e);
+    }
+  }
+
+  // מתכון לדיווח: המפתח במאגר, ותוכן ציבורי רק אם הוא כמו שנבנה מהמקור (בלי עריכות, לא שחזור מגיבוי)
+  async communityItem(recipe, { fresh = true } = {}) {
+    const identity = communityIdentity(recipe);
+    if (!identity) return null;
+    const original = fresh && !recipe.restored && !(recipe.edited && Object.keys(recipe.edited).length);
+    return { key: await communityKey(identity), recipe: original ? publicCopy(recipe) : null };
   }
 
   // תמונה שהועלתה לספר הזה (קישור /img/<book>/<id>) – נמחקת כשהמתכון נמחק או שהתמונה הוחלפה
@@ -138,6 +213,9 @@ export class RecipeBook {
       }
       return json({ ok: true });
     }
+
+    // ---- מאגר הקהילה (רק במופע community) ----
+    if (url.pathname.startsWith('/community/')) return this.communityRoute(url, request);
 
     // ---- גיבוי (רק מתוך השרת, backup.js): כל הנתונים בלי התמונות, והתמונות אחת-אחת ----
     if (url.pathname === '/backup/export' && request.method === 'GET') {
@@ -328,6 +406,12 @@ export class RecipeBook {
     if (request.method === 'GET' && !id) {
       const all = await this.storage.list({ prefix: PREFIX });
       const recipes = [...all.values()].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+      // פעם אחת לכל ספר: מתכונים מקישורים שנשמרו לפני שהיה מאגר קהילה נכנסים אליו
+      if (!(await this.storage.get('community-bf'))) {
+        const items = (await Promise.all(recipes.filter((r) => !r.community).map((r) => this.communityItem(r)))).filter(Boolean);
+        if (items.length) await this.community('/community/add', { items });
+        await this.storage.put('community-bf', true);
+      }
       return json({ recipes });
     }
 
@@ -366,8 +450,12 @@ export class RecipeBook {
       if (url.searchParams.get('replace') !== '1' || (existing && !existing.restored)) delete saved.restored;
       // שחזור לא מחליף את המקור של מתכון שכבר נקרא (אחרת "רענון" חינמי היה קורא טקסט חדש בלי מכסה)
       if (url.searchParams.get('replace') === '1' && existing && !existing.restored) saved.source = existing.source;
+      // מתכון חדש בספר: נספר במאגר הקהילה (שחזור מגיבוי – רק נספר, בלי תוכן). community: כבר נספר
+      const item = !existing && (await this.communityItem(saved, { fresh: url.searchParams.get('replace') !== '1' }));
+      if (item || existing?.community) saved.community = true;
       await this.storage.put(PREFIX + saved.id, saved);
       if (existing && existing.image !== saved.image) await this.dropImage(existing.image);
+      if (item) await this.community('/community/add', { items: [item] });
       if (key) await this.storage.put(SRC + key, saved.id);
       // counted: נוסף מתכון חדש (או שמתכון שרק שוחזר מגיבוי נקרא עכשיו לראשונה) – נספר במכסה
       // מתכון מטקסט חדש (טקסט אחר מזה שכבר נשמר לאותו מקור) הוא עבודה חדשה, ולכן גם הוא נספר
@@ -405,12 +493,17 @@ export class RecipeBook {
       if (edited.length) next.edited = { ...(current.edited || {}), ...Object.fromEntries(edited.map((k) => [k, true])) };
       await this.storage.put(PREFIX + id, next);
       if ('image' in patch && current.image !== next.image) await this.dropImage(current.image);
+      // דירוג (אחד לכל ספר) נספר בדירוג המשותף של המתכון
+      const identity = 'rating' in patch && (current.rating || 0) !== (next.rating || 0) && communityIdentity(current);
+      if (identity) await this.community('/community/rate', { key: await communityKey(identity), rater: this.state.id?.toString?.() || 'book', rating: next.rating || 0 });
       return json({ recipe: next });
     }
 
     if (request.method === 'DELETE') {
       await this.storage.delete(PREFIX + id);
       await this.storage.put('recipe-count', Math.max(0, (await this.recipeCount()) - 1));
+      const identity = communityIdentity(current);
+      if (identity) await this.community('/community/remove', { key: await communityKey(identity), rater: this.state.id?.toString?.() || 'book' });
       await this.dropImage(current.image);
       const key = sourceKey(current);
       if (key) await this.storage.delete(SRC + key);

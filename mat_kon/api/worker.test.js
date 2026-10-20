@@ -1425,3 +1425,61 @@ test('a pin with only a video: its image goes to the agent, and a guessed recipe
   assert.equal(again.recipe.title, 'עוגת שוקולד');
   assert.equal(typeof apiCalls.at(-1).messages[0].content, 'string');
 });
+
+test('community: link recipes are searchable with saves and ratings (no names), personal recipes are not', async () => {
+  const inv1 = await invite('דנה');
+  const dana = (await (await register(inv1.token, 'dana@example.com')).json()).session;
+  const inv2 = await invite('רון');
+  const ron = (await (await register(inv2.token, 'ron@example.com')).json()).session;
+  const mine = (await (await call('POST', '/recipes', { url: 'https://cake.example/community' }, dana)).json()).recipe;
+  assert.match(mine.source.identity, /^url:https:\/\/cake\.example\/community/);
+  await call('POST', '/recipes/manual', { title: 'עוגת שוקולד של סבתא', ingredients: [{ title: '', items: ['סוד'] }] }, dana);
+
+  const found = (await (await call('GET', `/community?q=${encodeURIComponent('עוגת שוקולד')}`, undefined, ron)).json()).results;
+  assert.equal(found.length, 1);
+  assert.deepEqual([found[0].title, found[0].saves, found[0].rating, found[0].kosher], ['עוגת שוקולד', 1, null, 'parve']);
+  assert.equal(JSON.stringify(found).includes('dana'), false);
+  assert.equal((await (await call('GET', '/community?q=סבתא', undefined, ron)).json()).results.length, 0);
+
+  // שמירה מהקהילה: נספר כמתכון, ובמאגר – שמירה נוספת
+  const { recipe, summary } = await (await call('GET', `/community/${found[0].key}`, undefined, ron)).json();
+  assert.equal(recipe.myNotes, undefined);
+  assert.equal(summary.saves, 1);
+  const saved = await (await call('POST', `/community/${found[0].key}/save`, {}, ron)).json();
+  assert.equal(saved.user.added, 1);
+  // בעל האפליקציה שומר גם הוא, ושלושה ספרים מדרגים – יש ממוצע
+  await call('POST', '/recipes', { url: 'https://cake.example/community' });
+  const ownerList = (await (await call('GET', '/recipes')).json()).recipes;
+  await call('PUT', `/recipes/${ownerList.find((r) => r.source.url === 'https://cake.example/community').id}`, { rating: 3 });
+  await call('PUT', `/recipes/${mine.id}`, { rating: 5 }, dana);
+  let s = (await (await call('GET', '/community?q=שוקולד', undefined, ron)).json()).results[0];
+  assert.deepEqual([s.saves, s.rating, s.ratingCount], [3, null, 2]);
+  await call('PUT', `/recipes/${saved.recipe.id}`, { rating: 4 }, ron);
+  s = (await (await call('GET', '/community?q=שוקולד', undefined, ron)).json()).results[0];
+  assert.deepEqual([s.rating, s.ratingCount], [4, 3]);
+  // דנה משנה דירוג ואחר כך מוחקת את המתכון – הדירוג שלה יוצא
+  await call('PUT', `/recipes/${mine.id}`, { rating: 2 }, dana);
+  await call('DELETE', `/recipes/${mine.id}`, undefined, dana);
+  s = (await (await call('GET', '/community?q=שוקולד', undefined, ron)).json()).results[0];
+  assert.deepEqual([s.saves, s.ratingCount], [2, 2]);
+  // סינונים
+  assert.equal((await (await call('GET', '/community?q=שוקולד&kosher=meat', undefined, ron)).json()).results.length, 0);
+  assert.equal((await (await call('GET', '/community?q=שוקולד&minutes=60', undefined, ron)).json()).results.length, 1);
+  // רשימת הספר נטענת – לא נספר פעמיים
+  await call('GET', '/recipes', undefined, ron);
+  assert.equal((await (await call('GET', '/community?q=שוקולד', undefined, ron)).json()).results[0].saves, 2);
+});
+
+test('community: recipes saved before the community existed are added once per book (not edited ones)', async () => {
+  env.BOOK.get('book'); // יוצר את הספר
+  const storage = env.BOOK.objects.get('book').storage;
+  // ספר "ישן": מתכונים שנשמרו לפני העדכון (בלי סימון community)
+  const old = { id: 'o1', title: 'פשטידה ישנה', category: 'אחר', createdAt: '2026-01-01T00:00:00Z', ingredients: [{ title: '', items: ['ביצים'] }], steps: [{ title: '', items: ['אופים'] }], source: { url: 'https://old.example/p', kind: 'page' } };
+  await storage.put('r:o1', old);
+  await storage.put('r:o2', { ...old, id: 'o2', title: 'פשטידה שערכתי', source: { url: 'https://old.example/q', kind: 'page' }, edited: { ingredients: true } });
+  await storage.put('r:o3', { ...old, id: 'o3', title: 'פשטידה מצילום', source: { url: null, key: 'photo:x', kind: 'photo' } });
+  await call('GET', '/recipes');
+  await call('GET', '/recipes'); // פעם שנייה – לא נספר שוב
+  const results = (await (await call('GET', '/community?q=פשטידה')).json()).results;
+  assert.deepEqual(results.map((r) => [r.title, r.saves]), [['פשטידה ישנה', 1]]);
+});

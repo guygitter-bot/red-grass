@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
-import { BookmarkPlus, ChefHat, Clock, Loader2, Lock, Smartphone, Users, X } from 'lucide-react';
-import { getSharedRecipe, getSharePreview, saveSharedRecipe } from '../lib/api';
+import { BookmarkPlus, ChefHat, Clock, ExternalLink, Loader2, Lock, Smartphone, Star, Users, X } from 'lucide-react';
+import { getCommunityRecipe, getSharedRecipe, getSharePreview, saveCommunityRecipe, saveSharedRecipe } from '../lib/api';
 import { isNative } from '../lib/native';
 
 const PLAY_URL = 'https://play.google.com/store/apps/details?id=app.matkon';
 
 // מתכון שמישהו שלח בקישור (#recipe=...). מי שמחובר רואה את המתכון המלא ושומר אותו בספר שלו.
 // מי שלא מחובר רואה רק תצוגה מקדימה: באפליקציה – כניסה/הרשמה, באתר – פתיחה באפליקציה (או הורדה מ-Google Play)
-export default function SharedRecipe({ token, session, onLogin, onSaved, onClose, onPaywall }) {
+// communityKey: אותו מסך למתכון ממאגר הקהילה (עם דירוג, מספר שמירות וקרדיט למקור)
+export default function SharedRecipe({ token, communityKey, session, onLogin, onSaved, onClose, onPaywall }) {
   const [preview, setPreview] = useState(null);
   const [full, setFull] = useState(null);
   const [error, setError] = useState('');
@@ -15,7 +16,7 @@ export default function SharedRecipe({ token, session, onLogin, onSaved, onClose
 
   useEffect(() => {
     let alive = true;
-    getSharedRecipe(session, token)
+    (communityKey ? getCommunityRecipe(session, communityKey) : getSharedRecipe(session, token))
       .then((d) => {
         if (alive) setFull(d);
       })
@@ -34,7 +35,7 @@ export default function SharedRecipe({ token, session, onLogin, onSaved, onClose
     setBusy(true);
     setError('');
     try {
-      onSaved(await saveSharedRecipe(session, token));
+      onSaved(await (communityKey ? saveCommunityRecipe(session, communityKey) : saveSharedRecipe(session, token)));
     } catch (e) {
       if (e.status === 402) onPaywall(e.data.paymentUrl);
       setError(e.message);
@@ -56,7 +57,7 @@ export default function SharedRecipe({ token, session, onLogin, onSaved, onClose
           <button onClick={onClose} className="p-2 rounded-full hover:bg-stone-100" aria-label="סגירה">
             <X size={22} />
           </button>
-          <div className="flex-1 truncate font-bold">מתכון שנשלח אליך</div>
+          <div className="flex-1 truncate font-bold">{communityKey ? 'מתכון מהקהילה' : 'מתכון שנשלח אליך'}</div>
         </div>
       </div>
 
@@ -73,6 +74,16 @@ export default function SharedRecipe({ token, session, onLogin, onSaved, onClose
             {info.image && <img src={info.image} alt="" className="w-full aspect-video object-cover rounded-3xl bg-stone-100" />}
             <h1 className="mt-4 text-2xl font-black leading-tight">{info.title}</h1>
             {info.by && <p className="mt-1 text-sm text-orange-700 font-medium">נשלח אליך מ־{info.by}</p>}
+            {full?.summary && (
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-stone-600">
+                <CommunityStats s={full.summary} />
+                {full.recipe.source?.url && (
+                  <a href={full.recipe.source.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-orange-700">
+                    <ExternalLink size={13} /> {full.summary.credit || 'המקור'}
+                  </a>
+                )}
+              </div>
+            )}
             {info.description && <p className="mt-2 text-stone-600 leading-relaxed">{info.description}</p>}
             {full?.recipe.basis === 'guessed' && <p className="mt-2 rounded-xl bg-amber-100 text-amber-900 text-sm p-2">מתכון משוער: במקור יש רק תמונה או סרטון, בלי מתכון כתוב.</p>}
             <div className="mt-3 flex flex-wrap gap-2 text-sm text-stone-600">
@@ -137,6 +148,20 @@ export default function SharedRecipe({ token, session, onLogin, onSaved, onClose
         )}
       </div>
     </div>
+  );
+}
+
+// דירוג (רק מ-3 דירוגים) ומספר הספרים שהמתכון נשמר בהם – בלי שמות
+export function CommunityStats({ s }) {
+  return (
+    <>
+      {s.rating ? (
+        <span className="inline-flex items-center gap-1"><Star size={14} className="text-amber-500" fill="currentColor" /><b>{s.rating}</b> ({s.ratingCount} דירוגים)</span>
+      ) : (
+        <span className="text-stone-400">עוד אין מספיק דירוגים</span>
+      )}
+      <span>נשמר ב-{s.saves} {s.saves === 1 ? 'ספר' : 'ספרים'}</span>
+    </>
   );
 }
 

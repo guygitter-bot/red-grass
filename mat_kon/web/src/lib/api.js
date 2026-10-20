@@ -123,6 +123,18 @@ export const recipeShareLink = (token) => `${appUrl()}#recipe=${token}`;
 export const getSharePreview = (token) => api('', 'GET', `/shares/${encodeURIComponent(token)}`).then((d) => d.preview);
 export const getSharedRecipe = (s, token) => api(s, 'GET', `/shares/${encodeURIComponent(token)}/full`).then((d) => ({ by: d.by, recipe: safeRecipe(d.recipe) }));
 export const saveSharedRecipe = (s, token) => api(s, 'POST', `/shares/${encodeURIComponent(token)}/save`, {});
+// מאגר הקהילה: מתכונים מקישורים שמשתמשים שמרו, עם דירוג ומספר שמירות
+export const searchCommunity = (s, q, filters = {}) => {
+  const p = new URLSearchParams({ q: q || '' });
+  if (filters.minutes) p.set('minutes', '30');
+  if (filters.calories) p.set('calories', '400');
+  if (filters.kosher) p.set('kosher', filters.kosher);
+  if (filters.vegan) p.set('vegan', '1');
+  if (filters.gf) p.set('gf', '1');
+  return api(s, 'GET', `/community?${p}`).then((d) => d.results || []);
+};
+export const getCommunityRecipe = (s, key) => api(s, 'GET', `/community/${encodeURIComponent(key)}`).then((d) => ({ by: '', recipe: safeRecipe(d.recipe), summary: d.summary }));
+export const saveCommunityRecipe = (s, key) => api(s, 'POST', `/community/${encodeURIComponent(key)}/save`, {});
 export const addTextRecipe = (s, item) => api(s, 'POST', '/recipes/text', item);
 
 // מתכון מתמונות / שנכתב ידנית

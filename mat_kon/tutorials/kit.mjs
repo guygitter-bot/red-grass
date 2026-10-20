@@ -109,6 +109,13 @@ function mockApi(opts = {}) {
     }
     if (p === '/categories') { state.custom = [...state.custom, body.name]; return { custom: state.custom }; }
     if (p === '/categories/remove') { state.custom = state.custom.filter((c) => c !== body.name); return { custom: state.custom }; }
+    if (p === '/community' && method === 'GET') return { results: opts.community ?? demo.COMMUNITY };
+    m = p.match(/^\/community\/([\w-]+)(\/save)?$/);
+    if (m) {
+      const s = (opts.community ?? demo.COMMUNITY).find((x) => x.key === m[1]);
+      if (m[2]) { await sleep(800); return { recipe: created({ title: s.title, source: { url: s.url, kind: 'web' } }) }; }
+      return { recipe: { ...clone(state.newRecipe), title: s.title, image: s.image, source: { url: s.url, kind: 'web', site: s.credit } }, summary: s };
+    }
     if (p === '/search') { await sleep(state.delay); return { results: opts.searchResults ?? demo.SEARCH_RESULTS }; }
     if (p === '/shopping/organize') {
       await sleep(state.delay);
