@@ -162,6 +162,12 @@ export const PANTRY = [
   ['אורז', '1 קילו', 'pantry'], ['פסטה', '2 חבילות', 'pantry'], ['עדשים כתומות', '', 'pantry'], ['קמח', '', 'pantry'], ['שמן זית', '', 'pantry'],
 ].map(([name, qty, place], i) => ({ id: `p${i}`, name, qty, place }));
 
+// מאגר הקהילה (מה שמשתמשים אחרים שמרו), עם דירוג ומספר שמירות
+export const COMMUNITY = [
+  { key: 'c-spinach-quiche-1', title: 'פשטידת תרד וגבינות קלה', url: 'https://www.example-food.co.il/spinach-quiche', credit: 'אוכל ביתי', image: null, rating: 4.7, ratingCount: 18, saves: 64, minutes: 45, calories: 260, kosher: 'dairy' },
+  { key: 'c-spinach-pie-2', title: 'פשטידת תרד בלי קמח', url: 'https://www.example-chef.co.il/spinach-pie', credit: 'השף בבית', image: null, rating: 4.4, ratingCount: 7, saves: 21, minutes: 40, calories: 210, kosher: 'dairy' },
+];
+
 export const SEARCH_RESULTS = [
   { title: 'פשטידת תרד וגבינות קלה', url: 'https://www.example-food.co.il/spinach-quiche', site: 'אוכל ביתי', description: 'פשטידה רכה בקערה אחת, עם פטה וגבינה צהובה.' },
   { title: 'פשטידת תרד בלי קמח', url: 'https://www.example-chef.co.il/spinach-pie', site: 'השף בבית', description: 'גרסה קלילה ללא קמח, מתאימה גם ללא גלוטן.' },

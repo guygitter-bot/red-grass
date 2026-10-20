@@ -15,6 +15,7 @@ import { NoRecipeError, aiMessage, categoryFields, cleanNutrition, estimateNutri
 import { findStores } from './stores.js';
 import { CATEGORIES } from './categories.js';
 import { backupStatus, restoreBook, runBackup } from './backup.js';
+import { publicSummary } from './community.js';
 
 export { RecipeBook, Accounts };
 
@@ -337,6 +338,58 @@ export default {
       }
     }
 
+    // עותק של מתכון (שנשלח בקישור / מהקהילה) נשמר בספר שלי: נספר כמו מתכון חדש, והתמונה מועתקת לספר
+    const saveCopy = async (raw) => {
+      const recipe = restoredRecipe(raw, await allCategories());
+      if (!recipe) return { res: { ok: false, status: 400 }, data: { error: 'המתכון לא תקין' } };
+      const counts = Boolean(user);
+      if (counts) {
+        const taken = await internal(accounts, 'POST', '/quota/take', { userId: user.id });
+        if (!taken.ok) return { res: { ok: false, status: 402 }, data: { error: `נגמרו ${user.freeLimit} המתכונים החינמיים`, paywall: true, paymentUrl: env.PAYMENT_URL || '' } };
+      }
+      recipe.image = await copyImage(recipe.image, {
+        origin: url.origin, bookKey: bookKeyOf(user), source: (k) => bookOf(k === 'book' ? null : k), target: bookStub(),
+      });
+      const res = await internal(bookStub(), 'POST', '/recipes', recipe);
+      const data = await res.json();
+      if (counts) {
+        if (!res.ok || !data.counted) await internal(accounts, 'POST', '/quota/give', { userId: user.id });
+        const fresh = await internal(accounts, 'POST', '/auth', { session });
+        data.user = fresh.ok ? (await fresh.json()).user : undefined;
+      }
+      delete data.counted;
+      return { res, data };
+    };
+
+    // ---- מאגר הקהילה: חיפוש במתכונים מקישורים שמשתמשים שמרו (עם דירוג ומספר שמירות, בלי שמות) ----
+    if (parts[0] === 'community') {
+      const stub = env.BOOK.get(env.BOOK.idFromName('community'));
+      if (parts.length === 1 && request.method === 'GET') {
+        const limited = await rate([{ key: `community:${bookKeyOf(user)}`, limit: 300, window: 3600 }]);
+        if (limited) return limited;
+        const p = url.searchParams;
+        const num = (k) => (Number(p.get(k)) > 0 ? Math.min(Number(p.get(k)), 100000) : 0);
+        const filters = {
+          maxMinutes: num('minutes'), maxCalories: num('calories'),
+          kosher: ['meat', 'dairy', 'parve'].includes(p.get('kosher')) ? p.get('kosher') : '',
+          vegan: p.get('vegan') === '1', glutenFree: p.get('gf') === '1',
+        };
+        return pass(await internal(stub, 'POST', '/community/search', { q: String(p.get('q') || '').slice(0, 100), filters }));
+      }
+      if (!/^[\w-]{10,40}$/.test(parts[1] || '')) return fail(404, 'Not found');
+      const res = await internal(stub, 'POST', '/community/get', { key: parts[1] });
+      if (!res.ok) return fail(404, 'המתכון כבר לא במאגר');
+      const { recipe, summary } = await res.json();
+      if (parts.length === 2 && request.method === 'GET') return reply(200, { recipe, summary: publicSummary(summary) });
+      if (parts.length === 3 && parts[2] === 'save' && request.method === 'POST') {
+        const limited = await rate([{ key: `share-save:${bookKeyOf(user)}`, limit: 200, window: 86400 }], 'הגעתם למגבלה היומית. נסו שוב מחר.');
+        if (limited) return limited;
+        const { res: saved, data } = await saveCopy(recipe);
+        return reply(saved.status, data);
+      }
+      return fail(405, 'Method not allowed');
+    }
+
     // ---- מתכון ששותף בקישור: המתכון המלא, ושמירה שלו בספר שלי (נספר כמו מתכון חדש) ----
     if (parts[0] === 'shares' && parts.length === 3 && ['full', 'save'].includes(parts[2])) {
       if (parts[2] === 'full' && request.method === 'GET') {
@@ -349,25 +402,8 @@ export default {
         if (limited) return limited;
         const share = await getShare(parts[1]);
         if (!share) return fail(404, 'הקישור לא נמצא או שפג תוקפו');
-        const recipe = restoredRecipe(share.recipe, await allCategories());
-        if (!recipe) return fail(400, 'המתכון ששותף לא תקין');
-        const counts = Boolean(user);
-        if (counts) {
-          const taken = await internal(accounts, 'POST', '/quota/take', { userId: user.id });
-          if (!taken.ok) return fail(402, `נגמרו ${user.freeLimit} המתכונים החינמיים`, { paywall: true, paymentUrl: env.PAYMENT_URL || '' });
-        }
-        recipe.image = await copyImage(recipe.image, {
-          origin: url.origin, bookKey: bookKeyOf(user), source: (k) => bookOf(k === 'book' ? null : k), target: bookStub(),
-        });
-        const res = await internal(bookStub(), 'POST', '/recipes', recipe);
-        const data = await res.json();
-        if (counts) {
-          if (!res.ok || !data.counted) await internal(accounts, 'POST', '/quota/give', { userId: user.id });
-          const fresh = await internal(accounts, 'POST', '/auth', { session });
-          data.user = fresh.ok ? (await fresh.json()).user : undefined;
-        }
+        const { res, data } = await saveCopy(share.recipe);
         if (res.ok && !data.updated) await getShare(parts[1], true);
-        delete data.counted;
         return reply(res.status, data);
       }
       return fail(405, 'Method not allowed');
@@ -959,6 +995,7 @@ function restoredRecipe(r, categories) {
     ...(key ? { key } : url ? {} : { key: `manual:restored-${textHash(title)}` }),
     kind: /^[a-z]{2,20}$/.test(src.kind) ? src.kind : url ? sourceKind(url) : 'manual',
     ...['title', 'author', 'site', 'chat', 'date', 'hint'].reduce((o, k) => (src[k] ? { ...o, [k]: str(src[k]) } : o), {}),
+    ...(url && typeof src.identity === 'string' && /^[a-z]+:.{3,600}$/.test(src.identity) ? { identity: src.identity } : {}),
     ...(typeof src.text === 'string' ? { text: src.text.slice(0, 20000) } : {}),
     ...(typeof src.embed === 'string' && EMBED_ORIGIN.test(src.embed) ? { embed: src.embed.slice(0, 500) } : {}),
   };

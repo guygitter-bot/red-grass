@@ -142,6 +142,8 @@ export default function App() {
   // סדר הקטגוריות ומועדפות (נשמר בשרת לכל הספר)
   const [categoryPrefs, setCategoryPrefsState] = usePersistentState('matkon_category_prefs', { order: [], favorites: [] });
   const [loadError, setLoadError] = useState('');
+  // מתכון מהקהילה שנפתח מתוך החיפוש
+  const [communityOpen, setCommunityOpen] = useState(null);
   // מתכון ששלחו לי בקישור: נשמר במכשיר עד שמחליטים, כדי שיחכה גם אחרי הרשמה (login: המשתמש ביקש להיכנס)
   const [incoming, setIncoming] = usePersistentState('matkon_incoming_share', SHARE_LINK ? { token: SHARE_LINK } : null);
   useEffect(() => {
@@ -227,6 +229,7 @@ export default function App() {
     const onHash = () => {
       navigatedInApp.current = true;
       setNav(route());
+      setCommunityOpen(null);
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
@@ -655,10 +658,31 @@ export default function App() {
 
   if (nav.view === 'search') {
     const savedUrls = savedUrlSet(recipes);
+    if (communityOpen) {
+      return (
+        <>
+          {paywall && <Paywall user={user} paymentUrl={paywall.paymentUrl} onClose={() => setPaywall(null)} />}
+          <SharedRecipe
+            communityKey={communityOpen.key}
+            session={session}
+            onClose={() => setCommunityOpen(null)}
+            onSaved={(data) => {
+              if (data.user && session && !ownerDevice) setUser(data.user);
+              upsert(safeRecipe(data.recipe));
+              setCommunityOpen(null);
+              setToast(data.updated ? 'המתכון כבר היה בספר שלך' : 'המתכון נשמר בספר שלך');
+              open(data.recipe.id);
+            }}
+            onPaywall={(url) => setPaywall({ paymentUrl: url || paymentUrl })}
+          />
+        </>
+      );
+    }
     return (
       <>
         {paywall && <Paywall user={user} paymentUrl={paywall.paymentUrl} onClose={() => setPaywall(null)} />}
         <SearchView
+          onOpenCommunity={setCommunityOpen}
           key={nav.q}
           session={session}
           initialQuery={nav.q}
@@ -830,7 +854,7 @@ export default function App() {
               <PenLine size={20} /> כתיבה ידנית
             </a>
             <a href="#/search" className="rounded-2xl bg-white/15 hover:bg-white/25 py-2.5 flex flex-col items-center gap-1">
-              <Globe size={20} /> חיפוש ברשת
+              <Globe size={20} /> חיפוש מתכון
             </a>
             <a href="#/import" className="rounded-2xl bg-white/15 hover:bg-white/25 py-2.5 flex flex-col items-center gap-1">
               <MessageCircle size={20} /> ייבוא מווטסאפ

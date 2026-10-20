@@ -27,7 +27,7 @@ function namespace(Cls, env) {
     get: (n) => {
       if (!objects.has(n)) {
         const storage = fakeStorage();
-        const obj = new Cls({ storage }, env);
+        const obj = new Cls({ storage, id: { toString: () => n } }, env);
         // אזעקה (alarm) של Durable Object: רצה מיד אחרי הבקשה
         storage.setAlarm = async () => { setTimeout(() => obj.alarm?.(), 0); };
         objects.set(n, obj);

@@ -45,6 +45,7 @@ export async function buildRecipe(env, client, { link, text, hint }, categories)
     return fromCache(known, categories, hint);
   }
   const recipe = await extractRecipe(client, src, { categories });
+  recipe.source = { ...recipe.source, identity }; // לזיהוי במאגר הקהילה
   const { more, ...shared } = recipe;
   void more;
   const { hint: ownHint, ...source } = shared.source || {};
