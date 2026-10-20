@@ -25,10 +25,12 @@
 
 <button class="btn pri fab" id="fab" type="button">שאלו את המדריך</button>
 <div class="drawer" id="drawer" hidden>
-  <header><b>המדריך האישי (AI)</b><button class="btn sm" id="drawerClose" type="button">סגירה</button></header>
+  <header><b>המדריך האישי (AI)</b><div class="row"><button class="btn sm" id="tutorNew" type="button">שיחה חדשה</button><button class="btn sm" id="drawerClose" type="button">סגירה</button></div></header>
   <div class="chat" id="tutorChat"></div>
   <form id="tutorForm">
-    <textarea id="tutorIn" placeholder="למשל: כמה שירים צריך לסרטון של שעה?"></textarea>
-    <button class="btn pri" type="submit" id="tutorSend">שליחה</button>
+    <div class="pends" id="tutorPend" hidden></div>
+    <div class="row"><button class="btn sm" id="tutorNext" type="button">מה הצעד הבא?</button><label class="btn sm" for="tutorImg" style="cursor:pointer">📷 צילום מסך</label><input id="tutorImg" type="file" accept="image/*" multiple hidden></div>
+    <div class="row" style="flex-wrap:nowrap;align-items:flex-end"><textarea id="tutorIn" placeholder="כתבו שאלה, או שלחו צילום מסך…"></textarea>
+    <button class="btn pri" type="submit" id="tutorSend">שליחה</button></div>
   </form>
 </div>

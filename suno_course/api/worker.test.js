@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import worker, { cleanMessages, sameSecret, MODELS } from './worker.js';
+import worker, { cleanMessages, cleanImages, sameSecret, MODELS } from './worker.js';
 
 const env = { ANTHROPIC_API_KEY: 'k', COURSE_PASSWORD: 'secret', ALLOWED_ORIGIN_RE: '^https://([a-z0-9-]+\\.)?suno-course(-[a-z0-9]+)?\\.pages\\.dev$' };
 const req = (body, auth = 'secret', origin = 'https://suno-course.pages.dev') => new Request('https://x/ai', {
@@ -49,4 +49,16 @@ test('שגיאת קרדיט – הודעה בעברית', async () => {
   const r = await worker.fetch(req({ messages: [{ role: 'user', content: 'hi' }] }), env);
   assert.equal(r.status, 502);
   assert.match((await r.json()).error, /קרדיט/);
+});
+
+test('תמונות: מצורפות להודעה האחרונה, וסוג לא מותר נדחה', async () => {
+  assert.equal(cleanImages([{ media_type: 'image/svg+xml', data: 'AAAA' }]), null);
+  assert.equal(cleanImages(Array(5).fill({ media_type: 'image/png', data: 'AAAA' })), null);
+  let sent;
+  globalThis.fetch = async (url, init) => { sent = JSON.parse(init.body); return new Response(JSON.stringify({ content: [{ type: 'text', text: 'רואה' }] }), { status: 200 }); };
+  const r = await worker.fetch(req({ messages: [{ role: 'user', content: 'מה זה?' }], images: [{ media_type: 'image/jpeg', data: 'AAAA' }] }), env);
+  assert.equal(r.status, 200);
+  const c = sent.messages[0].content;
+  assert.equal(c[0].type, 'image');
+  assert.equal(c[1].text, 'מה זה?');
 });
