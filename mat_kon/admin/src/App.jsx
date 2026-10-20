@@ -1,0 +1,415 @@
+import { useCallback, useEffect, useState } from 'react';
+import {
+  AlertTriangle, Bug, CheckCircle2, ChefHat, DollarSign, LayoutDashboard, Loader2, LogOut, RefreshCw, Shield, Star, Users,
+} from 'lucide-react';
+import { ISSUE_STATUS, SECURITY, SOURCES, ago, api, lastDays, usd } from './lib';
+
+// אפליקציית הניהול של mat-kon: רק לבעל האפליקציה (כניסה עם סיסמת הבעלים; הכול נבדק בשרת)
+const TABS = [
+  ['overview', 'סקירה', LayoutDashboard], ['users', 'משתמשים', Users], ['money', 'כסף', DollarSign],
+  ['issues', 'תקלות', Bug], ['security', 'אבטחה', Shield], ['content', 'תוכן', ChefHat],
+];
+
+export default function App() {
+  const [session, setSession] = useState(() => localStorage.getItem('admin_session') || '');
+  const [tab, setTab] = useState('overview');
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const signOut = useCallback(() => {
+    localStorage.removeItem('admin_session');
+    setSession('');
+    setData(null);
+  }, []);
+
+  const load = useCallback(async () => {
+    if (!session) return;
+    setBusy(true);
+    setError('');
+    try {
+      const [overview, issues, security] = await Promise.all([
+        api(session, 'GET', '/admin/overview'), api(session, 'GET', '/admin/issues'), api(session, 'GET', '/admin/security'),
+      ]);
+      setData({ ...overview, issueList: issues.issues, security });
+    } catch (e) {
+      if (e.status === 401 || e.status === 403) signOut();
+      else setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }, [session, signOut]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (!session) return <Login onDone={(s) => { localStorage.setItem('admin_session', s); setSession(s); }} />;
+
+  return (
+    <div className="min-h-screen pb-24 lg:pb-8">
+      <header className="sticky top-0 z-10 bg-card/95 backdrop-blur border-b border-line pt-[env(safe-area-inset-top)]">
+        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-2">
+          <div className="flex-1 font-black">mat-kon <span className="text-muted font-medium">ניהול</span></div>
+          <button onClick={load} disabled={busy} className="p-2 rounded-full hover:bg-page" aria-label="רענון">
+            {busy ? <Loader2 size={20} className="animate-spin" /> : <RefreshCw size={20} />}
+          </button>
+          <button onClick={signOut} className="p-2 rounded-full hover:bg-page" aria-label="יציאה"><LogOut size={20} /></button>
+        </div>
+        <nav className="hidden lg:flex max-w-5xl mx-auto px-4 gap-1 pb-2">
+          {TABS.map(([id, label, Icon]) => (
+            <button key={id} onClick={() => setTab(id)} className={`px-3 py-1.5 rounded-full text-sm flex items-center gap-1.5 ${tab === id ? 'bg-ink text-card' : 'hover:bg-page'}`}>
+              <Icon size={16} /> {label}
+            </button>
+          ))}
+        </nav>
+      </header>
+
+      <main className="max-w-5xl mx-auto px-4 pt-4">
+        {error && <p className="mb-3 rounded-xl bg-red-500/10 text-red-600 p-3 text-sm">{error}</p>}
+        {!data ? (
+          <div className="py-20 flex justify-center text-muted"><Loader2 className="animate-spin" size={28} /></div>
+        ) : (
+          <>
+            {tab === 'overview' && <Overview d={data} go={setTab} />}
+            {tab === 'users' && <UsersTab d={data} />}
+            {tab === 'money' && <Money d={data} session={session} reload={load} />}
+            {tab === 'issues' && <Issues list={data.issueList} session={session} reload={load} />}
+            {tab === 'security' && <Security d={data} />}
+            {tab === 'content' && <Content d={data} />}
+          </>
+        )}
+      </main>
+
+      {/* תפריט תחתון בטלפון */}
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 bg-card border-t border-line pb-[env(safe-area-inset-bottom)] grid grid-cols-6">
+        {TABS.map(([id, label, Icon]) => (
+          <button key={id} onClick={() => setTab(id)} className={`relative py-2 flex flex-col items-center gap-0.5 text-[11px] ${tab === id ? 'text-brand font-bold' : 'text-muted'}`}>
+            <Icon size={20} />
+            {label}
+            {id === 'issues' && data?.issues.new > 0 && <span className="absolute top-1.5 right-1/2 mr-[-14px] w-2 h-2 rounded-full bg-red-500" />}
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
+function Login({ onDone }) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const res = await api('', 'POST', '/owner-login', { password });
+      onDone(res.session);
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <form onSubmit={submit} className="w-full max-w-sm bg-card rounded-3xl p-6 shadow-sm border border-line">
+        <h1 className="text-2xl font-black">mat-kon ניהול</h1>
+        <p className="text-muted text-sm mt-1 mb-5">כניסה עם סיסמת הבעלים</p>
+        <input
+          type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="סיסמת הבעלים" autoComplete="current-password"
+          className="w-full rounded-xl border border-line bg-page px-3 py-3 outline-none focus:border-brand"
+        />
+        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+        <button disabled={busy || !password} className="mt-4 w-full rounded-xl bg-brand text-white font-bold py-3 disabled:opacity-50">
+          {busy ? <Loader2 className="animate-spin mx-auto" size={20} /> : 'כניסה'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+const Card = ({ title, children, className = '' }) => (
+  <section className={`bg-card rounded-2xl border border-line p-4 ${className}`}>
+    {title && <h2 className="font-bold mb-3">{title}</h2>}
+    {children}
+  </section>
+);
+
+const Stat = ({ label, value, sub, onClick }) => (
+  <button onClick={onClick} disabled={!onClick} className="bg-card rounded-2xl border border-line p-3 text-right">
+    <div className="text-xs text-muted">{label}</div>
+    <div className="text-2xl font-black mt-0.5">{value}</div>
+    {sub && <div className="text-xs text-muted mt-0.5">{sub}</div>}
+  </button>
+);
+
+const LEVEL = { serious: 'bg-red-500/10 text-red-700 dark:text-red-300', warning: 'bg-amber-500/15 text-amber-800 dark:text-amber-300' };
+
+function Overview({ d, go }) {
+  const s = d.stats;
+  return (
+    <div className="space-y-4">
+      {d.alerts.length > 0 ? (
+        <div className="space-y-2">
+          {d.alerts.map((a, i) => (
+            <div key={i} className={`rounded-xl p-3 text-sm flex gap-2 items-start ${LEVEL[a.level]}`}>
+              <AlertTriangle size={18} className="shrink-0 mt-0.5" /> {a.text}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-xl p-3 text-sm flex gap-2 items-center bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+          <CheckCircle2 size={18} /> הכול תקין – אין התראות
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+        <Stat label="משתמשים" value={s.users} sub={`+${s.today} היום · +${s.week} השבוע`} onClick={() => go('users')} />
+        <Stat label="פעילים ב-7 ימים" value={s.active7} sub={`${s.active30} ב-30 ימים`} />
+        <Stat label="הוצאה החודש (AI)" value={usd(d.costs[0].usd)} sub={`חודש קודם ${usd(d.costs[1].usd)}`} onClick={() => go('money')} />
+        <Stat label="תקלות פתוחות" value={d.issues.open} sub={`${d.issues.new} חדשות`} onClick={() => go('issues')} />
+      </div>
+
+      <Card title="הרשמות ב-30 הימים האחרונים">
+        <SignupChart byDay={s.signupsByDay} />
+      </Card>
+
+      <div className="grid lg:grid-cols-2 gap-4">
+        <Card title="מסלולים">
+          <Rows rows={[
+            ['💳 משלמים', s.plans.paying, 'יתחיל לספור כשנחבר תשלומים'],
+            ['🎁 מנוי חינם (ממך)', s.plans.gifted],
+            [`🆓 חינמי (${s.freeLimit} מתכונים)`, s.plans.free],
+            ['⚠️ הגיעו לתקרה – כדאי לפנות', s.plans.atLimit],
+          ]} />
+        </Card>
+        <Card title="מאיפה הגיעו">
+          <Rows rows={Object.entries(SOURCES).map(([k, label]) => [label, s.sources[k] || 0])} />
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+const Rows = ({ rows }) => (
+  <ul className="divide-y divide-line">
+    {rows.map(([label, value, hint]) => (
+      <li key={label} className="py-2 flex items-center gap-2">
+        <span className="flex-1">{label}{hint && <span className="block text-xs text-muted">{hint}</span>}</span>
+        <b>{value}</b>
+      </li>
+    ))}
+  </ul>
+);
+
+// עמודה לכל יום (סדרה אחת – בלי מקרא); ריחוף/לחיצה מראה את המספר
+function SignupChart({ byDay }) {
+  const days = lastDays(byDay);
+  const max = Math.max(1, ...days.map((d) => d.count));
+  const [hover, setHover] = useState(null);
+  const shown = hover ?? days[days.length - 1];
+  return (
+    <div>
+      <div className="text-sm text-muted mb-2">
+        {new Date(shown.day).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })}: <b className="text-ink">{shown.count}</b> הרשמות
+      </div>
+      <div className="h-32 flex items-end gap-[2px] border-b border-line" dir="ltr" onMouseLeave={() => setHover(null)}>
+        {days.map((d) => (
+          <button
+            key={d.day}
+            onMouseEnter={() => setHover(d)}
+            onClick={() => setHover(d)}
+            className="flex-1 h-full flex items-end group"
+            aria-label={`${d.day}: ${d.count}`}
+          >
+            <span
+              className={`w-full rounded-t ${hover?.day === d.day ? 'bg-ink' : 'bg-brand'} ${d.count ? '' : 'opacity-20'}`}
+              style={{ height: `${d.count ? Math.max(4, (d.count / max) * 100) : 2}%` }}
+            />
+          </button>
+        ))}
+      </div>
+      <div className="flex justify-between text-[11px] text-muted mt-1" dir="ltr">
+        <span>לפני 30 ימים</span><span>היום</span>
+      </div>
+    </div>
+  );
+}
+
+function UsersTab({ d }) {
+  const s = d.stats;
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+        <Stat label="ספרים (בעלי ספר)" value={s.books} />
+        <Stat label="נכנסים עם גוגל" value={s.google} />
+        <Stat label="מתכונים שנשלחו בקישור" value={s.shares.links} sub={`${s.shares.saves} נשמרו אצל אחרים`} />
+        <Stat label="נרשמו החודש" value={s.month} />
+      </div>
+      <Card title="נרשמו לאחרונה">
+        <ul className="divide-y divide-line">
+          {s.recent.map((u) => (
+            <li key={u.email} className="py-2.5 flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="font-medium truncate">{u.name || '—'}</div>
+                <div className="text-xs text-muted truncate" dir="ltr">{u.email}</div>
+              </div>
+              <div className="text-left text-xs text-muted shrink-0">
+                <div>{SOURCES[u.source]}</div>
+                <div>{u.plan === 'paid' ? 'מנוי' : `${u.added}/${s.freeLimit} מתכונים`}</div>
+                <div>נכנס {ago(u.lastSeen)}</div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </div>
+  );
+}
+
+function Money({ d, session, reload }) {
+  const [alert, setAlert] = useState(d.settings.spendAlert || '');
+  const [saved, setSaved] = useState(false);
+  const save = async () => {
+    await api(session, 'PUT', '/admin/settings', { spendAlert: Number(alert) || 0 });
+    setSaved(true);
+    reload();
+  };
+  const users = d.stats.users || 1;
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-2">
+        {d.costs.map((c) => <Stat key={c.month} label={c.month} value={usd(c.usd)} />)}
+      </div>
+      <Card title="עלות ממוצעת למשתמש החודש">
+        <div className="text-2xl font-black">{usd(d.costs[0].usd / users)}</div>
+        <p className="text-xs text-muted mt-1">רק עלויות AI (Claude). השרתים (Cloudflare) ושמירת הקבצים לא כלולים.</p>
+      </Card>
+      <Card title="מי עלה הכי הרבה החודש">
+        {d.costs[0].top.length ? (
+          <Rows rows={d.costs[0].top.map((t) => [t.name || t.email || '—', usd(t.usd)])} />
+        ) : <p className="text-sm text-muted">אין עדיין עלויות החודש</p>}
+      </Card>
+      <Card title="התראה על הוצאה">
+        <p className="text-sm text-muted mb-2">כשההוצאה החודשית על AI עוברת את הסכום הזה – תופיע התראה במסך הסקירה.</p>
+        <div className="flex gap-2">
+          <input type="number" min="0" inputMode="decimal" value={alert} onChange={(e) => { setAlert(e.target.value); setSaved(false); }} placeholder="למשל 50" className="flex-1 rounded-xl border border-line bg-page px-3 py-2" dir="ltr" />
+          <button onClick={save} className="rounded-xl bg-brand text-white font-bold px-4">{saved ? 'נשמר ✓' : 'שמירה'}</button>
+        </div>
+      </Card>
+      <Card title="הכנסות"><p className="text-sm text-muted">יופיעו כאן כשנחבר תשלומים באפליקציה.</p></Card>
+    </div>
+  );
+}
+
+const STATUS_STYLE = { new: 'bg-red-500/10 text-red-700 dark:text-red-300', working: 'bg-amber-500/15 text-amber-800 dark:text-amber-300', fixed: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' };
+
+function Issues({ list, session, reload }) {
+  const [filter, setFilter] = useState('open');
+  const shown = list.filter((i) => (filter === 'open' ? i.status !== 'fixed' : i.status === 'fixed'));
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2">
+        {[['open', `פתוחות (${list.filter((i) => i.status !== 'fixed').length})`], ['fixed', `תוקנו (${list.filter((i) => i.status === 'fixed').length})`]].map(([id, label]) => (
+          <button key={id} onClick={() => setFilter(id)} className={`px-3 py-1.5 rounded-full text-sm border ${filter === id ? 'bg-ink text-card border-ink' : 'bg-card border-line'}`}>{label}</button>
+        ))}
+      </div>
+      {!shown.length && <Card><p className="text-sm text-muted">{filter === 'open' ? 'אין תקלות פתוחות 🎉' : 'עוד לא סומנו תקלות כמתוקנות'}</p></Card>}
+      {shown.map((i) => <Issue key={i.sig} i={i} session={session} reload={reload} />)}
+    </div>
+  );
+}
+
+function Issue({ i, session, reload }) {
+  const [note, setNote] = useState(i.note || '');
+  const [busy, setBusy] = useState(false);
+  const update = async (patch) => {
+    setBusy(true);
+    try {
+      await api(session, 'POST', `/admin/issues/${i.sig}`, patch);
+      await reload();
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card>
+      <div className="flex items-start gap-2">
+        <span className={`text-xs rounded-full px-2 py-0.5 shrink-0 ${STATUS_STYLE[i.status]}`}>{ISSUE_STATUS[i.status]}{i.reopened ? ' · חזרה' : ''}</span>
+        <div className="flex-1 min-w-0">
+          <div className="font-medium break-words" dir="auto">{i.message}</div>
+          <div className="text-xs text-muted mt-1">
+            {i.list === 'client' ? 'באפליקציה' : 'בשרת'} · {i.where} · {i.count} פעמים · אחרונה {ago(i.lastAt)}
+            {i.users?.length > 0 && <> · <span dir="ltr">{i.users.join(', ')}</span></>}
+          </div>
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {Object.entries(ISSUE_STATUS).filter(([k]) => k !== i.status).map(([k, label]) => (
+          <button key={k} disabled={busy} onClick={() => update({ status: k })} className="text-sm rounded-full border border-line px-3 py-1 hover:bg-page disabled:opacity-50">סימון: {label}</button>
+        ))}
+      </div>
+      <div className="mt-2 flex gap-2">
+        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="הערה (מה צריך לתקן / מה תוקן)" className="flex-1 min-w-0 rounded-xl border border-line bg-page px-3 py-1.5 text-sm" />
+        {note !== (i.note || '') && <button disabled={busy} onClick={() => update({ note })} className="text-sm rounded-xl bg-brand text-white px-3">שמירה</button>}
+      </div>
+    </Card>
+  );
+}
+
+function Security({ d }) {
+  const days = d.security.days.slice(0, 14);
+  const total = (k) => days.reduce((n, x) => n + (x[k] || 0), 0);
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+        {['ownerFail', 'loginFail', 'rateLimited', 'ownerLogin'].map((k) => <Stat key={k} label={SECURITY[k]} value={total(k)} sub="ב-14 ימים" />)}
+      </div>
+      <Card title="גיבוי לילי">
+        {d.backups ? (
+          <Rows rows={[['גיבוי אחרון', d.backups.last || 'אין עדיין'], ['גיבויים שמורים (30 יום)', d.backups.count], ['האחרון הושלם', d.backups.ok ? 'כן ✓' : 'לא']]} />
+        ) : <p className="text-sm text-muted">הגיבוי לא מוגדר</p>}
+      </Card>
+      <Card title="אירועים אחרונים">
+        {!d.security.events.length && <p className="text-sm text-muted">אין אירועים</p>}
+        <ul className="divide-y divide-line text-sm">
+          {d.security.events.slice(0, 40).map((e, idx) => (
+            <li key={idx} className="py-2 flex gap-2">
+              <span className="flex-1">{SECURITY[e.type] || e.type}{e.detail && <span className="text-muted"> · {e.detail}</span>}</span>
+              <span className="text-xs text-muted shrink-0">{ago(e.at)}</span>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </div>
+  );
+}
+
+function Content({ d }) {
+  const c = d.community;
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+        <Stat label="מתכונים בקהילה" value={c.recipes} />
+        <Stat label="שמירות" value={c.saves} />
+        <Stat label="דירוגים" value={c.ratings} />
+        <Stat label="מתכונים משוערים" value={c.guessed} sub="מקור בלי מתכון כתוב" />
+      </div>
+      <Card title="הכי פופולריים">
+        <ul className="divide-y divide-line">
+          {c.top.map((r) => (
+            <li key={r.title} className="py-2 flex items-center gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="truncate">{r.title}</div>
+                {r.credit && <div className="text-xs text-muted truncate">{r.credit}</div>}
+              </div>
+              {r.rating && <span className="text-sm inline-flex items-center gap-0.5"><Star size={13} className="text-amber-500" fill="currentColor" />{r.rating}</span>}
+              <span className="text-sm text-muted">{r.saves} שמירות</span>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </div>
+  );
+}

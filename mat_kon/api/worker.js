@@ -39,7 +39,8 @@ function corsHeaders(request, env) {
     'access-control-max-age': '86400',
     vary: 'origin',
   };
-  if (allowed.includes(origin)) headers['access-control-allow-origin'] = origin;
+  // אפליקציית הניהול (mat_kon/admin) – Cloudflare Pages נפרד; כל הנתונים בה מוגנים בכניסת בעלים
+  if (allowed.includes(origin) || /^https:\/\/mat-kon-admin(-[a-z0-9]+)?\.pages\.dev$/.test(origin)) headers['access-control-allow-origin'] = origin;
   return headers;
 }
 
@@ -101,6 +102,7 @@ export default {
     // ---- הרשמה וכניסה (בלי זיהוי) ----
     // הגבלת קצב לפי כתובת (ולפי אימייל בכניסה), נבדקת ונספרת באותו צעד
     const ip = request.headers.get('cf-connecting-ip') || 'local';
+    const country = request.headers.get('cf-ipcountry') || '';
     const rate = async (checks, message, trust) => {
       const res = await internal(accounts, 'POST', '/rate', { checks, message, trust });
       return res.ok ? null : pass(res);
@@ -112,6 +114,7 @@ export default {
       if (parts[0] === 'logout' || parts[0] === 'logout-all') body.session = bearer(request);
       if (parts[0] === 'login') {
         const email = String(body.email || '').trim().toLowerCase();
+        body.country = country;
         const limited = await rate([
           { key: `login-ip:${ip}`, limit: 30, window: 900 },
           { key: `login:${email}:${ip}`, limit: 10, window: 900 },
@@ -196,8 +199,11 @@ export default {
         { key: 'owner-all', limit: 300, window: 900, global: true },
       ], 'יותר מדי ניסיונות. נסו שוב בעוד רבע שעה.', { scope: 'owner', device: body.device });
       if (limited) return limited;
-      if (!(await sameSecret(String(body.password || ''), ownerPassword))) return fail(401, 'הסיסמה שגויה');
-      return pass(await internal(accounts, 'POST', '/owner-session', { device: body.device }));
+      if (!(await sameSecret(String(body.password || ''), ownerPassword))) {
+        await internal(accounts, 'POST', '/admin/security/event', { type: 'ownerFail', detail: country });
+        return fail(401, 'הסיסמה שגויה');
+      }
+      return pass(await internal(accounts, 'POST', '/owner-session', { device: body.device, country }));
     }
 
     // ---- כניסה והרשמה עם חשבון גוגל ----
@@ -216,7 +222,7 @@ export default {
         if (!me) return fail(401, 'צריך להיכנס מחדש');
         return pass(await internal(accounts, 'POST', '/google/link', { userId: me.id, ...profile }));
       }
-      if (ownerEmail && profile.email.toLowerCase() === ownerEmail) return pass(await internal(accounts, 'POST', '/owner-session', {}));
+      if (ownerEmail && profile.email.toLowerCase() === ownerEmail) return pass(await internal(accounts, 'POST', '/owner-session', { country }));
       // הרשמה בלי קישור הזמנה עם גוגל (רק כשמותר; משתמש קיים פשוט נכנס)
       const open = body.open === true && !body.token && !body.join && openSignupAllowed(request, env);
       return pass(await internal(accounts, 'POST', '/google', { ...profile, token: body.token || '', join: body.join || '', open }));
@@ -607,20 +613,65 @@ export default {
     // ---- ניהול: עלויות ותקלות (רק בעל האפליקציה) ----
     if (parts[0] === 'admin') {
       if (user) return fail(403, 'רק לבעל האפליקציה');
-      if (url.pathname === '/admin/usage' && request.method === 'GET') {
-        const m = /^\d{4}-\d{2}$/.test(url.searchParams.get('month') || '') ? url.searchParams.get('month') : month();
+      // עלויות AI לחודש, לכל ספר
+      const price = { in: Number(env.AI_PRICE_IN || 5), out: Number(env.AI_PRICE_OUT || 25), search: Number(env.AI_PRICE_SEARCH || 0.01) };
+      const usage = async (m) => {
         const { books, ownerMembers } = await (await internal(accounts, 'GET', '/books')).json();
-        const price = { in: Number(env.AI_PRICE_IN || 5), out: Number(env.AI_PRICE_OUT || 25), search: Number(env.AI_PRICE_SEARCH || 0.01) };
         const withCost = async (row, stub) => {
           const c = await (await internal(stub, 'GET', `/costs/${m}`)).json();
           const usd = (c.input * price.in + c.output * price.out) / 1e6 + c.searches * price.search;
           return { ...row, ...c, usd: Math.round(usd * 100) / 100 };
         };
-        const rows = await Promise.all([
+        return Promise.all([
           withCost({ id: 'owner', name: 'הספר שלי', plan: 'owner', members: ownerMembers }, bookOf(null)),
           ...books.map((b) => withCost({ id: b.id, name: b.name, email: b.email, plan: b.plan, added: b.added, members: b.members }, bookOf(b.id))),
         ]);
-        return reply(200, { month: m, price, rows });
+      };
+      if (url.pathname === '/admin/usage' && request.method === 'GET') {
+        const m = /^\d{4}-\d{2}$/.test(url.searchParams.get('month') || '') ? url.searchParams.get('month') : month();
+        return reply(200, { month: m, price, rows: await usage(m) });
+      }
+      // ---- אפליקציית הניהול: סקירה אחת של הכול ----
+      if (url.pathname === '/admin/overview' && request.method === 'GET') {
+        const now = new Date();
+        const months = [0, 1, 2].map((i) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1)).toISOString().slice(0, 7));
+        const [stats, costs, community, backups, issues, settings] = await Promise.all([
+          internal(accounts, 'GET', '/admin/stats').then((r) => r.json()),
+          Promise.all(months.map(async (m) => {
+            const rows = await usage(m);
+            const usd = Math.round(rows.reduce((n, r) => n + r.usd, 0) * 100) / 100;
+            return { month: m, usd, top: rows.filter((r) => r.usd > 0).sort((a, b) => b.usd - a.usd).slice(0, 5).map((r) => ({ name: r.name, email: r.email, usd: r.usd })) };
+          })),
+          internal(env.BOOK.get(env.BOOK.idFromName('community')), 'POST', '/community/stats', {}).then((r) => r.json()),
+          backupStatus(env).catch(() => null),
+          internal(accounts, 'GET', '/admin/issues').then((r) => r.json()),
+          internal(accounts, 'GET', '/admin/settings').then((r) => r.json()),
+        ]);
+        const open = issues.issues.filter((i) => i.status !== 'fixed');
+        const alerts = [];
+        const spend = settings.settings.spendAlert;
+        if (spend && costs[0].usd >= spend) alerts.push({ level: 'serious', text: `ההוצאה על AI החודש ($${costs[0].usd}) עברה את הסף שקבעת ($${spend})` });
+        if (open.some((i) => i.status === 'new')) alerts.push({ level: 'warning', text: `${open.filter((i) => i.status === 'new').length} תקלות חדשות שעוד לא טופלו` });
+        if (stats.today >= 50) alerts.push({ level: 'warning', text: `${stats.today} הרשמות היום – הרבה יותר מהרגיל` });
+        const lastBackup = backups?.days?.at(-1);
+        if (backups?.enabled && (!lastBackup || Date.now() - Date.parse(`${lastBackup}T00:00:00Z`) > 2 * 86400000)) alerts.push({ level: 'serious', text: 'הגיבוי הלילי לא רץ ביומיים האחרונים' });
+        return reply(200, {
+          stats, costs, community, backups: backups?.enabled ? { last: lastBackup || null, count: backups.days.length, ok: Boolean(backups.last) } : null,
+          issues: { open: open.length, new: open.filter((i) => i.status === 'new').length, fixed: issues.issues.length - open.length },
+          settings: settings.settings, alerts,
+        });
+      }
+      if (url.pathname === '/admin/issues' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/admin/issues'));
+      if (parts[1] === 'issues' && parts.length === 3 && request.method === 'POST') {
+        const { body, error } = await readJson();
+        if (error) return error;
+        return pass(await internal(accounts, 'POST', '/admin/issues/update', { sig: parts[2], status: body.status, note: body.note }));
+      }
+      if (url.pathname === '/admin/security' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/admin/security'));
+      if (url.pathname === '/admin/settings' && request.method === 'PUT') {
+        const { body, error } = await readJson();
+        if (error) return error;
+        return pass(await internal(accounts, 'POST', '/admin/settings', { spendAlert: body.spendAlert }));
       }
       if (url.pathname === '/admin/errors' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/errors'));
       return fail(404, 'Not found');
