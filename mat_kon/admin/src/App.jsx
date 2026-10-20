@@ -85,7 +85,7 @@ export default function App() {
         ) : (
           <>
             {tab === 'overview' && <Overview d={data} go={setTab} session={session} />}
-            {tab === 'users' && <UsersTab d={data} />}
+            {tab === 'users' && <UsersTab d={data} session={session} />}
             {tab === 'money' && <Money d={data} session={session} reload={load} />}
             {tab === 'issues' && <Issues list={data.issueList} session={session} reload={load} />}
             {tab === 'security' && <Security d={data} />}
@@ -329,7 +329,7 @@ function SignupChart({ byDay }) {
   );
 }
 
-function UsersTab({ d }) {
+function UsersTab({ d, session }) {
   const s = d.stats;
   return (
     <div className="space-y-4">
@@ -339,6 +339,7 @@ function UsersTab({ d }) {
         <Stat label="מתכונים שנשלחו בקישור" value={s.shares.links} sub={`${s.shares.saves} נשמרו אצל אחרים`} />
         <Stat label="נרשמו החודש" value={s.month} />
       </div>
+      <BisFeature session={session} />
       <Card title="נרשמו לאחרונה">
         <ul className="divide-y divide-line">
           {s.recent.map((u) => (
@@ -357,6 +358,59 @@ function UsersTab({ d }) {
         </ul>
       </Card>
     </div>
+  );
+}
+
+// ניקוד ביס בדף המתכון – רק למשתמשים שבוחרים כאן (לפי אימייל)
+function BisFeature({ session }) {
+  const [users, setUsers] = useState(null);
+  const [email, setEmail] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const load = useCallback(async () => {
+    try {
+      setUsers((await api(session, 'GET', '/admin/features')).users.filter((u) => u.features?.bis));
+    } catch (e) {
+      setError(e.message);
+    }
+  }, [session]);
+  useEffect(() => {
+    load();
+  }, [load]);
+  const set = async (address, on) => {
+    setBusy(true);
+    setError('');
+    try {
+      await api(session, 'POST', '/admin/features', { email: address, feature: 'bis', on });
+      setEmail('');
+      await load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card title="ניקוד ביס בדף המתכון">
+      <p className="text-sm text-muted">מי שמופיע כאן רואה בכל מתכון כמה נקודות של ביס יש במנה. אחרי ההפעלה – לסגור ולפתוח אצלו את האפליקציה.</p>
+      <form onSubmit={(e) => { e.preventDefault(); if (email.trim()) set(email.trim(), true); }} className="mt-3 flex gap-2">
+        <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" dir="ltr" placeholder="email@example.com" className="flex-1 min-w-0 rounded-xl border border-line bg-page px-3 py-2 text-sm" />
+        <button disabled={busy || !email.trim()} className="rounded-xl bg-brand text-white px-4 text-sm font-medium disabled:opacity-50">הפעלה</button>
+      </form>
+      {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {users && !users.length && <p className="mt-3 text-sm text-muted">עוד לא הופעל לאף משתמש</p>}
+      <ul className="mt-2 divide-y divide-line">
+        {(users || []).map((u) => (
+          <li key={u.email} className="py-2 flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="font-medium truncate">{u.name || '—'}</div>
+              <div className="text-xs text-muted truncate" dir="ltr">{u.email}</div>
+            </div>
+            <button disabled={busy} onClick={() => set(u.email, false)} className="text-sm rounded-full border border-line px-3 py-1 disabled:opacity-50">כיבוי</button>
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }
 

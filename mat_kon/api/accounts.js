@@ -68,6 +68,8 @@ export const normalizeEmail = (e) => String(e || '').trim().toLowerCase();
 const validEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) && e.length <= 200;
 
 // מה שהאפליקציה רואה על המשתמש (בלי הסיסמה)
+export const USER_FEATURES = ['bis'];
+
 export const publicUser = (u, freeLimit) => ({
   id: u.id,
   name: u.name,
@@ -79,6 +81,8 @@ export const publicUser = (u, freeLimit) => ({
   ...(u.bookId ? { bookId: u.bookId } : {}),
   google: Boolean(u.google),
   password: Boolean(u.hash),
+  // תכונות שבעל האפליקציה פתח למשתמש מסוים (למשל ניקוד ביס)
+  ...(u.features && Object.keys(u.features).length ? { features: u.features } : {}),
 });
 
 export class Accounts {
@@ -276,6 +280,23 @@ export class Accounts {
       if (invite.userId) await this.deleteUser(invite.userId);
       await this.storage.delete(`invite:${body.token}`);
       return json({ ok: true, deletedUserId: invite.userId });
+    }
+    // תכונה למשתמש לפי אימייל (ניקוד ביס): רק תכונות מהרשימה
+    if (path === '/users/feature' && request.method === 'POST') {
+      if (!USER_FEATURES.includes(body.feature)) return err(400, 'תכונה לא מוכרת');
+      const id = await this.storage.get(`email:${normalizeEmail(body.email)}`);
+      const user = id && (await this.storage.get(`user:${id}`));
+      if (!user || user.removed) return err(404, 'אין משתמש עם האימייל הזה');
+      const features = { ...(user.features || {}) };
+      if (body.on) features[body.feature] = true;
+      else delete features[body.feature];
+      user.features = features;
+      await this.storage.put(`user:${user.id}`, user);
+      return json({ user: publicUser(user, this.freeLimit) });
+    }
+    if (path === '/users/features' && request.method === 'GET') {
+      const users = [...(await this.storage.list({ prefix: 'user:' })).values()].filter((u) => !u.removed && u.features && Object.keys(u.features).length);
+      return json({ users: users.map((u) => ({ name: u.name, email: u.email, features: u.features })) });
     }
     if (path === '/users/plan' && request.method === 'POST') {
       const user = await this.storage.get(`user:${body.userId}`);

@@ -45,7 +45,7 @@
 - תיאור: `points_tracker/README.md`. האפליקציה ב-`points_tracker/web`, השרת ב-`points_tracker/proxy`.
 - עלייה: `bis-deploy.yml` – **staging** (ענף `staging` → https://staging.bis-app.pages.dev) לפני **production**
   (main → https://bis-app.pages.dev). בקשות תיקון מתוך האפליקציה: `bis-fix.yml` (ענפים `bis-fix/*`).
-- סוכן המאכלים: `points-agent.yml`. הנוסחה זהה ב-`web/src/lib/points.js` וב-`points.py` – לשנות בשניהם.
+- סוכן המאכלים: `points-agent.yml`. הנוסחה זהה ב-`web/src/lib/points.js`, ב-`points.py` וב-`mat_kon/web/src/lib/bis.js` – לשנות בכולם.
 
 ### ביסים – הגרסה המסחרית (`bisim/`)
 - תיאור: `bisim/README.md`. אפליקציה נפרדת לגמרי מ"ביס" (קוד, שרת `bisim-api`, מאגר ומכשירים משלה) → https://bisim.pages.dev.
@@ -86,6 +86,7 @@
 - הודעות שגיאה של AI למשתמש – בעברית. המודל: `claude-opus-5-5` (beta עם fallback), עלויות נרשמות במסך "עלויות ותקלות".
 - תגיות (האשטגים) **לא מוצגות** בממשק (נשמרות רק לחיפוש). קטגוריות במסך משלהן (`#/categories`); סדר ומועדפות נשמרים בשרת לכל ספר.
 - סינון (כשר, פסח, צליאק, רגישויות, תזונה, ציוד): `diet.js` זהה ב-`api/` וב-`web/src/lib/` (בדיקה מוודאת) – לשנות בשניהם. ה-AI מסמן `diet` בבניית מתכון (עם טביעת אצבע של המצרכים); אחרת לפי מילים.
+- ניקוד ביס בדף המתכון – רק למשתמשים שבעל האפליקציה הפעיל להם (אפליקציית הניהול ← משתמשים, `user.features.bis`), לא לכולם (שיטה של שומרי משקל). הנוסחה ב-`web/src/lib/bis.js` זהה ל-`points_tracker` (בדיקה מוודאת).
 - ה-service worker לא שומר קובצי `.mp4` (סרטוני ההדרכה עוברים ישר לרשת).
 
 #### בדיקה לפני שליחה

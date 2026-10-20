@@ -14,11 +14,12 @@ import { DAY_NAMES, MEALS, dateKey, shortDate } from '../lib/plan';
 import { categoriesOf, emojiOf, VIDEO_LABEL, isVideo, sectionsToText, shortUrl, textToSections } from '../lib/recipes';
 import { usePersistentState } from '../lib/storage';
 import { dietBadges, recipeDiet } from '../lib/diet';
+import { bisPoints, formatBis } from '../lib/bis';
 
 // רק נגני סרטונים מהאתרים המוכרים
 const SAFE_EMBED = /^https:\/\/(www\.youtube-nocookie\.com\/embed\/|www\.tiktok\.com\/embed\/|www\.instagram\.com\/(p|reel|tv)\/|player\.vimeo\.com\/video\/)/;
 
-export default function RecipeView({ recipe, pantryNames = [], categories, onBack, onUpdate, onRefresh, onDelete, onAddToShopping, onAddToPlan, onShareLink, onEstimateNutrition, community }) {
+export default function RecipeView({ recipe, pantryNames = [], categories, onBack, onUpdate, onRefresh, onDelete, onAddToShopping, onAddToPlan, onShareLink, onEstimateNutrition, community, bis = false }) {
   const [editing, setEditing] = useState(false);
   const [planning, setPlanning] = useState(false);
   const [cooking, setCooking] = useState(false);
@@ -363,7 +364,7 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
               </Section>
             )}
 
-            <Nutrition value={recipe.nutrition} busy={busy === 'nutrition'} onEstimate={() => run('nutrition', onEstimateNutrition)} />
+            <Nutrition value={recipe.nutrition} busy={busy === 'nutrition'} onEstimate={() => run('nutrition', onEstimateNutrition)} bis={bis} title={recipe.title} />
 
             {/* מתכון אישי (לא מקישור ולא של מישהו אחר מהקהילה) אפשר לפרסם לקהילה */}
             {community && !recipe.source.url && recipe.source.kind !== 'community' && <PublishPanel recipe={recipe} community={community} />}
@@ -455,7 +456,7 @@ const NUTRIENTS = [
   ['protein', 'חלבון', 'גרם'], ['carbs', 'פחמימות', 'גרם'], ['sugar', 'מתוכן סוכרים', 'גרם'], ['fat', 'שומן', 'גרם'],
   ['saturated_fat', 'מתוכו רווי', 'גרם'], ['fiber', 'סיבים תזונתיים', 'גרם'], ['sodium', 'נתרן', 'מ"ג'],
 ];
-function Nutrition({ value, busy, onEstimate }) {
+function Nutrition({ value, busy, onEstimate, bis, title }) {
   const valid = value && typeof value === 'object' && Number(value.calories) > 0;
   const num = (v) => formatAmount(Math.round(Number(v) || 0));
   return (
@@ -475,6 +476,7 @@ function Nutrition({ value, busy, onEstimate }) {
             ))}
           </div>
           <p className="mt-2 text-xs text-stone-500">הערכה בלבד, לפי המצרכים והכמויות שבמתכון.</p>
+          {bis && <BisScore value={value} title={title} />}
         </>
       ) : (
         <button onClick={onEstimate} disabled={busy} className="w-full rounded-2xl border border-dashed border-orange-300 bg-orange-50/50 text-orange-700 font-medium py-3 flex items-center justify-center gap-2 disabled:opacity-60 print:hidden">
@@ -483,6 +485,42 @@ function Nutrition({ value, busy, onEstimate }) {
         </button>
       )}
     </Section>
+  );
+}
+
+// ניקוד ביס למנה (רק למי שזה נפתח לו), עם כמה אכלתי והעתקה להזנה באפליקציית ביס
+const PORTIONS = [[0.5, '½'], [1, '1'], [1.5, '1.5'], [2, '2']];
+function BisScore({ value, title }) {
+  const [portion, setPortion] = useState(1);
+  const [copied, setCopied] = useState(false);
+  const points = formatBis(bisPoints(value) * portion);
+  const copy = async () => {
+    const amount = portion === 1 ? 'מנה' : `${PORTIONS.find(([p]) => p === portion)[1]} מנות`;
+    try {
+      await navigator.clipboard.writeText(`${title} (${amount}) – ${points} נקודות`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
+  return (
+    <div className="mt-3 rounded-2xl bg-sky-50 border border-sky-100 px-4 py-3 print:hidden">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-sm font-bold text-sky-900">ניקוד ביס</span>
+        <span><span className="text-2xl font-black text-sky-700">{points}</span> <span className="text-sm text-stone-600">נקודות</span></span>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-sm">
+        <span className="text-stone-600 ml-1">כמה מנות:</span>
+        {PORTIONS.map(([p, label]) => (
+          <button key={p} onClick={() => setPortion(p)} className={`rounded-full px-3 py-1 border ${portion === p ? 'bg-sky-600 border-sky-600 text-white' : 'bg-white border-stone-200 text-stone-700'}`}>{label}</button>
+        ))}
+        <button onClick={copy} className="mr-auto rounded-full px-3 py-1 border border-sky-200 bg-white text-sky-800 inline-flex items-center gap-1">
+          {copied ? <><Check size={14} /> הועתק</> : 'העתקה לביס'}
+        </button>
+      </div>
+      <p className="mt-1.5 text-xs text-stone-500">לפי הערכים התזונתיים המשוערים של מנה אחת.</p>
+    </div>
   );
 }
 

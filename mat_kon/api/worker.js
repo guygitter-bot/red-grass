@@ -738,6 +738,13 @@ export default {
         }
       }
       if (url.pathname === '/admin/security' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/admin/security'));
+      // תכונות למשתמש מסוים (ניקוד ביס בדף המתכון)
+      if (url.pathname === '/admin/features' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/users/features'));
+      if (url.pathname === '/admin/features' && request.method === 'POST') {
+        const { body, error } = await readJson();
+        if (error) return error;
+        return pass(await internal(accounts, 'POST', '/users/feature', { email: String(body.email || '').slice(0, 200), feature: body.feature, on: Boolean(body.on) }));
+      }
       // התראות לטלפון של בעל האפליקציה
       if (parts[1] === 'push' && parts.length === 3) {
         if (parts[2] === 'key' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/admin/push/key'));
