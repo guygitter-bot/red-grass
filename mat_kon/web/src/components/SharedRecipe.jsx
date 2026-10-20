@@ -74,6 +74,7 @@ export default function SharedRecipe({ token, session, onLogin, onSaved, onClose
             <h1 className="mt-4 text-2xl font-black leading-tight">{info.title}</h1>
             {info.by && <p className="mt-1 text-sm text-orange-700 font-medium">נשלח אליך מ־{info.by}</p>}
             {info.description && <p className="mt-2 text-stone-600 leading-relaxed">{info.description}</p>}
+            {full?.recipe.basis === 'guessed' && <p className="mt-2 rounded-xl bg-amber-100 text-amber-900 text-sm p-2">מתכון משוער: במקור יש רק תמונה או סרטון, בלי מתכון כתוב.</p>}
             <div className="mt-3 flex flex-wrap gap-2 text-sm text-stone-600">
               {info.servings && <span className="inline-flex items-center gap-1 rounded-full bg-white border border-stone-200 px-3 py-1"><Users size={15} />{info.servings}</span>}
               {info.time && <span className="inline-flex items-center gap-1 rounded-full bg-white border border-stone-200 px-3 py-1"><Clock size={15} />{info.time}</span>}

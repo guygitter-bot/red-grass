@@ -6,7 +6,8 @@ import { deps } from './deps.js';
 // מתכון מקישור נשמר במטמון משותף (מופע אחד של RecipeBook בשם recipe-cache): אותו קישור – אותו מתכון אצל כל
 // המשתמשים, גם כשהסוכן השלים או העריך משהו. נבדק לפי הקישור שנשלח, ואחרי הקריאה – לפי זהות המקור
 const cacheOf = (env) => env.BOOK?.get(env.BOOK.idFromName('recipe-cache'));
-const cacheKey = async (k) => btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(k)))));
+// v2: מתכונים שנשמרו לפני שסומן אם הם משוערים (basis) לא נלקחים מהמטמון
+const cacheKey = async (k) => 'v2:' + btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(k)))));
 async function cacheCall(env, path, body) {
   const stub = cacheOf(env);
   if (!stub) return null;

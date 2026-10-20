@@ -1398,3 +1398,30 @@ test('the same link gives the same recipe to every user (shared cache), also fro
   // קישור חדש – הסוכן כן נקרא
   assert.equal((await (await call('POST', '/recipes', { url: 'https://cake.example/new' }, ron)).json()).recipe.title, 'משהו אחר');
 });
+
+test('a pin with only a video: its image goes to the agent, and a guessed recipe is marked as guessed', async () => {
+  deps.fetch = async (url) => {
+    if (String(url).startsWith('https://widgets.pinterest.com/')) {
+      return Response.json({ data: [{ id: '397794579611014464', grid_title: 'Doctirs lunch', description: 'A round baked dish', link: '', images: { '564x': { url: 'https://i.pinimg.com/564x/x.jpg' } } }] });
+    }
+    return new Response('', { status: 404 });
+  };
+  reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_recipe', input: { ...recipeInput, basis: 'guessed' } }] });
+  const { recipe } = await (await call('POST', '/recipes', { url: 'https://www.pinterest.com/pin/397794579611014464/' })).json();
+  assert.equal(recipe.basis, 'guessed');
+  const first = apiCalls.at(-1).messages[0].content;
+  assert.deepEqual(first[0], { type: 'image', source: { type: 'url', url: 'https://i.pinimg.com/564x/x.jpg' } });
+  assert.ok(apiCalls.at(-1).tools.some((t) => t.name === 'web_search'));
+
+  // תמונה שהמודל לא הצליח לטעון – ממשיכים בלעדיה
+  let n = 0;
+  deps.anthropic = () => ({ beta: { messages: { create: async (p) => {
+    apiCalls.push(p);
+    n += 1;
+    if (n === 1) throw Object.assign(new Error('bad image'), { status: 400 });
+    return reply();
+  } } } });
+  const again = await (await call('POST', '/recipes', { url: 'https://www.pinterest.com/pin/111222333444/' })).json();
+  assert.equal(again.recipe.title, 'עוגת שוקולד');
+  assert.equal(typeof apiCalls.at(-1).messages[0].content, 'string');
+});

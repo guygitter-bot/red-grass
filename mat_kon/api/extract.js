@@ -77,6 +77,10 @@ export const RECIPE_TOOL = {
       steps: sectionList('Preparation steps in order, one action per item, without numbering'),
       tips: { type: 'array', items: { type: 'string' }, description: 'Hebrew tips, storage, substitutions from the source' },
       nutrition: NUTRITION_SCHEMA,
+      basis: {
+        type: 'string', enum: ['source', 'completed', 'guessed'],
+        description: '"source": the recipe is written in the source (or the creator\'s own recipe was found). "completed": mostly from the source, with gaps filled in. "guessed": the source only shows the dish (e.g. a video or photo with no written recipe and the original could not be found) and the recipe was reconstructed.',
+      },
       confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
       notes: {
         type: 'string',
@@ -85,7 +89,7 @@ export const RECIPE_TOOL = {
     },
     required: [
       'found', 'title', 'original_title', 'description', 'category', 'more_categories', 'tags', 'servings', 'prep_time',
-      'cook_time', 'total_time', 'ingredients', 'steps', 'tips', 'nutrition', 'confidence', 'notes',
+      'cook_time', 'total_time', 'ingredients', 'steps', 'tips', 'nutrition', 'basis', 'confidence', 'notes',
     ],
     additionalProperties: false,
   },
@@ -115,8 +119,10 @@ the most faithful recipe you can from what the caption, comments, hint and video
 from a reliable recipe for the same dish that you found with web_search. Set confidence to "low" and explain in \
 notes exactly what came from the creator and what was completed from elsewhere.
 - A Pinterest pin: the recipe is usually on the site the pin links to ("Linked page" below) – build it from there. \
-If that page could not be read, web_fetch it; if the pin has no link, use the pin's title and description, and \
-web_search for the recipe (title + site/creator) to complete what is missing.
+If that page could not be read, web_fetch it. If the pin has no link (often a re-posted video), the pin's image is \
+attached: read any creator handle or watermark on it (e.g. "@doctorbowl") and any text, then web_search for that \
+creator's original recipe (Instagram / TikTok / YouTube / blog) and use it. Only if the original cannot be found, \
+reconstruct the dish from what is visible and set basis to "guessed".
 - A website: if the page text below is missing or blocked, web_fetch the link.
 - A WhatsApp message or text the user pasted: build the recipe from that text. If it is chatter and not a recipe, set found=false.
 - Photos and messages: if one source has several different dishes, give each its own recipe (more_recipes) – never \
@@ -204,6 +210,7 @@ export function toRecipe(input, src, categories = CATEGORIES) {
     steps: cleanSections(input.steps),
     tips: cleanList(input.tips),
     nutrition: cleanNutrition(input.nutrition),
+    basis: ['source', 'completed', 'guessed'].includes(input.basis) ? input.basis : 'source',
     confidence: ['high', 'medium', 'low'].includes(input.confidence) ? input.confidence : 'medium',
     notes: clean(input.notes),
     source: src.images ? { url: null, key: src.key, kind: 'photo' } : src.fromText ? {
@@ -381,12 +388,14 @@ export async function extractRecipe(client, src, { categories = CATEGORIES } = {
   // כמה מתכונים ממקור אחד: רק בצילום / הודעה בלי קישור (מתכון מקישור מזוהה לפי הקישור, ואי אפשר לשמור שניים לאותו קישור)
   const multi = Boolean(src.images || (src.fromText && !src.url));
   const RECIPE_TOOL = recipeTool(categories, { multi });
+  // פין בלי קישור לאתר: גם התמונה שלו נשלחת, כדי שהסוכן יקרא סימן מים / שם יוצר ויחפש את המתכון המקורי
+  const pinImage = src.kind === 'pinterest' && !src.linked?.length && /^https:\/\//.test(src.image || '') ? src.image : null;
   const content = src.images
     ? [...src.images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.type, data: i.data } })), { type: 'text', text }]
-    : text;
+    : pinImage ? [{ type: 'image', source: { type: 'url', url: pinImage } }, { type: 'text', text }] : text;
   const messages = [{ role: 'user', content }];
   for (let step = 0; step < MAX_STEPS; step++) {
-    const response = await client.beta.messages.create({
+    const request = () => client.beta.messages.create({
       model: MODEL,
       max_tokens: 16000,
       betas: ['server-side-fallback-2026-07-01'],
@@ -396,6 +405,15 @@ export async function extractRecipe(client, src, { categories = CATEGORIES } = {
       tools: complete ? [RECIPE_TOOL] : [...WEB_TOOLS, RECIPE_TOOL],
       messages,
     });
+    let response;
+    try {
+      response = await request();
+    } catch (e) {
+      // תמונת הפין לא נטענה אצל המודל – ממשיכים בלעדיה
+      if (!(pinImage && step === 0 && e?.status === 400)) throw e;
+      messages[0] = { role: 'user', content: text };
+      response = await request();
+    }
     if (response.stop_reason === 'refusal') throw new Error('הבקשה נדחתה על ידי המודל.');
     const submit = response.content.find((b) => b.type === 'tool_use' && b.name === RECIPE_TOOL.name);
     if (submit) {

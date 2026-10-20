@@ -245,6 +245,14 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
           </div>
         )}
 
+        {/* במקור אין מתכון כתוב (למשל סרטון בלבד) – המתכון שוחזר מהתמונה */}
+        {recipe.basis === 'guessed' && (
+          <div className="mt-4 rounded-2xl p-3 text-sm flex gap-2 bg-amber-100 text-amber-900 border border-amber-200">
+            <Info size={18} className="shrink-0 mt-0.5" />
+            <span><b>מתכון משוער:</b> במקור יש רק תמונה או סרטון, בלי מתכון כתוב. המצרכים והכמויות הם הערכה.</span>
+          </div>
+        )}
+
         {recipe.notes && (
           <div className={`mt-4 rounded-2xl p-3 text-sm flex gap-2 ${recipe.confidence === 'low' ? 'bg-amber-50 text-amber-900' : 'bg-stone-100 text-stone-600'}`}>
             <Info size={18} className="shrink-0 mt-0.5" />
