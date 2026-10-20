@@ -166,7 +166,9 @@
 - סרטוני הדרכה ב-`isport/tutorials` (אותו נוהל כמו mat-kon: נועה + מוזיקה, `isport-voice.yml`). **לא להקליט מחדש בלי לשאול**: אחרי שינוי במסך – לשאול את המשתמש אם לעדכן את הסרטונים.
 
 ### קורס ערוץ מוזיקה מסונו (`suno_course/`)
-- תיאור: `suno_course/README.md`. דף HTML אחד שמפורסם כ-Artifact (לא Cloudflare): לערוך ב-`src/`, להריץ `build.sh`, ולפרסם מחדש לאותה כתובת.
+- תיאור: `suno_course/README.md`. תוכן אחד ב-`src/` ושתי גרסאות: Artifact ב-claude.ai (`build.sh`, לפרסם מחדש לאותה כתובת) ואפליקציה
+  `web` → https://suno-course.pages.dev + `api` → Worker `suno-course-api` (AI עם סיסמה). עלייה: `suno-course.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd suno_course/api && npm test` · `cd suno_course/web && npm test`. אותם כללים: טלפון + מחשב + מצב לילה.
 - כל נתון "קשה" (מחיר, סף, מכסה) עם מקור ותאריך; איורי מסכים מסומנים כאיור ולא כצילום.
 
 ### טוטו (`toto_predictor/`)

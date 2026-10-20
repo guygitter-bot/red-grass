@@ -1367,6 +1367,7 @@ function initTheme() {
 
 // הודעת שגיאה של ה-AI בעברית
 function aiErr(e) {
+  if (e && e.he) return e.he; // הודעה מוכנה מהאפליקציה העצמאית
   const c = e && e.code;
   if (c === 'not_granted' || c === 'sampling_disabled' || c === 'not_declared' || c === 'capability_disabled') return 'ה-AI לא זמין כאן. צריך לאשר לעמוד להשתמש ב-Claude (בחלון שנפתח), או לפתוח את הקורס מתוך Claude.';
   if (c === 'rate_limited') return 'יותר מדי בקשות כרגע. מחכים דקה ומנסים שוב.';

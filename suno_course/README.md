@@ -9,9 +9,16 @@
   מחולל כותרת/תיאור/פרקי זמן, חידון זכויות, בדיקה עצמית, מעקב עם ייבוא CSV מיוטיוב סטודיו.
 - איורי המסכים הם שחזור ב-HTML (`src/04-mocks.js`); צילומי מסך אמיתיים של עמודים ציבוריים ב-`img/` (מתפרסמים לצד הדף כ-`files`).
 
+## אפליקציה (PWA)
+- `web/` → Cloudflare Pages "suno-course" → https://suno-course.pages.dev (מותקנת מהדפדפן למסך הבית). נבנית מאותם קבצים ב-`src/` (`web/build.mjs`),
+  עם `web/app-shim.js` שמחליף את ה-AI של claude.ai בשרת שלנו. בלי `db`: המעקב נשמר בדפדפן.
+- `api/` → Worker `suno-course-api`: ‏`POST /ai` עם `Authorization: Bearer <סיסמה>`. סודות: `ANTHROPIC_API_KEY`, `COURSE_PASSWORD` (אם לא קיים – `OWNER_PASSWORD`).
+- עלייה: `.github/workflows/suno-course.yml` אחרי מיזוג ל-main. בדיקה: `cd suno_course/api && npm test` · `cd suno_course/web && npm test`.
+- שינוי ב-`web/public/sw.js` או בתוכן: להעלות את מספר `CACHE` ב-sw.js כדי שהגרסה החדשה תיטען.
+
 ## עדכון
 1. עורכים את הקבצים ב-`src/` (תוכן: `05-content-*.js`, כלים: `07-tools.js`).
 2. `./build.sh` → `course.html`.
-3. מפרסמים מחדש לאותה כתובת (Artifact עם `url`).
+3. מפרסמים מחדש לאותה כתובת (Artifact עם `url`). האפליקציה מתעדכנת לבד אחרי מיזוג ל-main.
 
 הנתונים בקורס נאספו באוקטובר 2026 ממקורות משניים; מחירים, ספים ומכסות מסומנים לבדיקה בדפים הרשמיים.
