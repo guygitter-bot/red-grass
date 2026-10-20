@@ -16,6 +16,7 @@ import { findStores } from './stores.js';
 import { CATEGORIES } from './categories.js';
 import { backupStatus, restoreBook, runBackup } from './backup.js';
 import { communityKey, publicCopy, publicSummary } from './community.js';
+import { fixAction, fixConfigured, fixStatus, sendFix } from './fixes.js';
 
 export { RecipeBook, Accounts };
 
@@ -693,6 +694,46 @@ export default {
         const { body, error } = await readJson();
         if (error) return error;
         return pass(await internal(accounts, 'POST', '/admin/issues/update', { sig: parts[2], status: body.status, note: body.note }));
+      }
+      // "שלח ל-Claude לטיפול": התקלה נפתחת ב-GitHub (בלי פרטי משתמשים) ו-Claude מכין תיקון לאישור
+      if (parts[1] === 'issues' && parts.length === 4 && parts[3] === 'fix' && request.method === 'POST') {
+        if (!fixConfigured(env)) return fail(503, 'השליחה ל-Claude לא מוגדרת בשרת');
+        const { body, error } = await readJson();
+        if (error) return error;
+        const { issues } = await (await internal(accounts, 'GET', '/admin/issues')).json();
+        const issue = issues.find((i) => i.sig === parts[2]);
+        if (!issue) return fail(404, 'התקלה לא נמצאה');
+        if (issue.fix) {
+          const current = await fixStatus(env, issue.fix).catch(() => null);
+          if (current && !['done', 'rejected', 'closed'].includes(current.status)) return fail(409, 'Claude כבר מטפל בתקלה הזו');
+        }
+        let number;
+        try {
+          number = await sendFix(env, issue, typeof body.note === 'string' ? body.note : '');
+        } catch (e) {
+          return fail(502, `לא הצלחתי לשלוח ל-Claude (${e.message})`);
+        }
+        return pass(await internal(accounts, 'POST', '/admin/issues/update', { sig: issue.sig, status: 'working', fix: number }));
+      }
+      if (parts[1] === 'fix' && /^\d+$/.test(parts[2] || '') && fixConfigured(env)) {
+        const number = Number(parts[2]);
+        // רק בקשות ששלחנו מתקלה (לא כל issue במאגר)
+        const { issues } = await (await internal(accounts, 'GET', '/admin/issues')).json();
+        const issue = issues.find((i) => i.fix === number);
+        if (!issue) return fail(404, 'הבקשה לא נמצאה');
+        try {
+          if (parts.length === 3 && request.method === 'GET') return reply(200, await fixStatus(env, number));
+          const action = parts.length === 4 && request.method === 'POST' && ['approve', 'reject', 'retry', 'reply'].includes(parts[3]) ? parts[3] : '';
+          if (!action) return fail(404, 'Not found');
+          const { body, error } = await readJson();
+          if (error) return error;
+          const out = await fixAction(env, number, action, body.text);
+          if (out.status === 200 && action === 'approve') await internal(accounts, 'POST', '/admin/issues/update', { sig: issue.sig, status: 'fixed' });
+          if (out.status === 200 && action === 'reject') await internal(accounts, 'POST', '/admin/issues/update', { sig: issue.sig, status: 'new', fix: null });
+          return reply(out.status, out.data);
+        } catch (e) {
+          return fail(502, `שגיאה מול GitHub (${e.message})`);
+        }
       }
       if (url.pathname === '/admin/security' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/admin/security'));
       // התראות לטלפון של בעל האפליקציה
