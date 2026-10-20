@@ -1,0 +1,114 @@
+name: suno-course
+
+# קורס "ערוץ מוזיקה מסונו" (suno_course/):
+#   api -> Cloudflare Worker "suno-course-api" (מעביר שאלות ל-Claude, עם סיסמה)
+#   web -> Cloudflare Pages "suno-course" -> https://suno-course.pages.dev
+on:
+  push:
+    branches: [main]
+    paths: ["suno_course/**", ".github/workflows/suno-course.yml"]
+  pull_request:
+    paths: ["suno_course/**", ".github/workflows/suno-course.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: suno-course-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Server tests
+        working-directory: suno_course/api
+        run: npm test
+      - name: App tests and build
+        working-directory: suno_course/web
+        run: |
+          npm test
+          npm run build
+
+  api:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check secrets
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PASS: ${{ secrets.COURSE_PASSWORD || secrets.OWNER_PASSWORD }}
+        run: |
+          missing=""
+          [ -n "$CF_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -n "$CF_ACCOUNT" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          [ -n "$API_KEY" ] || missing="$missing ANTHROPIC_API_KEY"
+          [ -n "$PASS" ] || missing="$missing COURSE_PASSWORD(or OWNER_PASSWORD)"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing (see suno_course/README.md)"
+            exit 1
+          fi
+      - name: Deploy worker
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          COURSE_PASSWORD: ${{ secrets.COURSE_PASSWORD || secrets.OWNER_PASSWORD }}
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: suno_course/api
+          wranglerVersion: "4.146.0"
+          secrets: |
+            ANTHROPIC_API_KEY
+            COURSE_PASSWORD
+      - name: Summary
+        env:
+          URL: ${{ steps.deploy.outputs.deployment-url }}
+        run: |
+          echo "Worker: $URL" >> "$GITHUB_STEP_SUMMARY"
+
+  web:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build
+        working-directory: suno_course/web
+        run: npm run build
+      - name: Create the Pages project (first run only)
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: suno_course/web
+          wranglerVersion: "4.146.0"
+          command: pages project create suno-course --production-branch=main
+      - name: Publish
+        id: publish
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: suno_course/web
+          wranglerVersion: "4.146.0"
+          command: pages deploy dist --project-name=suno-course --branch=main --commit-dirty=true
+      - name: Summary
+        env:
+          URL: ${{ steps.publish.outputs.deployment-url }}
+        run: |
+          echo "Published: $URL" >> "$GITHUB_STEP_SUMMARY"

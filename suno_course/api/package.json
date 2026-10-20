@@ -1,0 +1,8 @@
+{
+  "name": "suno-course-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

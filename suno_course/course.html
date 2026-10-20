@@ -1,0 +1,1979 @@
+<title>ערוץ מוזיקה מסונו</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Hebrew:wght@400;500;600;700&family=Secular+One&display=swap">
+<style>
+/* פריסה: קונסולת מיקס – רצועת ערוצים (פרקים) בצד, משטח עבודה רחב, מד VU כפס התקדמות */
+:root{
+  --bg:#EEF1F2; --panel:#FFFFFF; --sunk:#E3E8EA; --line:#CDD6D9;
+  --fg:#11191C; --muted:#56656B;
+  --accent:#0B7A69; --accent-ink:#FFFFFF; --accent-soft:#D3EDE7;
+  --meter:#D98E04; --meter-soft:#FBEBCB;
+  --ok:#1E8A44; --ok-soft:#DDF2E3; --warn:#B86200; --warn-soft:#FCEBD6; --bad:#C22E2E; --bad-soft:#FADDDD;
+  --f-display:"Secular One","IBM Plex Sans Hebrew",Arial,sans-serif;
+  --f-body:"IBM Plex Sans Hebrew","Segoe UI",Arial,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0D1416; --panel:#152024; --sunk:#0A1012; --line:#26353A;
+  --fg:#E6EEF0; --muted:#93A6AC;
+  --accent:#2CC4A8; --accent-ink:#04211B; --accent-soft:#123A33;
+  --meter:#F2AE2E; --meter-soft:#3A2C0E;
+  --ok:#4CC777; --ok-soft:#123222; --warn:#F0A04B; --warn-soft:#3A2710; --bad:#F06A6A; --bad-soft:#3D1616;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0D1416; --panel:#152024; --sunk:#0A1012; --line:#26353A;
+  --fg:#E6EEF0; --muted:#93A6AC;
+  --accent:#2CC4A8; --accent-ink:#04211B; --accent-soft:#123A33;
+  --meter:#F2AE2E; --meter-soft:#3A2C0E;
+  --ok:#4CC777; --ok-soft:#123222; --warn:#F0A04B; --warn-soft:#3A2710; --bad:#F06A6A; --bad-soft:#3D1616;
+  color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--f-body);font-size:16px;line-height:1.65;direction:rtl}
+h1,h2,h3,h4{font-family:var(--f-display);font-weight:400;line-height:1.25;text-wrap:balance;margin:0}
+a{color:var(--accent)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--meter);outline-offset:2px}
+.mono{font-family:var(--f-mono);direction:ltr;unicode-bidi:isolate}
+.tnum{font-variant-numeric:tabular-nums}
+
+/* מעטפת */
+.app{display:grid;grid-template-columns:300px minmax(0,1fr);min-height:100vh}
+.side{background:var(--panel);border-inline-start:0;border-inline-end:1px solid var(--line);position:sticky;top:env(safe-area-inset-top,0px);height:100vh;overflow:auto;padding-block:20px;padding-inline:max(16px,env(safe-area-inset-right,0px)) 16px}
+.brand{display:flex;gap:10px;align-items:center;margin-bottom:6px}
+.brand h1{font-size:22px}
+.brand-sub{color:var(--muted);font-size:13px;margin-bottom:16px}
+.vu{display:flex;gap:3px;align-items:flex-end;height:26px}
+.vu i{display:block;width:5px;border-radius:2px;background:var(--sunk)}
+.vu i.on{background:var(--accent)} .vu i.hot{background:var(--meter)}
+.progress-line{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin:10px 0 4px}
+.bar{height:8px;background:var(--sunk);border-radius:99px;overflow:hidden}
+.bar>span{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--meter));border-radius:99px}
+.navgroup{margin-top:18px}
+.navgroup h4{font-family:var(--f-body);font-weight:600;font-size:12px;letter-spacing:.06em;color:var(--muted);margin-bottom:6px}
+.nav a{display:grid;grid-template-columns:28px 1fr 18px;gap:8px;align-items:center;padding:7px 8px;border-radius:8px;color:var(--fg);text-decoration:none;font-size:14.5px;line-height:1.35}
+.nav a:hover{background:var(--sunk)}
+.nav a.cur{background:var(--accent-soft);color:var(--fg);font-weight:600}
+.nav .n{font-family:var(--f-mono);font-size:12px;color:var(--muted);text-align:center}
+.nav .done{color:var(--ok);font-size:14px}
+.side-tools{margin-top:18px;display:grid;gap:6px}
+.side-tools button{text-align:start}
+
+.main{min-width:0;padding-block:28px 80px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:860px;margin-inline:auto}
+.topbar{display:none}
+
+/* כותרת פרק */
+.mhead{display:grid;gap:8px;margin-bottom:22px}
+.eyebrow{font-size:12.5px;font-weight:600;letter-spacing:.08em;color:var(--accent)}
+.mhead h2{font-size:clamp(28px,4vw,40px)}
+.mmeta{display:flex;flex-wrap:wrap;gap:8px;color:var(--muted);font-size:13.5px}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--sunk);border-radius:99px;padding:3px 10px;font-size:13px}
+.lead{font-size:18px;color:var(--fg);max-width:65ch}
+
+.content h3{font-size:24px;margin:34px 0 10px}
+.content h4{font-size:18px;margin:22px 0 6px}
+.content p,.content li{max-width:68ch}
+.content ul,.content ol{padding-inline-start:22px}
+.content li{margin-bottom:4px}
+
+/* צעדים */
+.steps{counter-reset:st;display:grid;gap:12px;margin:14px 0;padding:0;list-style:none}
+.steps>li{counter-increment:st;display:grid;grid-template-columns:36px minmax(0,1fr);gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;max-width:none}
+.steps>li::before{content:counter(st);font-family:var(--f-mono);font-weight:600;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--accent-ink);font-size:14px}
+.steps>li b{display:block}
+
+/* קופסאות */
+.box{border-radius:var(--r);padding:14px 16px;margin:16px 0;border:1px solid var(--line);background:var(--panel)}
+.box>:first-child{margin-top:0}.box>:last-child{margin-bottom:0}
+.box .bt{font-weight:700;display:block;margin-bottom:4px}
+.box.tip{background:var(--accent-soft);border-color:transparent}
+.box.warn{background:var(--warn-soft);border-color:transparent}
+.box.bad{background:var(--bad-soft);border-color:transparent}
+.box.ok{background:var(--ok-soft);border-color:transparent}
+.box.src{font-size:13.5px;color:var(--muted);background:transparent;border-style:dashed}
+
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.two>*{min-width:0}
+.yes,.no{border-radius:var(--r);padding:12px 14px}
+.yes{background:var(--ok-soft)} .no{background:var(--bad-soft)}
+.yes h4,.no h4{margin:0 0 6px;font-size:17px}
+.yes ul,.no ul{margin:0;padding-inline-start:18px}
+
+.tbl{overflow-x:auto;margin:14px 0;border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:14.5px}
+td.tnum{white-space:nowrap}
+th,td{padding:9px 12px;text-align:start;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;background:var(--sunk);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+.pill{display:inline-block;border-radius:99px;padding:1px 9px;font-size:12.5px;font-weight:600;white-space:nowrap}
+.pill.g{background:var(--ok-soft);color:var(--ok)} .pill.y{background:var(--warn-soft);color:var(--warn)} .pill.r{background:var(--bad-soft);color:var(--bad)}
+
+/* כפתורים וטפסים */
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:500;font-size:15px;text-decoration:none;color:var(--fg);white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.sm{padding:5px 10px;font-size:13.5px}
+.btn[disabled]{opacity:.5;cursor:default}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.field{display:grid;gap:4px;min-width:0}
+.field label{font-size:13.5px;font-weight:600;color:var(--muted)}
+.field input,.field select,.field textarea{width:100%;min-width:0;max-width:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.field textarea{min-height:90px;resize:vertical}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.opts{display:flex;flex-wrap:wrap;gap:6px}
+.opt{border:1px solid var(--line);background:var(--bg);border-radius:99px;padding:4px 11px;font-size:13.5px;cursor:pointer}
+.opt[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+
+/* כלי */
+.tool{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin:20px 0;display:grid;gap:14px}
+.tool-h{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.tool-h h3{margin:0;font-size:21px}
+.tag{font-size:12px;font-weight:600;letter-spacing:.06em;color:var(--meter);background:var(--meter-soft);border-radius:6px;padding:2px 8px}
+.out{background:var(--sunk);border-radius:10px;padding:12px 14px;white-space:pre-wrap;word-break:break-word;font-family:var(--f-mono);font-size:13.5px;direction:ltr;text-align:left;unicode-bidi:plaintext}
+.out.he{font-family:var(--f-body);direction:rtl;text-align:right;font-size:15px}
+.copyrow{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px;font-size:13px;color:var(--muted)}
+.stat{background:var(--sunk);border-radius:10px;padding:10px 12px}
+.stat b{display:block;font-family:var(--f-mono);font-size:20px;font-variant-numeric:tabular-nums;direction:ltr;text-align:right}
+.stat span{font-size:12.5px;color:var(--muted)}
+.chart{width:100%;height:auto;display:block}
+.note{font-size:13px;color:var(--muted)}
+.ai-out{white-space:pre-wrap;line-height:1.7}
+.chat{display:grid;gap:10px;max-height:460px;overflow:auto;padding:4px}
+.msg{border-radius:12px;padding:10px 12px;max-width:92%;white-space:pre-wrap;word-break:break-word}
+.msg.me{background:var(--accent-soft);justify-self:start}
+.msg.ai{background:var(--sunk);justify-self:end}
+
+/* מוקאפ מסכים */
+.shot{margin:18px 0}
+.shot figcaption{font-size:13.5px;color:var(--muted);margin-top:6px}
+.shot figcaption b{color:var(--fg)}
+.frame{border-radius:12px;overflow:hidden;border:1px solid var(--line);box-shadow:0 1px 0 var(--line);direction:ltr;text-align:left;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.35;position:relative}
+.frame .chrome{display:flex;align-items:center;gap:8px;padding:7px 10px;background:#DADFE2;color:#333}
+.frame .chrome i{width:10px;height:10px;border-radius:50%;background:#B9C0C4;display:inline-block}
+.frame .url{flex:1;background:#fff;border-radius:6px;padding:3px 10px;color:#444;font-size:11.5px;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.shot img{border:0}
+.frame .illus{position:absolute;top:6px;right:10px;font-family:var(--f-body);direction:rtl;font-size:11px;background:#fff9;color:#333;padding:1px 7px;border-radius:5px}
+.scr{position:relative;overflow:hidden}
+.pin{position:absolute;width:24px;height:24px;border-radius:50%;background:var(--meter);color:#1b1200;font:700 12.5px/24px var(--f-mono);text-align:center;box-shadow:0 0 0 3px rgba(217,142,4,.35);z-index:3}
+.legend{list-style:none;padding:0;margin:10px 0 0;display:grid;gap:6px;direction:rtl}
+.legend li{display:grid;grid-template-columns:26px minmax(0,1fr);gap:8px;align-items:start;max-width:none;font-size:14.5px}
+.legend li::before{content:attr(data-n);width:22px;height:22px;border-radius:50%;background:var(--meter);color:#1b1200;font:700 12px/22px var(--f-mono);text-align:center}
+.fscroll{overflow-x:auto}
+.fscroll .scr{min-width:640px}
+
+/* צבעי אפליקציות במוקאפים – קבועים בכוונה, כמו באפליקציה האמיתית */
+.suno{background:#101012;color:#E8E8EA}
+.suno .s-side{background:#0B0B0C;border-right:1px solid #222}
+.suno .s-in{background:#1C1C1F;border:1px solid #2C2C30;border-radius:8px;padding:8px;color:#CFCFD4}
+.suno .s-btn{background:linear-gradient(90deg,#F7B733,#FC4A1A);color:#111;border-radius:99px;padding:8px 14px;font-weight:700;text-align:center}
+.suno .s-tab{padding:4px 10px;border-radius:99px;background:#232327;color:#ccc}
+.suno .s-tab.on{background:#E8E8EA;color:#111}
+.suno .s-dim{color:#8B8B92}
+.yt{background:#fff;color:#0F0F0F}
+.yt .y-side{background:#fff;border-right:1px solid #E5E5E5}
+.yt .y-red{background:#FF0033;color:#fff}
+.yt .y-blue{background:#065FD4;color:#fff;border-radius:3px;padding:6px 12px;font-weight:600;display:inline-block}
+.yt .y-in{border:1px solid #CCC;border-radius:4px;padding:7px 9px;color:#333;background:#fff}
+.yt .y-dim{color:#606060}
+.cc{background:#18181A;color:#E9E9EB}
+.cc .c-panel{background:#232326;border:1px solid #2F2F33}
+.cc .c-dim{color:#8D8D94}
+
+/* כרטיס חידון */
+.quiz{display:grid;gap:8px}
+.q{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.q .qa{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.q .res{margin-top:8px;font-size:14.5px}
+
+.done-row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:40px;padding-top:18px;border-top:1px solid var(--line)}
+.checklist{list-style:none;padding:0;display:grid;gap:6px}
+.checklist li{max-width:none}
+.checklist label{display:flex;gap:10px;align-items:flex-start;cursor:pointer;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+.checklist input{margin-top:5px;accent-color:var(--accent)}
+
+/* צ'אט צף */
+.fab{position:fixed;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:20;border-radius:99px;padding:11px 16px;box-shadow:0 6px 20px rgba(0,0,0,.18)}
+.drawer{position:fixed;left:calc(16px + env(safe-area-inset-left,0px));bottom:calc(72px + env(safe-area-inset-bottom,0px));width:min(420px,calc(100vw - 32px));max-height:min(620px,calc(100vh - 110px));z-index:21;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.25);display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden}
+.drawer header{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.drawer .chat{max-height:none;padding:12px}
+.drawer form{display:flex;gap:6px;padding:10px;border-top:1px solid var(--line)}
+.drawer form textarea{flex:1;min-height:44px;max-height:120px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px}
+
+@media (max-width:960px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .side{position:fixed;inset:0 auto 0 0;right:0;left:auto;width:min(320px,88vw);z-index:30;transform:translateX(100%);transition:transform .2s;box-shadow:0 0 40px rgba(0,0,0,.3);padding-top:calc(20px + env(safe-area-inset-top,0px))}
+  .side.open{transform:none}
+  .topbar{display:flex;position:sticky;top:env(safe-area-inset-top,0px);z-index:10;background:var(--panel);border-bottom:1px solid var(--line);padding-block:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));justify-content:space-between;align-items:center;gap:10px}
+  body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--panel)}
+  .topbar .t{font-family:var(--f-display);font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .main{padding-top:18px}
+}
+@media (max-width:640px){
+  .two,.grid3,.grid2{grid-template-columns:minmax(0,1fr)}
+  .grid4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .lead{font-size:16.5px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div class="app">
+  <aside class="side" id="side" aria-label="פרקי הקורס">
+    <div class="brand">
+      <div class="vu" id="vu" aria-hidden="true"></div>
+      <h1>ערוץ מוזיקה מסונו</h1>
+    </div>
+    <div class="brand-sub">קורס מעשי: מסונו ליוטיוב, עד הכנסה ושכפול לערוצים נוספים</div>
+    <div class="progress-line"><span>ההתקדמות שלי</span><span class="tnum" id="pct">0%</span></div>
+    <div class="bar"><span id="pbar" style="width:0%"></span></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="side-tools">
+      <button class="btn sm" id="themeBtn" type="button">מצב לילה / יום</button>
+    </div>
+  </aside>
+  <div class="main">
+    <div class="topbar">
+      <button class="btn sm" id="menuBtn" type="button" aria-controls="side" aria-expanded="false">☰ פרקים</button>
+      <span class="t" id="topTitle">ערוץ מוזיקה מסונו</span>
+      <span class="tnum note" id="topPct">0%</span>
+    </div>
+    <div class="wrap" id="view"></div>
+  </div>
+</div>
+
+<button class="btn pri fab" id="fab" type="button">שאלו את המדריך</button>
+<div class="drawer" id="drawer" hidden>
+  <header><b>המדריך האישי (AI)</b><button class="btn sm" id="drawerClose" type="button">סגירה</button></header>
+  <div class="chat" id="tutorChat"></div>
+  <form id="tutorForm">
+    <textarea id="tutorIn" placeholder="למשל: כמה שירים צריך לסרטון של שעה?"></textarea>
+    <button class="btn pri" type="submit" id="tutorSend">שליחה</button>
+  </form>
+</div>
+<script>
+// ===== כלי עזר לבניית איורי מסכים =====
+// A(שמאל, למעלה, רוחב, גובה – באחוזים, מחלקה, תוכן, סגנון נוסף)
+function A(l, t, w, h, cls, html, st) {
+  return `<div class="${cls || ''}" style="position:absolute;left:${l}%;top:${t}%;width:${w}%;height:${h}%;${st || ''}">${html || ''}</div>`;
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// איור מסך עם נקודות ממוספרות והסבר מתחת
+function mock({ app, url, h, body, pins, cap, wide }) {
+  const p = pins || [];
+  return `<figure class="shot">
+  <div class="frame${wide ? ' fscroll' : ''}" style="${wide ? 'overflow-x:auto' : ''}">
+    <div class="chrome"><i></i><i></i><i></i><span class="url">${esc(url)}</span></div>
+    <div class="scr ${app}" style="height:${h}px">${body}${p.map((x, i) => `<span class="pin" style="left:calc(${x[0]}% - 12px);top:calc(${x[1]}% - 12px)">${i + 1}</span>`).join('')}</div>
+  </div>
+  <figcaption><b>איור של המסך</b> (לא צילום) · ${cap}</figcaption>
+  ${p.length ? `<ol class="legend">${p.map((x, i) => `<li data-n="${i + 1}"><span>${x[2]}</span></li>`).join('')}</ol>` : ''}
+</figure>`;
+}
+
+// קופסאות טקסט
+const tip = (t, b) => `<div class="box tip"><span class="bt">${t}</span>${b}</div>`;
+const warn = (t, b) => `<div class="box warn"><span class="bt">${t}</span>${b}</div>`;
+const bad = (t, b) => `<div class="box bad"><span class="bt">${t}</span>${b}</div>`;
+const good = (t, b) => `<div class="box ok"><span class="bt">${t}</span>${b}</div>`;
+const src = b => `<div class="box src"><b>מקורות ובדיקה:</b> ${b}</div>`;
+const steps = arr => `<ol class="steps">${arr.map(s => `<li><div>${s}</div></li>`).join('')}</ol>`;
+const yesno = (y, n) => `<div class="two"><div class="yes"><h4>✓ מותר / מומלץ</h4><ul>${y.map(x => `<li>${x}</li>`).join('')}</ul></div><div class="no"><h4>✗ אסור / מסוכן</h4><ul>${n.map(x => `<li>${x}</li>`).join('')}</ul></div></div>`;
+const table = (head, rows) => `<div class="tbl"><table><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+const tool = name => `<div data-tool="${name}"></div>`;
+const g = t => `<span class="pill g">${t}</span>`, y = t => `<span class="pill y">${t}</span>`, r = t => `<span class="pill r">${t}</span>`;
+// צילום מסך אמיתי (קובץ שמתפרסם לצד הדף)
+const shot = (file, url, cap) => `<figure class="shot"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">${esc(url)}</span></div><img src="img/${file}" alt="${esc(cap.replace(/<[^>]+>/g, ''))}" loading="lazy" style="display:block;width:100%"></div><figcaption><b>צילום מסך אמיתי</b> (20.10.2026) · ${cap}</figcaption></figure>`;
+const L = (txt, href) => `<a href="${href}" target="_blank" rel="noopener">${txt}</a>`;
+// ===== איורי המסכים =====
+const MOCK = {};
+
+// --- סונו: עמוד היצירה במצב Custom ---
+MOCK.sunoCreate = () => mock({
+  app: 'suno', url: 'suno.com/create', h: 460, wide: true,
+  cap: 'עמוד היצירה של סונו במצב Custom. הסידור המדויק משתנה בין גרסאות, אבל השדות האלה תמיד שם.',
+  body:
+    A(0, 0, 14, 100, 's-side', `<div style="padding:12px 10px;display:grid;gap:12px">
+      <b style="font-size:15px;letter-spacing:.12em">SUNO</b>
+      <span class="s-dim">Home</span><span style="color:#fff;font-weight:700">Create</span><span class="s-dim">Library</span>
+      <span class="s-dim">Explore</span><span class="s-dim">Studio</span><span class="s-dim">Search</span></div>`) +
+    A(1, 86, 12, 10, '', `<div class="s-dim" style="font-size:11px">Pro plan<br><b style="color:#F7B733">2,450 credits</b></div>`) +
+    A(16, 3, 22, 7, '', `<span class="s-tab">Simple</span> <span class="s-tab on">Custom</span>`) +
+    A(40, 3, 9, 7, 's-in', `v6 ▾`, 'padding:4px 8px;text-align:center') +
+    A(16, 12, 33, 21, 's-in', `<div class="s-dim" style="font-size:11px">Lyrics</div>[Intro]<br>[Instrumental]<br>[Outro]<div style="position:absolute;right:8px;bottom:6px" class="s-dim">✨ Write</div>`) +
+    A(16, 35, 33, 7, 's-in', `Instrumental <span style="float:right;background:#F7B733;border-radius:99px;width:30px;height:16px;display:inline-block"></span>`, 'padding:6px 8px') +
+    A(16, 44, 33, 15, 's-in', `<div class="s-dim" style="font-size:11px">Styles</div>lofi hip hop, 75 BPM, mellow Rhodes, dusty drums, vinyl crackle, rainy night, instrumental, no vocals`) +
+    A(16, 60, 33, 6, '', `<span class="s-tab">+ jazz</span> <span class="s-tab">+ chill</span> <span class="s-tab">+ ambient</span>`) +
+    A(16, 67, 33, 14, 's-in', `<div class="s-dim" style="font-size:11px">More Options ▾</div>Exclude styles: vocals, singing, choir<br>Weirdness <b>35%</b> · Style Influence <b>70%</b>`) +
+    A(16, 82, 33, 6, 's-in', `<span class="s-dim">Title:</span> Rainy Window 01`, 'padding:5px 8px') +
+    A(16, 90, 33, 7, 's-btn', `♪ Create`, 'height:auto') +
+    A(52, 3, 46, 7, '', `<b style="font-size:13px">My Workspace</b> <span class="s-dim">· Filters · Search</span>`) +
+    [0, 1, 2, 3].map(i => A(52, 13 + i * 15, 46, 12, '', `<div style="display:flex;gap:8px;align-items:center;height:100%">
+      <span style="width:44px;height:44px;border-radius:6px;background:linear-gradient(135deg,#3b2f6e,#d17b4a)"></span>
+      <span style="flex:1"><b>Rainy Window 0${i + 1}</b><br><span class="s-dim">lofi hip hop, 75 BPM… · v6</span></span>
+      <span class="s-dim">${['3:41', '3:12', '4:05', '2:58'][i]}</span><span style="font-size:16px">⋯</span></div>`)).join(''),
+  pins: [
+    [15, 6, '<b>Custom</b> – המצב שבו כותבים בעצמכם סגנון, מילים וכותרת. ב-Simple רק כותבים תיאור קצר וסונו מחליט על השאר. לערוץ עובדים תמיד ב-Custom.'],
+    [50.5, 6, '<b>בחירת המודל</b> – v6 היא הגרסה החדשה בתשלום (מספטמבר 2026), v6-mini חינמית ומהירה יותר.'],
+    [15, 22, '<b>Lyrics (מילים)</b> – בשיר בלי שירה כותבים כאן רק תגיות מבנה בסוגריים מרובעים, כמו [Instrumental].'],
+    [15, 38.5, '<b>Instrumental</b> – להדליק תמיד במוזיקת רקע. זה המתג שאומר לסונו: בלי זמר.'],
+    [15, 51, '<b>Styles (סגנון)</b> – השדה הכי חשוב. כאן מדביקים את הפרומפט מהמחולל שבפרק 8.'],
+    [15, 74, '<b>אפשרויות נוספות</b> – Exclude styles (מה לא לכלול), Weirdness (כמה "מוזר" ויצירתי) ו-Style Influence (כמה להיצמד לסגנון).'],
+    [15, 85, '<b>Title</b> – שם השיר. השם מופיע בקובץ ואחר כך ברשימת השירים בתיאור הסרטון.'],
+    [15, 93.5, '<b>Create</b> – כל לחיצה מייצרת שתי גרסאות ומורידה קרדיטים.'],
+    [97, 11, '<b>⋯ תפריט השיר</b> – מכאן מאריכים, עורכים ומורידים. מוסבר בפרק 7.'],
+    [11, 84, '<b>יתרת קרדיטים</b> – בודקים לפני סשן יצירה גדול.']
+  ]
+});
+
+// --- סונו: תפריט שיר ---
+MOCK.sunoMenu = () => mock({
+  app: 'suno', url: 'suno.com/create', h: 380, wide: true,
+  cap: 'תפריט שלוש הנקודות (⋯) ליד שיר. ממנו עוברים לעריכה, להארכה ולהורדה.',
+  body:
+    A(3, 6, 50, 14, '', `<div style="display:flex;gap:8px;align-items:center">
+      <span style="width:46px;height:46px;border-radius:6px;background:linear-gradient(135deg,#1f4d5a,#a3d5c3)"></span>
+      <span><b>Morning Café 03</b><br><span class="s-dim">bossa nova, 105 BPM… · 3:22</span></span><span style="margin-left:auto;font-size:18px">⋯</span></div>`) +
+    A(30, 22, 30, 74, 's-in', `<div style="display:grid;gap:9px">
+      <span style="color:#fff">Remix/Edit ▸</span><span>Get Stems</span><span>Remaster</span><span style="color:#fff">Download ▸</span>
+      <span>Add to Playlist</span><span>Share</span><span>Make Public</span><span class="s-dim">Move to Trash</span></div>`) +
+    A(62, 18, 34, 54, 's-in', `<div style="display:grid;gap:9px">
+      <span>Cover</span><span style="color:#fff">Extend</span><span>Reuse Prompt</span><span>Replace Section</span><span>Crop</span><span>Adjust Speed</span></div>`) +
+    A(62, 75, 34, 22, 's-in', `<div style="display:grid;gap:7px"><span>MP3 Audio</span><span style="color:#fff">WAV Audio</span><span>Video</span></div>`),
+  pins: [
+    [57, 27, '<b>Remix/Edit</b> – תפריט העריכה. נפתח לצד ימין.'],
+    [70, 30, '<b>Extend</b> – ממשיכים את השיר מנקודה שבוחרים. כך הופכים קטע של 3 דקות לטראק של 6–8 דקות (פחות הורדות לכל סרטון).'],
+    [73, 38, '<b>Reuse Prompt</b> – יוצר שיר חדש עם אותו פרומפט בדיוק. הדרך הכי מהירה לבנות פלייליסט אחיד.'],
+    [74, 46, '<b>Replace Section</b> – מחליפים רק חלק בעייתי (למשל מקום ששמעו בו פתאום קול). זמין במסלולים בתשלום.'],
+    [52, 41, '<b>Get Stems</b> – מפריד לערוצים (תופים, בס, פסנתר…). שימושי אם רוצים לערבב או לנקות.'],
+    [74, 84, '<b>Download ▸ WAV</b> – הורדה באיכות הכי גבוהה. כל הורדה נספרת במכסה החודשית, לכן מורידים רק שירים שנבחרו.']
+  ]
+});
+
+// --- יוטיוב: יצירת ערוץ ---
+MOCK.ytCreate = () => mock({
+  app: 'yt', url: 'youtube.com/create_channel', h: 360,
+  cap: 'החלון שנפתח בלחיצה על תמונת הפרופיל ← Create a channel (יצירת ערוץ).',
+  body:
+    A(0, 0, 100, 100, '', '', 'background:#0006') +
+    A(20, 7, 60, 86, '', `<div style="background:#fff;border-radius:12px;height:100%;padding:16px;display:grid;gap:10px;justify-items:center;align-content:start">
+      <b style="font-size:15px">How you'll appear</b>
+      <span style="width:70px;height:70px;border-radius:50%;background:linear-gradient(135deg,#7bc6b5,#2b5d74)"></span>
+      <span style="color:#065FD4;font-weight:600">Select picture</span>
+      <div class="y-in" style="width:80%"><span class="y-dim" style="font-size:10px">Name</span><br>Rainy Window Lofi</div>
+      <div class="y-in" style="width:80%"><span class="y-dim" style="font-size:10px">Handle</span><br>@rainywindowlofi</div>
+      <span class="y-dim" style="font-size:10px;width:80%">By clicking Create channel you agree to YouTube's Terms of Service.</span>
+      <div style="width:80%;text-align:right"><span class="y-dim">Cancel</span> &nbsp; <span style="color:#065FD4;font-weight:700">Create channel</span></div></div>`),
+  pins: [
+    [57, 24, '<b>Select picture</b> – תמונת הערוץ (לוגו). עדיף ציור ייחודי בסגנון של הערוץ, לא תמונה שלכם.'],
+    [80, 46, '<b>Name</b> – שם הערוץ. קצר, זכיר, ומרמז על האווירה (פרק 3).'],
+    [80, 60, '<b>Handle</b> – הכתובת עם @. כדאי שיהיה זהה לשם, באותיות לטיניות.'],
+    [72, 86, '<b>Create channel</b> – לוחצים, והערוץ קיים.']
+  ]
+});
+
+// --- יוטיוב סטודיו: לוח הבקרה ---
+const ytSide = (on) => A(0, 0, 18, 100, 'y-side', `<div style="padding:12px 10px;display:grid;gap:11px">
+  <span style="display:flex;gap:6px;align-items:center"><span class="y-red" style="border-radius:4px;padding:1px 5px;font-size:10px">▶</span><b>Studio</b></span>
+  ${['Dashboard', 'Content', 'Analytics', 'Community', 'Subtitles', 'Copyright', 'Earn', 'Customization', 'Audio library'].map(x => `<span style="${x === on ? 'font-weight:700;color:#0F0F0F' : 'color:#606060'}">${x}</span>`).join('')}</div>`);
+
+MOCK.ytDash = () => mock({
+  app: 'yt', url: 'studio.youtube.com', h: 420, wide: true,
+  cap: 'YouTube Studio – המקום שבו מנהלים את הערוץ. נכנסים מ-studio.youtube.com או מתמונת הפרופיל ← YouTube Studio.',
+  body:
+    ytSide('Dashboard') +
+    A(20, 2, 78, 8, '', `<div style="display:flex;gap:10px;align-items:center"><span class="y-in" style="flex:1">Search across your channel</span><span style="border:1px solid #ccc;border-radius:4px;padding:5px 10px;font-weight:700">⊕ CREATE</span></div>`) +
+    A(20, 14, 40, 8, '', `<b style="font-size:16px">Channel dashboard</b>`) +
+    A(20, 24, 25, 70, '', `<div style="border:1px solid #e5e5e5;border-radius:8px;padding:10px;height:100%"><b>Latest video performance</b><div style="height:60px;background:linear-gradient(135deg,#334,#a76);border-radius:6px;margin:8px 0"></div><span class="y-dim">First 2 days 1 hour:<br>Views 812 · Watch time 64.3h</span></div>`) +
+    A(47, 24, 25, 70, '', `<div style="border:1px solid #e5e5e5;border-radius:8px;padding:10px;height:100%"><b>Channel analytics</b><br><span class="y-dim">Current subscribers</span><br><b style="font-size:20px">642</b><br><span class="y-dim">Summary · Last 28 days<br>Views 18.4K<br>Watch time (hours) 1,206</span></div>`) +
+    A(74, 24, 24, 70, '', `<div style="border:1px solid #e5e5e5;border-radius:8px;padding:10px;height:100%"><b>Ideas for you</b><br><span class="y-dim">Inspiration and research topics your audience searches for</span></div>`),
+  pins: [
+    [94, 6, '<b>CREATE ← Upload videos</b> – מכאן מעלים סרטון חדש (פרק 11).'],
+    [6, 16, '<b>Content</b> – כל הסרטונים, הפלייליסטים וה-Shorts.'],
+    [6, 21, '<b>Analytics</b> – נתוני צפיות, זמן צפייה, מנויים והכנסות. משם מייצאים נתונים לכלי המעקב בפרק 16.'],
+    [6, 37, '<b>Copyright</b> – תביעות זכויות על סרטונים שלכם (פרק 13).'],
+    [5, 42, '<b>Earn</b> – תוכנית השותפים: כמה חסר עד המונטיזציה, ומכאן מגישים בקשה (פרק 15).'],
+    [8, 47, '<b>Customization</b> – תמונה, באנר, תיאור, קישורים והסרטון המוצג בעמוד הערוץ.'],
+    [60, 50, '<b>Channel analytics</b> – תמונת מצב מהירה של 28 הימים האחרונים.']
+  ]
+});
+
+// --- יוטיוב סטודיו: העלאה – פרטים ---
+const ytSteps = on => A(4, 3, 92, 8, '', `<div style="display:flex;justify-content:space-between;align-items:center;color:#606060">${['Details', 'Video elements', 'Checks', 'Visibility'].map(x => `<span style="${x === on ? 'color:#065FD4;font-weight:700' : ''}">● ${x}</span>`).join('<span style="flex:1;border-top:1px solid #ccc;margin:0 6px"></span>')}</div>`);
+
+MOCK.ytDetails = () => mock({
+  app: 'yt', url: 'studio.youtube.com – Upload videos', h: 520, wide: true,
+  cap: 'שלב Details (פרטים) בחלון ההעלאה. זה השלב החשוב ביותר לקידום.',
+  body:
+    ytSteps('Details') +
+    A(4, 13, 60, 11, 'y-in', `<span class="y-dim" style="font-size:10px">Title (required)</span><br>Rainy Night Lofi 🌧️ 1 Hour of Chill Beats to Study & Relax`) +
+    A(4, 26, 60, 21, 'y-in', `<span class="y-dim" style="font-size:10px">Description</span><br>Cozy lofi beats for a rainy night of studying…<br>00:00 Rainy Window<br>03:41 Soft Lamp Light<br>06:53 Tea at Midnight…`) +
+    A(4, 49, 60, 15, '', `<b>Thumbnail</b><div style="display:flex;gap:6px;margin-top:4px"><span style="border:1px dashed #aaa;border-radius:4px;padding:8px;font-size:10px">⬆ Upload file</span><span style="border:1px dashed #aaa;border-radius:4px;padding:8px;font-size:10px">Auto-generated</span><span style="border:1px dashed #aaa;border-radius:4px;padding:8px;font-size:10px">⚗ Test & compare</span></div>`) +
+    A(4, 66, 60, 10, '', `<b>Playlists</b><div class="y-in" style="margin-top:3px">Rainy Lofi Collection ▾</div>`) +
+    A(4, 78, 60, 18, '', `<b>Audience</b><br><span class="y-dim" style="font-size:10px">Is this video made for kids? (required)</span><br>○ Yes, it's made for kids<br>◉ No, it's not made for kids<br><span style="color:#065FD4;font-weight:600">Show more</span>`) +
+    A(67, 13, 29, 40, '', `<div style="background:#111;height:60%;border-radius:6px;background-image:linear-gradient(135deg,#2c3e66,#d08b5b)"></div><div style="background:#f2f2f2;padding:6px;font-size:10px;border-radius:0 0 6px 6px"><span class="y-dim">Video link</span><br><span style="color:#065FD4">youtu.be/xxxxxxx</span><br><span class="y-dim">Filename</span><br>rainy-night-lofi-1h.mp4</div>`) +
+    A(80, 90, 16, 7, 'y-blue', `NEXT`, 'text-align:center'),
+  pins: [
+    [50, 6, '<b>ארבעת השלבים</b> – Details (פרטים) ← Video elements (רכיבי וידאו) ← Checks (בדיקות) ← Visibility (חשיפה).'],
+    [62, 17, '<b>Title</b> – כותרת: מה, לאיזה מצב, כמה זמן. עד 100 תווים, החשוב בהתחלה. המחולל בפרק 11 כותב אותה.'],
+    [62, 32, '<b>Description</b> – תיאור עם רשימת שירים ושעות. השעות יוצרות "פרקים" (Chapters) אוטומטית.'],
+    [17, 57, '<b>Upload file</b> – תמונה ממוזערת משלכם: 1280×720, עד 2MB. בלי זה יוטיוב בוחר פריים מהסרטון.'],
+    [50, 57, '<b>Test & compare</b> – בדיקה של עד 3 תמונות (ו-3 כותרות) כדי לראות מה מחזיק צופים יותר.'],
+    [62, 72, '<b>Playlists</b> – מוסיפים מיד לפלייליסט הנכון. פלייליסטים מאריכים את זמן ההאזנה.'],
+    [30, 87, '<b>Audience</b> – מוזיקה למבוגרים ← "No, it\'s not made for kids". סימון "לילדים" מבטל תגובות ומוריד הכנסה.'],
+    [15, 94, '<b>Show more</b> – כאן מסתתרת שאלת תוכן ה-AI. חובה לפתוח ולסמן Yes.'],
+    [82, 44, '<b>Video link</b> – הקישור לסרטון עוד לפני הפרסום. שימושי לשיתוף.']
+  ]
+});
+
+// --- יוטיוב: Show more ---
+MOCK.ytMore = () => mock({
+  app: 'yt', url: 'studio.youtube.com – Upload videos', h: 440, wide: true,
+  cap: 'מה שנפתח מתחת ל-Show more באותו שלב Details.',
+  body:
+    A(4, 4, 92, 30, '', `<b>Altered content</b><br><span class="y-dim" style="font-size:10.5px">Do any of the following describe your content? • Makes a real person appear to say or do something they didn't • Alters footage of a real event or place • Generates a realistic-looking scene that didn't actually occur</span><br><br>◉ Yes &nbsp; ○ No`) +
+    A(4, 37, 44, 10, 'y-in', `<span class="y-dim" style="font-size:10px">Tags</span><br>lofi, study music, rainy night`) +
+    A(52, 37, 44, 10, 'y-in', `<span class="y-dim" style="font-size:10px">Video language</span><br>English ▾`) +
+    A(4, 51, 44, 10, 'y-in', `<span class="y-dim" style="font-size:10px">License</span><br>Standard YouTube License ▾`) +
+    A(52, 51, 44, 10, 'y-in', `<span class="y-dim" style="font-size:10px">Category</span><br>Music ▾`) +
+    A(4, 65, 92, 12, '', `<b>Comments and ratings</b><br><span class="y-dim">Comments: On ▾ · Sort by: Top</span>`) +
+    A(4, 80, 92, 14, '', `<b>Shorts remixing</b><br><span class="y-dim">◉ Allow video and audio remixing</span>`),
+  pins: [
+    [10, 26, '<b>Altered content / AI use (גילוי שימוש ב-AI)</b> – <b>חובה לסמן Yes</b>: לפי ההנחיות הרשמיות, מוזיקה שנוצרה ב-AI והיא העיקר בסרטון מחייבת גילוי. יוטיוב יוסיף תווית לנגן. בגרסאות חדשות השדה יכול להופיע בשם "AI use".'],
+    [44, 42, '<b>Tags</b> – משפיע מעט. 5–10 מילים מדויקות, בלי "פיזור" של מילים שלא קשורות.'],
+    [92, 42, '<b>Video language</b> – השפה של הכותרת והתיאור.'],
+    [92, 56, '<b>Category</b> – Music.'],
+    [44, 70, '<b>Comments</b> – להשאיר פתוח. תגובות הן סימן לתוכן אמיתי ולקהילה.']
+  ]
+});
+
+// --- יוטיוב: Visibility ---
+MOCK.ytVis = () => mock({
+  app: 'yt', url: 'studio.youtube.com – Upload videos', h: 340, wide: true,
+  cap: 'השלב האחרון: Visibility (חשיפה).',
+  body:
+    ytSteps('Visibility') +
+    A(4, 16, 60, 48, '', `<div style="border:1px solid #ddd;border-radius:6px;padding:10px;display:grid;gap:7px"><b>Save or publish</b>
+      <span>○ Private <span class="y-dim">– only you</span></span><span>○ Unlisted <span class="y-dim">– anyone with the link</span></span><span>○ Public <span class="y-dim">– everyone</span></span>
+      <span style="padding-left:14px">☐ Set as instant Premiere</span></div>`) +
+    A(4, 68, 60, 22, '', `<div style="border:1px solid #065FD4;border-radius:6px;padding:10px"><b>◉ Schedule</b><br>Fri, Oct 24, 2026 &nbsp; 18:00 &nbsp; (GMT+3) Jerusalem</div>`) +
+    A(80, 88, 16, 8, 'y-blue', `SCHEDULE`, 'text-align:center'),
+  pins: [
+    [40, 32, '<b>Private / Unlisted / Public</b> – פרטי (רק אתם), לא-רשום (רק עם קישור), ציבורי.'],
+    [30, 55, '<b>Premiere</b> – הקרנת בכורה עם צ\'אט. נחמד לסרטונים גדולים, לא חובה.'],
+    [55, 78, '<b>Schedule</b> – תזמון. מעלים מראש ובוחרים שעה קבועה, לפי הזמנים שבהם הקהל שלכם צופה (Analytics ← Audience).'],
+    [88, 92, '<b>SCHEDULE</b> – שומרים. הסרטון יעלה לבד.']
+  ]
+});
+
+// --- יוטיוב: Earn ---
+MOCK.ytEarn = () => mock({
+  app: 'yt', url: 'studio.youtube.com – Earn', h: 380, wide: true,
+  cap: 'לשונית Earn (הכנסות) לפני שהערוץ עומד בתנאים. המספרים כאן הם דוגמה.',
+  body:
+    ytSide('Earn') +
+    A(21, 4, 76, 10, '', `<b style="font-size:16px">Earn</b> &nbsp; <span class="y-dim">Join the YouTube Partner Program</span>`) +
+    A(21, 17, 76, 30, '', `<div style="border:1px solid #e5e5e5;border-radius:8px;padding:10px;display:grid;gap:7px">
+      <span>Subscribers <b style="float:right">642 / 1,000</b></span><div style="height:6px;background:#eee;border-radius:9px"><div style="width:64%;height:100%;background:#065FD4;border-radius:9px"></div></div>
+      <span>Public watch hours (last 365 days) <b style="float:right">2,310 / 4,000</b></span><div style="height:6px;background:#eee;border-radius:9px"><div style="width:58%;height:100%;background:#065FD4;border-radius:9px"></div></div>
+      <span class="y-dim">or Public Shorts views (90 days) 0.2M / 10M</span></div>`) +
+    A(21, 52, 76, 20, '', `<div style="border:1px solid #e5e5e5;border-radius:8px;padding:10px"><b>Early access: fan funding</b><br><span class="y-dim">500 subscribers · 3 public uploads in 90 days · 3,000 watch hours</span></div>`) +
+    A(21, 78, 30, 9, 'y-blue', `GET NOTIFIED`, 'text-align:center'),
+  pins: [
+    [94, 26, '<b>מנויים</b> – צריך 1,000 לתוכנית המלאה (עם פרסומות).'],
+    [94, 33, '<b>שעות צפייה ציבוריות ב-365 הימים האחרונים</b> – 4,000 (נכון לאוקטובר 2026; דווח שמ-1.2.2027 יעלה ל-8,000 למצטרפים חדשים).'],
+    [94, 60, '<b>השלב המוקדם</b> – מאפשר רק חברויות ותרומות, בלי פרסומות. פחות רלוונטי לערוץ מוזיקה.'],
+    [36, 83, '<b>Get notified / Apply</b> – כשמגיעים לתנאים הכפתור הופך ל-Apply (להגיש).']
+  ]
+});
+
+// --- יוטיוב: Analytics ---
+MOCK.ytAnalytics = () => mock({
+  app: 'yt', url: 'studio.youtube.com – Analytics', h: 380, wide: true,
+  cap: 'מסך Analytics. מכאן לוקחים את המספרים לכלי המעקב בפרק 16.',
+  body:
+    ytSide('Analytics') +
+    A(21, 3, 60, 8, '', `<b style="font-size:16px">Channel analytics</b>`) +
+    A(84, 3, 14, 8, '', `<span style="color:#065FD4;font-weight:600">Advanced mode</span>`) +
+    A(21, 12, 76, 8, '', `<span style="border-bottom:2px solid #0F0F0F;padding-bottom:4px;font-weight:700">Overview</span> &nbsp; Content &nbsp; Audience &nbsp; Revenue &nbsp; Inspiration`) +
+    A(21, 24, 76, 16, '', `<div style="display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #e5e5e5;border-radius:6px">${[['Views', '18.4K'], ['Watch time (hours)', '1,206'], ['Subscribers', '+212'], ['Estimated revenue', '$0.00']].map(x => `<div style="padding:8px;border-right:1px solid #eee"><span class="y-dim" style="font-size:10px">${x[0]}</span><br><b style="font-size:15px">${x[1]}</b></div>`).join('')}</div>`) +
+    A(21, 44, 76, 50, '', `<svg viewBox="0 0 300 100" preserveAspectRatio="none" style="width:100%;height:100%"><rect width="300" height="100" fill="#fff"/><polyline fill="none" stroke="#065FD4" stroke-width="2" points="0,90 30,85 60,80 90,82 120,70 150,62 180,55 210,48 240,35 270,30 300,22"/></svg>`),
+  pins: [
+    [90, 7, '<b>Advanced mode</b> – טבלה מפורטת. בפינה יש כפתור ייצוא (חץ למטה) ← Comma-separated values (.csv). את הקובץ הזה מעלים לכלי המעקב.'],
+    [72, 16, '<b>Revenue</b> – מופיע רק אחרי שמתקבלים לתוכנית: RPM, הכנסה לפי סרטון וסוג פרסומת.'],
+    [87, 16, '<b>Inspiration / Research</b> – מה הקהל שלכם מחפש. מקור מצוין לרעיונות לנושאים.'],
+    [40, 32, '<b>Watch time (hours)</b> – המספר שחשוב לסף 4,000 השעות.']
+  ]
+});
+
+// --- קאפקאט: מסך העריכה ---
+MOCK.capcut = () => mock({
+  app: 'cc', url: 'CapCut Desktop – Project 1', h: 470, wide: true,
+  cap: 'CapCut למחשב: מסך העריכה עם סרטון לולאה ורצועת אודיו של שעה.',
+  body:
+    A(0, 0, 100, 8, 'c-panel', `<div style="display:flex;gap:14px;align-items:center;height:100%;padding:0 10px"><span>☰ CapCut</span>${['Media', 'Audio', 'Text', 'Stickers', 'Effects', 'Transitions', 'Filters', 'Adjustment'].map((x, i) => `<span style="${i === 0 ? 'color:#2fd3c5;font-weight:700' : ''}">${x}</span>`).join('')}<span style="margin-left:auto;background:#2fd3c5;color:#111;border-radius:5px;padding:3px 12px;font-weight:700">⬆ Export</span></div>`) +
+    A(0, 9, 28, 50, 'c-panel', `<div style="padding:8px"><span style="background:#2fd3c5;color:#111;border-radius:5px;padding:4px 10px;font-weight:700">+ Import</span><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px">${['loop_rain.mp4', 'track01.wav', 'track02.wav', 'logo.png'].map((x, i) => `<div><div style="height:34px;border-radius:4px;background:${i ? '#2b3b3a' : 'linear-gradient(135deg,#2c3e66,#d08b5b)'}"></div><span class="c-dim" style="font-size:10px">${x}</span></div>`).join('')}</div></div>`) +
+    A(29, 9, 44, 50, 'c-panel', `<div style="height:100%;display:grid;place-items:center"><div style="width:86%;aspect-ratio:16/9;background:linear-gradient(135deg,#2c3e66,#d08b5b);border-radius:4px;position:relative"><span style="position:absolute;left:8px;bottom:8px;font-size:11px">Rainy Night Lofi</span></div></div>`) +
+    A(74, 9, 26, 50, 'c-panel', `<div style="padding:8px;display:grid;gap:6px"><b>Video</b><span class="c-dim">Basic · Animation · Speed</span><span>Scale 100%</span><span>Opacity 100%</span><span>Speed 1.0x</span></div>`) +
+    A(0, 60, 100, 40, 'c-panel', `<div style="padding:6px 8px;display:grid;gap:5px;font-size:10px">
+      <div class="c-dim" style="display:flex;justify-content:space-between"><span>00:00</span><span>15:00</span><span>30:00</span><span>45:00</span><span>01:00:00</span></div>
+      <div style="display:flex;gap:2px;height:20px">${Array(10).fill('<span style="flex:1;background:#3d5a80;border-radius:3px"></span>').join('')}</div>
+      <div style="display:flex;gap:2px;height:14px">${Array(3).fill('<span style="flex:1;background:#7a5af5;border-radius:3px;padding-left:4px">Rainy Night Lofi</span>').join('')}<span style="flex:7"></span></div>
+      <div style="display:flex;gap:2px;height:22px">${['01', '02', '03', '04', '05', '06', '07', '08', '09'].map(n => `<span style="flex:1;background:#1f7a5c;border-radius:3px;padding-left:4px">track${n}</span>`).join('')}</div></div>`),
+  pins: [
+    [7, 13, '<b>Import</b> – מייבאים את סרטון הלולאה, את קובצי השירים ואת הלוגו.'],
+    [6, 4, '<b>Media / Audio / Text / Effects</b> – הלשוניות העליונות: טקסט, אפקטים ומעברים.'],
+    [51, 34, '<b>Player</b> – תצוגה מקדימה. בודקים שהלולאה חלקה בלי "קפיצה".'],
+    [87, 22, '<b>Properties</b> – כאן משנים גודל, מהירות והנפשה של הפריט שנבחר.'],
+    [50, 75, '<b>רצועת וידאו</b> – אותו קליפ לולאה, משוכפל לכל אורך השעה.'],
+    [15, 83, '<b>רצועת טקסט</b> – שם הערוץ או שם הסרטון. אפשר גם שם השיר שמתנגן.'],
+    [60, 92, '<b>רצועת אודיו</b> – השירים אחד אחרי השני, עם מעבר רך (fade) ביניהם.'],
+    [93, 4, '<b>Export</b> – יצוא הסרטון הגמור.']
+  ]
+});
+
+// --- קאפקאט: חלון הייצוא ---
+MOCK.capExport = () => mock({
+  app: 'cc', url: 'CapCut Desktop – Export', h: 380, wide: true,
+  cap: 'חלון Export. אלה ההגדרות שמתאימות ליוטיוב.',
+  body:
+    A(18, 4, 64, 92, 'c-panel', `<div style="padding:12px;display:grid;gap:9px;border-radius:8px">
+      <b style="font-size:14px">Export</b>
+      <span>Title &nbsp; <span style="background:#18181a;padding:3px 8px;border-radius:4px">rainy-night-lofi-1h</span></span>
+      <span>Export to &nbsp; <span class="c-dim">C:\\Videos\\Channel</span></span>
+      <b>☑ Video</b>
+      <span>Resolution &nbsp; <b>1080P</b> ▾</span>
+      <span>Bit rate &nbsp; <b>Recommended</b> ▾</span>
+      <span>Codec &nbsp; <b>H.264</b> ▾</span>
+      <span>Format &nbsp; <b>mp4</b> ▾</span>
+      <span>Frame rate &nbsp; <b>30fps</b> ▾</span>
+      <b>☐ Audio only</b>
+      <span style="justify-self:end;background:#2fd3c5;color:#111;border-radius:5px;padding:5px 16px;font-weight:700">Export</span></div>`),
+  pins: [
+    [52, 30, '<b>Resolution</b> – ‏1080P. ‏4K לא נחוץ לסרטון לולאה, ובחינם לא תמיד זמין.'],
+    [56, 46, '<b>Codec</b> – ‏H.264, הנפוץ ביותר. יוטיוב מקבל אותו בלי בעיה.'],
+    [57, 62, '<b>Frame rate</b> – ‏24 או 30. בסרטון רגוע אין צורך ביותר; מספר נמוך גם מקצר את זמן הייצוא.'],
+    [78, 88, '<b>Export</b> – שעה של וידאו יכולה לקחת 10–40 דקות, לפי המחשב.']
+  ]
+});
+
+// --- AdSense: מידע מס ---
+MOCK.adsenseTax = () => mock({
+  app: 'yt', url: 'adsense.google.com – Payments – Settings', h: 320, wide: true,
+  cap: 'AdSense ← Payments ← Payments info ← Manage settings ← United States tax info.',
+  body:
+    A(0, 0, 100, 12, '', `<div style="background:#f8f9fa;height:100%;display:flex;align-items:center;padding:0 12px;gap:10px"><b>Google AdSense</b><span class="y-dim">Payments › Settings</span></div>`) +
+    A(4, 18, 92, 30, '', `<div style="border:1px solid #e5e5e5;border-radius:8px;padding:10px"><b>United States tax info</b><br><span class="y-dim">Provide your tax info to avoid the highest withholding rate on earnings from US viewers.</span><br><span style="color:#1a73e8;font-weight:600">MANAGE TAX INFO</span></div>`) +
+    A(4, 54, 92, 40, '', `<div style="border:1px solid #e5e5e5;border-radius:8px;padding:10px;display:grid;gap:5px"><b>Tax form</b><span>Are you an individual or business? ◉ Individual</span><span>Are you a US citizen? ◉ No</span><span>Form: <b>W-8BEN</b> · Country of residence: Israel</span><span class="y-dim">Claim tax treaty benefits ☑</span></div>`),
+  pins: [
+    [40, 40, '<b>Manage tax info</b> – בלי טופס, יוטיוב מנכה עד 24% מההכנסה מצופים בארה"ב.'],
+    [45, 73, '<b>W-8BEN, אדם פרטי, תושבות ישראל</b> – מילוי נכון מוריד את הניכוי לפי אמנת המס. ממלאים מספר תעודת זהות ישראלי.'],
+    [30, 88, '<b>Treaty benefits</b> – מסמנים כדי לקבל את שיעור האמנה. מה בדיוק השיעור – בודקים עם רואה חשבון.']
+  ]
+});
+// ===== תוכן הקורס – חלק א =====
+const MODULES = [];
+const M = (o) => MODULES.push(o);
+
+M({
+  id: 'start', group: 'פתיחה', title: 'איך הקורס עובד', min: 10,
+  lead: 'מה בונים, באיזה סדר, ומה מצפה לנו בדרך. בסוף הפרק יש מפת דרכים של 90 יום.',
+  body: () => `
+<h3>מה בונים כאן</h3>
+<p>ערוץ יוטיוב "בלי פנים" שמפרסם פלייליסטים ואוספים ארוכים (שעה עד שלוש שעות) של מוזיקה שאנחנו יוצרים בסונו, סביב נושא ואווירה ברורים: למשל לימודים בגשם, ג'אז לבית קפה או שינה עמוקה. הכסף מגיע בעיקר מפרסומות ביוטיוב אחרי שמתקבלים לתוכנית השותפים (YPP), ובהמשך גם ממקורות נוספים.</p>
+
+<h3>איך לומדים</h3>
+${steps([
+  '<b>עוברים פרק אחרי פרק לפי הסדר.</b> כל פרק נגמר בצ\'קליסט קטן ובכפתור "סיימתי את הפרק". ההתקדמות נשמרת בדפדפן.',
+  '<b>איורי מסכים עם נקודות ממוספרות.</b> כל נקודה מוסברת מתחת לאיור. האיורים משחזרים את המסכים האמיתיים, אבל הם לא צילומים. סונו ויוטיוב משנים עיצוב לעתים קרובות, אז אם כפתור זז קצת, מחפשים אותו לפי השם.',
+  '<b>כלים בתוך הקורס:</b> מחשבון הכנסות, מעבדת נישות עם AI, מחולל פרומפטים לסונו, מחולל כותרות ופרקי זמן, וכלי מעקב שמתחבר לנתונים מהערוץ.',
+  '<b>המדריך האישי:</b> הכפתור "שאלו את המדריך" בפינה פותח שיחה עם AI שמכיר את הקורס. אפשר לשאול אותו כל דבר.'
+])}
+
+${warn('מה חשוב לדעת מראש', `<ul>
+<li><b>זה לא כסף מהיר.</b> ערוץ מוזיקה חדש מגיע לתנאי המונטיזציה בדרך כלל אחרי 3 עד 12 חודשים, ורבים לא מגיעים בכלל. הכנסה טיפוסית בנישת מוזיקה היא כ-1–4 דולר לכל 1,000 צפיות.</li>
+<li><b>יוטיוב מחמיר מול תוכן AI המוני.</b> מיולי 2025 יש מדיניות "תוכן לא אותנטי", ובשנת 2026 נסגרו ערוצי AI גדולים. הקורס בנוי סביב הכלל המרכזי: <b>ערוץ שנראה כמו עבודה של אדם עם טעם</b>, לא מפעל.</li>
+<li><b>שינויים קרובים:</b> לפי דיווחים מאוגוסט 2026, מ-1 בפברואר 2027 מצטרפים חדשים יצטרכו <b>8,000</b> שעות צפייה במקום 4,000. המחשבון בפרק 2 מתחשב בזה.</li>
+</ul>`)}
+
+<h3>מפת הדרכים: 90 הימים הראשונים</h3>
+${table(['שלב', 'ימים', 'מה עושים', 'פרקים'], [
+  ['תכנון', '1–7', 'בוחרים נישה בעזרת מעבדת הנישות, שם וסגנון ויזואלי. נרשמים למסלול בתשלום בסונו.', '2–3'],
+  ['תשתית', '8–14', 'פותחים ערוץ, מעצבים, בונים תבנית עריכה ותבנית תיאור. יוצרים 40–60 שירים ובוחרים את הטובים.', '4–10'],
+  ['פרסום', '15–60', '2–3 אוספים ארוכים בשבוע + Shorts קצרים מהקטעים הכי טובים. בודקים נתונים כל שבוע.', '11–12'],
+  ['שיפור', '61–75', 'מכפילים את מה שעובד: אותה אווירה בווריאציות. מוסיפים סדרה עונתית (חורף, חגים).', '12, 16'],
+  ['הרחבה', '76–90', 'גרסאות ארוכות (3–8 שעות) לנושא המצליח. מגישים בקשה כשעומדים בתנאים.', '15–17']
+])}
+${src('התחקיר לקורס נעשה באוקטובר 2026 ממקורות עיתונאיים ובלוגים מקצועיים. דפי העזרה הרשמיים של יוטיוב וסונו לא היו נגישים בזמן התחקיר, לכן כל נתון "קשה" (מחירים, ספים, מכסות) מסומן לבדיקה ומופיע עם מקור. לפני החלטה כספית בודקים בדף הרשמי.')}
+`,
+  check: ['קראתי את מפת הדרכים', 'הבנתי שהאיורים הם שחזור של המסכים ולא צילומים', 'הבנתי שהכסף מגיע רק אחרי קבלה לתוכנית השותפים']
+});
+
+M({
+  id: 'money', group: 'הכסף', title: 'איך יוטיוב משלם, ומחשבון הכנסות', min: 20,
+  lead: 'התנאים להצטרפות לתוכנית השותפים, כמה משלמים על מוזיקה, ומחשבון שמראה מתי אפשר להגיע לשם וכמה זה שווה.',
+  body: () => `
+<h3>תוכנית השותפים של יוטיוב (YPP)</h3>
+${table(['שלב', 'תנאים', 'מה מקבלים'], [
+  ['מוקדם (מימון מעריצים)', '500 מנויים + 3 סרטונים ציבוריים ב-90 יום + 3,000 שעות צפייה בשנה (או 3 מיליון צפיות ב-Shorts ב-90 יום)', 'חברויות בתשלום, Super Thanks, Super Chat. <b>בלי פרסומות.</b>'],
+  ['מלא', '1,000 מנויים + 4,000 שעות צפייה ציבוריות ב-365 יום (או 10 מיליון צפיות ב-Shorts ב-90 יום)', '<b>הכנסה מפרסומות</b> + חלק מ-YouTube Premium + כל השאר.'],
+  ['מלא – מ-1.2.2027 (דווח בעיתונות)', '1,000 מנויים + <b>8,000</b> שעות (או 20 מיליון צפיות Shorts)', 'אותו דבר. דף העזרה הרשמי מאשר שיש עדכון לתוכנית מ-1.2.2027 (צריך לאשר תנאים חדשים עד 31.1.2027), אבל עדיין מציג 4,000 שעות. ' + y('עוד לא רשמי')]
+])}
+<p>בנוסף לכל השלבים: בלי אזהרות (Strikes) פעילות, אימות דו-שלבי בחשבון גוגל, גישה ל"תכונות מתקדמות" (Advanced features) ביוטיוב, חשבון AdSense מחובר ומגורים במדינה נתמכת. ישראל נתמכת בתוכנית המלאה; את השלב המוקדם בודקים בלשונית Earn.</p>
+${shot('yt-ypp.jpg', 'support.google.com/youtube/answer/72851', 'דף העזרה הרשמי של תוכנית השותפים: ההודעה על העדכון מ-1.2.2027 והתנאים הנוכחיים (1,000 מנויים + 4,000 שעות, או 10 מיליון צפיות Shorts).')}
+
+${MOCK.ytEarn()}
+
+<h3>מה זה RPM, ולמה מוזיקה משלמת מעט</h3>
+<p><b>RPM</b> הוא ההכנסה שלכם (אחרי שיוטיוב לוקח את חלקו) לכל 1,000 צפיות. בסרטונים ארוכים היוצר מקבל 55% מהכנסות הפרסום. בסקר של 300 ערוצים (מאי 2025 – מאי 2026) החציון בנישת מוזיקה היה <b>2.28$</b>, ורוב הערוצים נמצאים בין 1.35$ ל-4.16$.</p>
+<ul>
+<li><b>מדינת הצופים קובעת הכי הרבה.</b> צופה מארה"ב, בריטניה או קנדה שווה פי כמה מצופה מהודו או מברזיל.</li>
+<li><b>אורך הסרטון עוזר.</b> בסרטון של 8 דקות ומעלה אפשר לשים פרסומות באמצע. סרטון של שעה מקבל כמה הפסקות, אבל בסרטוני שינה יותר מדי הפסקות מעצבנות ומבריחות צופים.</li>
+<li><b>Shorts משלמים מעט מאוד</b> (כ-3–14% מסרטון ארוך). התפקיד שלהם הוא להביא מנויים.</li>
+<li><b>יתרון גדול למוזיקה:</b> אנשים משאירים אותה ברקע שעות. כך צוברים שעות צפייה מהר יותר מבכל נישה אחרת.</li>
+</ul>
+
+${tool('calc')}
+
+${tip('איך לקרוא את המחשבון', 'המחשבון לא מנבא. הוא מראה מה <b>יקרה אם</b> ההנחות שהזנתם יתקיימו. כדאי להריץ תרחיש פסימי ותרחיש אופטימי. אחרי שהערוץ עולה, מחליפים את ההנחות בנתונים האמיתיים מכלי המעקב (פרק 16).')}
+${src('ספים: נבדק מול ' + L('דף העזרה הרשמי', 'https://support.google.com/youtube/answer/72851?hl=en') + ' ב-20.10.2026. שינוי 2027: tbreak.com, ppc.land, shacknews (אוגוסט 2026). RPM: air.io "real RPM data from 300 channels" (2026). Shorts: support.google.com/youtube/answer/12504220.')}
+`,
+  check: ['אני יודע/ת מה התנאים לתוכנית המלאה', 'הרצתי את המחשבון בתרחיש פסימי ואופטימי', 'הבנתי ש-RPM תלוי בעיקר במדינת הצופים']
+});
+
+M({
+  id: 'niche', group: 'תכנון', title: 'בוחרים נושא לערוץ, יחד עם AI', min: 30,
+  lead: 'הנושא קובע כמה מתחרים יש, כמה משלמים ועד כמה קל לצבור שעות. כאן בוחרים אותו בשיטה.',
+  body: () => `
+<h3>מפת הנישות</h3>
+${table(['נישה', 'תחרות', 'הכנסה לצפייה', 'שעות צפייה', 'הערה'], [
+  ['לו-פיי ללימודים', r('קיצונית'), r('נמוכה'), g('גבוהות'), 'רק עם עולם ויזואלי ייחודי מאוד'],
+  ['שינה / גשם / אמביינט', y('גבוהה'), y('נמוכה–בינונית'), g('גבוהות מאוד'), 'הדרך המהירה ל-4,000 שעות'],
+  ['ג\'אז לבית קפה / בוסה נובה', y('בינונית–גבוהה'), g('בינונית'), g('גבוהות'), 'קהל מבוגר יותר, מפרסמים טובים'],
+  ['פסנתר רגוע / קלאסי-סגנוני', y('בינונית'), y('נמוכה–בינונית'), g('גבוהות'), 'סונו טוב מאוד בזה'],
+  ['ריכוז / עבודה עמוקה', y('בינונית'), g('בינונית'), g('גבוהות'), 'בלי הבטחות רפואיות (למשל "מרפא ADHD")'],
+  ['מדיטציה / ספא / יוגה', y('בינונית'), g('בינונית'), g('גבוהות'), 'מפרסמי בריאות ורווחה'],
+  ['אימונים / חדר כושר', y('גבוהה'), y('נמוכה–בינונית'), y('בינוניות'), 'מדלגים הרבה בין שירים'],
+  ['משחקים / סינת\'ווייב', y('בינונית'), y('נמוכה–בינונית'), g('גבוהות'), 'קהל נאמן שחוזר'],
+  ['עונתי (חורף, כריסמס)', y('משתנה'), g('גבוהה ברבעון 4'), g('גבוהות'), 'מעלים בספטמבר–אוקטובר'],
+  ['שירי ערש לילדים', r('גבוהה'), r('נמוכה'), g('גבוהות'), 'סימון "לילדים" מוריד הכנסה ומבטל תגובות. לא לערוץ ראשון'],
+  ['ישראלי (צ\'יל ים-תיכוני, שבת, לו-פיי עברי)', g('נמוכה'), y('לא ידוע'), y('בינוניות'), 'קהל קטן; עדיף בלי מילים, ובלי לחקות זמרים אמיתיים']
+])}
+${src('ההערכות משלבות נתוני RPM כלליים לנישת מוזיקה (air.io) עם שיקול דעת. לא נמצאו נתונים מאומתים לכל תת-נישה, לכן בודקים נישה בשיטה שלמטה לפני שמתחייבים.')}
+
+<h3>איך בודקים נישה ב-30 דקות</h3>
+${steps([
+  '<b>השלמה אוטומטית ביוטיוב:</b> מקלידים בחיפוש מילת בסיס (למשל "jazz for") ורושמים מה יוטיוב משלים. אלה חיפושים אמיתיים של אנשים.',
+  '<b>ערוצים קטנים עם להיטים:</b> מחפשים ערוצים עם פחות מ-5,000 מנויים שיש להם סרטון עם פי 10 צפיות מהממוצע שלהם. זה סימן שהנושא עובד גם בלי ערוץ גדול.',
+  '<b>גיל התוצאות:</b> אם בעשר התוצאות הראשונות יש סרטונים מהשנה האחרונה מערוצים חדשים, הנישה פתוחה. אם כולם בני 5 שנים מערוצי ענק, קשה להיכנס.',
+  '<b>קוראים תגובות:</b> מה אנשים עושים בזמן ההאזנה (לומדים? נרדמים? עובדים?). מזה בונים כותרות ותמונות.',
+  '<b>לשונית Inspiration בסטודיו</b> (אחרי שיש ערוץ): מה הקהל מחפש ויש עליו מעט תוכן.',
+  '<b>כלים בתשלום (לא חובה):</b> ‏vidIQ או TubeBuddy נותנים ציון חיפוש ותחרות למילות מפתח.'
+])}
+
+<h3>מעבדת הנישות</h3>
+<p>שני כלים: <b>שיחת סיעור מוחות</b> עם AI שמכיר את הנתונים מהקורס, ו<b>טבלת ניקוד</b> שבה מדרגים כל רעיון ומקבלים ציון משוקלל.</p>
+${tool('niche')}
+
+<h3>אחרי שבוחרים: זהות הערוץ</h3>
+<ul>
+<li><b>שם:</b> קצר, באנגלית אם הקהל עולמי, מתאר אווירה ולא ז'אנר יבש ("Rainy Window" עדיף על "Lofi Music 24").</li>
+<li><b>עולם ויזואלי:</b> דמות, מקום או סגנון ציור קבועים (חתול על אדן חלון, בית קפה בטוקיו בלילה). זה מה שהופך את הערוץ למותג ולא לעוד ערוץ AI.</li>
+<li><b>הבטחה לצופה:</b> משפט אחד. "מוזיקה רגועה ללימודים בלילות גשומים, בלי פרסומות באמצע שיר".</li>
+</ul>
+`,
+  check: ['בדקתי לפחות 3 נישות בשיטת ה-30 דקות', 'דירגתי אותן בטבלת הניקוד', 'בחרתי שם, עולם ויזואלי והבטחה לצופה']
+});
+
+M({
+  id: 'channel', group: 'הקמה', title: 'פותחים ערוץ ביוטיוב, צעד אחרי צעד', min: 25,
+  lead: 'פתיחת הערוץ, אבטחה ועיצוב. כך הוא מוכן לקבל סרטונים ולעבור בדיקת מונטיזציה.',
+  body: () => `
+<h3>לפני הכול: חשבון גוגל ואבטחה</h3>
+${steps([
+  '<b>חשבון גוגל ייעודי לערוץ</b> (או החשבון הקיים). אם מתכננים כמה ערוצים, אפשר לנהל כמה ערוצים מחשבון אחד; מוסבר בפרק 17.',
+  '<b>אימות דו-שלבי:</b> ‏myaccount.google.com ← Security (אבטחה) ← 2-Step Verification. זה <b>תנאי חובה</b> לתוכנית השותפים, וגם מגן מפריצות, שהן סיבה נפוצה לאיבוד ערוצים.',
+  '<b>אימות טלפון ליוטיוב:</b> ‏youtube.com/verify. פותח סרטונים ארוכים מ-15 דקות, תמונות ממוזערות משלכם ושידורים חיים. <b>חובה לאוספים של שעה.</b>'
+])}
+
+<h3>יצירת הערוץ</h3>
+${steps([
+  'נכנסים ל-youtube.com, לוחצים על תמונת הפרופיל למעלה ← <b>Create a channel</b> (יצירת ערוץ).',
+  'ממלאים שם, כתובת (@) ותמונה, ולוחצים <b>Create channel</b>.'
+])}
+${MOCK.ytCreate()}
+
+<h3>עיצוב הערוץ (Customization)</h3>
+<p>ב-YouTube Studio ← <b>Customization</b> יש שלוש לשוניות:</p>
+${table(['לשונית', 'מה ממלאים', 'מידות / הערות'], [
+  ['Profile ‏(פרופיל)', 'תמונת ערוץ, באנר, סימן מים (Watermark)', 'תמונה 800×800; באנר 2560×1440, והתוכן החשוב באמצע (1546×423) כדי שיראו אותו גם בטלפון'],
+  ['Profile ‏← Description', 'תיאור הערוץ: מה מנגנים, למי, באיזה תדירות', 'שתי שורות ראשונות הכי חשובות. בלי ערימת מילות מפתח'],
+  ['Profile ‏← Links', 'קישורים (אינסטגרם, ספוטיפיי בהמשך)', 'לא חובה בהתחלה'],
+  ['Home tab ‏(דף הבית)', 'סרטון מוצג למבקרים חדשים, ומדפים של פלייליסטים', 'מסדרים מדפים לפי מצבים: לימודים / שינה / בוקר']
+])}
+${MOCK.ytDash()}
+
+<h3>הגדרות שכדאי לעשות פעם אחת</h3>
+<ul>
+<li><b>Settings ← Upload defaults:</b> ממלאים תבנית קבועה לתיאור, תגיות, קטגוריה Music ושפה. כך כל העלאה מתחילה מוכנה.</li>
+<li><b>Settings ← Channel ← Advanced settings:</b> קהל ← "No, set this channel as not made for kids".</li>
+<li><b>Settings ← Channel ← Feature eligibility:</b> מוודאים ש-Intermediate ו-Advanced features פעילים. זה פותח בדיקות A/B של תמונות וכותרות.</li>
+</ul>
+${tip('טיפ למוזיקה', 'פלייליסטים הם הנכס הכי חשוב בערוץ מוזיקה. יוצרים מראש 3–4 פלייליסטים לפי מצב (Study, Sleep, Morning, Rain), גם אם הם עדיין ריקים.')}
+`,
+  check: ['הפעלתי אימות דו-שלבי', 'אימתתי טלפון (סרטונים מעל 15 דקות)', 'יצרתי ערוץ עם שם, תמונה ובאנר', 'הגדרתי Upload defaults ו"לא לילדים"', 'פתחתי 3–4 פלייליסטים ריקים']
+});
+
+M({
+  id: 'suno1', group: 'סונו', title: 'סונו: מסלולים, קרדיטים וזכויות', min: 20,
+  lead: 'לפני שיוצרים שיר אחד צריך להבין איזה מסלול מאפשר להרוויח כסף, וכמה שירים אפשר להוריד בחודש.',
+  body: () => `
+${bad('הכלל הכי חשוב בקורס', 'שירים שנוצרו <b>במסלול החינמי</b> מותרים לשימוש <b>לא-מסחרי בלבד, לתמיד</b>. גם אם משדרגים אחר כך, השירים הישנים לא הופכים למסחריים. ערוץ עם מונטיזציה הוא שימוש מסחרי. לכן יוצרים את כל המוזיקה לערוץ רק בזמן מנוי בתשלום.')}
+
+<h3>המסלולים (נכון לאוקטובר 2026)</h3>
+${table(['', 'Free', 'Pro', 'Premier'], [
+  ['מחיר', '0$', '10$ לחודש (8$ בתשלום שנתי)', '30$ לחודש (24$ בתשלום שנתי)'],
+  ['קרדיטים', '50 ביום', '2,500 בחודש', '10,000 בחודש'],
+  ['שירים (בערך)', 'מעט', 'כ-500', 'כ-2,000'],
+  ['הורדות', 'אין הורדות חודשיות', '20 בחודש', '60 בחודש'],
+  ['שימוש מסחרי', r('אסור'), g('מותר'), g('מותר')],
+  ['מודל', 'v6-mini', 'v6 ו-v6-wild', 'v6 ו-v6-wild + Suno Studio'],
+  ['העלאת אודיו', 'עד 8 דקות', 'עד 8 דקות', 'עד 30 דקות']
+])}
+${shot('suno-pricing.jpg', 'suno.com/pricing', 'דף המחירים של סונו בתצוגה חודשית. ' + g('נבדק') + ' המחירים, הקרדיטים, ההורדות והזכויות בטבלה למעלה תואמים את הדף.')}
+<p>כל לחיצה על Create עולה בדרך כלל 10 קרדיטים ומייצרת 2 גרסאות. קרדיטים לא עוברים לחודש הבא. ב-v6 יש "Max Mode" שעולה יותר.</p>
+${warn('מכסת ההורדות היא צוואר הבקבוק', `מספטמבר 2026 סונו מגביל הורדות. נעשה חשבון: שעה של מוזיקה היא בערך 17 שירים של 3.5 דקות, כלומר <b>17 הורדות לסרטון אחד</b>.
+<ul><li>ב-Pro (20 הורדות) יוצא בערך סרטון של שעה בחודש. זה לא מספיק.</li>
+<li>ב-Premier (60 הורדות) יוצאים 3 סרטונים של שעה בחודש.</li>
+<li><b>הפתרון:</b> מאריכים כל שיר ל-6–8 דקות עם Extend (פרק 7). אז שעה צריכה רק 8–10 הורדות. מורידים רק שירים שנבחרו אחרי האזנה. אפשר גם לקנות הורדות נוספות.</li></ul>
+המסקנה: <b>לערוץ פעיל, Premier</b>. מתחילים ב-Pro רק לחודש הלמידה. אפשר גם לקנות הורדות נוספות (במסלולים בתשלום).`)}
+${tool('dlcalc')}
+
+<h3>מה בדיוק קונים: רישיון ולא זכויות יוצרים</h3>
+<ul>
+<li>במסלול בתשלום מותר להשתמש בשיר מסחרית, כשהוא <b>הורד דרך סונו</b>. לפי התנאים החדשים (3.9.2026), השימוש המסחרי קשור להורדה מורשית. לא מקליטים מהמסך ולא מורידים מאתרים אחרים.</li>
+<li><b>זכויות יוצרים:</b> לפי עמדת משרד זכויות היוצרים האמריקאי, מוזיקה שנוצרה רק מפרומפט <b>לא מוגנת</b> בזכויות יוצרים. מה שאתם מוסיפים בעצמכם (מילים, עריכה, סידור) כן יכול להיות מוגן. בפועל: מותר לכם להשתמש ולהרוויח, אבל קשה למנוע מאחרים להעתיק.</li>
+<li>שומרים תיעוד לכל שיר: תאריך, מסלול, קישור לשיר בסונו וקובץ ההורדה. זה מה שמציגים אם מישהו תובע את השיר.</li>
+</ul>
+
+<h3>מה קורה ברקע (כדי להבין את הסיכון)</h3>
+<ul>
+<li>‏<b>Warner Music</b> הגיעה להסדר עם סונו בנובמבר 2025. בעקבותיו הושק בספטמבר 2026 מודל v6, שמתואר כמאומן על מוזיקה ברישיון, וההורדות הוגבלו.</li>
+<li>‏<b>Universal ו-Sony</b> עדיין בתביעה. בגרמניה בית משפט במינכן פסק נגד סונו ביולי 2026 (לא סופי). בספטמבר 2026 הוגשה תביעה של מוזיקאים עצמאיים.</li>
+<li>התביעות הן נגד סונו, לא נגד המשתמשים. אבל התנאים יכולים להשתנות, ולכן <b>מורידים ושומרים</b> כל שיר שמשתמשים בו.</li>
+</ul>
+${src('מחירים, קרדיטים, הורדות וזכויות: נבדק מול דף המחירים הרשמי ב-20.10.2026. רקע על השינוי: aimusicdaily.com, kingy.ai, suno.com/blog/suno-updates-tos. הסדר Warner: musicbusinessworldwide.com (11/2025). v6: techcrunch.com (9.9.2026). זכויות: terms.law, techjacksolutions.com. ' + L('דף המחירים של סונו', 'https://suno.com/pricing') + ' · ' + L('תנאי השימוש', 'https://suno.com/terms'))}
+`,
+  check: ['הבנתי ששירים מהמסלול החינמי אסורים לערוץ', 'בחרתי מסלול (Pro ללמידה, Premier לערוץ פעיל)', 'הכנתי תיקייה או גיליון לתיעוד כל שיר']
+});
+
+M({
+  id: 'suno2', group: 'סונו', title: 'סונו: יוצרים את השיר הראשון', min: 30,
+  lead: 'סיור מודרך בעמוד היצירה, ותרגיל מלא: שיר אינסטרומנטלי ראשון בשבע דקות.',
+  body: () => `
+<h3>נכנסים</h3>
+${steps([
+  'נכנסים ל-' + L('suno.com', 'https://suno.com') + ' ← <b>Sign in</b>. אפשר להתחבר עם גוגל.',
+  'משדרגים: תמונת הפרופיל או <b>Upgrade</b> ← בוחרים מסלול ← משלמים.',
+  'בתפריט הצד ← <b>Create</b>. בראש הטופס עוברים ל-<b>Custom</b>.'
+])}
+${shot('suno-home.jpg', 'suno.com', 'דף הבית של סונו לפני התחברות. בגרסה הנוכחית יש תיבת "Chat to make music" (יצירה בשיחה) וכפתור <b>Advanced</b> שפותח את השדות המפורטים.')}
+${warn('הממשק השתנה עם v6', 'בצילום רואים שסונו עבר לתיבת יצירה בסגנון שיחה. השדות שמתוארים באיור למטה (Styles, Lyrics, Instrumental, Exclude, Weirdness) נמצאים תחת <b>Advanced</b> (או Custom). את המסך שאחרי ההתחברות לא יכולתי לצלם, כי הוא דורש חשבון. לכן האיור מבוסס על התיאורים של הגרסאות הקודמות. אם הסידור שונה, מחפשים את השדות לפי השם.')}
+${MOCK.sunoCreate()}
+
+<h3>תרגיל: שיר ראשון</h3>
+${steps([
+  '<b>Instrumental:</b> מדליקים.',
+  '<b>Lyrics:</b> כותבים בדיוק:<div class="out" style="margin-top:6px">[Intro]\n[Instrumental]\n[Interlude]\n[Instrumental]\n[Outro]\n[End]</div>',
+  '<b>Styles:</b> מדביקים:<div class="out" style="margin-top:6px">lofi hip hop, 75 BPM, mellow Rhodes chords, dusty boom-bap drums, warm upright bass, vinyl crackle, soft rain ambience, cozy, nostalgic, instrumental, no vocals</div>',
+  '<b>More Options ← Exclude styles:</b> ‏<span class="mono">vocals, singing, humming, choir, rap</span>',
+  '<b>Weirdness</b> כ-35%, <b>Style Influence</b> כ-70%. כך התוצאה צפויה ונצמדת לסגנון.',
+  '<b>Title:</b> שם קצר ("Rainy Window"). לוחצים <b>Create</b> ומחכים כדקה.',
+  '<b>מאזינים לשתי הגרסאות עד הסוף.</b> פוסלים כל גרסה עם קול פתאומי, סוף חתוך או רעש. מסמנים ב-❤ את מה שטוב.'
+])}
+
+<h3>מה עושה כל שדה, בקצרה</h3>
+${table(['שדה', 'מה כותבים', 'מגבלה (בערך)'], [
+  ['Styles', 'ז\'אנר, אווירה, קצב (BPM), 3–5 כלים, הפקה, "instrumental"', 'כ-1,000 תווים, אבל 6–10 תיאורים עובדים הכי טוב'],
+  ['Lyrics', 'בשיר בלי שירה: רק תגיות מבנה', 'כ-5,000 תווים'],
+  ['Exclude styles', 'מה לא לכלול: vocals, choir, drums (לשינה)…', 'זה כיוון, לא הבטחה'],
+  ['Weirdness', 'נמוך = צפוי, גבוה = הפתעות', 'ברירת מחדל באמצע'],
+  ['Style Influence', 'גבוה = נצמד לסגנון שכתבתם', 'ברירת מחדל באמצע'],
+  ['Title', 'שם השיר', '80–100 תווים']
+])}
+
+<h3>תגיות מבנה (בתוך Lyrics)</h3>
+<p>התגיות עובדות גם בלי מילים: <span class="mono">[Intro] [Verse] [Chorus] [Bridge] [Instrumental] [Interlude] [Solo] [Outro] [End]</span>. בשיר ארוך ורגוע: Intro ← Instrumental ← Interlude ← Instrumental ← Outro ← End. התגית <span class="mono">[End]</span> עוזרת למנוע סוף חתוך.</p>
+
+${good('חמש השכבות נגד שירה לא רצויה', `<ol><li>מתג Instrumental דולק.</li><li>"instrumental, no vocals" בסוף ה-Styles.</li><li>vocals, singing, humming, choir ב-Exclude.</li><li>[Instrumental] בשדה Lyrics (שדה ריק לבד לא מספיק).</li><li>להימנע ממילים שמרמזות על קול: chant, ooh, anthemic, soulful, sing-along.</li></ol>`)}
+${warn('שמות אמנים', 'סונו חוסם שמות של אמנים בפרומפט. לא מנסים לעקוף (למשל לרווח אותיות). מתארים במקום זה ז\'אנר, תקופה, כלים והפקה: "1960s bossa nova, nylon guitar, soft brushed drums" במקום שם של זמר.')}
+`,
+  check: ['נכנסתי לסונו ועברתי למצב Custom', 'יצרתי שיר אינסטרומנטלי לפי התרגיל', 'האזנתי לשתי הגרסאות וסימנתי את הטובה']
+});
+
+M({
+  id: 'suno3', group: 'סונו', title: 'סונו מתקדם: הארכה, עריכה והורדה', min: 25,
+  lead: 'איך הופכים שיר טוב לטראק ארוך ואחיד, מתקנים חלקים בעייתיים ומורידים בחוכמה.',
+  body: () => `
+${MOCK.sunoMenu()}
+
+<h3>הארכת שיר (Extend) – חוסך הורדות</h3>
+${steps([
+  'בתפריט ⋯ של השיר ← <b>Remix/Edit ← Extend</b>.',
+  'בוחרים נקודת התחלה (החץ הלבן על הגל). עדיף רגע שקט לפני הסוף, לא הסוף עצמו.',
+  'ב-Lyrics כותבים תגיות לחלק החדש, למשל <span class="mono">[Interlude] [Instrumental] [Outro] [End]</span>. משאירים את אותו Styles.',
+  '<b>Create</b>. מאזינים למעבר, ואם הוא חלק לוחצים <b>Get Whole Song</b> כדי לחבר הכול לשיר אחד.',
+  'מורידים רק את השיר המחובר: <b>הורדה אחת</b> במקום שתיים.'
+])}
+
+<h3>בניית פלייליסט אחיד</h3>
+<ul>
+<li><b>שורת ליבה קבועה:</b> ז'אנר + BPM + כלים + מרקם נשארים זהים. משנים <b>משתנה אחד</b> בכל שיר: כלי מוביל, מילת אווירה או סולם.</li>
+<li><b>Reuse Prompt</b> על שיר שאהבתם: אותו פרומפט, שיר חדש.</li>
+<li><b>Cover</b> על שיר שאהבתם: אותה מנגינה בעיבוד אחר. שימושי לגרסה "רגועה יותר" או "עם פסנתר".</li>
+<li>מייצרים פי 2–3 שירים ממה שצריך, ומשאירים רק את הטובים. האוצרות (הבחירה) היא בדיוק "העבודה האנושית" שיוטיוב רוצה לראות.</li>
+</ul>
+
+<h3>תיקונים</h3>
+${table(['בעיה', 'פתרון'], [
+  ['קול או "אההה" באמצע', '<b>Replace Section</b> על החלק הבעייתי (במסלול בתשלום). מתקבלות 2 גרסאות.'],
+  ['סוף חתוך או רועש', '<b>Crop</b> לפני הסוף, או Extend עם [Outro] [End], או פייד-אאוט בעריכה.'],
+  ['השיר מהיר מדי', '<b>Adjust Speed</b>, או לכתוב BPM נמוך יותר ב-Styles וליצור מחדש.'],
+  ['צליל עמום', '<b>Remaster</b> (בגרסאות החדשות), או להוריד WAV במקום MP3.'],
+  ['רוצים להוציא רק את הפסנתר', '<b>Get Stems</b>: הפרדה לערוצים (עולה קרדיטים).']
+])}
+
+<h3>הורדה ותיעוד</h3>
+${steps([
+  '⋯ ← <b>Download</b> ← <b>WAV Audio</b> (איכות הכי גבוהה לעריכה) או MP3.',
+  'שם קובץ קבוע: <span class="mono">2026-10-20_rainy-window_01.wav</span>.',
+  'בגיליון התיעוד: שם, תאריך, מסלול, קישור לשיר בסונו, הפרומפט. 30 שניות לשיר, וזה מה שמציל אתכם בתביעת זכויות.',
+  'גיבוי לענן (Google Drive / Dropbox).'
+])}
+
+<h3>Suno Studio (במסלול Premier)</h3>
+<p>תוכנת עריכה בדפדפן: עריכה לפי ערוצים, MIDI, סינתיסייזר וייצוא WAV. לערוץ פלייליסטים זה לא חובה. זה שימושי כשרוצים להוסיף נגיעה אישית (למשל להחליף כלי), וגם מחזק את הטענה ל"תרומה אנושית". לפי דיווח לא רשמי, ייצוא מ-Studio לא נספר במכסת ההורדות ${y('לא מאומת')}.</p>
+
+<h3>יכולות v6 שכדאי להכיר</h3>
+<ul>
+<li>עריכה של קטעים במשפט רגיל ("make the bridge softer").</li>
+<li>קלט מתמונה, וידאו או הקלטה קולית כהשראה.</li>
+<li>‏<b>Custom Model</b> (בטא, בתשלום): מאמנים מודל על 6+ שירים שלכם. מתאים לשמור על "צליל הערוץ".</li>
+<li>‏<b>Voices</b> (לשעבר Personas): שומרים קול או סגנון קבוע.</li>
+</ul>
+${src('תפריט השיר והארכה: help.suno.com, jackrighteous.com. Studio 2.0: dubspot (13.8.2026). v6: about.suno.com/blog/introducing-v6. שמות הכפתורים משתנים בין גרסאות; אם משהו לא נמצא, מחפשים במדריך הרשמי ' + L('help.suno.com', 'https://help.suno.com') + '.')}
+`,
+  check: ['הארכתי שיר עם Extend וחיברתי עם Get Whole Song', 'הורדתי WAV ושמרתי בשם קבוע', 'רשמתי את השיר בגיליון התיעוד']
+});
+
+M({
+  id: 'prompts', group: 'סונו', title: 'מחולל פרומפטים לסונו', min: 20,
+  lead: 'בוחרים נושא, אווירה וכלים, ומקבלים פרומפט מוכן להדבקה. הכלי גם מייצר סדרה שלמה של וריאציות לפלייליסט אחד.',
+  body: () => `
+<h3>המבנה של פרומפט טוב</h3>
+<p class="mono" style="direction:ltr;text-align:left;background:var(--sunk);padding:10px;border-radius:8px">[genre] , [BPM] , [3–5 instruments] , [production / texture] , [mood × 2] , [use-case] , instrumental, no vocals</p>
+<ul>
+<li>קונקרטי: "warm upright bass" ולא "nice bass".</li>
+<li>לא סותר: לא "calm, energetic".</li>
+<li>לא יותר מ-2 ז'אנרים.</li>
+<li>תמיד BPM, אחרת הקצב "נודד".</li>
+</ul>
+
+${tool('prompt')}
+
+<h3>ספריית פרומפטים מוכנים</h3>
+<p>לחיצה על "העתקה" מעתיקה את הפרומפט.</p>
+${tool('library')}
+`,
+  check: ['יצרתי פרומפט במחולל והדבקתי בסונו', 'יצרתי סדרת וריאציות לפלייליסט אחד', 'שמרתי את שורת הליבה של הערוץ']
+});
+// ===== תוכן הקורס – חלק ב =====
+M({
+  id: 'visuals', group: 'וידאו', title: 'תמונות ואנימציה עם AI', min: 25,
+  lead: 'הוויזואל הוא מה שמבדיל ערוץ עם אופי מ"עוד ערוץ AI". כאן בונים לולאה מונפשת ותמונה ממוזערת.',
+  body: () => `
+<h3>שלוש רמות ויזואל</h3>
+${table(['רמה', 'מה זה', 'זמן', 'סיכון "תוכן לא אותנטי"'], [
+  ['1. תמונה סטטית', 'תמונה אחת לכל הסרטון', '5 דק\'', r('גבוה אם זו אותה תמונה בכל הסרטונים')],
+  ['2. תמונה + תנועה עדינה', 'זום איטי, גשם, אורות מהבהבים, ויזואלייזר', '20 דק\'', y('בינוני')],
+  ['3. לולאה מונפשת', 'קליפ של 5–10 שניות שחוזר בצורה חלקה', '45 דק\'', g('נמוך, במיוחד עם סצנה חדשה לכל סרטון')]
+])}
+<p><b>ההמלצה:</b> רמה 3, עם <b>סצנה חדשה לכל סרטון</b> מתוך אותו עולם (אותו חתול, חדר אחר; אותו בית קפה, שעה אחרת). כך יש אחידות של מותג וגם גיוון.</p>
+
+<h3>הכלים</h3>
+${table(['שלב', 'כלים', 'הערות'], [
+  ['תמונה', 'Midjourney, Ideogram, Leonardo, ChatGPT / Gemini לתמונות', 'בודקים בתנאי השימוש שמותר שימוש מסחרי במסלול שלכם'],
+  ['הנפשה', 'Kling, Runway, Google Veo, Sora', 'מעלים את התמונה (image-to-video) ומבקשים תנועה עדינה'],
+  ['לולאה חלקה', 'CapCut (Reverse), DaVinci Resolve', 'קליפ + אותו קליפ הפוך = לולאה בלי קפיצה'],
+  ['תמונה ממוזערת', 'Canva, Photopea (חינם), CapCut', '1280×720, עד 2MB']
+])}
+
+<h3>פרומפט לתמונה (דוגמה)</h3>
+<div class="out">cozy anime-style bedroom at night, girl studying at a wooden desk by a large window, heavy rain on the glass, warm desk lamp, a sleeping orange cat on the windowsill, city lights blurred outside, soft lo-fi aesthetic, muted teal and amber palette, 16:9</div>
+<h4>פרומפט להנפשה</h4>
+<div class="out">subtle seamless loop: rain drops sliding down the window, lamp light flickering slightly, the cat's tail moving slowly, camera completely still, no character movement</div>
+${tip('למה "camera completely still"', 'מצלמה שזזה לא חוזרת לנקודת ההתחלה, והלולאה "קופצת". תנועות קטנות ומחזוריות (גשם, אור, עשן, עלים) נראות הכי טבעיות בלולאה.')}
+
+<h3>תמונה ממוזערת למוזיקה</h3>
+<ul>
+<li>תמונה אחת חזקה עם אווירה ברורה, ניגודיות גבוהה.</li>
+<li>2–4 מילים לכל היותר: "RAINY NIGHT", "DEEP FOCUS". גדולות, קריאות בטלפון.</li>
+<li>אותו סגנון בכל הערוץ: מיקום טקסט, גופן, צבעים. צופה צריך לזהות את הערוץ בלי לקרוא.</li>
+<li>אפשר תג קטן של אורך: "1 HOUR", "3 HRS".</li>
+<li>לא להבטיח מה שאין (למשל "NO ADS" אם יש פרסומות). זו הטעיה.</li>
+</ul>
+`,
+  check: ['בחרתי רמת ויזואל ויצרתי סצנה ראשונה', 'יצרתי לולאה חלקה של 5–10 שניות', 'עיצבתי תבנית קבועה לתמונה ממוזערת']
+});
+
+M({
+  id: 'capcut', group: 'וידאו', title: 'עריכה ב-CapCut: אוסף של שעה', min: 35,
+  lead: 'מהשירים והלולאה לסרטון מוכן להעלאה. מסלול מלא ב-CapCut למחשב, ואלטרנטיבות.',
+  body: () => `
+<h3>לפני שמתחילים</h3>
+<ul>
+<li>מורידים <b>CapCut למחשב</b> (Windows / Mac) מ-${L('capcut.com', 'https://www.capcut.com')}. לסרטונים ארוכים הגרסה למחשב יציבה בהרבה מהטלפון.</li>
+<li>תיקייה אחת לכל סרטון: <span class="mono">/rainy-night-01/audio</span>, <span class="mono">/video</span>, <span class="mono">/thumb</span>.</li>
+<li>סדר השירים: מתחילים בשיר הכי חזק (הדקה הראשונה קובעת אם נשארים), ונגמרים ברגוע.</li>
+</ul>
+
+${MOCK.capcut()}
+
+<h3>צעד אחרי צעד</h3>
+${steps([
+  '<b>New project</b> ← יחס 16:9 (בפינה של הנגן ← Ratio ← 16:9).',
+  '<b>Import</b> ← בוחרים את כל השירים, הלולאה והלוגו.',
+  '<b>אודיו:</b> גוררים את השירים לרצועה מתחת לווידאו, לפי הסדר, צמודים זה לזה.',
+  '<b>מעברים רכים:</b> לוחצים על כל שיר ← בצד ימין ← <b>Basic ← Fade in / Fade out</b> של 2–3 שניות. בשירי שינה עדיף 4–5.',
+  '<b>עוצמה אחידה:</b> בוחרים את כל השירים ← <b>Normalize loudness</b> (אם קיים בגרסה שלכם). אחרת משווים בעין לפי גובה הגל.',
+  '<b>וידאו:</b> גוררים את הלולאה לרצועת הווידאו. לוחצים Ctrl+C, ואז Ctrl+V שוב ושוב עד שהווידאו ארוך כמו האודיו. טיפ: מעתיקים 10 עותקים, מסמנים את כולם ומעתיקים שוב. כך מתקדמים מהר.',
+  '<b>חיתוך הסוף:</b> מזיזים את הסמן לסוף השיר האחרון ← <b>Split</b> (Ctrl+B) ← מוחקים את מה שאחרי.',
+  '<b>טקסט (לא חובה):</b> לשונית <b>Text</b> ← שם הערוץ בפינה, בשקיפות 60%. לחלופין שם השיר שמתנגן מעל כל קטע.',
+  '<b>ויזואלייזר (לא חובה):</b> לשונית <b>Effects</b> ← מחפשים "audio visualizer" או "spectrum". נותן תחושה של "חי".',
+  '<b>Export</b> לפי ההגדרות למטה. משאירים את המחשב לעבוד.'
+])}
+${MOCK.capExport()}
+
+<h3>פרקי זמן (Chapters) לתיאור</h3>
+<p>תוך כדי העריכה רושמים את זמן ההתחלה של כל שיר. אפשר גם רק את אורכי השירים: הכלי בפרק 11 מחשב את השעות לבד.</p>
+
+${warn('CapCut חינם מול בתשלום, ורישיונות', `<ul>
+<li>בחינם: יצוא 1080p בלי סימן מים, כל עוד לא משתמשים באפקטים או תבניות "Pro". אפקט עם יהלום מוסיף סימן מים או דורש מנוי.</li>
+<li><b>לא משתמשים במוזיקה מהספרייה של CapCut.</b> הרישיון שלה למטרות מסחריות לא ברור. האודיו בא רק מסונו.</li>
+<li>תנאי השימוש של CapCut נותנים לה זכויות רחבות על תוכן שמעלים אליה. קוראים אותם; אם זה מפריע, יש אלטרנטיבות.</li>
+</ul>`)}
+
+<h3>אלטרנטיבות</h3>
+${table(['כלי', 'למי', 'יתרון'], [
+  ['DaVinci Resolve (חינם)', 'מי שרוצה כלי מקצועי', 'בלי סימני מים, 4K בחינם, יציב בפרויקטים ארוכים'],
+  ['Canva', 'מתחילים', 'פשוט מאוד, טוב גם לתמונות ממוזערות'],
+  ['FFmpeg', 'מי שלא מפחד מפקודה', 'הכי מהיר: לולאה + אודיו בפקודה אחת, בלי לרנדר אפקטים']
+])}
+<p class="note">פקודת FFmpeg לדוגמה (מחברת את כל השירים לקובץ <span class="mono">mix.mp3</span> מראש):</p>
+<div class="out">ffmpeg -stream_loop -1 -i loop.mp4 -i mix.mp3 -shortest -map 0:v -map 1:a -c:v libx264 -preset veryfast -crf 20 -c:a aac -b:a 192k out.mp4</div>
+`,
+  check: ['ערכתי אוסף של לפחות 30 דקות', 'הוספתי מעברים רכים בין שירים', 'ייצאתי ב-1080p H.264', 'רשמתי את אורכי השירים לפרקי הזמן']
+});
+
+M({
+  id: 'upload', group: 'יוטיוב', title: 'העלאה ליוטיוב סטודיו', min: 30,
+  lead: 'מסך אחרי מסך בחלון ההעלאה, וכלי שכותב כותרת, תיאור ופרקי זמן.',
+  body: () => `
+${steps([
+  'ב-YouTube Studio ← <b>CREATE ← Upload videos</b> ← גוררים את הקובץ.',
+  'בזמן שהקובץ עולה ממלאים את הפרטים (המסכים למטה).'
+])}
+${MOCK.ytDetails()}
+
+<h3>הכלי: כותרת, תיאור ופרקי זמן</h3>
+${tool('meta')}
+
+${MOCK.ytMore()}
+${bad('חובה: לסמן שהמוזיקה נוצרה ב-AI', 'בדף העזרה הרשמי של יוטיוב כתוב שחובה לגלות תוכן AI ש"<b>יוצר מוזיקה שהיא העיקר בסרטון</b>". זה בדיוק ערוץ שכולו מוזיקה מסונו. לכן בכל סרטון מסמנים <b>Yes</b> בשאלה על תוכן AI. יוטיוב מוסיף תווית לנגן. מי שלא מסמן שוב ושוב מסתכן בהסרת תוכן או בהשעיה מתוכנית השותפים.')}
+${shot('yt-ai-disclosure.jpg', 'support.google.com/youtube/answer/14328491', 'דף העזרה הרשמי "Disclosing use of GenAI content". בשורה הרביעית ברשימה: Creates music that\'s the main focus of the video.')}
+
+<h3>Video elements (רכיבי וידאו)</h3>
+<ul>
+<li><b>End screen (מסך סיום):</b> 20 השניות האחרונות. מוסיפים "Best for viewer" + כפתור הרשמה + הפלייליסט הקשור. זה מה שמשאיר אנשים בערוץ.</li>
+<li><b>Cards:</b> לא חובה. אפשר להפנות לפלייליסט באמצע.</li>
+<li>כתוביות: לא רלוונטי למוזיקה בלי מילים.</li>
+</ul>
+
+<h3>Checks (בדיקות)</h3>
+<p>יוטיוב סורק זכויות יוצרים. "No issues found" = מצוין. אם מופיעה תביעה (Copyright claim) – לא מפרסמים. בודקים מה נתבע ומטפלים לפי פרק 13.</p>
+
+${MOCK.ytVis()}
+${tip('תדירות', 'עדיף קצב קבוע וצנוע (2–3 סרטונים בשבוע, באותן שעות) מאשר הצפה של 10 סרטונים ביום. הצפה של סרטונים דומים היא בדיוק הדפוס שמערכות "תוכן לא אותנטי" מזהות.')}
+`,
+  check: ['העליתי סרטון ראשון (גם Private זה בסדר)', 'כתבתי תיאור עם פרקי זמן בעזרת הכלי', 'סימנתי "לא לילדים" ו-Yes בשאלת תוכן ה-AI', 'הוספתי מסך סיום ופלייליסט']
+});
+
+M({
+  id: 'seo', group: 'יוטיוב', title: 'קידום אורגני לפי הכללים של היום', min: 25,
+  lead: 'איך יוטיוב מחליט למי להציג את הסרטון, ומה עושים כדי שיציג אותו ליותר אנשים, בלי טריקים שיכולים להפיל את הערוץ.',
+  body: () => `
+<h3>מה האלגוריתם מודד</h3>
+<p>יוטיוב לא "קורא" את המוזיקה. הוא בודק איך אנשים מגיבים לסרטון:</p>
+${table(['מדד', 'איפה רואים', 'יעד סביר למוזיקה'], [
+  ['שיעור הקלקה (CTR)', 'Analytics ← Reach', '4–8%'],
+  ['משך צפייה ממוצע', 'Analytics ← Engagement', 'בסרטון של שעה: 8–20 דקות זה טוב'],
+  ['צפייה לכל חשיפה', 'Test & compare משתמש בזה לבחירת המנצח', 'השוואה בין גרסאות'],
+  ['צופים חוזרים', 'Analytics ← Audience', 'עולה עם הזמן = מותג'],
+  ['מקורות תנועה', 'Analytics ← Reach ← Traffic source', 'מוזיקה: Browse ו-Suggested הכי חשובים']
+])}
+
+<h3>הצ'קליסט לכל סרטון</h3>
+${steps([
+  '<b>כותרת</b> שמתחילה במצב או בשימוש: "Rainy Night Lofi 🌧️ Chill Beats to Study & Relax (1 Hour)". כנה ומדויקת.',
+  '<b>תמונה ממוזערת</b> בתבנית של הערוץ. אחרי 48 שעות בודקים CTR.',
+  '<b>Test & compare:</b> ‏2–3 תמונות או כותרות. יוטיוב בוחר לפי זמן צפייה, לא רק לפי הקלקות.',
+  '<b>תיאור:</b> שתי שורות ראשונות טבעיות עם מילות המפתח, ואז רשימת שירים עם זמנים, ואז קישור לפלייליסט.',
+  '<b>פלייליסט:</b> כל סרטון בפלייליסט אחד לפחות. פלייליסטים מגדילים את זמן הצפייה בערוץ.',
+  '<b>מסך סיום</b> לסרטון הבא.',
+  '<b>תגובה מוצמדת:</b> שאלה לקהל ("מה אתם לומדים הערב?"). תגובות בונות קהילה.'
+])}
+
+<h3>Shorts כמשפך</h3>
+<ul>
+<li>‏15–30 שניות של הקטע הכי יפה + אותו ויזואל + טקסט "Full 1-hour mix on the channel".</li>
+<li>‏Shorts כמעט לא מכניסים כסף, אבל מביאים מנויים חדשים. מקשרים ל-Short את הסרטון המלא (Related video).</li>
+<li>‏2–4 בשבוע מספיקים.</li>
+</ul>
+
+<h3>פורמטים שמגדילים שעות צפייה</h3>
+<ul>
+<li><b>אוספים ארוכים</b> (1–3 שעות), ולסרטוני שינה גם 8–10 שעות.</li>
+<li><b>שידור חי 24/7</b> של פלייליסט מתחלף. חזק לנישות לימוד ושינה, ואפשר אחרי שיש מספיק שירים.</li>
+<li><b>סדרות</b>: "Rainy Café Vol. 1, 2, 3". צופים שאהבו חוזרים לחלק הבא.</li>
+<li><b>עונתיות:</b> חורף, גשם ראשון, חגים. מעלים 4–6 שבועות לפני העונה.</li>
+</ul>
+
+<h3>מה אסור בקידום</h3>
+${yesno(
+  ['מילות מפתח טבעיות בכותרת ובתיאור', 'תמונות שמשקפות את התוכן', 'שיתוף ברשתות חברתיות, קהילות לימודים ו-Reddit (לפי הכללים שלהם)', 'שיתופי פעולה עם יוצרים אחרים'],
+  ['ערימת מילות מפתח או תגיות לא קשורות', 'כותרת או תמונה מטעה (למשל שם של אמן מפורסם)', 'קניית צפיות, מנויים או לייקים', 'Sub4sub (מנוי תמורת מנוי), קבוצות "תעזרו לי"', 'ספאם של קישורים בתגובות של ערוצים אחרים']
+)}
+${src('Test & compare: tubefilter.com (7/2025), vidanalyze.com (2026). מדיניות ספאם: support.google.com/youtube/answer/2801973. הנתונים "יעד סביר" הם הערכה מקצועית, לא נתון רשמי.')}
+`,
+  check: ['השתמשתי בצ\'קליסט בסרטון האחרון', 'הפעלתי Test & compare', 'פרסמתי 2 Shorts שמפנים לאוסף מלא']
+});
+
+M({
+  id: 'rights', group: 'חוקים', title: 'זכויות יוצרים: מה מותר ומה אסור', min: 25,
+  lead: 'מאיפה מגיעות תביעות זכויות, איך נמנעים מהן, ומה עושים כשמגיעה אחת.',
+  body: () => `
+<h3>הטבלה הגדולה</h3>
+${yesno(
+  ['שירים שנוצרו בסונו <b>במסלול בתשלום</b> והורדו מסונו', 'תמונות ואנימציות מכלים שמתירים שימוש מסחרי במסלול שלכם', 'מילים שכתבתם בעצמכם', 'גופנים חינמיים לשימוש מסחרי (Google Fonts)', 'תיאור סגנון: "1960s bossa nova, nylon guitar"'],
+  ['שירים מהמסלול החינמי של סונו', 'מוזיקה של אחרים, גם "רק 10 שניות"', 'מוזיקה מהספרייה של CapCut או TikTok', 'שמות אמנים בפרומפט, או חיקוי קול של זמר', 'העלאת שיר של אחר לסונו כדי לעשות לו Cover', 'מילים של שירים קיימים', 'דמויות מוגנות (דיסני, אנימה מוכרת) בתמונות']
+)}
+
+<h3>Content ID: המלכודת של מוזיקת AI</h3>
+<p>Content ID היא המערכת של יוטיוב שמשווה כל סרטון למאגר של שירים רשומים. הבעיה: סונו יכול לייצר דברים דומים לשני אנשים עם פרומפט דומה. אם מישהו אחר רשם שיר דומה (למשל דרך DistroKid), הסרטון שלכם יכול לקבל תביעה, וההכנסה תעבור אליו.</p>
+${steps([
+  '<b>לא רושמים את השירים שלכם ב-Content ID</b> בשלב הזה. לפי חלק מהמקורות, מוזיקה שכולה AI בכלל לא כשירה לרישום.',
+  '<b>אם מפיצים לספוטיפיי</b> דרך מפיץ (DistroKid וכד\'): מבטלים את שירות "YouTube Content ID" של המפיץ, או מוסיפים את הערוץ שלכם לרשימה הלבנה (Whitelist). אחרת הערוץ שלכם יקבל תביעות על המוזיקה שלכם.',
+  '<b>שומרים תיעוד</b> (פרקים 5 ו-7): קישור לשיר בסונו + תאריך + מסלול.',
+  '<b>קיבלתם תביעה?</b> Studio ← Content ← הסרטון ← Restrictions ← Copyright ← <b>Dispute</b> (ערעור). מסבירים: "Original track generated by me with Suno on a paid plan on [date]; link: …".'
+])}
+${warn('ערעור הוא לא משחק', 'מערערים רק כשבטוחים. ערעור שנדחה פעמיים יכול להפוך להתראת זכויות יוצרים (Copyright strike). שלוש התראות = סגירת הערוץ.')}
+
+<h3>תביעה (Claim) מול התראה (Strike)</h3>
+${table(['', 'Copyright claim', 'Copyright strike'], [
+  ['מה זה', 'בעל זכויות "לוקח" את ההכנסה או חוסם את הסרטון', 'בקשת הסרה משפטית'],
+  ['פוגע בערוץ?', 'לא ישירות', 'כן: 3 תוך 90 יום = סגירה'],
+  ['מה עושים', 'Dispute אם בטוחים', 'ערעור (Counter notification) או פנייה לתובע']
+])}
+
+<h3>תרגול: מותר או אסור?</h3>
+${tool('quiz')}
+${src('Content ID ו-AI: sunowatermark.com, hookgenius.app (2026, מקורות לא רשמיים, חלקם סותרים). זכויות יוצרים ב-AI: עמדת משרד זכויות היוצרים האמריקאי (דוחות 2025). זה לא ייעוץ משפטי.')}
+`,
+  check: ['הבנתי את ההבדל בין תביעה להתראה', 'החלטתי לא לרשום שירים ב-Content ID', 'עברתי את התרגול']
+});
+
+M({
+  id: 'safe', group: 'חוקים', title: 'איך הערוץ לא ייחסם', min: 25,
+  lead: 'המדיניות של יוטיוב נגד תוכן המוני ו-AI באיכות נמוכה, ובדיקה עצמית לפני כל העלאה.',
+  body: () => `
+<h3>מה השתנה</h3>
+<ul>
+<li><b>יולי 2025:</b> "תוכן חוזרני" שונה ל"<b>תוכן לא אותנטי</b>": תוכן שנראה מיוצר בייצור המוני או חוזר על עצמו. זה חל על כל שיטת יצירה, עם AI או בלי.</li>
+<li><b>ינואר 2026:</b> מנכ"ל יוטיוב הכריז שטיפול ב"תוכן AI באיכות נמוכה" הוא יעד מרכזי. ערוצי AI גדולים נמחקו.</li>
+<li><b>ספטמבר 2026:</b> נסגרו רשתות של ערוצים מתואמים בגלל ספאם.</li>
+<li>הבדיקה היא <b>ברמת הערוץ כולו</b>: בודק אנושי מסתכל על כמה סרטונים ושואל אם יש כאן ערך ועבודה של אדם.</li>
+</ul>
+
+${yesno(
+  ['מותג ברור ועולם ויזואלי ייחודי', 'סצנה חדשה לכל סרטון', 'אוצרות: בחירה וסידור של השירים', 'קצב פרסום קבוע וסביר', 'כותרות כנות, תיאור עם רשימת שירים', 'סימון "נוצר ב-AI" בכל סרטון (חובה למוזיקת AI)', 'מענה לתגובות, פוסטים בקהילה', 'נגיעה אישית: הערות של האוצר, סיפור לכל אוסף, עריכה ב-Studio'],
+  ['עשרות סרטונים כמעט זהים', 'אותה תמונה סטטית בכל סרטון', 'אותם שירים בסדר אחר כ"סרטון חדש"', 'העלאה של 5–10 סרטונים ביום', 'שירים שלא האזנתם להם (עם תקלות וקולות)', 'רשת ערוצים עם אותו תוכן', 'שכפול של ערוץ אחר', 'פתיחת ערוץ חדש אחרי שערוץ נסגר (עקיפת חסימה)']
+)}
+
+<h3>מערכת ההתראות (Strikes)</h3>
+${table(['שלב', 'מה קורה'], [
+  ['אזהרה ראשונה', 'בדרך כלל אזהרה בלבד, בלי עונש'],
+  ['התראה 1', 'שבוע בלי העלאות. ההתראה פגה אחרי 90 יום'],
+  ['התראה 2 (תוך 90 יום)', 'שבועיים בלי העלאות'],
+  ['התראה 3 (תוך 90 יום)', 'סגירת הערוץ'],
+  ['הפרה חמורה (ספאם, הונאה)', 'סגירה מיידית אפשרית']
+])}
+
+<h3>בדיקה עצמית לפני העלאה</h3>
+${tool('selfcheck')}
+
+<h3>אם בכל זאת נדחים מהתוכנית</h3>
+${steps([
+  'קוראים את הסיבה במייל וב-Earn (בדרך כלל "Reused content" או "Inauthentic content").',
+  'מתקנים: מוחקים או מסתירים סרטונים דומים מדי, מוסיפים גיוון ויזואלי ונגיעה אישית.',
+  'אפשר לערער תוך 21 יום, או להמשיך להעלות תוכן מקורי ולהגיש מחדש אחרי 30 יום. אחרי דחייה שנייה ממתינים 90 יום.'
+])}
+${src('support.google.com/youtube/answer/1311392 (מדיניות מונטיזציה), tubefilter.com (1/2026), semafor.com (9/2026), searchenginejournal.com. משכי ההשעיה לפי ההתראות הם מהידע הכללי על המדיניות; לבדוק בדף הרשמי.')}
+`,
+  check: ['עברתי את הבדיקה העצמית על הסרטון הבא', 'יש לי תוכנית גיוון ויזואלי', 'אני לא מעלה יותר מסרטון ארוך אחד ביום']
+});
+
+M({
+  id: 'monetize', group: 'הכסף', title: 'הגשה למונטיזציה, AdSense ומיסים', min: 25,
+  lead: 'מה עושים ביום שעוברים את הסף: הגשה, חיבור AdSense, טופס מס אמריקאי ודיווח בישראל.',
+  body: () => `
+<h3>ההגשה</h3>
+${steps([
+  'כשמגיעים לתנאים, ב-<b>Earn</b> מופיע <b>Apply</b>. לוחצים ומאשרים את תנאי התוכנית.',
+  '<b>Set up AdSense:</b> מחברים חשבון AdSense קיים או פותחים חדש בתוך התהליך. <b>חשבון אחד לאדם</b>: אותו AdSense מחברים לכל הערוצים.',
+  'הבקשה נכנסת לתור. מערכות אוטומטיות ובודקים אנושיים בודקים את הערוץ כולו. לפי יוטיוב, בדרך כלל כחודש, ולפעמים יותר.',
+  '<b>לפני ההגשה:</b> מסתירים (Private) סרטונים חלשים או דומים מדי. הבודק מסתכל על הסרטונים האחרונים והפופולריים.'
+])}
+
+<h3>AdSense: תשלום</h3>
+${steps([
+  'מאמתים כתובת: גוגל שולחת מכתב עם קוד (PIN) בדואר רגיל, כשההכנסה מגיעה ל-10$. מקלידים את הקוד ב-AdSense.',
+  'Payments ← <b>Add payment method</b> ← העברה בנקאית (חשבון בנק ישראלי, בדולרים או בשקלים לפי הבנק).',
+  'התשלום יוצא כשהיתרה עוברת <b>100$</b>, בסביבות ה-21 לחודש.'
+])}
+${MOCK.adsenseTax()}
+
+<h3>מיסים: ארה"ב</h3>
+<ul>
+<li>יוטיוב מנכה מס רק מההכנסה מצופים <b>בארה"ב</b>.</li>
+<li>בלי טופס: ניכוי של עד 24%. עם <b>W-8BEN</b> ותביעת הטבות אמנה כתושבי ישראל: ניכוי מופחת (המקורות מזכירים 10% או 15%). השיעור המדויק מופיע בסוף מילוי הטופס.</li>
+</ul>
+<h3>מיסים: ישראל</h3>
+${warn('מדברים עם רואה חשבון לפני התשלום הראשון', `<ul>
+<li>הכנסה מיוטיוב היא הכנסה מעסק, וצריך לדווח עליה לרשות המסים.</li>
+<li>בדרך כלל פותחים <b>תיק במע"מ</b> (עוסק פטור או מורשה) ו<b>תיק במס הכנסה</b>, ומדווחים לביטוח לאומי.</li>
+<li>אפשר לקזז את המס שנוכה בארה"ב מהמס בישראל, לפי אמנת המס. שומרים את טופסי 1042-S מ-AdSense.</li>
+<li>הוצאות מוכרות: מנויים לסונו, CapCut, כלי תמונות, ציוד. שומרים חשבוניות.</li>
+</ul>הסעיף הזה הוא מידע כללי, לא ייעוץ מס.`)}
+
+<h3>אחרי הקבלה</h3>
+<ul>
+<li><b>Monetization</b> בכל סרטון ← <b>On</b>. בסרטונים ארוכים: <b>Ad breaks ← Place automatically</b>. בסרטוני שינה כדאי להוריד ידנית חלק מההפסקות.</li>
+<li>Analytics ← <b>Revenue</b>: בודקים RPM לפי סרטון ולפי מדינה. מכאן מעדכנים את המחשבון.</li>
+<li>‏<b>Memberships</b> (חברות בתשלום) – אפשרי, אבל בערוץ מוזיקה בדרך כלל הכנסה קטנה.</li>
+</ul>
+${src('זמני בדיקה: vidiq.com (2026). מס: subsub.io, taxesforexpats.com (אמנת ישראל–ארה"ב). סף התשלום ותהליך PIN: ידע כללי על AdSense, לבדוק ב-' + L('עזרה של AdSense', 'https://support.google.com/adsense') + '.')}
+`,
+  check: ['פתחתי או חיברתי חשבון AdSense', 'מילאתי W-8BEN', 'קבעתי פגישה עם רואה חשבון']
+});
+
+M({
+  id: 'tracker', group: 'הכסף', title: 'הערוץ שלי: מעקב הכנסות ותחזית', min: 15,
+  lead: 'מחברים את הקורס לערוץ דרך קובץ ייצוא מיוטיוב סטודיו, ורואים כמה הרווחתם, כמה חסר עד הסף ומה צפוי.',
+  body: () => `
+<h3>איך מחברים את הנתונים</h3>
+<p>אין ליוטיוב חיבור ישיר שהקורס יכול להשתמש בו בלי הגדרות מסובכות. יש דרך פשוטה ובטוחה: מייצאים קובץ מהסטודיו ומעלים אותו לכאן. הנתונים נשמרים רק לכם.</p>
+${steps([
+  'YouTube Studio ← <b>Analytics</b> ← <b>Advanced mode</b> (למעלה מימין).',
+  'בוחרים טווח תאריכים: <b>Lifetime</b> (מאז ההתחלה). מעל הגרף, בתפריט, בוחרים פילוח לפי <b>חודש</b>.',
+  'בפינה ← חץ ייצוא (⬇) ← <b>Comma-separated values (.csv)</b>. יורד קובץ ZIP.',
+  'פותחים את ה-ZIP. מעלים לכאן את הקובץ <span class="mono">Chart data.csv</span> (או <span class="mono">Totals.csv</span>).',
+  'אפשר גם להקליד ידנית כל חודש: צפיות, שעות, מנויים והכנסה.'
+])}
+${MOCK.ytAnalytics()}
+${tool('tracker')}
+`,
+  check: ['ייצאתי קובץ מהסטודיו והעליתי', 'עדכנתי את המחשבון לפי ה-RPM האמיתי שלי']
+});
+
+M({
+  id: 'scale', group: 'צמיחה', title: 'שכפול לערוצים נוספים והכנסות נוספות', min: 25,
+  lead: 'איך הופכים ערוץ אחד שעובד לכמה ערוצים, בלי לסכן את כולם, ואילו מקורות הכנסה אפשר להוסיף.',
+  body: () => `
+<h3>מתי פותחים ערוץ שני</h3>
+<ul>
+<li>רק אחרי שהערוץ הראשון <b>צומח לבד</b>: קיבלתם מונטיזציה, או לפחות 3 חודשים של צמיחה רציפה, ותבנית עבודה שלוקחת פחות מ-3 שעות לסרטון.</li>
+<li>ערוץ שני = <b>נישה אחרת ומותג אחר</b> (לימודים בגשם ← ג'אז בוקר), לא העתק.</li>
+</ul>
+
+<h3>איך מנהלים כמה ערוצים בבטחה</h3>
+${steps([
+  '<b>ערוץ מותג (Brand Account):</b> ‏youtube.com ← תמונת פרופיל ← Settings ← <b>Add or manage your channel(s)</b> ← Create a channel. אפשר לנהל כמה ערוצים מאותו חשבון גוגל ולהוסיף מנהלים בלי לשתף סיסמה.',
+  '<b>AdSense אחד</b> לכל הערוצים (מותר וזה הכלל: חשבון אחד לאדם).',
+  '<b>תוכן שונה באמת:</b> שירים, ויזואל, שם וקהל. שירים מערוץ אחד לא עוברים לשני.',
+  '<b>אל תקדמו ערוץ מערוץ עם תוכן זהה.</b> רשת של ערוצים דומים היא בדיוק מה שנסגר בשנת 2026.',
+  '<b>אם ערוץ נסגר:</b> לא פותחים "במקומו" ערוץ חדש. זו עקיפת חסימה, והיא יכולה להפיל את כל הערוצים המקושרים. מערערים קודם.'
+])}
+
+<h3>שגרת עבודה ("פס ייצור" אנושי)</h3>
+${table(['יום', 'מה', 'זמן'], [
+  ['א', 'סשן סונו: 40–60 שירים לשני אוספים, האזנה ובחירה', '3 שעות'],
+  ['ב', 'ויזואל: 2 סצנות + 2 לולאות + 2 תמונות ממוזערות', '2 שעות'],
+  ['ג', 'עריכה + ייצוא (המחשב עובד, אתם לא)', '1.5 שעות'],
+  ['ד', 'העלאה ותזמון, Shorts, תגובות', '1 שעה'],
+  ['ה', 'Analytics, עדכון מעקב, תכנון לשבוע הבא', '30 דק\'']
+])}
+<p>אחרי שזה עובד אפשר להעביר חלקים לפרילנסרים (תמונות ממוזערות, עריכה). הבחירה של השירים נשארת אצלכם: זה הטעם של הערוץ.</p>
+
+<h3>הכנסות נוספות</h3>
+${table(['מקור', 'מה צריך', 'הערות'], [
+  ['ספוטיפיי, אפל מיוזיק (דרך DistroKid וכד\')', 'שירים ממסלול בתשלום, אלבום עם שם ועטיפה', 'ספוטיפיי מחק 75 מיליון שירי ספאם ב-2025. מפיצים מעט אלבומים איכותיים. <b>לבטל Content ID אצל המפיץ</b>'],
+  ['קישורי שותפים (Affiliate)', 'Amazon Associates וכד\'', 'אוזניות, מנורות, כלי לימוד. לציין בתיאור שזה קישור שותפים'],
+  ['חברויות בערוץ', 'תוכנית השותפים', 'הטבות: גרסאות בלי פרסומות, הצבעה על האוסף הבא'],
+  ['Patreon / חבילות', 'רישיון מסחרי מסונו', 'למשל חבילת מוזיקת רקע ליוצרים. לבדוק בתנאים של סונו מה מותר למכור הלאה']
+])}
+${bad('לא עושים', 'קניית השמעות, פלייליסטים של בוטים, או מאות שירים כמעט זהים בספוטיפיי. דייזר דיווחה שעד 85% מההשמעות של שירי AI מלאכותיים היו הונאה, והמערכות מזהות את זה.')}
+${src('ספוטיפיי: techcrunch.com (25.9.2025), musicbusinessworldwide.com. דייזר: routenote.com. ניהול ערוצים: ידע כללי על חשבונות מותג; לא נמצא מקור רשמי על קישור בין ערוצים בזמן סגירה.')}
+`,
+  check: ['יש לי שגרת עבודה שבועית', 'הערוץ השני (כשיגיע) יהיה בנישה ומותג אחרים', 'בדקתי מקור הכנסה נוסף אחד']
+});
+
+M({
+  id: 'glossary', group: 'צמיחה', title: 'מילון מונחים וצ\'קליסט העלאה', min: 10,
+  lead: 'כל המונחים במקום אחד, וצ\'קליסט קצר להדפסה בראש.',
+  body: () => `
+${table(['מונח', 'פירוש'], [
+  ['YPP', 'YouTube Partner Program – תוכנית השותפים. מה שמאפשר הכנסה מפרסומות'],
+  ['RPM', 'ההכנסה שלכם לכל 1,000 צפיות, אחרי החלק של יוטיוב'],
+  ['CPM', 'כמה המפרסם משלם לכל 1,000 הצגות פרסומת (לפני החלק של יוטיוב)'],
+  ['CTR', 'שיעור הקלקה: כמה מתוך מי שראו את התמונה הממוזערת לחצו'],
+  ['Watch time', 'שעות צפייה. לסף נספרות רק צפיות ציבוריות בסרטונים ארוכים'],
+  ['Content ID', 'מערכת הזיהוי של יוטיוב שמשווה סרטונים לשירים רשומים'],
+  ['Claim / Strike', 'תביעה (לוקחת הכנסה) / התראה (פוגעת בערוץ)'],
+  ['BPM', 'פעימות בדקה: הקצב של השיר'],
+  ['Stems', 'ערוצים נפרדים של שיר (תופים, בס, פסנתר)'],
+  ['Extend', 'הארכת שיר בסונו מנקודה שבוחרים'],
+  ['Chapters', 'פרקי זמן בסרטון, נוצרים מהשעות בתיאור'],
+  ['Brand Account', 'חשבון מותג: ערוץ שאפשר לנהל עם כמה אנשים'],
+  ['W-8BEN', 'טופס מס אמריקאי לתושבי חוץ, מקטין ניכוי במקור'],
+  ['Inauthentic content', 'תוכן לא אותנטי: המדיניות נגד תוכן המוני וחוזרני']
+])}
+<h3>צ'קליסט העלאה</h3>
+<ul class="checklist">
+${['כל השירים ממסלול בתשלום, מתועדים בגיליון', 'האזנתי לכל שיר עד הסוף', 'סצנה ויזואלית חדשה', 'כותרת כנה, מצב + שימוש + אורך', 'תיאור עם רשימת שירים וזמנים (00:00 ראשון)', 'תמונה ממוזערת בתבנית הערוץ', 'פלייליסט + מסך סיום', '"לא לילדים" + Yes בשאלת תוכן AI', 'Checks: אין תביעות', 'מתוזמן לשעה הקבועה', 'Short שמפנה לאוסף'].map((t, i) => `<li><label><input type="checkbox" id="gl${i}"> ${t}</label></li>`).join('')}
+</ul>
+`,
+  check: ['שמרתי את הצ\'קליסט']
+});
+// ===== מנוע הקורס: ניווט, התקדמות, ערכה =====
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('sc_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('sc_' + k, JSON.stringify(v)); } catch (e) { } }
+};
+const $ = (s, el) => (el || document).querySelector(s);
+const $$ = (s, el) => [...(el || document).querySelectorAll(s)];
+const fmt = (n, d) => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: d == null ? 0 : d, minimumFractionDigits: d || 0 });
+let done = new Set(store.get('done', []));
+let checks = store.get('chk', {});
+let SAMPLE = null; // יכולת ה-AI, אם קיימת
+
+async function copyText(text, btn) {
+  try { await navigator.clipboard.writeText(text); if (btn) { const o = btn.textContent; btn.textContent = 'הועתק ✓'; setTimeout(() => btn.textContent = o, 1400); } }
+  catch (e) {
+    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); if (btn) btn.textContent = 'הועתק ✓'; } catch (x) { if (btn) btn.textContent = 'סמנו והעתיקו ידנית'; }
+    ta.remove();
+  }
+}
+function outBlock(label, text, he) {
+  const id = 'o' + Math.random().toString(36).slice(2, 8);
+  return `<div><div class="copyrow"><span>${label}</span><button class="btn sm" type="button" data-copy="${id}">העתקה</button></div><div class="out${he ? ' he' : ''}" id="${id}">${esc(text)}</div></div>`;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-copy]'); if (!b) return;
+  const el = document.getElementById(b.dataset.copy); if (el) copyText(el.textContent, b);
+});
+
+function renderNav() {
+  // קבוצות לפי הסדר: כותרת חדשה בכל פעם שהקבוצה מתחלפת
+  let html = '', curG = null;
+  MODULES.forEach((m, i) => {
+    if (m.group !== curG) { html += (curG ? '</div>' : '') + `<div class="navgroup"><h4>${m.group}</h4>`; curG = m.group; }
+    html += `<a href="#${m.id}" data-id="${m.id}"><span class="n">${String(i + 1).padStart(2, '0')}</span><span>${m.title}</span><span class="done">${done.has(m.id) ? '✓' : ''}</span></a>`;
+  });
+  $('#nav').innerHTML = html + '</div>';
+  const pct = Math.round(done.size / MODULES.length * 100);
+  $('#pct').textContent = pct + '%'; $('#topPct').textContent = pct + '%'; $('#pbar').style.width = pct + '%';
+  const lit = Math.round(pct / 100 * 12);
+  $('#vu').innerHTML = Array.from({ length: 12 }, (_, i) => `<i class="${i < lit ? (i >= 9 ? 'hot' : 'on') : ''}" style="height:${8 + i * 1.5}px"></i>`).join('');
+}
+
+function show(id) {
+  const idx = Math.max(0, MODULES.findIndex(m => m.id === id));
+  const m = MODULES[idx];
+  const prev = MODULES[idx - 1], next = MODULES[idx + 1];
+  const ck = checks[m.id] || [];
+  $('#view').innerHTML = `
+    <header class="mhead">
+      <span class="eyebrow">פרק ${idx + 1} מתוך ${MODULES.length} · ${m.group}</span>
+      <h2>${m.title}</h2>
+      <div class="mmeta"><span class="chip">⏱ כ-${m.min} דקות</span>${done.has(m.id) ? '<span class="chip">✓ הושלם</span>' : ''}</div>
+      <p class="lead">${m.lead}</p>
+    </header>
+    <div class="content">${m.body()}
+      <h3>לפני שממשיכים</h3>
+      <ul class="checklist">${m.check.map((c, i) => `<li><label><input type="checkbox" id="ck-${m.id}-${i}" data-ck="${i}" ${ck[i] ? 'checked' : ''}> ${c}</label></li>`).join('')}</ul>
+    </div>
+    <div class="done-row">
+      ${prev ? `<a class="btn" href="#${prev.id}">→ ${prev.title}</a>` : '<span></span>'}
+      <button class="btn ${done.has(m.id) ? '' : 'pri'}" type="button" id="doneBtn">${done.has(m.id) ? 'סימון כלא הושלם' : 'סיימתי את הפרק ✓'}</button>
+      ${next ? `<a class="btn" href="#${next.id}">${next.title} ←</a>` : '<span></span>'}
+    </div>`;
+  $$('#nav a').forEach(a => a.classList.toggle('cur', a.dataset.id === m.id));
+  $('#topTitle').textContent = m.title;
+  $$('[data-ck]').forEach(cb => cb.addEventListener('change', () => {
+    const arr = checks[m.id] || []; arr[+cb.dataset.ck] = cb.checked; checks[m.id] = arr; store.set('chk', checks);
+  }));
+  $('#doneBtn').onclick = () => {
+    done.has(m.id) ? done.delete(m.id) : done.add(m.id);
+    store.set('done', [...done]); renderNav();
+    if (done.has(m.id) && next) location.hash = next.id; else show(m.id);
+  };
+  $$('[data-tool]').forEach(el => { const f = TOOLS[el.dataset.tool]; if (f) f(el); });
+  $('#side').classList.remove('open'); $('#menuBtn').setAttribute('aria-expanded', 'false');
+  window.scrollTo(0, 0);
+  store.set('last', m.id);
+}
+
+function route() {
+  const h = (location.hash || '').slice(1);
+  show(MODULES.some(m => m.id === h) ? h : store.get('last', 'start'));
+}
+
+function initTheme() {
+  const t = store.get('theme', null);
+  if (t) document.documentElement.setAttribute('data-theme', t);
+  $('#themeBtn').onclick = () => {
+    const cur = document.documentElement.getAttribute('data-theme') ||
+      (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const nt = cur === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', nt); store.set('theme', nt);
+  };
+}
+
+// הודעת שגיאה של ה-AI בעברית
+function aiErr(e) {
+  if (e && e.he) return e.he; // הודעה מוכנה מהאפליקציה העצמאית
+  const c = e && e.code;
+  if (c === 'not_granted' || c === 'sampling_disabled' || c === 'not_declared' || c === 'capability_disabled') return 'ה-AI לא זמין כאן. צריך לאשר לעמוד להשתמש ב-Claude (בחלון שנפתח), או לפתוח את הקורס מתוך Claude.';
+  if (c === 'rate_limited') return 'יותר מדי בקשות כרגע. מחכים דקה ומנסים שוב.';
+  if (c === 'session_expired') return 'צריך להתחבר מחדש ל-Claude.';
+  if (c === 'refused') return 'ה-AI לא ענה על השאלה הזאת. נסו לנסח אחרת.';
+  if (c === 'invalid_json') return 'התשובה הגיעה בפורמט לא תקין. לחצו שוב.';
+  if (c === 'cancelled') return '';
+  return 'משהו השתבש בחיבור ל-AI. נסו שוב.';
+}
+
+function initMenu() {
+  $('#menuBtn').onclick = () => { const o = $('#side').classList.toggle('open'); $('#menuBtn').setAttribute('aria-expanded', o ? 'true' : 'false'); };
+  document.addEventListener('click', e => {
+    if (innerWidth > 960) return;
+    if ($('#side').classList.contains('open') && !e.target.closest('#side') && !e.target.closest('#menuBtn')) $('#side').classList.remove('open');
+  });
+}
+
+// ===== המדריך האישי =====
+const COURSE_FACTS = `עובדות מפתח מהקורס (נכון לאוקטובר 2026, חלק מהנתונים ממקורות משניים):
+- YPP מלא: 1,000 מנויים + 4,000 שעות צפייה ציבוריות ב-365 יום, או 10M צפיות Shorts ב-90 יום. דווח שמ-1.2.2027 מצטרפים חדשים יצטרכו 8,000 שעות או 20M צפיות Shorts. שלב מוקדם: 500 מנויים, 3 העלאות ב-90 יום, 3,000 שעות (בלי פרסומות).
+- RPM חציוני בנישת מוזיקה כ-2.28$ (רוב הערוצים 1.35-4.16$). Shorts משלמים 3-14% מסרטון ארוך. היוצר מקבל 55% בסרטונים ארוכים. פרסומות באמצע מ-8 דקות.
+- סונו: Free (לא מסחרי, לתמיד, גם אחרי שדרוג), Pro 10$ (2,500 קרדיטים, 20 הורדות בחודש), Premier 30$ (10,000 קרדיטים, 60 הורדות בחודש, Studio). מגבלות ההורדה מ-3.9.2026. Create = כ-10 קרדיטים ו-2 גרסאות. v6 מ-9.9.2026, v6-mini חינמי. שימוש מסחרי קשור להורדה מורשית.
+- AI טהור לא מוגן בזכויות יוצרים בארה"ב; הרישיון מסונו מתיר שימוש מסחרי.
+- לא לרשום שירים ב-Content ID; לבטל Content ID אצל מפיץ (DistroKid) או לשים את הערוץ ב-whitelist.
+- גילוי AI: לפי דף העזרה הרשמי, חובה לגלות תוכן AI ש"יוצר מוזיקה שהיא העיקר בסרטון" – כלומר בכל סרטון בערוץ כזה מסמנים Yes. יוטיוב מוסיף תווית.
+- בדיקת YPP: לפי יוטיוב בדרך כלל כחודש; ערעור תוך 21 יום; הגשה מחדש אחרי 30 יום (אחרי דחייה נוספת 90 יום). מחירי סונו נבדקו ב-20.10.2026: Pro 10$ (8$ שנתי), Premier 30$ (24$ שנתי); Free – 50 קרדיטים ביום, אין הורדות.
+- מדיניות "תוכן לא אותנטי" מיולי 2025: תוכן המוני וחוזרני. 2026: מחיקת ערוצי AI slop. בדיקה ברמת הערוץ. להמליץ: מותג, סצנה חדשה לכל סרטון, אוצרות, קצב קבוע, כותרות כנות, סימון AI (חובה).
+- מס: W-8BEN ב-AdSense, תושבות ישראל; רואה חשבון בישראל, עוסק פטור/מורשה.
+- עריכה: CapCut למחשב, 1080p H.264, לולאה מונפשת, fade בין שירים; לא להשתמש במוזיקה של CapCut. חלופות: DaVinci Resolve, FFmpeg.
+- נישות: שינה/גשם (שעות מהירות), ג'אז לבית קפה (RPM בינוני), ריכוז, מדיטציה, עונתי; לו-פיי ללימודים תחרות קיצונית; ילדים לא מומלץ.`;
+
+function tutorRules() {
+  return `אתה המדריך האישי בקורס "ערוץ מוזיקה מסונו" – קורס בעברית על בניית ערוץ יוטיוב שמפרסם פלייליסטים של מוזיקה שנוצרה ב-Suno, עד מונטיזציה ושכפול לערוצים.
+כללים: עונים רק בעברית, בשפה פשוטה, קצר ומעשי (עד 180 מילים אלא אם ביקשו יותר). כשמזכירים כפתור באפליקציה – שם הכפתור באנגלית כפי שמופיע, ותרגום בסוגריים. לא ממציאים נתונים: אם משהו לא ידוע או משתנה – אומרים לבדוק בדף הרשמי. לא נותנים ייעוץ משפטי או מס מחייב. לא ממליצים על שום דבר שמפר את מדיניות יוטיוב או סונו (קניית צפיות, עקיפת חסימות, שמות אמנים, חיקוי קולות).
+פרקי הקורס: ${MODULES.map((m, i) => (i + 1) + '. ' + m.title).join(' | ')}.
+${COURSE_FACTS}
+הפרק שהתלמיד/ה נמצא/ת בו עכשיו: ${(MODULES.find(m => '#' + m.id === location.hash) || MODULES[0]).title}.`;
+}
+const tutorTurns = [];
+function initTutor() {
+  const chat = $('#tutorChat');
+  const add = (who, t) => { const d = document.createElement('div'); d.className = 'msg ' + who; d.textContent = t; chat.appendChild(d); chat.scrollTop = chat.scrollHeight; return d; };
+  add('ai', 'שלום! אני המדריך של הקורס. אפשר לשאול אותי כל דבר: איך עושים משהו בסונו, מה כותבים בכותרת, או אם רעיון מסוים מסוכן לערוץ.');
+  $('#fab').onclick = () => { $('#drawer').hidden = !$('#drawer').hidden; if (!$('#drawer').hidden) $('#tutorIn').focus(); };
+  $('#drawerClose').onclick = () => { $('#drawer').hidden = true; };
+  let ctl = null;
+  $('#tutorIn').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#tutorForm').requestSubmit(); } });
+  $('#tutorForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const q = $('#tutorIn').value.trim(); if (!q) return;
+    if (!SAMPLE) { add('ai', 'ה-AI זמין רק כשפותחים את הקורס מתוך Claude. בינתיים אפשר להיעזר בפרקים עצמם.'); return; }
+    $('#tutorIn').value = ''; add('me', q);
+    tutorTurns.push({ role: 'user', content: q });
+    while (tutorTurns.length > 12) tutorTurns.shift();
+    if (tutorTurns[0].role !== 'user') tutorTurns.shift();
+    const bubble = add('ai', 'חושב…'); $('#tutorSend').disabled = true;
+    ctl = new AbortController();
+    try {
+      const { text } = await SAMPLE([{ role: 'user', content: tutorRules() }, ...tutorTurns], { cache: false, signal: ctl.signal, onText: ({ text }) => { bubble.textContent = text; chat.scrollTop = chat.scrollHeight; } });
+      tutorTurns.push({ role: 'assistant', content: text });
+    } catch (err) { bubble.textContent = (err.text ? err.text + '\n\n' : '') + aiErr(err); tutorTurns.pop(); }
+    finally { $('#tutorSend').disabled = false; }
+  });
+}
+
+async function boot() {
+  initTheme(); initMenu(); renderNav();
+  window.addEventListener('hashchange', route);
+  route();
+  initTutor();
+  try {
+    if (window.claude && claude.use) {
+      const s = await claude.use('sample');
+      if (s) { SAMPLE = s; document.dispatchEvent(new Event('ai-ready')); }
+    }
+  } catch (e) { }
+}
+// ===== הכלים האינטראקטיביים =====
+const TOOLS = {};
+const num = (el) => parseFloat(String(el.value).replace(/,/g, '')) || 0;
+const MONTHS_HE = ['ינו׳', 'פבר׳', 'מרץ', 'אפר׳', 'מאי', 'יוני', 'יולי', 'אוג׳', 'ספט׳', 'אוק׳', 'נוב׳', 'דצמ׳'];
+const ymLabel = (y, m) => `${MONTHS_HE[m]} ${String(y).slice(2)}`;
+
+// גרף SVG פשוט: עמודות + קו + קו סף
+function chartSVG({ labels, bars, line, thresholds, barLabel, lineLabel, fmtBar, fmtLine }) {
+  const W = 640, H = 240, pl = 48, pr = 48, pt = 16, pb = 34;
+  const n = labels.length, iw = W - pl - pr, ih = H - pt - pb, bw = iw / n;
+  const maxB = Math.max(1, ...(bars || [0]));
+  const maxL = Math.max(1, ...(line || [0]), ...((thresholds || []).map(t => t.v)));
+  const yb = v => pt + ih - v / maxB * ih, yl = v => pt + ih - v / maxL * ih;
+  let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${barLabel || ''} ${lineLabel || ''}" style="direction:ltr">`;
+  for (let i = 0; i <= 4; i++) { const yy = pt + ih * i / 4; s += `<line x1="${pl}" x2="${W - pr}" y1="${yy}" y2="${yy}" stroke="var(--line)" stroke-width="1"/>`; }
+  if (bars) {
+    bars.forEach((v, i) => { const h = pt + ih - yb(v); s += `<rect x="${pl + i * bw + bw * .15}" y="${yb(v)}" width="${bw * .7}" height="${Math.max(0, h)}" rx="2" fill="var(--meter)"><title>${labels[i]}: ${fmtBar ? fmtBar(v) : v}</title></rect>`; });
+    s += `<text x="${pl - 6}" y="${pt + 8}" text-anchor="end" font-size="11" fill="var(--muted)">${fmtBar ? fmtBar(maxB) : maxB}</text>`;
+  }
+  (thresholds || []).forEach(t => { s += `<line x1="${pl}" x2="${W - pr}" y1="${yl(t.v)}" y2="${yl(t.v)}" stroke="var(--bad)" stroke-dasharray="5 4" stroke-width="1.5"/><text x="${pl + 4}" y="${yl(t.v) - 5}" font-size="10.5" fill="var(--bad)">סף ${t.label}</text>`; });
+  if (line) {
+    const pts = line.map((v, i) => `${pl + i * bw + bw / 2},${yl(v)}`).join(' ');
+    s += `<polyline points="${pts}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>`;
+    const li = line.length - 1; s += `<circle cx="${pl + li * bw + bw / 2}" cy="${yl(line[li])}" r="4" fill="var(--accent)"/>`;
+    s += `<text x="${W - pr + 4}" y="${pt + 8}" font-size="11" fill="var(--accent)">${fmtLine ? fmtLine(maxL) : maxL}</text>`;
+  }
+  const step = Math.ceil(n / 8);
+  labels.forEach((l, i) => { if (i % step === 0) s += `<text x="${pl + i * bw + bw / 2}" y="${H - 12}" text-anchor="middle" font-size="11" fill="var(--muted)">${l}</text>`; });
+  s += `<line x1="${pl}" x2="${W - pr}" y1="${pt + ih}" y2="${pt + ih}" stroke="var(--muted)" stroke-width="1"/></svg>`;
+  s += `<div class="row note" style="gap:14px">${bars ? `<span><span style="display:inline-block;width:10px;height:10px;background:var(--meter);border-radius:2px"></span> ${barLabel}</span>` : ''}${line ? `<span><span style="display:inline-block;width:14px;height:3px;background:var(--accent)"></span> ${lineLabel}</span>` : ''}${(thresholds || []).length ? `<span><span style="display:inline-block;width:14px;border-top:2px dashed var(--bad)"></span> סף</span>` : ''}</div>`;
+  return s;
+}
+
+// ---------- מחשבון הכנסות ----------
+const SCEN = {
+  pess: { vpw: 2, base: 150, growth: 8, tail: 55, avd: 8, subs: 5, rpm: 1.2 },
+  real: { vpw: 2, base: 300, growth: 15, tail: 65, avd: 12, subs: 8, rpm: 2.3 },
+  opt: { vpw: 3, base: 600, growth: 22, tail: 75, avd: 18, subs: 12, rpm: 3.8 }
+};
+TOOLS.calc = el => {
+  const st = Object.assign({}, SCEN.real, { months: 24, fx: 3.7, cost: 40, ch: 1, scen: 'real' }, store.get('calc', {}));
+  const F = (id, label, val, extra) => `<div class="field"><label for="c_${id}">${label}</label><input id="c_${id}" type="number" inputmode="decimal" value="${val}" ${extra || ''}></div>`;
+  el.innerHTML = `<div class="tool">
+    <div class="tool-h"><h3>מחשבון הכנסות ותחזית</h3><span class="tag">כלי</span></div>
+    <div class="row" role="group" aria-label="תרחיש">${[['pess', 'פסימי'], ['real', 'סביר'], ['opt', 'אופטימי']].map(([k, t]) => `<button class="opt" type="button" data-scen="${k}" aria-pressed="${st.scen === k}">${t}</button>`).join('')}</div>
+    <div class="grid4">
+      ${F('vpw', 'סרטונים ארוכים בשבוע', st.vpw, 'min="0" step="0.5"')}
+      ${F('base', 'צפיות לסרטון בחודש הראשון (בהתחלה)', st.base, 'min="0"')}
+      ${F('growth', 'שיפור חודשי בצפיות לסרטון (%)', st.growth)}
+      ${F('tail', 'כמה % מהצפיות סרטון שומר כל חודש אחרי', st.tail, 'min="0" max="100"')}
+      ${F('avd', 'דקות צפייה ממוצעות לצפייה', st.avd, 'min="0"')}
+      ${F('subs', 'מנויים חדשים לכל 1,000 צפיות', st.subs, 'min="0" step="0.5"')}
+      ${F('rpm', 'RPM בדולרים', st.rpm, 'min="0" step="0.1"')}
+      ${F('cost', 'הוצאות חודשיות ($): סונו + כלים', st.cost, 'min="0"')}
+      ${F('months', 'חודשים לתחזית', st.months, 'min="6" max="48"')}
+      ${F('fx', 'שער דולר בשקלים', st.fx, 'step="0.01"')}
+      ${F('ch', 'מספר ערוצים דומים', st.ch, 'min="1" max="10"')}
+    </div>
+    <div class="grid4" id="c_stats"></div>
+    <div id="c_chart1"></div>
+    <div id="c_chart2"></div>
+    <p class="note" id="c_note"></p>
+  </div>`;
+  const ids = ['vpw', 'base', 'growth', 'tail', 'avd', 'subs', 'rpm', 'cost', 'months', 'fx', 'ch'];
+  const calc = () => {
+    const v = {}; ids.forEach(k => v[k] = num($('#c_' + k, el)));
+    v.scen = st.scen; store.set('calc', v);
+    const N = Math.min(48, Math.max(6, Math.round(v.months)));
+    const now = new Date(); const y0 = now.getFullYear(), m0 = now.getMonth() + 1; // מתחילים בחודש הבא
+    const perMonth = v.vpw * 4.33, tail = Math.min(0.98, v.tail / 100);
+    const views = [], hours = [], roll = [], subs = [], rev = [], labels = [], thr = [];
+    let cum = 0, eligible = -1, approved = -1;
+    for (let t = 0; t < N; t++) {
+      let vv = 0;
+      for (let k = 0; k <= t; k++) vv += perMonth * v.base * Math.pow(1 + v.growth / 100, k) * Math.pow(tail, t - k);
+      views.push(vv); hours.push(vv * v.avd / 60);
+      roll.push(hours.slice(Math.max(0, t - 11), t + 1).reduce((a, b) => a + b, 0));
+      cum += vv * v.subs / 1000; subs.push(cum);
+      const d = new Date(y0, m0 + t - 1, 1); labels.push(ymLabel(d.getFullYear(), d.getMonth()));
+      const need = d < new Date(2027, 1, 1) ? 4000 : 8000; thr.push(need);
+      if (eligible < 0 && cum >= 1000 && roll[t] >= need) { eligible = t; approved = t + 1; }
+      rev.push(approved >= 0 && t >= approved ? vv * v.rpm / 1000 : 0);
+    }
+    const ch = Math.max(1, Math.round(v.ch));
+    const totalRev = rev.reduce((a, b) => a + b, 0) * ch;
+    const last = rev[N - 1] * ch;
+    const net = totalRev - v.cost * N * ch;
+    $('#c_stats', el).innerHTML = `
+      <div class="stat"><b>${eligible >= 0 ? labels[eligible] : 'לא בטווח'}</b><span>עומדים בתנאי YPP${eligible >= 0 ? ` (חודש ${eligible + 1})` : ''}</span></div>
+      <div class="stat"><b>$${fmt(last)}</b><span>הכנסה בחודש האחרון (₪${fmt(last * v.fx)})</span></div>
+      <div class="stat"><b>$${fmt(totalRev)}</b><span>סה"כ הכנסה ב-${N} חודשים (₪${fmt(totalRev * v.fx)})</span></div>
+      <div class="stat"><b style="color:${net < 0 ? 'var(--bad)' : 'var(--ok)'}">$${fmt(net)}</b><span>אחרי הוצאות (₪${fmt(net * v.fx)})</span></div>`;
+    // הגרף הראשון נעצר כמה חודשים אחרי הזכאות, כדי שקו הסף יישאר קריא
+    const cut = eligible >= 0 ? Math.min(N, eligible + 4) : N;
+    const thrShown = thr.slice(0, cut);
+    $('#c_chart1', el).innerHTML = `<h4 style="margin:4px 0">שעות צפייה ב-12 החודשים האחרונים מול הסף${cut < N ? ' (עד כמה חודשים אחרי הזכאות)' : ''}</h4>` + chartSVG({ labels: labels.slice(0, cut), line: roll.slice(0, cut), thresholds: [...(thrShown.includes(4000) ? [{ v: 4000, label: '4,000' }] : []), ...(thrShown.includes(8000) ? [{ v: 8000, label: '8,000 (מ-2.2027)' }] : [])], lineLabel: 'שעות צפייה מצטברות (12 חודשים)', fmtLine: x => fmt(x) });
+    $('#c_chart2', el).innerHTML = `<h4 style="margin:4px 0">הכנסה חודשית משוערת${ch > 1 ? ` (${ch} ערוצים)` : ''}</h4>` + chartSVG({ labels, bars: rev.map(x => x * ch), barLabel: 'הכנסה חודשית ($)', fmtBar: x => '$' + fmt(x) });
+    const subsAtElig = eligible >= 0 ? fmt(subs[eligible]) : fmt(subs[N - 1]);
+    $('#c_note', el).innerHTML = `ההנחות: ${fmt(perMonth, 1)} סרטונים בחודש; כל סרטון ממשיך להביא צפיות שהולכות ופוחתות. מנויים ${eligible >= 0 ? 'בזמן הזכאות' : 'בסוף התקופה'}: ${subsAtElig}. אחרי הזכאות נוסף חודש לבדיקה. מ-1.2.2027 הסף לחדשים הוא 8,000 שעות (לפי דיווחים). הכנסה מוצגת רק מצפיות שאחרי הקבלה, כי צפיות ישנות לא מתוגמלות.`;
+  };
+  ids.forEach(k => $('#c_' + k, el).addEventListener('input', () => { st.scen = ''; $$('[data-scen]', el).forEach(b => b.setAttribute('aria-pressed', 'false')); calc(); }));
+  $$('[data-scen]', el).forEach(b => b.onclick = () => {
+    st.scen = b.dataset.scen; const s = SCEN[st.scen];
+    Object.keys(s).forEach(k => $('#c_' + k, el).value = s[k]);
+    $$('[data-scen]', el).forEach(x => x.setAttribute('aria-pressed', String(x === b))); calc();
+  });
+  calc();
+};
+
+// ---------- מחשבון הורדות סונו ----------
+TOOLS.dlcalc = el => {
+  el.innerHTML = `<div class="tool"><div class="tool-h"><h3>כמה הורדות וקרדיטים צריך בחודש?</h3><span class="tag">כלי</span></div>
+    <div class="grid4">
+      <div class="field"><label for="d_v">סרטונים בחודש</label><input id="d_v" type="number" value="8" min="1"></div>
+      <div class="field"><label for="d_h">שעות מוזיקה בסרטון</label><input id="d_h" type="number" value="1" step="0.5" min="0.5"></div>
+      <div class="field"><label for="d_t">אורך שיר ממוצע (דקות)</label><input id="d_t" type="number" value="3.5" step="0.5" min="1"></div>
+      <div class="field"><label for="d_k">מכל כמה שירים בוחרים אחד</label><input id="d_k" type="number" value="3" min="1"></div>
+    </div>
+    <div class="grid4" id="d_out"></div><p class="note" id="d_note"></p></div>`;
+  const run = () => {
+    const v = num($('#d_v', el)), h = num($('#d_h', el)), t = Math.max(1, num($('#d_t', el))), k = Math.max(1, num($('#d_k', el)));
+    const dl = Math.ceil(v * h * 60 / t), creates = Math.ceil(dl * k / 2), cr = creates * 10;
+    const plan = dl <= 20 && cr <= 2500 ? 'Pro' : dl <= 60 && cr <= 10000 ? 'Premier' : 'Premier + הורדות נוספות';
+    $('#d_out', el).innerHTML = `<div class="stat"><b>${fmt(dl)}</b><span>הורדות בחודש</span></div><div class="stat"><b>${fmt(creates)}</b><span>לחיצות Create</span></div><div class="stat"><b>${fmt(cr)}</b><span>קרדיטים (כ-10 ללחיצה)</span></div><div class="stat"><b style="font-family:var(--f-body)">${plan}</b><span>המסלול המתאים</span></div>`;
+    $('#d_note', el).textContent = `טיפ: הארכת השירים ל-7 דקות עם Extend מורידה את מספר ההורדות ל-${fmt(Math.ceil(v * h * 60 / 7))}. מכסות: Pro כ-20 הורדות ו-2,500 קרדיטים, Premier כ-60 הורדות ו-10,000 קרדיטים (לבדוק בדף המחירים).`;
+  };
+  $$('input', el).forEach(i => i.addEventListener('input', run)); run();
+};
+
+// ---------- מעבדת נישות ----------
+const NICHE_EXAMPLES = [
+  { n: 'ג\'אז לבית קפה בגשם', d: 4, c: 3, r: 4, e: 5, p: 4, ex: true },
+  { n: 'שינה: פסנתר ורעש גשם 8 שעות', d: 5, c: 2, r: 3, e: 5, p: 3, ex: true },
+  { n: 'צ\'יל ים-תיכוני לשבת בבוקר', d: 2, c: 5, r: 3, e: 4, p: 5, ex: true }
+];
+const CRIT = [['d', 'ביקוש'], ['c', 'מעט מתחרים'], ['r', 'הכנסה לצפייה'], ['e', 'קל לייצר בסונו'], ['p', 'אהבה אישית']];
+TOOLS.niche = el => {
+  let rows = store.get('niches', null) || NICHE_EXAMPLES.map(x => ({ ...x }));
+  const turns = [];
+  el.innerHTML = `<div class="tool">
+    <div class="tool-h"><h3>סיעור מוחות עם AI</h3><span class="tag">AI</span></div>
+    <div class="opts" id="n_chips">${['תציע לי 10 נישות עם תחרות נמוכה והכנסה סבירה', 'אני אוהב/ת טבע וטיולים. אילו נישות מתאימות?', 'תבדוק את הרעיון: ערוץ ג\'אז לבית קפה בגשם', 'אילו נישות עונתיות כדאי להתחיל עכשיו, באוקטובר?', 'איך להבדיל את הערוץ שלי מ-Lofi Girl?'].map(t => `<button type="button" class="opt">${t}</button>`).join('')}</div>
+    <div class="chat" id="n_chat"></div>
+    <form class="row" id="n_form"><div class="field" style="flex:1"><label for="n_in">מה מעניין אתכם, מה אתם אוהבים לשמוע, או רעיון לבדיקה</label><textarea id="n_in" style="min-height:60px"></textarea></div><button class="btn pri" type="submit">שליחה</button></form>
+    <p class="note" id="n_note"></p>
+    <hr style="border:0;border-top:1px solid var(--line);width:100%">
+    <div class="tool-h"><h3>טבלת ניקוד</h3><span class="tag">כלי</span></div>
+    <p class="note">מדרגים 1–5 בכל קריטריון. "ביקוש" ו"הכנסה" שוקלים כפול. כפתור "דירוג AI" ממלא הערכה ראשונית לרעיון. שורות מסומנות "דוגמה" הן להמחשה בלבד.</p>
+    <div class="tbl"><table><thead><tr><th>נישה</th>${CRIT.map(c => `<th>${c[1]}</th>`).join('')}<th>ציון</th><th></th></tr></thead><tbody id="n_rows"></tbody></table></div>
+    <div class="row"><div class="field" style="flex:1"><label for="n_new">נישה חדשה</label><input id="n_new" placeholder="למשל: פסנתר לקריאה בחורף"></div><button class="btn" type="button" id="n_add">הוספה</button><button class="btn" type="button" id="n_ai">✨ הוספה עם דירוג AI</button></div>
+    <p class="note" id="n_ainote"></p>
+  </div>`;
+  const score = x => Math.round((x.d * 2 + x.c + x.r * 2 + x.e + x.p) / 35 * 100);
+  const draw = () => {
+    store.set('niches', rows);
+    const sorted = rows.map((x, i) => ({ x, i })).sort((a, b) => score(b.x) - score(a.x));
+    $('#n_rows', el).innerHTML = sorted.map(({ x, i }) => `<tr><td>${esc(x.n)}${x.ex ? ' <span class="pill y">דוגמה</span>' : ''}${x.why ? `<div class="note">${esc(x.why)}</div>` : ''}</td>${CRIT.map(c => `<td><select aria-label="${c[1]} – ${esc(x.n)}" data-i="${i}" data-k="${c[0]}" style="background:var(--bg);border:1px solid var(--line);border-radius:6px">${[1, 2, 3, 4, 5].map(n => `<option ${x[c[0]] === n ? 'selected' : ''}>${n}</option>`).join('')}</select></td>`).join('')}<td><b class="tnum">${score(x)}</b></td><td><button class="btn sm" type="button" data-del="${i}" aria-label="מחיקה">✕</button></td></tr>`).join('');
+    $$('select', $('#n_rows', el)).forEach(s => s.onchange = () => { rows[+s.dataset.i][s.dataset.k] = +s.value; rows[+s.dataset.i].ex = false; draw(); });
+    $$('[data-del]', el).forEach(b => b.onclick = () => { rows.splice(+b.dataset.del, 1); draw(); });
+  };
+  draw();
+  $('#n_add', el).onclick = () => { const n = $('#n_new', el).value.trim(); if (!n) return; rows.push({ n, d: 3, c: 3, r: 3, e: 3, p: 3 }); $('#n_new', el).value = ''; draw(); };
+  $('#n_ai', el).onclick = async () => {
+    const n = $('#n_new', el).value.trim(); if (!n) { $('#n_ainote', el).textContent = 'כתבו קודם את שם הנישה.'; return; }
+    if (!SAMPLE) { $('#n_ainote', el).textContent = 'ה-AI זמין רק כשפותחים את הקורס מתוך Claude. אפשר להוסיף ולדרג ידנית.'; return; }
+    $('#n_ainote', el).textContent = 'ה-AI מדרג…'; $('#n_ai', el).disabled = true;
+    try {
+      const j = await SAMPLE.json(`${COURSE_FACTS}\n\nדרג את נישת ערוץ היוטיוב הבאה (מוזיקה שנוצרת בסונו, אוספים ארוכים): "${n}".\nהחזר רק JSON: {"d":1-5 ביקוש,"c":1-5 כמה מעט מתחרים (5=מעט מאוד),"r":1-5 הכנסה לצפייה,"e":1-5 קלות ייצור בסונו,"why":"משפט אחד בעברית עם הסיבה העיקרית והסיכון העיקרי"}`, { modelTier: 'quick' });
+      const c = v => Math.min(5, Math.max(1, Math.round(+v || 3)));
+      rows.push({ n, d: c(j.d), c: c(j.c), r: c(j.r), e: c(j.e), p: 3, why: String(j.why || '').slice(0, 200) });
+      $('#n_new', el).value = ''; $('#n_ainote', el).textContent = 'נוסף. "אהבה אישית" נשאר 3 – רק אתם יודעים.'; draw();
+    } catch (e) { $('#n_ainote', el).textContent = aiErr(e); }
+    finally { $('#n_ai', el).disabled = false; }
+  };
+  const chat = $('#n_chat', el);
+  const add = (who, t) => { const d = document.createElement('div'); d.className = 'msg ' + who; d.textContent = t; chat.appendChild(d); chat.scrollTop = chat.scrollHeight; return d; };
+  add('ai', 'ספרו לי מה אתם אוהבים לשמוע, מה התחביבים שלכם ולאיזה קהל אתם מכוונים (ישראל או העולם). אציע נישות, נבדוק תחרות והכנסה, ונבחר יחד שם ועולם ויזואלי.');
+  const RULES = `אתה יועץ אסטרטגיה לערוצי מוזיקה ביוטיוב (מוזיקה מסונו, אוספים ארוכים ופלייליסטים). המטרה: לעזור לבחור נישה שתגיע למונטיזציה הכי מהר ותניב הכנסה, בלי להפר מדיניות.
+ענה בעברית פשוטה, קצר ומסודר. כשמציעים נישה: שם הנישה, למי, תחרות (נמוכה/בינונית/גבוהה), הכנסה לצפייה, פוטנציאל שעות צפייה, רעיון לשם ערוץ באנגלית ולעולם ויזואלי, ומילות חיפוש לבדיקה ביוטיוב. סמן הערכות כהערכות. בסוף כל תשובה – שאלה אחת שמקדמת את ההחלטה.
+${COURSE_FACTS}`;
+  const send = async q => {
+    if (!q) return;
+    if (!SAMPLE) { $('#n_note', el).textContent = 'ה-AI זמין רק כשפותחים את הקורס מתוך Claude. בינתיים: טבלת הנישות בפרק והשיטה של 30 הדקות.'; return; }
+    add('me', q); turns.push({ role: 'user', content: q });
+    while (turns.length > 12) turns.shift(); if (turns[0].role !== 'user') turns.shift();
+    const b = add('ai', 'חושב…');
+    try {
+      const { text } = await SAMPLE([{ role: 'user', content: RULES }, ...turns], { cache: false, onText: ({ text }) => { b.textContent = text; chat.scrollTop = chat.scrollHeight; } });
+      turns.push({ role: 'assistant', content: text });
+    } catch (e) { b.textContent = (e.text ? e.text + '\n\n' : '') + aiErr(e); turns.pop(); }
+  };
+  $$('#n_chips .opt', el).forEach(b => b.onclick = () => send(b.textContent));
+  $('#n_form', el).addEventListener('submit', e => { e.preventDefault(); const q = $('#n_in', el).value.trim(); $('#n_in', el).value = ''; send(q); });
+};
+
+// ---------- מחולל פרומפטים ----------
+const USES = {
+  study: { he: 'לימודים', genre: 'lofi hip hop', bpm: 75, moods: ['cozy', 'focused'], inst: ['mellow Rhodes chords', 'dusty boom-bap drums', 'warm upright bass'], tex: ['vinyl crackle'], use: 'study beats', words: ['Late Night Notes', 'Desk Lamp', 'Quiet Library', 'Margin Notes', 'Pencil Rain', 'Open Book', 'Study Hall', 'Midnight Chapter'] },
+  sleep: { he: 'שינה', genre: 'ambient sleep music', bpm: 55, moods: ['calm', 'dreamy'], inst: ['soft felt piano', 'warm evolving pads'], tex: ['gentle rain texture', 'very slow'], use: 'deep sleep', extra: ['no drums', 'no percussion'], words: ['Moonlit Room', 'Slow Tide', 'Soft Blanket', 'Starlight', 'Drifting', 'Night Window', 'Velvet Sky', 'Hush'] },
+  focus: { he: 'ריכוז ועבודה', genre: 'deep focus ambient electronic', bpm: 90, moods: ['focused', 'steady'], inst: ['soft synth pluck', 'textured pads', 'steady soft hi-hat'], tex: ['clean minimal mix'], use: 'deep work', words: ['Flow State', 'Clear Mind', 'Workbench', 'Signal', 'Long Hours', 'Grid', 'Momentum', 'Quiet Office'] },
+  cafe: { he: 'בית קפה / ג\'אז', genre: 'coffee shop jazz', bpm: 100, moods: ['warm', 'intimate'], inst: ['acoustic piano trio', 'upright bass', 'soft brushed drums'], tex: ['soft swing', 'room ambience'], use: 'café background', words: ['Morning Espresso', 'Corner Table', 'Rainy Café', 'Latte Art', 'Window Seat', 'Sunday Brunch', 'Small Talk', 'Warm Cup'] },
+  bossa: { he: 'בוסה נובה', genre: 'bossa nova', bpm: 110, moods: ['relaxed', 'sunny'], inst: ['nylon string guitar', 'light shaker percussion', 'soft flute'], tex: ['warm analog'], use: 'relaxing afternoon', words: ['Seaside Terrace', 'Golden Hour', 'Lazy Afternoon', 'Citrus Breeze', 'Promenade', 'Sun Hat'] },
+  meditation: { he: 'מדיטציה', genre: 'meditation ambient', bpm: 60, moods: ['peaceful', 'grounded'], inst: ['singing bowls', 'soft drone', 'gentle chimes'], tex: ['spacious reverb'], use: 'meditation', extra: ['no drums', 'no melody changes'], words: ['Still Water', 'Breath', 'Inner Garden', 'Temple Morning', 'Lotus', 'Silence Between'] },
+  workout: { he: 'אימון', genre: 'workout electronic', bpm: 128, moods: ['energetic', 'driving'], inst: ['four-on-the-floor kick', 'punchy bass', 'bright synth lead'], tex: ['build and drop'], use: 'gym training', words: ['Rep Count', 'Heavy Set', 'Sprint', 'Iron', 'Last Round', 'Power Hour'] },
+  gaming: { he: 'משחקים / סינת\'ווייב', genre: 'synthwave', bpm: 100, moods: ['nostalgic', 'adventurous'], inst: ['analog arpeggios', 'gated reverb snare', 'warm bass synth'], tex: ['retro 80s'], use: 'gaming session', words: ['Neon Highway', 'Pixel Night', 'Arcade Glow', 'Retro Drive', 'Save Point', 'Level Select'] },
+  med: { he: 'צ\'יל ים-תיכוני', genre: 'mediterranean chill instrumental', bpm: 92, moods: ['warm', 'sunny'], inst: ['oud', 'nylon guitar', 'soft darbuka', 'gentle strings'], tex: ['airy mix'], use: 'relaxed morning', words: ['Jaffa Morning', 'Olive Grove', 'Sea Breeze', 'Old Port', 'Lemon Tree', 'Shabbat Light'] },
+  piano: { he: 'פסנתר רגוע', genre: 'solo piano', bpm: 65, moods: ['reflective', 'tender'], inst: ['solo felt piano'], tex: ['intimate room reverb', 'rubato'], use: 'reading and relaxing', words: ['First Snow', 'Letters', 'Quiet Morning', 'Old Photographs', 'Rain on Glass', 'Home'] }
+};
+const MOOD_OPTS = ['calm', 'cozy', 'dreamy', 'nostalgic', 'warm', 'focused', 'melancholic', 'hopeful', 'uplifting', 'mysterious', 'peaceful', 'romantic', 'sunny', 'rainy'];
+const INST_OPTS = ['mellow Rhodes', 'soft felt piano', 'upright bass', 'nylon guitar', 'jazzy electric guitar', 'saxophone', 'muted trumpet', 'flute', 'strings', 'warm pads', 'vibraphone', 'kalimba', 'oud', 'harp', 'analog synth', 'brushed drums', 'boom-bap drums', 'soft hand percussion'];
+const TEX_OPTS = ['vinyl crackle', 'tape hiss', 'rain ambience', 'room ambience', 'spacious reverb', 'warm analog', 'lo-fi', 'crisp clean mix', 'sidechain pump'];
+TOOLS.prompt = el => {
+  const st = Object.assign({ use: 'study', moods: [], inst: [], tex: [], bpm: null, extra: '', n: 8 }, store.get('prompt', {}));
+  const chips = (key, arr) => `<div class="opts">${arr.map(x => `<button type="button" class="opt" data-k="${key}" data-v="${esc(x)}" aria-pressed="${(st[key] || []).includes(x)}">${x}</button>`).join('')}</div>`;
+  el.innerHTML = `<div class="tool">
+    <div class="tool-h"><h3>מחולל הפרומפטים</h3><span class="tag">כלי</span></div>
+    <div class="field"><label>1. לאיזה שימוש?</label><div class="opts">${Object.entries(USES).map(([k, u]) => `<button type="button" class="opt" data-use="${k}" aria-pressed="${st.use === k}">${u.he}</button>`).join('')}</div></div>
+    <div class="field"><label>2. אווירה (עד 2; אם לא בוחרים – ברירת מחדל לפי השימוש)</label>${chips('moods', MOOD_OPTS)}</div>
+    <div class="field"><label>3. כלים (3–5; אם לא בוחרים – ברירת מחדל)</label>${chips('inst', INST_OPTS)}</div>
+    <div class="field"><label>4. מרקם והפקה</label>${chips('tex', TEX_OPTS)}</div>
+    <div class="grid3">
+      <div class="field"><label for="p_bpm">קצב (BPM)</label><input id="p_bpm" type="number" min="40" max="180"></div>
+      <div class="field"><label for="p_extra">תוספת חופשית (באנגלית)</label><input id="p_extra" placeholder="e.g. 1960s, cinematic" value="${esc(st.extra)}"></div>
+      <div class="field"><label for="p_n">כמה וריאציות לפלייליסט</label><input id="p_n" type="number" min="1" max="20" value="${st.n}"></div>
+    </div>
+    <div id="p_out" style="display:grid;gap:12px"></div>
+    <div class="row"><button class="btn pri" type="button" id="p_ai">✨ שיפור והצעות עם AI</button><span class="note" id="p_ainote"></span></div>
+    <div id="p_aiout" style="display:grid;gap:10px"></div>
+  </div>`;
+  const build = () => {
+    const u = USES[st.use];
+    const bpm = num($('#p_bpm', el)) || u.bpm;
+    const moods = (st.moods.length ? st.moods : u.moods).slice(0, 2);
+    const inst = (st.inst.length ? st.inst : u.inst).slice(0, 5);
+    const tex = st.tex.length ? st.tex : u.tex;
+    const extra = $('#p_extra', el).value.trim();
+    const core = [u.genre, `${bpm} BPM`, ...inst, ...tex, ...moods, ...(extra ? [extra] : []), ...(u.extra || []), u.use, 'instrumental', 'no vocals'];
+    const style = core.join(', ');
+    const lyrics = (u.extra || []).includes('no drums') || st.use === 'sleep' ? '[Intro]\n[Instrumental]\n[Interlude]\n[Instrumental]\n[Outro]\n[End]' : '[Intro]\n[Instrumental]\n[Instrumental]\n[Interlude]\n[Instrumental]\n[Outro]\n[End]';
+    const exclude = ['vocals', 'singing', 'humming', 'choir', 'rap', ...((u.extra || []).includes('no drums') ? ['drums', 'percussion'] : [])].join(', ');
+    // וריאציות: משנים משתנה אחד בכל פעם
+    const N = Math.min(20, Math.max(1, Math.round(num($('#p_n', el)) || 1)));
+    const altInst = INST_OPTS.filter(x => !inst.includes(x));
+    const altMood = MOOD_OPTS.filter(x => !moods.includes(x));
+    const keys = ['in A minor', 'in D major', 'in F major', 'in E minor', 'in C major', 'in G minor'];
+    const vars = [];
+    for (let i = 0; i < N; i++) {
+      const kind = i % 3; let p = [...core];
+      if (i === 0) { vars.push({ t: u.words[0], p: style }); continue; }
+      if (kind === 1) p.splice(2, 1, `${altInst[i % altInst.length]} lead`);
+      else if (kind === 2) p.splice(p.indexOf(moods[0]), 1, altMood[i % altMood.length]);
+      else p.splice(2, 0, keys[i % keys.length]);
+      vars.push({ t: u.words[i % u.words.length] + (i >= u.words.length ? ' II' : ''), p: p.join(', ') });
+    }
+    store.set('prompt', { use: st.use, moods: st.moods, inst: st.inst, tex: st.tex, extra, n: N });
+    $('#p_out', el).innerHTML =
+      outBlock(`Styles (סגנון) · ${style.length} תווים`, style) +
+      `<div class="grid2">${outBlock('Lyrics (מילים) – רק תגיות', lyrics)}${outBlock('Exclude styles (לא לכלול)', exclude)}</div>` +
+      `<div class="note">הגדרות: Instrumental דולק · Weirdness כ-30–40% · Style Influence כ-65–75%.</div>` +
+      `<h4 style="margin:6px 0 0">סדרת וריאציות לפלייליסט (${N})</h4><p class="note">אותה "שורת ליבה", ובכל שיר משתנה דבר אחד: כלי מוביל, אווירה או סולם. כך הפלייליסט אחיד אבל לא חוזר על עצמו.</p>` +
+      outBlock('כל הווריאציות (כותרת ⇐ פרומפט)', vars.map((v, i) => `${String(i + 1).padStart(2, '0')}. ${v.t}\n${v.p}`).join('\n\n'));
+  };
+  $('#p_bpm', el).placeholder = USES[st.use].bpm;
+  $$('[data-use]', el).forEach(b => b.onclick = () => { st.use = b.dataset.use; $$('[data-use]', el).forEach(x => x.setAttribute('aria-pressed', String(x === b))); $('#p_bpm', el).value = ''; $('#p_bpm', el).placeholder = USES[st.use].bpm; build(); });
+  $$('[data-k]', el).forEach(b => b.onclick = () => {
+    const k = b.dataset.k, v = b.dataset.v, arr = st[k]; const i = arr.indexOf(v);
+    if (i >= 0) arr.splice(i, 1); else { const max = k === 'moods' ? 2 : k === 'inst' ? 5 : 3; if (arr.length >= max) arr.shift(); arr.push(v); }
+    $$(`[data-k="${k}"]`, el).forEach(x => x.setAttribute('aria-pressed', String(arr.includes(x.dataset.v)))); build();
+  });
+  ['#p_bpm', '#p_extra', '#p_n'].forEach(s => $(s, el).addEventListener('input', build));
+  build();
+  $('#p_ai', el).onclick = async () => {
+    if (!SAMPLE) { $('#p_ainote', el).textContent = 'ה-AI זמין רק כשפותחים את הקורס מתוך Claude.'; return; }
+    const base = $('#p_out .out', el).textContent;
+    $('#p_ainote', el).textContent = 'ה-AI עובד…'; $('#p_ai', el).disabled = true;
+    try {
+      const arr = await SAMPLE.json(`You are an expert Suno (v6) prompt engineer for instrumental YouTube playlist music. Base style prompt:\n"${base}"\nUse case: ${USES[st.use].he} (${USES[st.use].use}).\nWrite 5 improved, distinct style prompts that keep the same channel identity but vary in a musically meaningful way. Rules: English, comma-separated descriptors, 6-12 descriptors, always include a BPM and end with "instrumental, no vocals"; no artist names; no words implying vocals (chant, ooh, anthemic, soulful).\nReturn only JSON: [{"title":"evocative English track title","style":"...","why":"one short Hebrew sentence on what changed"}]`, { cache: false });
+      $('#p_aiout', el).innerHTML = (Array.isArray(arr) ? arr : []).slice(0, 5).map(x => outBlock(`${esc(x.title || '')} — ${esc(x.why || '')}`, String(x.style || ''))).join('');
+      $('#p_ainote', el).textContent = '';
+    } catch (e) { $('#p_ainote', el).textContent = aiErr(e); }
+    finally { $('#p_ai', el).disabled = false; }
+  };
+};
+
+// ---------- ספריית פרומפטים ----------
+const LIB = [
+  ['לו-פיי', 'lo-fi hip hop, 80 BPM, dusty drum loop, warm upright bass, mellow electric piano chords, vinyl crackle, instrumental, no vocals'],
+  ['לו-פיי', 'lofi study beats, 72 BPM, soft Rhodes, muted boom-bap drums, tape hiss, relaxed, focused, instrumental'],
+  ['לו-פיי', 'chillhop, 85 BPM, jazzy guitar, vinyl crackle, laid-back drums, warm, nostalgic, instrumental'],
+  ['לו-פיי', 'rainy day lo-fi, 70 BPM, felt piano, soft brushed drums, rain ambience, cozy, no vocals'],
+  ['שינה ואמביינט', 'ambient drone, 60 BPM, evolving pads, deep sub bass, slow filter sweeps, spacious reverb, calm, instrumental'],
+  ['שינה ואמביינט', 'sleep music, 55 BPM, soft piano, warm pads, gentle nature texture, very slow, no drums, no percussion, instrumental'],
+  ['שינה ואמביינט', 'nature ambient, 50 BPM, soft pads, gentle wind chimes, distant birds, peaceful, no drums, instrumental'],
+  ['ריכוז', 'deep focus ambient, 66 BPM, textured synth pads, soft pulsing arpeggio, minimal, no drums, instrumental'],
+  ['ריכוז', 'coding work beats, 90 BPM, minimal electronic, soft pluck, steady hi-hat, clean mix, focused, instrumental'],
+  ['מדיטציה', 'meditation, singing bowls, slow breathing pace, soft drone, no melody changes, no vocals'],
+  ['ג\'אז', 'smooth jazz, 90 BPM, warm saxophone lead, Rhodes piano, brushed drums, upright bass, late night, instrumental'],
+  ['ג\'אז', 'coffee shop jazz, 100 BPM, acoustic piano trio, soft swing, upright bass, intimate, instrumental'],
+  ['ג\'אז', 'bossa nova, 110 BPM, nylon guitar, light percussion, relaxed, sunny, instrumental'],
+  ['אנרגיה', 'workout electronic, 128 BPM, four-on-the-floor kick, punchy bass, driving synth lead, energetic, build and drop, instrumental'],
+  ['אנרגיה', 'gym trap, 140 BPM, heavy 808s, aggressive hi-hats, dark synth stabs, intense, no vocals'],
+  ['קולנועי', 'cinematic orchestral, 90 BPM, strings, french horns, powerful timpani, epic, rising tension, instrumental'],
+  ['משחקים', 'synthwave, 100 BPM, analog arpeggios, gated reverb snare, neon night drive, retro, instrumental'],
+  ['משחקים', 'dark ambient for gaming, 65 BPM, low drones, metallic textures, sparse piano, tense, instrumental'],
+  ['אקוסטי', 'acoustic folk instrumental, 95 BPM, fingerpicked guitar, soft strings, warm, hopeful, no vocals'],
+  ['פסנתר', 'classical piano, 60 BPM, solo piano, reflective, rubato, intimate room reverb, instrumental']
+];
+TOOLS.library = el => {
+  const cats = [...new Set(LIB.map(x => x[0]))];
+  el.innerHTML = `<div class="tool"><div class="tool-h"><h3>ספריית פרומפטים</h3><span class="tag">${LIB.length} פרומפטים</span></div>
+    <div class="opts">${['הכול', ...cats].map((c, i) => `<button type="button" class="opt" data-cat="${c}" aria-pressed="${i === 0}">${c}</button>`).join('')}</div>
+    <div id="l_list" style="display:grid;gap:10px"></div><p class="note">לכל פרומפט מוסיפים ב-Exclude: vocals, singing, humming, choir, rap. מקור: מדריכי פרומפטים מקצועיים (hookgenius, undetectr, 2026).</p></div>`;
+  const draw = c => { $('#l_list', el).innerHTML = LIB.filter(x => c === 'הכול' || x[0] === c).map(x => outBlock(x[0], x[1])).join(''); };
+  $$('[data-cat]', el).forEach(b => b.onclick = () => { $$('[data-cat]', el).forEach(x => x.setAttribute('aria-pressed', String(x === b))); draw(b.dataset.cat); });
+  draw('הכול');
+};
+
+// ---------- כותרת, תיאור ופרקי זמן ----------
+function parseDur(s) { const p = s.split(':').map(Number); if (p.some(isNaN)) return 0; return p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : p.length === 2 ? p[0] * 60 + p[1] : p[0] || 0; }
+function ts(sec, long) { const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = Math.floor(sec % 60); const mm = String(m).padStart(2, '0'), ss = String(s).padStart(2, '0'); return long ? `${h}:${mm}:${ss}` : `${mm}:${ss}`; }
+TOOLS.meta = el => {
+  const st = Object.assign({ theme: 'Rainy Night Lofi', use: 'Study & Relax', emoji: '🌧️', ch: 'Rainy Window', pl: '', tracks: 'Rainy Window | 3:41\nSoft Lamp Light | 3:12\nTea at Midnight | 4:05\nPages Turning | 2:58\nCity Lights Blur | 3:30' }, store.get('meta', {}));
+  el.innerHTML = `<div class="tool"><div class="tool-h"><h3>מחולל כותרת, תיאור ופרקי זמן</h3><span class="tag">כלי</span></div>
+    <div class="grid2">
+      <div class="field"><label for="m_theme">נושא הסרטון (באנגלית)</label><input id="m_theme" value="${esc(st.theme)}"></div>
+      <div class="field"><label for="m_use">שימוש</label><input id="m_use" value="${esc(st.use)}" placeholder="Study & Relax / Deep Sleep / Focus"></div>
+      <div class="field"><label for="m_ch">שם הערוץ</label><input id="m_ch" value="${esc(st.ch)}"></div>
+      <div class="field"><label for="m_emoji">אימוג'י (לא חובה)</label><input id="m_emoji" value="${esc(st.emoji)}"></div>
+    </div>
+    <div class="field"><label for="m_pl">קישור לפלייליסט (לא חובה)</label><input id="m_pl" value="${esc(st.pl)}" placeholder="https://www.youtube.com/playlist?list=..."></div>
+    <div class="field"><label for="m_tracks">רשימת השירים לפי הסדר: שם | אורך (שורה לכל שיר)</label><textarea id="m_tracks" style="min-height:140px;direction:ltr;text-align:left" class="mono">${esc(st.tracks)}</textarea></div>
+    <div id="m_out" style="display:grid;gap:12px"></div>
+    <div class="row"><button class="btn pri" type="button" id="m_ai">✨ גרסאות נוספות עם AI</button><span class="note" id="m_ainote"></span></div>
+    <div id="m_aiout" style="display:grid;gap:10px"></div></div>`;
+  const run = () => {
+    const v = { theme: $('#m_theme', el).value.trim(), use: $('#m_use', el).value.trim(), ch: $('#m_ch', el).value.trim(), emoji: $('#m_emoji', el).value.trim(), pl: $('#m_pl', el).value.trim(), tracks: $('#m_tracks', el).value };
+    store.set('meta', v);
+    const list = v.tracks.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const m = l.match(/^(.*?)[\s|–-]*\(?(\d{1,2}:\d{2}(?::\d{2})?)\)?\s*$/); return m ? { n: m[1].replace(/[|–-]\s*$/, '').trim(), d: parseDur(m[2]) } : { n: l, d: 0 }; });
+    const total = list.reduce((a, b) => a + b.d, 0), long = total >= 3600;
+    let t = 0; const chapters = list.map(x => { const line = `${ts(t, long)} ${x.n}`; t += x.d; return line; }).join('\n');
+    const durTxt = total >= 3600 ? (Math.round(total / 1800) / 2) + (total < 5400 ? ' Hour' : ' Hours') : Math.round(total / 60) + ' Min';
+    const e = v.emoji ? ' ' + v.emoji : '';
+    const titles = [`${v.theme}${e} ${durTxt} of Chill Beats to ${v.use}`, `${v.use} with ${v.theme}${e} (${durTxt} Playlist)`, `${v.theme}${e} | ${durTxt} ${v.use} Music`];
+    const desc = `${v.theme} – ${durTxt.toLowerCase()} of calm, hand-picked instrumental music for ${v.use.toLowerCase()}.\nPut it on, get comfortable, and let the music carry you through.\n\n🎧 Tracklist\n${chapters}\n\n${v.pl ? `▶ More in this mood: ${v.pl}\n\n` : ''}All music created and curated by ${v.ch} using Suno AI (paid plan, commercial license). Visuals created with AI tools and edited by ${v.ch}.\n\n#${v.theme.replace(/[^A-Za-z0-9]/g, '')} #${v.use.split(/\W+/)[0] || 'chill'}music #instrumental`;
+    const tags = [v.theme.toLowerCase(), `${v.use.toLowerCase()} music`, 'instrumental', 'chill music', `${durTxt.toLowerCase()} playlist`, v.ch.toLowerCase()].join(', ');
+    const errs = [];
+    if (list.length < 3) errs.push('צריך לפחות 3 שירים כדי שיוטיוב ייצור פרקים.');
+    if (list.some(x => x.d && x.d < 10)) errs.push('כל פרק חייב להיות לפחות 10 שניות.');
+    if (list.some(x => !x.d)) errs.push('בחלק מהשורות לא זוהה אורך. כתבו כך: שם | 3:41');
+    $('#m_out', el).innerHTML = `<div class="stat"><b>${ts(total, true)}</b><span>אורך כולל · ${list.length} שירים</span></div>` +
+      (errs.length ? `<div class="box warn">${errs.join('<br>')}</div>` : '') +
+      titles.map((x, i) => outBlock(`כותרת ${i + 1} · ${x.length} תווים${x.length > 100 ? ' – ארוך מדי' : ''}`, x)).join('') +
+      outBlock('תיאור (Description)', desc) + outBlock('תגיות (Tags)', tags);
+  };
+  $$('input,textarea', el).forEach(i => i.addEventListener('input', run)); run();
+  $('#m_ai', el).onclick = async () => {
+    if (!SAMPLE) { $('#m_ainote', el).textContent = 'ה-AI זמין רק כשפותחים את הקורס מתוך Claude.'; return; }
+    $('#m_ainote', el).textContent = 'ה-AI עובד…'; $('#m_ai', el).disabled = true;
+    try {
+      const j = await SAMPLE.json(`You write YouTube metadata for an instrumental music channel (music made with Suno, curated by a human). Video theme: "${$('#m_theme', el).value}", use case: "${$('#m_use', el).value}", channel: "${$('#m_ch', el).value}".\nFollow YouTube spam policy: honest, no keyword stuffing, no artist names, no false claims (e.g. "no ads"), no medical claims.\nReturn only JSON: {"titles":["5 titles, max 90 chars, mood/use-case first, include duration placeholder {DUR}"],"intro":"2-3 sentence warm description opening in English","pinned":"one friendly pinned-comment question to viewers"}`, { cache: false });
+      const dur = $('#m_out .stat b', el).textContent;
+      $('#m_aiout', el).innerHTML = outBlock('כותרות', (j.titles || []).map(x => String(x).replace('{DUR}', dur)).join('\n')) + outBlock('פתיחה לתיאור', String(j.intro || '')) + outBlock('תגובה מוצמדת', String(j.pinned || ''));
+      $('#m_ainote', el).textContent = '';
+    } catch (e) { $('#m_ainote', el).textContent = aiErr(e); }
+    finally { $('#m_ai', el).disabled = false; }
+  };
+};
+
+// ---------- חידון מותר/אסור ----------
+const QUIZ = [
+  ['להשתמש בשיר שיצרתי בסונו במסלול החינמי, ושדרגתי ל-Pro אחרי שבוע', false, 'שירים מהמסלול החינמי נשארים לא-מסחריים גם אחרי שדרוג.'],
+  ['לכתוב בפרומפט "1970s soul, warm Rhodes, tape saturation"', true, 'תיאור של סגנון, תקופה וכלים מותר. אסור רק שם של אמן.'],
+  ['להוסיף לסרטון 20 שניות משיר מוכר כ"פתיחה"', false, 'כל מוזיקה של אחרים, גם קצרה, תגרום לתביעה ואולי להתראה.'],
+  ['להעלות אותו אוסף שוב עם סדר שירים אחר ותמונה אחרת', false, 'זה בדיוק "תוכן חוזרני". אוסף "Best of" מדי פעם בסדר, אבל לא כשיטה.'],
+  ['לרשום את השירים שלי ב-Content ID כדי "להגן" עליהם', false, 'מסוכן: עלול לייצר תביעות על הערוץ שלכם ועל אחרים, ולפי חלק מהמקורות מוזיקת AI טהורה בכלל לא כשירה.'],
+  ['להשתמש בתמונה ממוזערת עם "NO ADS" כשיש פרסומות', false, 'הטעיה במטא-דאטה מפרה את מדיניות הספאם וההטעיה.'],
+  ['לא לסמן את שאלת תוכן ה-AI, כי "זו רק מוזיקת רקע"', false, 'אסור: לפי ההנחיות הרשמיות, מוזיקה שנוצרה ב-AI והיא העיקר בסרטון מחייבת גילוי.'],
+  ['לבקש מחברים בקבוצת וואטסאפ להירשם לערוץ', true, 'שיתוף טבעי מותר. אסור "מנוי תמורת מנוי" או קניית מנויים.'],
+  ['לפתוח ערוץ חדש אחרי שהערוץ הקודם נסגר על ספאם', false, 'זו עקיפת חסימה ויכולה להפיל את כל הערוצים המקושרים.'],
+  ['להפיץ אלבום בספוטיפיי דרך DistroKid עם Content ID מבוטל', true, 'כך המפיץ לא יתבע את הסרטונים שלכם ביוטיוב.']
+];
+TOOLS.quiz = el => {
+  el.innerHTML = `<div class="quiz">${QUIZ.map((q, i) => `<div class="q"><div>${i + 1}. ${q[0]}</div><div class="qa"><button class="btn sm" type="button" data-q="${i}" data-a="1">מותר</button><button class="btn sm" type="button" data-q="${i}" data-a="0">אסור</button></div><div class="res" id="qr${i}"></div></div>`).join('')}<div class="stat"><b id="q_score">0 / ${QUIZ.length}</b><span>תשובות נכונות</span></div></div>`;
+  const ans = {};
+  $$('[data-q]', el).forEach(b => b.onclick = () => {
+    const i = +b.dataset.q, a = b.dataset.a === '1', ok = a === QUIZ[i][1]; ans[i] = ok;
+    $('#qr' + i, el).innerHTML = `${ok ? '<span class="pill g">נכון</span>' : '<span class="pill r">לא נכון</span>'} ${QUIZ[i][1] ? 'מותר' : 'אסור'}: ${QUIZ[i][2]}`;
+    $('#q_score', el).textContent = `${Object.values(ans).filter(Boolean).length} / ${QUIZ.length}`;
+  });
+};
+
+// ---------- בדיקה עצמית ----------
+const SELF = [
+  ['כל השירים נוצרו במסלול בתשלום והורדו מסונו', 3],
+  ['האזנתי לכל שיר עד הסוף', 2],
+  ['הוויזואל שונה מהסרטונים הקודמים (סצנה חדשה)', 3],
+  ['השירים לא הופיעו בסרטון קודם', 3],
+  ['הכותרת והתמונה מתארות בדיוק את התוכן', 2],
+  ['בתיאור יש רשימת שירים ופרקי זמן', 1],
+  ['לא העליתי היום כבר סרטון ארוך אחר', 2],
+  ['יש בסרטון נגיעה אישית (סיפור, הערה, עריכה ייחודית)', 2],
+  ['סימנתי Yes בשאלת תוכן ה-AI (חובה)', 3],
+  ['אין בסרטון שם של אמן או דמות מוגנת', 3]
+];
+TOOLS.selfcheck = el => {
+  el.innerHTML = `<div class="tool"><div class="tool-h"><h3>בדיקה עצמית לפני העלאה</h3><span class="tag">כלי</span></div>
+    <ul class="checklist">${SELF.map((s, i) => `<li><label><input type="checkbox" id="sc${i}"> ${s[0]}</label></li>`).join('')}</ul>
+    <div class="bar"><span id="sc_bar" style="width:0%"></span></div><div id="sc_res"></div></div>`;
+  const total = SELF.reduce((a, s) => a + s[1], 0);
+  const run = () => {
+    let sc = 0; const miss = [];
+    SELF.forEach((s, i) => $('#sc' + i, el).checked ? sc += s[1] : (s[1] >= 3 && miss.push(s[0])));
+    const p = Math.round(sc / total * 100); $('#sc_bar', el).style.width = p + '%';
+    $('#sc_res', el).innerHTML = miss.length ? `<div class="box bad"><span class="bt">לא להעלות עדיין</span>חסר: ${miss.join(' · ')}</div>` : p >= 85 ? `<div class="box ok"><span class="bt">מוכן להעלאה ✓</span>${p}% מהבדיקה.</div>` : `<div class="box warn"><span class="bt">אפשר, אבל כדאי לשפר</span>${p}% מהבדיקה.</div>`;
+  };
+  $$('input', el).forEach(i => i.addEventListener('change', run)); run();
+};
+
+// ---------- מעקב הערוץ ----------
+const TRACK_SAMPLE = [['2026-11', 3200, 410, 85, 0], ['2026-12', 7900, 1150, 160, 0], ['2027-01', 14800, 2300, 290, 0], ['2027-02', 22500, 3600, 410, 0], ['2027-03', 31000, 5100, 520, 31.4], ['2027-04', 38500, 6400, 610, 88.2]].map(r => ({ m: r[0], views: r[1], hours: r[2], subs: r[3], rev: r[4] }));
+TOOLS.tracker = el => {
+  let rows = [], sample = false, dbRef = null, saving = Promise.resolve();
+  el.innerHTML = `<div class="tool">
+    <div class="tool-h"><h3>המעקב שלי</h3><span class="tag" id="t_where">שמור בדפדפן הזה</span></div>
+    <div class="row"><label class="btn pri" for="t_file" style="cursor:pointer">⬆ העלאת קובץ CSV מהסטודיו</label><input id="t_file" type="file" accept=".csv,text/csv" hidden>
+      <div class="field" style="width:150px"><label for="t_now">מנויים כרגע</label><input id="t_now" type="number" min="0"></div>
+      <div class="field" style="width:120px"><label for="t_fx">שער דולר</label><input id="t_fx" type="number" step="0.01" value="3.7"></div></div>
+    <p class="note" id="t_msg"></p>
+    <div class="grid4" id="t_stats"></div>
+    <div id="t_chart"></div>
+    <div class="tbl"><table><thead><tr><th>חודש</th><th>צפיות</th><th>שעות צפייה</th><th>מנויים חדשים</th><th>הכנסה ($)</th><th>RPM</th><th></th></tr></thead><tbody id="t_rows"></tbody></table></div>
+    <form class="grid4" id="t_form" style="align-items:end">
+      <div class="field"><label for="t_m">חודש</label><input id="t_m" type="month" required></div>
+      <div class="field"><label for="t_v">צפיות</label><input id="t_v" type="number" min="0" required></div>
+      <div class="field"><label for="t_h">שעות צפייה</label><input id="t_h" type="number" min="0" step="0.1" required></div>
+      <div class="field"><label for="t_s">מנויים חדשים</label><input id="t_s" type="number" required></div>
+      <div class="field"><label for="t_r">הכנסה ($)</label><input id="t_r" type="number" min="0" step="0.01" value="0"></div>
+      <button class="btn" type="submit">הוספה / עדכון חודש</button>
+    </form>
+    <div class="row"><button class="btn sm" type="button" id="t_sample">הצגת נתוני דוגמה</button><button class="btn sm" type="button" id="t_clear">מחיקת כל הנתונים</button><span class="note" id="t_confirm"></span></div>
+  </div>`;
+  const meta = store.get('trackmeta', { now: '', fx: 3.7 });
+  $('#t_now', el).value = meta.now; $('#t_fx', el).value = meta.fx;
+  const persist = () => {
+    if (sample) return;
+    store.set('track', rows);
+    if (dbRef) saving = saving.then(() => dbRef.set({ rows, now: $('#t_now', el).value, fx: num($('#t_fx', el)) })).catch(() => { $('#t_where', el).textContent = 'שמור בדפדפן הזה'; dbRef = null; });
+  };
+  const draw = () => {
+    const R = [...rows].sort((a, b) => a.m.localeCompare(b.m));
+    const fx = num($('#t_fx', el)) || 3.7;
+    $('#t_rows', el).innerHTML = R.length ? R.map(r => `<tr><td class="tnum">${r.m}</td><td class="tnum">${fmt(r.views)}</td><td class="tnum">${fmt(r.hours, 1)}</td><td class="tnum">${fmt(r.subs)}</td><td class="tnum">${fmt(r.rev, 2)}</td><td class="tnum">${r.rev && r.views ? '$' + fmt(r.rev / r.views * 1000, 2) : '–'}</td><td>${sample ? '' : `<button class="btn sm" type="button" data-rm="${r.m}" aria-label="מחיקת ${r.m}">✕</button>`}</td></tr>`).join('')
+      : `<tr><td colspan="7" class="note">עדיין אין נתונים. מעלים קובץ CSV מהסטודיו או מוסיפים חודש בטופס למטה. אפשר גם להציג נתוני דוגמה כדי לראות איך זה נראה.</td></tr>`;
+    $$('[data-rm]', el).forEach(b => b.onclick = () => { rows = rows.filter(r => r.m !== b.dataset.rm); persist(); draw(); });
+    const last12 = R.slice(-12);
+    const hrs12 = last12.reduce((a, r) => a + r.hours, 0);
+    const subsNow = num($('#t_now', el)) || R.reduce((a, r) => a + r.subs, 0);
+    const rev = R.reduce((a, r) => a + r.rev, 0);
+    const mon = R.filter(r => r.rev > 0), rpm = mon.length ? mon.reduce((a, r) => a + r.rev, 0) / mon.reduce((a, r) => a + r.views, 0) * 1000 : 0;
+    const need = new Date() >= new Date(2027, 1, 1) ? 8000 : 4000;
+    // תחזית: צמיחה ממוצעת ב-3 החודשים האחרונים
+    let proj = '';
+    if (R.length >= 3) {
+      const l = R.slice(-3); const g = Math.pow(Math.max(1, l[2].views) / Math.max(1, l[0].views), 1 / 2);
+      const gg = Math.min(1.5, Math.max(0.8, g)); let v = l[2].views, sum = 0;
+      for (let i = 0; i < 6; i++) { v *= gg; sum += v * (rpm || 2.28) / 1000; }
+      proj = `<div class="stat"><b>$${fmt(sum)}</b><span>תחזית ל-6 חודשים קדימה (₪${fmt(sum * fx)}), לפי צמיחה של ${fmt((gg - 1) * 100)}% בחודש ו-RPM ${rpm ? 'שלכם' : 'חציוני'}${rpm ? '' : ', אחרי קבלה'}</span></div>`;
+    }
+    $('#t_stats', el).innerHTML = R.length ? `
+      <div class="stat"><b>$${fmt(rev, 2)}</b><span>הרווחתם עד היום (₪${fmt(rev * fx)})</span></div>
+      <div class="stat"><b>${fmt(hrs12)} / ${fmt(need)}</b><span>שעות ב-12 החודשים האחרונים (${Math.min(100, Math.round(hrs12 / need * 100))}%)</span></div>
+      <div class="stat"><b>${fmt(subsNow)} / 1,000</b><span>מנויים (${Math.min(100, Math.round(subsNow / 10))}%)</span></div>
+      ${proj || `<div class="stat"><b>${rpm ? '$' + fmt(rpm, 2) : '–'}</b><span>RPM ממוצע</span></div>`}` : '';
+    $('#t_chart', el).innerHTML = R.length ? chartSVG({ labels: R.map(r => r.m.slice(2).replace('-', '/')), bars: R.map(r => r.rev), line: R.map(r => r.hours), barLabel: 'הכנסה ($)', lineLabel: 'שעות צפייה בחודש', fmtBar: x => '$' + fmt(x), fmtLine: x => fmt(x) }) : '';
+    $('#t_sample', el).textContent = sample ? 'חזרה לנתונים שלי' : 'הצגת נתוני דוגמה';
+    $('#t_msg', el).innerHTML = sample ? '<span class="pill y">נתוני דוגמה</span> אלה לא הנתונים שלכם, ולא נשמרים.' : $('#t_msg', el).innerHTML.replace(/.*נתוני דוגמה.*/, '');
+  };
+  // ייבוא CSV
+  const splitCSV = line => { const out = []; let cur = '', q = false; for (const ch of line) { if (ch === '"') q = !q; else if (ch === ',' && !q) { out.push(cur); cur = ''; } else cur += ch; } out.push(cur); return out.map(s => s.trim()); };
+  $('#t_file', el).addEventListener('change', async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      const txt = (await f.text()).replace(/^﻿/, '');
+      const lines = txt.split(/\r?\n/).filter(Boolean); const head = splitCSV(lines[0]).map(h => h.toLowerCase());
+      const col = re => head.findIndex(h => re.test(h));
+      const ci = { d: col(/^(date|day|month|תאריך|חודש)/), v: col(/^views|צפיות/), h: col(/watch time.*hour|שעות/), s: col(/^subscribers|מנויים/), r: col(/estimated revenue|הכנסה/) };
+      if (ci.d < 0 || (ci.v < 0 && ci.h < 0 && ci.r < 0)) throw new Error('cols');
+      const agg = {};
+      lines.slice(1).forEach(l => {
+        const c = splitCSV(l); const d = c[ci.d] || ''; const m = d.match(/(\d{4})-(\d{2})/) || d.match(/([A-Za-z]{3})\s+(\d{4})/);
+        if (!m) return; let key;
+        if (/^\d{4}$/.test(m[1])) key = `${m[1]}-${m[2]}`; else { const mi = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'].indexOf(m[1].toLowerCase()); if (mi < 0) return; key = `${m[2]}-${String(mi + 1).padStart(2, '0')}`; }
+        const n = i => i < 0 ? 0 : parseFloat(String(c[i] || '0').replace(/[^0-9.\-]/g, '')) || 0;
+        const a = agg[key] || (agg[key] = { m: key, views: 0, hours: 0, subs: 0, rev: 0 });
+        a.views += n(ci.v); a.hours += n(ci.h); a.subs += n(ci.s); a.rev += n(ci.r);
+      });
+      const got = Object.values(agg); if (!got.length) throw new Error('rows');
+      sample = false;
+      got.forEach(g => { const ex = rows.find(r => r.m === g.m); if (ex) { if (ci.v >= 0) ex.views = g.views; if (ci.h >= 0) ex.hours = g.hours; if (ci.s >= 0) ex.subs = g.subs; if (ci.r >= 0) ex.rev = g.rev; } else rows.push(g); });
+      persist(); $('#t_msg', el).textContent = `יובאו ${got.length} חודשים מהקובץ.`; draw();
+    } catch (err) { $('#t_msg', el).textContent = 'לא הצלחתי לקרוא את הקובץ. צריך קובץ CSV מ-Analytics ← Advanced mode, עם עמודת תאריך (Date) ועמודות כמו Views או Watch time (hours). אפשר גם להוסיף ידנית.'; }
+    e.target.value = '';
+  });
+  $('#t_form', el).addEventListener('submit', e => {
+    e.preventDefault(); if (sample) { sample = false; rows = store.get('track', []); }
+    const r = { m: $('#t_m', el).value, views: num($('#t_v', el)), hours: num($('#t_h', el)), subs: num($('#t_s', el)), rev: num($('#t_r', el)) };
+    rows = rows.filter(x => x.m !== r.m).concat(r); persist(); draw(); e.target.reset();
+  });
+  ['#t_now', '#t_fx'].forEach(s => $(s, el).addEventListener('change', () => { store.set('trackmeta', { now: $('#t_now', el).value, fx: num($('#t_fx', el)) }); persist(); draw(); }));
+  $('#t_sample', el).onclick = () => { sample = !sample; rows = sample ? TRACK_SAMPLE.map(x => ({ ...x })) : store.get('track', []); draw(); };
+  let armed = false;
+  $('#t_clear', el).onclick = () => {
+    if (!armed) { armed = true; $('#t_confirm', el).textContent = 'ללחוץ שוב כדי למחוק הכול.'; setTimeout(() => { armed = false; $('#t_confirm', el).textContent = ''; }, 4000); return; }
+    armed = false; sample = false; rows = []; persist(); $('#t_confirm', el).textContent = 'נמחק.'; draw();
+  };
+  rows = store.get('track', []); draw();
+  // שמירה בחשבון (אם זמין): פרטי לכל צופה
+  (async () => {
+    try {
+      if (!window.claude || !claude.use) return;
+      const [db, user] = await Promise.all([claude.use('db'), claude.use('user')]);
+      if (!db || !user) return; const uid = await user.id(); if (!uid) return;
+      dbRef = db.doc('data/users/' + uid + '/tracker');
+      const snap = await dbRef.get();
+      if (snap.exists) { const d = snap.data(); if (Array.isArray(d.rows) && !sample) { rows = d.rows.map(r => ({ ...r })); if (d.now != null) $('#t_now', el).value = d.now; if (d.fx) $('#t_fx', el).value = d.fx; store.set('track', rows); draw(); } }
+      $('#t_where', el).textContent = 'שמור בחשבון שלכם';
+    } catch (e) { dbRef = null; }
+  })();
+};
+boot();
+</script>
