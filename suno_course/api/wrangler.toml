@@ -7,6 +7,15 @@ workers_dev = true
 # האתרים שמותר להם לפנות לשרת: האפליקציה ב-Cloudflare Pages (כולל כתובות תצוגה מקדימה) ופיתוח מקומי
 ALLOWED_ORIGIN_RE = "^https://([a-z0-9-]+\\.)?suno-course(-[a-z0-9]+)?\\.pages\\.dev$|^http://localhost:[0-9]+$"
 
+# הנתונים של התלמיד/ה לסנכרון בין מכשירים – אובייקט אחד ("main")
+[[durable_objects.bindings]]
+name = "VAULT"
+class_name = "Vault"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Vault"]
+
 # סודות, לא כאן (נקבעים אוטומטית מ-GitHub, ראו .github/workflows/suno-course.yml):
 #   ANTHROPIC_API_KEY – המפתח של Claude
 #   COURSE_PASSWORD   – הסיסמה שמקלידים באפליקציה כדי להשתמש ב-AI (ברירת מחדל: OWNER_PASSWORD)

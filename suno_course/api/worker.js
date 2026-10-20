@@ -1,7 +1,12 @@
 // השרת של אפליקציית הקורס "ערוץ מוזיקה מסונו" (Cloudflare Worker): מעביר שאלות ל-Claude.
 //   POST /ai {messages: [{role, content}], tier: 'quick'|'default'|'complex', images?: [{media_type, data}]} -> {text}
 //   התמונות (עד 4, base64) מצורפות להודעה האחרונה של המשתמש.
-// מוגן בסיסמה (Authorization: Bearer <COURSE_PASSWORD>) כדי שאף אחד אחר לא ישתמש במפתח.
+//   POST /sync/get -> {data: {key: {v, t}}}  ·  POST /sync/put {changes: {key: {v, t}}} -> {data}
+//   (סנכרון בין המחשב לטלפון; Durable Object אחד "main", ראו vault.js)
+// מוגן בסיסמה (Authorization: Bearer <COURSE_PASSWORD>) כדי שאף אחד אחר לא ישתמש במפתח או יקרא את הנתונים.
+import { Vault } from './vault.js';
+
+export { Vault };
 export const MODELS = { quick: 'claude-haiku-5-5', default: 'claude-sonnet-5-5', complex: 'claude-opus-5-5' };
 const MAX_BODY_BYTES = 12 * 1024 * 1024;
 const MAX_IMAGES = 4;
@@ -73,11 +78,21 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
     const { pathname } = new URL(request.url);
     if (pathname === '/' || pathname === '/health') return reply(200, { ok: true });
-    if (request.method !== 'POST' || pathname !== '/ai') return reply(404, { error: 'לא נמצא' });
+    const SYNC = ['/sync/get', '/sync/put'];
+    if (request.method !== 'POST' || (pathname !== '/ai' && !SYNC.includes(pathname))) return reply(404, { error: 'לא נמצא' });
     if (!env.ANTHROPIC_API_KEY || !env.COURSE_PASSWORD) return reply(503, { error: 'השרת לא מוגדר' });
 
     const auth = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
     if (!sameSecret(auth, env.COURSE_PASSWORD)) return reply(401, { error: 'הסיסמה לא נכונה', code: 'bad_key' });
+
+    if (SYNC.includes(pathname)) {
+      if (!env.VAULT) return reply(503, { error: 'השרת לא מוגדר' });
+      const raw = await request.text();
+      if (raw.length > 2 * 1024 * 1024) return reply(413, { error: 'גדול מדי' });
+      const stub = env.VAULT.get(env.VAULT.idFromName('main'));
+      const res = await stub.fetch('https://vault' + pathname.slice(5), { method: 'POST', body: raw || '{}' });
+      return reply(res.status, await res.json());
+    }
 
     const raw = await request.text();
     if (raw.length > MAX_BODY_BYTES) return reply(413, { error: 'השאלה ארוכה מדי' });

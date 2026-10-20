@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { mergeChanges, Vault } from './vault.js';
 import worker, { cleanMessages, cleanImages, sameSecret, MODELS } from './worker.js';
 
 const env = { ANTHROPIC_API_KEY: 'k', COURSE_PASSWORD: 'secret', ALLOWED_ORIGIN_RE: '^https://([a-z0-9-]+\\.)?suno-course(-[a-z0-9]+)?\\.pages\\.dev$' };
@@ -61,4 +62,26 @@ test('תמונות: מצורפות להודעה האחרונה, וסוג לא מ
   const c = sent.messages[0].content;
   assert.equal(c[0].type, 'image');
   assert.equal(c[1].text, 'מה זה?');
+});
+
+test('סנכרון: העדכון האחרון לכל מפתח מנצח, מפתח לא מוכר נדחה', () => {
+  const ex = { done: { v: ['a'], t: 10 } };
+  assert.deepEqual(mergeChanges(ex, { done: { v: ['b'], t: 5 } }), {});
+  assert.deepEqual(mergeChanges(ex, { done: { v: ['b'], t: 20 } }), { done: { v: ['b'], t: 20 } });
+  assert.equal(mergeChanges(ex, { evil: { v: 1, t: 1 } }), null);
+  assert.equal(mergeChanges(ex, { done: { v: 1 } }), null);
+});
+
+test('סנכרון דרך השרת: שמירה וקריאה, ובלי סיסמה – 401', async () => {
+  const mem = new Map();
+  const storage = { list: async ({ prefix }) => new Map([...mem].filter(([k]) => k.startsWith(prefix))), put: async (o) => { for (const [k, v] of Object.entries(o)) mem.set(k, v); } };
+  const vault = new Vault({ storage });
+  const e = { ...env, VAULT: { idFromName: () => 'id', get: () => ({ fetch: (url, init) => vault.fetch(new Request(url, init)) }) } };
+  const sreq = (path, body, auth = 'secret') => new Request('https://x' + path, { method: 'POST', headers: { authorization: 'Bearer ' + auth }, body: JSON.stringify(body) });
+  assert.equal((await worker.fetch(sreq('/sync/get', {}, 'nope'), e)).status, 401);
+  const put = await worker.fetch(sreq('/sync/put', { changes: { done: { v: ['start'], t: 100 } } }), e);
+  assert.equal(put.status, 200);
+  const got = await (await worker.fetch(sreq('/sync/get', {}), e)).json();
+  assert.deepEqual(got.data.done, { v: ['start'], t: 100 });
+  assert.equal((await worker.fetch(sreq('/sync/put', { changes: { x: { v: 1, t: 1 } } }), e)).status, 400);
 });
