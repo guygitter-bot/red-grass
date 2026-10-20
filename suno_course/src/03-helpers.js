@@ -29,4 +29,6 @@ const yesno = (y, n) => `<div class="two"><div class="yes"><h4>✓ מותר / מ
 const table = (head, rows) => `<div class="tbl"><table><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 const tool = name => `<div data-tool="${name}"></div>`;
 const g = t => `<span class="pill g">${t}</span>`, y = t => `<span class="pill y">${t}</span>`, r = t => `<span class="pill r">${t}</span>`;
+// צילום מסך אמיתי (קובץ שמתפרסם לצד הדף)
+const shot = (file, url, cap) => `<figure class="shot"><div class="frame"><div class="chrome"><i></i><i></i><i></i><span class="url">${esc(url)}</span></div><img src="img/${file}" alt="${esc(cap.replace(/<[^>]+>/g, ''))}" loading="lazy" style="display:block;width:100%"></div><figcaption><b>צילום מסך אמיתי</b> (20.10.2026) · ${cap}</figcaption></figure>`;
 const L = (txt, href) => `<a href="${href}" target="_blank" rel="noopener">${txt}</a>`;
