@@ -2,7 +2,7 @@
 // נשמר במופע אחד של RecipeBook בשם community. מתכון אישי (צילום, כתיבה ידנית, ווטסאפ, טקסט שהודבק) לא נכנס,
 // וגם לא הערות, דירוג אישי או עריכות של משתמש.
 import { normalizeUrl, youtubeId } from './source.js';
-import { dietInfo, matchesDiets, recipeDiet, recipeMinutes } from './diet.js';
+import { DIET_IDS, dietInfo, matchesDiets, recipeDiet, recipeMinutes } from './diet.js';
 
 export { parseMinutes, recipeMinutes } from './diet.js';
 
@@ -37,7 +37,7 @@ export function publicCopy(r, { keepImage = false } = {}) {
   const image = typeof r.image === 'string' && /^https:\/\//.test(r.image) && (keepImage || !/\/img\/[^/]+\/[0-9a-f-]{36}$/.test(r.image)) ? r.image : null;
   return {
     ...['title', 'originalTitle', 'description', 'category', 'categories', 'tags', 'servings', 'prepTime', 'cookTime', 'totalTime',
-      'ingredients', 'steps', 'tips', 'nutrition', 'basis', 'confidence', 'notes'].reduce((o, k) => ({ ...o, ...pick(k) }), {}),
+      'ingredients', 'steps', 'tips', 'nutrition', 'diet', 'basis', 'confidence', 'notes'].reduce((o, k) => ({ ...o, ...pick(k) }), {}),
     image,
     source: {
       url: src.url, kind: src.kind,
@@ -72,6 +72,8 @@ export function summarize(key, r, stats = { saves: 0, ratingSum: 0, ratingCount:
     protein: Number.isFinite(Number(r.nutrition?.protein)) && r.nutrition?.protein !== null ? Number(r.nutrition.protein) : null,
     carbs: Number.isFinite(Number(r.nutrition?.carbs)) && r.nutrition?.carbs !== null ? Number(r.nutrition.carbs) : null,
     ...dietOf(r),
+    // כל הסינונים שהמתכון מתאים להם (כולל סימון ה-AI וציוד מהשלבים) – לחיפוש
+    dietIds: (() => { const d = recipeDiet(r); return DIET_IDS.filter((k) => d[k]); })(),
     basis: r.basis || 'source',
     credit: author ? `מתכון של ${author.name}` : r.source?.author || r.source?.site || '',
     url: r.source?.url || '',
@@ -84,8 +86,8 @@ export function summarize(key, r, stats = { saves: 0, ratingSum: 0, ratingCount:
 
 // מה שהאפליקציה רואה: ממוצע רק מ-MIN_RATINGS דירוגים
 export function publicSummary(s) {
-  const { ratingSum, ingredients, authorId, reports, reportReasons, flagged, flagReason, hidden, ...rest } = s;
-  void ingredients, authorId, reports, reportReasons, flagged, flagReason, hidden;
+  const { ratingSum, ingredients, authorId, reports, reportReasons, flagged, flagReason, hidden, dietIds, ...rest } = s;
+  void ingredients, authorId, reports, reportReasons, flagged, flagReason, hidden, dietIds;
   return {
     ...rest,
     rating: s.ratingCount >= MIN_RATINGS ? Math.round((ratingSum / s.ratingCount) * 10) / 10 : null,
@@ -106,7 +108,13 @@ export function searchCommunity(summaries, q, filters = {}) {
     if (filters.vegan && !s.vegan) continue;
     if (filters.glutenFree && !s.glutenFree) continue;
     // סינונים לפי המצרכים (מחושב כאן, כך שגם מתכונים ישנים במאגר נכנסים)
-    if (filters.diets?.length && !matchesDiets(dietInfo(String(s.ingredients || '').split(' · '), { nutrition: { calories: s.calories, protein: s.protein, carbs: s.carbs }, minutes: s.minutes }), filters.diets)) continue;
+    if (filters.diets?.length) {
+      // סיכום חדש שומר את הסינונים; סיכום ישן – מחשבים מהמצרכים (בלי ציוד)
+      const info = Array.isArray(s.dietIds)
+        ? Object.fromEntries(DIET_IDS.map((k) => [k, s.dietIds.includes(k)]))
+        : dietInfo(String(s.ingredients || '').split(' · '), { nutrition: { calories: s.calories, protein: s.protein, carbs: s.carbs }, minutes: s.minutes });
+      if (!matchesDiets(info, filters.diets)) continue;
+    }
     const title = norm(s.title);
     const rest = norm(`${s.tags.join(' ')} ${s.category} ${s.description} ${s.ingredients}`);
     if (!words.every((w) => title.includes(w) || rest.includes(w))) continue;
