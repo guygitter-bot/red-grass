@@ -3,7 +3,7 @@ import { trackedClient } from './deps.js';
 // ספר המתכונים: Durable Object אחד שמחזיק את כל המתכונים (כל מתכון במפתח r:<id>).
 
 const PREFIX = 'r:';
-const EDITABLE = ['title', 'description', 'category', 'categories', 'tags', 'servings', 'prepTime', 'cookTime', 'totalTime', 'ingredients', 'steps', 'tips', 'notes', 'favorite', 'myNotes', 'image', 'rating'];
+const EDITABLE = ['title', 'description', 'category', 'categories', 'tags', 'servings', 'prepTime', 'cookTime', 'totalTime', 'ingredients', 'steps', 'tips', 'notes', 'favorite', 'myNotes', 'image', 'rating', 'nutrition'];
 
 const SRC = 'src:';
 export const MAX_RECIPES = 2000; // תקרה לספר, כדי שאי אפשר יהיה למלא את האחסון
@@ -379,7 +379,7 @@ export class RecipeBook {
       // סידור הקטגוריות על ידי הסוכן (פעם אחת לכל מתכון)
       if (patch.categorized) next.categorized = true;
       // שדות שהמשתמש ערך בעצמו – רענון מהמקור לא ידרוס אותם
-      const edited = EDITABLE.filter((k) => k in patch && !['favorite', 'myNotes', 'rating'].includes(k) && !patch.categorized);
+      const edited = EDITABLE.filter((k) => k in patch && !['favorite', 'myNotes', 'rating', 'nutrition'].includes(k) && !patch.categorized);
       if (edited.length) next.edited = { ...(current.edited || {}), ...Object.fromEntries(edited.map((k) => [k, true])) };
       await this.storage.put(PREFIX + id, next);
       if ('image' in patch && current.image !== next.image) await this.dropImage(current.image);

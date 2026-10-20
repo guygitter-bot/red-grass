@@ -36,7 +36,7 @@ import { CATEGORIES } from './lib/categories';
 import { isNative } from './lib/native';
 import {
   addCategory, setCategoryPrefs, addRecipeAsync, addTextRecipe, getJob, getRecipe, deleteRecipe, removeCategory, getMe, getPlan, getShopping, listRecipes, logout as apiLogout, refreshRecipe,
-  updateRecipe, categorizeRecipe, safeRecipe, getPantry, shoppingOps, pantryOps, planOps, shareRecipe, recipeShareLink,
+  updateRecipe, categorizeRecipe, estimateNutrition, safeRecipe, getPantry, shoppingOps, pantryOps, planOps, shareRecipe, recipeShareLink,
 } from './lib/api';
 import { SORTS, categoriesOf, countByCategory, emojiOf, filterRecipes, freeLeft, linkFromShare, orderCategories, parseAuthHash, parseShareLink, sortRecipes } from './lib/recipes';
 import { usePersistentState } from './lib/storage';
@@ -761,10 +761,15 @@ export default function App() {
         categories={allCategories}
         onBack={back}
         onShareLink={async () => recipeShareLink(await shareRecipe(session, current.id))}
+        onEstimateNutrition={async () => upsert(await estimateNutrition(session, current.id))}
         onUpdate={async (patch) => {
           upsert({ ...current, ...patch });
           try {
             upsert(await updateRecipe(session, current.id, patch));
+            // המצרכים השתנו: ההערכה התזונתית נמחקה בשרת – מחשבים מחדש ברקע (רק אם הייתה כזו)
+            if (('ingredients' in patch || 'servings' in patch) && current.nutrition) {
+              estimateNutrition(session, current.id).then(upsert).catch(() => {});
+            }
           } catch (e) {
             setToast(e.message);
             reload();

@@ -16,7 +16,7 @@ import { usePersistentState } from '../lib/storage';
 // רק נגני סרטונים מהאתרים המוכרים
 const SAFE_EMBED = /^https:\/\/(www\.youtube-nocookie\.com\/embed\/|www\.tiktok\.com\/embed\/|www\.instagram\.com\/(p|reel|tv)\/|player\.vimeo\.com\/video\/)/;
 
-export default function RecipeView({ recipe, pantryNames = [], categories, onBack, onUpdate, onRefresh, onDelete, onAddToShopping, onAddToPlan, onShareLink }) {
+export default function RecipeView({ recipe, pantryNames = [], categories, onBack, onUpdate, onRefresh, onDelete, onAddToShopping, onAddToPlan, onShareLink, onEstimateNutrition }) {
   const [editing, setEditing] = useState(false);
   const [planning, setPlanning] = useState(false);
   const [cooking, setCooking] = useState(false);
@@ -342,6 +342,8 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
               </Section>
             )}
 
+            <Nutrition value={recipe.nutrition} busy={busy === 'nutrition'} onEstimate={() => run('nutrition', onEstimateNutrition)} />
+
             <div className="print:hidden"><MyNotes value={recipe.myNotes || ''} onSave={(myNotes) => quiet({ myNotes })} /></div>
             {recipe.myNotes && <p className="hidden print:block mt-6 text-sm"><b>ההערות שלי:</b> {recipe.myNotes}</p>}
 
@@ -421,6 +423,42 @@ function Servings({ base, factor, onChange }) {
         </button>
       ))}
     </div>
+  );
+}
+
+// הערכה תזונתית למנה: נוצרת עם המתכון, או בלחיצה (מתכון ישן / אחרי עריכת המצרכים)
+const NUTRIENTS = [
+  ['protein', 'חלבון', 'גרם'], ['carbs', 'פחמימות', 'גרם'], ['sugar', 'מתוכן סוכרים', 'גרם'], ['fat', 'שומן', 'גרם'],
+  ['saturated_fat', 'מתוכו רווי', 'גרם'], ['fiber', 'סיבים תזונתיים', 'גרם'], ['sodium', 'נתרן', 'מ"ג'],
+];
+function Nutrition({ value, busy, onEstimate }) {
+  const valid = value && typeof value === 'object' && Number(value.calories) > 0;
+  const num = (v) => formatAmount(Math.round(Number(v) || 0));
+  return (
+    <Section title="ערכים תזונתיים">
+      {valid ? (
+        <>
+          <div className="rounded-2xl bg-orange-50 border border-orange-100 px-4 py-3 flex items-baseline justify-between gap-3">
+            <span className="text-sm text-stone-600">{value.per || 'למנה'}</span>
+            <span><span className="text-2xl font-black text-orange-600">{num(value.calories)}</span> <span className="text-sm text-stone-600">קלוריות</span></span>
+          </div>
+          <div className="mt-2 grid grid-cols-2 lg:grid-cols-4 gap-2">
+            {NUTRIENTS.map(([k, label, unit]) => (
+              <div key={k} className="rounded-xl bg-white border border-stone-200 px-3 py-2">
+                <div className="text-xs text-stone-500">{label}</div>
+                <div className="font-bold text-stone-800">{num(value[k])} <span className="text-xs font-normal text-stone-500">{unit}</span></div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-stone-500">הערכה בלבד, לפי המצרכים והכמויות שבמתכון.</p>
+        </>
+      ) : (
+        <button onClick={onEstimate} disabled={busy} className="w-full rounded-2xl border border-dashed border-orange-300 bg-orange-50/50 text-orange-700 font-medium py-3 flex items-center justify-center gap-2 disabled:opacity-60 print:hidden">
+          {busy ? <Loader2 size={18} className="animate-spin" /> : <Info size={18} />}
+          חישוב ערכים תזונתיים (קלוריות, חלבון, פחמימות, שומן)
+        </button>
+      )}
+    </Section>
   );
 }
 
