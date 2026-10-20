@@ -1,8 +1,12 @@
 // השרת של אפליקציית הקורס "ערוץ מוזיקה מסונו" (Cloudflare Worker): מעביר שאלות ל-Claude.
-//   POST /ai {messages: [{role, content}], tier: 'quick'|'default'|'complex'} -> {text}
+//   POST /ai {messages: [{role, content}], tier: 'quick'|'default'|'complex', images?: [{media_type, data}]} -> {text}
+//   התמונות (עד 4, base64) מצורפות להודעה האחרונה של המשתמש.
 // מוגן בסיסמה (Authorization: Bearer <COURSE_PASSWORD>) כדי שאף אחד אחר לא ישתמש במפתח.
 export const MODELS = { quick: 'claude-haiku-5-5', default: 'claude-sonnet-5-5', complex: 'claude-opus-5-5' };
-const MAX_BODY_BYTES = 300 * 1024;
+const MAX_BODY_BYTES = 12 * 1024 * 1024;
+const MAX_IMAGES = 4;
+const MAX_IMAGE_B64 = 3 * 1024 * 1024;
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const MAX_CHARS = 150000;
 const MAX_TURNS = 30;
 const SYSTEM = 'אתה עוזר בתוך אפליקציית קורס בעברית על בניית ערוץ יוטיוב של מוזיקה שנוצרת ב-Suno. ההוראות המדויקות מגיעות בהודעה הראשונה של המשתמש. כשמבקשים JSON – עונים רק ב-JSON תקין.';
@@ -43,6 +47,16 @@ export function cleanMessages(list) {
   return out;
 }
 
+// תמונות: סוג מותר, base64 בגודל סביר. null = בקשה לא תקינה
+export function cleanImages(list) {
+  if (list == null) return [];
+  if (!Array.isArray(list) || list.length > MAX_IMAGES) return null;
+  for (const im of list) {
+    if (!im || !IMAGE_TYPES.includes(im.media_type) || typeof im.data !== 'string' || !im.data || im.data.length > MAX_IMAGE_B64 || !/^[A-Za-z0-9+/=]+$/.test(im.data)) return null;
+  }
+  return list.map((im) => ({ type: 'image', source: { type: 'base64', media_type: im.media_type, data: im.data } }));
+}
+
 // שגיאות מ-Anthropic בעברית
 export function aiMessage(status, text) {
   const t = String(text || '').toLowerCase();
@@ -70,7 +84,12 @@ export default {
     let body;
     try { body = JSON.parse(raw); } catch { return reply(400, { error: 'בקשה לא תקינה' }); }
     const messages = cleanMessages(body.messages);
-    if (!messages) return reply(400, { error: 'בקשה לא תקינה' });
+    const images = cleanImages(body.images);
+    if (!messages || !images) return reply(400, { error: 'בקשה לא תקינה' });
+    if (images.length) {
+      const last = messages[messages.length - 1];
+      last.content = [...images, { type: 'text', text: last.content }];
+    }
     const model = MODELS[body.tier] || MODELS.default;
 
     let res;

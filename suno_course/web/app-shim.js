@@ -29,17 +29,30 @@ function toTurns(input) {
   return input.map(m => ({ role: m.role, content: String(m.content) }));
 }
 
+// צילום מסך → JPEG מוקטן (עד 1568 פיקסלים בצד הארוך) ב-base64
+async function shrinkImage(file) {
+  const bmp = await createImageBitmap(file);
+  const k = Math.min(1, 1568 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  const url = c.toDataURL('image/jpeg', 0.85);
+  return { media_type: 'image/jpeg', data: url.slice(url.indexOf(',') + 1) };
+}
+
 async function callCourseAI(input, opts) {
   opts = opts || {};
   let key = getKey();
   if (!key) key = await askKey();
   if (!key) throw { code: 'needs_key', he: 'כדי להשתמש ב-AI צריך להקליד את סיסמת הקורס (בתפריט ← "חיבור ה-AI").' };
+  let images = [];
+  try { images = await Promise.all([...(opts.images || [])].slice(0, 4).map(shrinkImage)); }
+  catch (e) { throw { code: 'image_rejected', he: 'לא הצלחתי לקרוא את התמונה. נסו צילום מסך אחר (JPG או PNG).' }; }
   let res;
   try {
     res = await fetch(COURSE_API + '/ai', {
       method: 'POST', signal: opts.signal,
       headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key },
-      body: JSON.stringify({ messages: toTurns(input), tier: opts.modelTier || 'default' }),
+      body: JSON.stringify({ messages: toTurns(input), tier: opts.modelTier || 'default', images }),
     });
   } catch (e) {
     if (opts.signal && opts.signal.aborted) throw { code: 'cancelled' };
@@ -61,6 +74,7 @@ function parseLoose(t) {
   throw { code: 'invalid_json', text: t };
 }
 const courseSample = (input, opts) => callCourseAI(input, opts);
+courseSample.limits = async () => ({ maxPromptBytes: 262144, images: { maxCount: 4, maxInputBytes: 20 * 1024 * 1024, mediaTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] } });
 courseSample.json = async (input, opts) => {
   const turns = toTurns(input);
   turns[turns.length - 1].content += '\n\n(Reply with only the JSON value, no other text.)';

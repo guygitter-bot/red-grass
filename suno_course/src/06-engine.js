@@ -129,38 +129,104 @@ const COURSE_FACTS = `עובדות מפתח מהקורס (נכון לאוקטו�
 - עריכה: CapCut למחשב, 1080p H.264, לולאה מונפשת, fade בין שירים; לא להשתמש במוזיקה של CapCut. חלופות: DaVinci Resolve, FFmpeg.
 - נישות: שינה/גשם (שעות מהירות), ג'אז לבית קפה (RPM בינוני), ריכוז, מדיטציה, עונתי; לו-פיי ללימודים תחרות קיצונית; ילדים לא מומלץ.`;
 
+// ===== המדריך האישי: שיחה שנשמרת, צילומי מסך, והכרות עם ההתקדמות =====
+// תמונת מצב של התלמיד/ה מכל מה שנשמר בדפדפן – נשלחת למדריך בכל שאלה
+function progressSummary() {
+  const cur = MODULES.find(m => '#' + m.id === location.hash) || MODULES.find(m => m.id === store.get('last', 'start')) || MODULES[0];
+  const next = MODULES.find(m => !done.has(m.id));
+  const lines = [];
+  lines.push(`פרקים שהושלמו (${done.size}/${MODULES.length}): ${MODULES.filter(m => done.has(m.id)).map(m => m.title).join(' | ') || 'עוד אין'}.`);
+  lines.push(`הפרק הפתוח עכשיו: ${cur.title}.`);
+  lines.push(`הפרק הבא שלא הושלם: ${next ? next.title : 'הכול הושלם'}.`);
+  const open = [];
+  MODULES.forEach(m => { const ck = checks[m.id] || []; m.check.forEach((c, i) => { if (!ck[i] && (m.id === cur.id || done.has(m.id))) open.push(`${m.title}: ${c}`); }); });
+  if (open.length) lines.push(`משימות שלא סומנו (בפרק הנוכחי ובפרקים שהושלמו): ${open.slice(0, 12).join(' | ')}.`);
+  const nich = store.get('niches', null);
+  if (nich && nich.some(x => !x.ex)) lines.push(`נישות שבדק/ה: ${nich.filter(x => !x.ex).map(x => x.n).join(', ')}.`);
+  const tr = store.get('track', []);
+  if (tr.length) {
+    const last = [...tr].sort((x, y) => x.m.localeCompare(y.m)).slice(-3);
+    lines.push(`נתוני הערוץ (חודשים אחרונים): ${last.map(r => `${r.m}: ${r.views} צפיות, ${r.hours} שעות, ${r.subs} מנויים, $${r.rev}`).join(' ; ')}.`);
+  }
+  const pr = store.get('prompt', null);
+  if (pr && pr.use) lines.push(`שימוש שנבחר במחולל הפרומפטים: ${pr.use}.`);
+  return lines.join('\n');
+}
 function tutorRules() {
-  return `אתה המדריך האישי בקורס "ערוץ מוזיקה מסונו" – קורס בעברית על בניית ערוץ יוטיוב שמפרסם פלייליסטים של מוזיקה שנוצרה ב-Suno, עד מונטיזציה ושכפול לערוצים.
-כללים: עונים רק בעברית, בשפה פשוטה, קצר ומעשי (עד 180 מילים אלא אם ביקשו יותר). כשמזכירים כפתור באפליקציה – שם הכפתור באנגלית כפי שמופיע, ותרגום בסוגריים. לא ממציאים נתונים: אם משהו לא ידוע או משתנה – אומרים לבדוק בדף הרשמי. לא נותנים ייעוץ משפטי או מס מחייב. לא ממליצים על שום דבר שמפר את מדיניות יוטיוב או סונו (קניית צפיות, עקיפת חסימות, שמות אמנים, חיקוי קולות).
+  return `אתה המדריך האישי בקורס "ערוץ מוזיקה מסונו" – קורס בעברית על בניית ערוץ יוטיוב שמפרסם פלייליסטים של מוזיקה שנוצרה ב-Suno, עד מונטיזציה ושכפול לערוצים. התלמיד/ה לא טכני/ת.
+איך עובדים: מדריכים יד ביד. צעד אחד או שניים בכל תשובה, בהוראות מדויקות (איפה ללחוץ, מה לכתוב). בסוף כל תשובה – שאלה אחת שבודקת שהצעד בוצע או מה רואים עכשיו על המסך. כשמבקשים "מה הצעד הבא" – מסתכלים על ההתקדמות למטה ומציעים את המשימה הקטנה הבאה, ומפנים לפרק המתאים בקורס.
+צילומי מסך: כשמצורף צילום – מתארים בקצרה מה רואים, מסמנים בדיוק על מה ללחוץ (שם הכפתור כפי שמופיע + מיקום: למעלה מימין וכו'), ומזהים טעויות (למשל "Made for kids" מסומן, מסלול חינמי בסונו, כותרת מטעה). אם הצילום לא ברור – מבקשים צילום נוסף.
+כללים: עונים רק בעברית פשוטה. שמות כפתורים באנגלית כפי שמופיעים, ותרגום בסוגריים. לא ממציאים נתונים: מה שלא ידוע או משתנה – אומרים לבדוק בדף הרשמי. לא ייעוץ משפטי או מס מחייב. לא ממליצים על שום דבר שמפר את מדיניות יוטיוב או סונו (קניית צפיות, עקיפת חסימות, שמות אמנים, חיקוי קולות). אל תבקש סיסמאות.
 פרקי הקורס: ${MODULES.map((m, i) => (i + 1) + '. ' + m.title).join(' | ')}.
 ${COURSE_FACTS}
-הפרק שהתלמיד/ה נמצא/ת בו עכשיו: ${(MODULES.find(m => '#' + m.id === location.hash) || MODULES[0]).title}.`;
+ההתקדמות של התלמיד/ה עכשיו:
+${progressSummary()}`;
 }
-const tutorTurns = [];
+// מעט עיצוב בתשובות: **מודגש** ושורות
+const mdLite = t => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/^#{1,4}\s*(.+)$/gm, '<b>$1</b>');
+let tutorTurns = store.get('tutor', []);
 function initTutor() {
   const chat = $('#tutorChat');
-  const add = (who, t) => { const d = document.createElement('div'); d.className = 'msg ' + who; d.textContent = t; chat.appendChild(d); chat.scrollTop = chat.scrollHeight; return d; };
-  add('ai', 'שלום! אני המדריך של הקורס. אפשר לשאול אותי כל דבר: איך עושים משהו בסונו, מה כותבים בכותרת, או אם רעיון מסוים מסוכן לערוץ.');
-  $('#fab').onclick = () => { $('#drawer').hidden = !$('#drawer').hidden; if (!$('#drawer').hidden) $('#tutorIn').focus(); };
+  const add = (who, t, imgs) => {
+    const d = document.createElement('div'); d.className = 'msg ' + who;
+    d.innerHTML = (imgs ? `<div class="thumbs">${imgs.map(u => `<img src="${u}" alt="צילום מסך">`).join('')}</div>` : '') + mdLite(t);
+    chat.appendChild(d); chat.scrollTop = chat.scrollHeight; return d;
+  };
+  const greet = () => {
+    const next = MODULES.find(m => !done.has(m.id));
+    add('ai', `שלום! אני המדריך האישי שלך. אני רואה איפה את/ה בקורס${next ? ` – הפרק הבא הוא **${next.title}**` : ''}.\nאפשר לשאול כל שאלה, לשלוח צילום מסך (📷) מסונו או מיוטיוב, או ללחוץ "מה הצעד הבא?" ואוביל אותך צעד אחרי צעד.`);
+  };
+  const redraw = () => { chat.innerHTML = ''; greet(); tutorTurns.forEach(t => add(t.role === 'user' ? 'me' : 'ai', t.content)); };
+  redraw();
+  const open = () => { $('#drawer').hidden = false; $('#tutorIn').focus(); chat.scrollTop = chat.scrollHeight; };
+  $('#fab').onclick = () => { $('#drawer').hidden ? open() : ($('#drawer').hidden = true); };
   $('#drawerClose').onclick = () => { $('#drawer').hidden = true; };
+  // תמונות שמחכות לשליחה
+  let pending = [];
+  const drawPending = () => {
+    $('#tutorPend').innerHTML = pending.map((p, i) => `<span class="pend"><img src="${p.url}" alt=""><button type="button" data-rmimg="${i}" aria-label="הסרת התמונה">✕</button></span>`).join('');
+    $('#tutorPend').hidden = !pending.length;
+    $$('[data-rmimg]').forEach(b => b.onclick = () => { URL.revokeObjectURL(pending[+b.dataset.rmimg].url); pending.splice(+b.dataset.rmimg, 1); drawPending(); });
+  };
+  $('#tutorImg').addEventListener('change', e => {
+    for (const f of e.target.files) if (/^image\//.test(f.type) && pending.length < 4) pending.push({ file: f, url: URL.createObjectURL(f) });
+    e.target.value = ''; drawPending();
+  });
   let ctl = null;
-  $('#tutorIn').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#tutorForm').requestSubmit(); } });
-  $('#tutorForm').addEventListener('submit', async e => {
-    e.preventDefault();
-    const q = $('#tutorIn').value.trim(); if (!q) return;
-    if (!SAMPLE) { add('ai', 'ה-AI זמין רק כשפותחים את הקורס מתוך Claude. בינתיים אפשר להיעזר בפרקים עצמם.'); return; }
-    $('#tutorIn').value = ''; add('me', q);
-    tutorTurns.push({ role: 'user', content: q });
-    while (tutorTurns.length > 12) tutorTurns.shift();
-    if (tutorTurns[0].role !== 'user') tutorTurns.shift();
+  const ask = async (q, shown) => {
+    if (!SAMPLE) { add('ai', 'ה-AI לא זמין כאן כרגע. בינתיים אפשר להיעזר בפרקים עצמם.'); return; }
+    const imgs = pending; pending = []; drawPending();
+    const content = q + (imgs.length ? `\n[צורפו ${imgs.length} צילומי מסך]` : '');
+    add('me', shown || q, imgs.map(p => p.url));
+    tutorTurns.push({ role: 'user', content });
     const bubble = add('ai', 'חושב…'); $('#tutorSend').disabled = true;
     ctl = new AbortController();
+    // שולחים את 20 התורות האחרונות; השיחה כולה נשמרת בטלפון
+    let send = tutorTurns.slice(-20); if (send[0].role !== 'user') send = send.slice(1);
     try {
-      const { text } = await SAMPLE([{ role: 'user', content: tutorRules() }, ...tutorTurns], { cache: false, signal: ctl.signal, onText: ({ text }) => { bubble.textContent = text; chat.scrollTop = chat.scrollHeight; } });
+      const opts = { cache: false, signal: ctl.signal, onText: ({ text }) => { bubble.innerHTML = mdLite(text); chat.scrollTop = chat.scrollHeight; } };
+      if (imgs.length) opts.images = imgs.map(p => p.file);
+      const { text } = await SAMPLE([{ role: 'user', content: tutorRules() }, ...send], opts);
       tutorTurns.push({ role: 'assistant', content: text });
+      store.set('tutor', tutorTurns.slice(-60));
     } catch (err) { bubble.textContent = (err.text ? err.text + '\n\n' : '') + aiErr(err); tutorTurns.pop(); }
     finally { $('#tutorSend').disabled = false; }
+  };
+  $('#tutorIn').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && innerWidth > 640) { e.preventDefault(); $('#tutorForm').requestSubmit(); } });
+  $('#tutorForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const q = $('#tutorIn').value.trim();
+    if (!q && !pending.length) return;
+    $('#tutorIn').value = '';
+    ask(q || 'מה רואים בצילום, ומה עליי לעשות עכשיו?');
   });
+  $('#tutorNext').onclick = () => ask('מה הצעד הבא שלי? תן לי משימה אחת קטנה עכשיו, צעד אחרי צעד.', 'מה הצעד הבא שלי?');
+  let armed = false;
+  $('#tutorNew').onclick = () => {
+    if (!armed) { armed = true; $('#tutorNew').textContent = 'למחוק? לחיצה נוספת'; setTimeout(() => { armed = false; $('#tutorNew').textContent = 'שיחה חדשה'; }, 3500); return; }
+    armed = false; $('#tutorNew').textContent = 'שיחה חדשה';
+    tutorTurns = []; store.set('tutor', []); redraw();
+  };
 }
 
 async function boot() {
