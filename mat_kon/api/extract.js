@@ -346,6 +346,47 @@ export async function estimateNutrition(client, recipe) {
   return nutrition;
 }
 
+// בדיקה לפני פרסום מתכון אישי לקהילה: שזה מתכון, בלי תוכן פוגעני, בלי פרטים אישיים, ושהתמונה מתאימה.
+// decision: publish (בסדר) / review (לא בטוח – מתפרסם ובעל האפליקציה מקבל התראה) / reject (לא מתפרסם, עם סיבה בעברית)
+export async function moderateRecipe(client, recipe, imageUrl = null) {
+  const tool = {
+    name: 'submit_review',
+    description: 'Submit the review of a recipe a user wants to publish to a public recipe community.',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: {
+        decision: { type: 'string', enum: ['publish', 'review', 'reject'] },
+        image_ok: { type: 'boolean', description: 'false if the image is not a food/cooking photo, or shows people, documents, personal details or anything inappropriate' },
+        reason: { type: 'string', description: 'Short Hebrew reason for the user when the decision is reject or review (or why the image was removed); empty otherwise' },
+      },
+      required: ['decision', 'image_ok', 'reason'],
+      additionalProperties: false,
+    },
+  };
+  const list = (sections) => (sections || []).flatMap((g) => g.items || []).slice(0, 80).join('\n');
+  const text = `Title: ${recipe.title}\nDescription: ${recipe.description || ''}\nIngredients:\n${list(recipe.ingredients)}\nSteps:\n${list(recipe.steps)}\nTips: ${(recipe.tips || []).join(' | ')}\nNotes: ${recipe.notes || ''}`;
+  const response = await client.beta.messages.create({
+    model: MODEL,
+    max_tokens: 1000,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: { effort: 'low' },
+    system: `You review recipes that users of a Hebrew family recipe app want to publish to the app's public community.
+publish: a real recipe (food or drink) with nothing problematic.
+reject: not a recipe at all (spam, ads, random text), hateful/sexual/violent or otherwise offensive content, or personal details of real people (phone numbers, addresses, emails, ID numbers, full names of private people beyond a first name like "סבתא רחל").
+review: you are not sure (e.g. a borderline joke, possibly copied commercial text, a dangerous food practice).
+Also judge the attached image (if any): image_ok=false if it is not food/cooking or shows faces, documents or personal details.
+The reason is in simple Hebrew, addressed to the user. Call submit_review.`,
+    tools: [tool],
+    messages: [{ role: 'user', content: imageUrl ? [{ type: 'image', source: { type: 'url', url: imageUrl } }, { type: 'text', text }] : text }],
+  });
+  const submit = response.content.find((b) => b.type === 'tool_use' && b.name === tool.name);
+  if (!submit) throw new Error('הבדיקה לפני הפרסום לא הצליחה. נסו שוב.');
+  const { decision, image_ok: imageOk, reason } = submit.input;
+  return { decision: ['publish', 'review', 'reject'].includes(decision) ? decision : 'review', imageOk: imageOk !== false, reason: clean(reason) };
+}
+
 // קטגוריות של מתכון: category = הראשית (גם בשביל מתכונים ונתונים ישנים), categories = כולן, הראשית ראשונה
 export const MAX_RECIPE_CATEGORIES = 4;
 export function categoryFields(list, categories = CATEGORIES) {

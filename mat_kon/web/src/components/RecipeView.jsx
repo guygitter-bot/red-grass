@@ -4,6 +4,7 @@ import {
   CalendarPlus, Plus, Printer, RotateCw, Share2, ShoppingCart, Star, Trash2, Users, X,
 } from 'lucide-react';
 import CookMode from './CookMode';
+import PublishPanel from './PublishPanel';
 import { isNative, shareText } from '../lib/native';
 import { STAPLES, missingLines } from '../lib/fridge';
 import { shoppingName } from '../lib/shopping';
@@ -16,7 +17,7 @@ import { usePersistentState } from '../lib/storage';
 // רק נגני סרטונים מהאתרים המוכרים
 const SAFE_EMBED = /^https:\/\/(www\.youtube-nocookie\.com\/embed\/|www\.tiktok\.com\/embed\/|www\.instagram\.com\/(p|reel|tv)\/|player\.vimeo\.com\/video\/)/;
 
-export default function RecipeView({ recipe, pantryNames = [], categories, onBack, onUpdate, onRefresh, onDelete, onAddToShopping, onAddToPlan, onShareLink, onEstimateNutrition }) {
+export default function RecipeView({ recipe, pantryNames = [], categories, onBack, onUpdate, onRefresh, onDelete, onAddToShopping, onAddToPlan, onShareLink, onEstimateNutrition, community }) {
   const [editing, setEditing] = useState(false);
   const [planning, setPlanning] = useState(false);
   const [cooking, setCooking] = useState(false);
@@ -113,9 +114,10 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
         {!fromChat && !recipe.source.url ? (
           <div className="mt-4 rounded-2xl bg-stone-100 p-3 flex items-center gap-3 text-sm text-stone-700">
             <span className="w-10 h-10 rounded-xl bg-stone-500 text-white flex items-center justify-center shrink-0">
-              {recipe.source.kind === 'photo' ? <Camera size={20} /> : <PenLine size={20} />}
+              {recipe.source.kind === 'photo' ? <Camera size={20} /> : recipe.source.kind === 'community' ? <Users size={20} /> : <PenLine size={20} />}
             </span>
-            {recipe.source.kind === 'photo' ? 'מתכון שנבנה מתמונה' : 'מתכון שכתבתם בעצמכם'}
+            {recipe.source.kind === 'photo' ? 'מתכון שנבנה מתמונה'
+              : recipe.source.kind === 'community' ? `מתכון מהקהילה${recipe.source.author ? ` – של ${recipe.source.author}` : ''}` : 'מתכון שכתבתם בעצמכם'}
           </div>
         ) : fromChat ? (
           <div className="mt-4 rounded-2xl bg-emerald-50 border border-emerald-200 p-3">
@@ -351,6 +353,9 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
             )}
 
             <Nutrition value={recipe.nutrition} busy={busy === 'nutrition'} onEstimate={() => run('nutrition', onEstimateNutrition)} />
+
+            {/* מתכון אישי (לא מקישור ולא של מישהו אחר מהקהילה) אפשר לפרסם לקהילה */}
+            {community && !recipe.source.url && recipe.source.kind !== 'community' && <PublishPanel recipe={recipe} community={community} />}
 
             <div className="print:hidden"><MyNotes value={recipe.myNotes || ''} onSave={(myNotes) => quiet({ myNotes })} /></div>
             {recipe.myNotes && <p className="hidden print:block mt-6 text-sm"><b>ההערות שלי:</b> {recipe.myNotes}</p>}

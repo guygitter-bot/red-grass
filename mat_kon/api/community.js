@@ -4,10 +4,13 @@
 import { normalizeUrl, youtubeId } from './source.js';
 
 export const MIN_RATINGS = 3; // ממוצע מוצג רק מ-3 דירוגים
+export const HIDE_AT_REPORTS = 3; // מתכון שפורסם ע"י משתמש מוסתר אחרי 3 דיווחים, עד שבעל האפליקציה בודק
 
 // זהות המקור של מתכון בספר (כמו sourceIdentity בזמן הקריאה), או null אם הוא לא מתכון מקישור ציבורי
 export function communityIdentity(recipe) {
   const src = recipe?.source;
+  // עותק של מתכון שמשתמש פרסם (נשמר מהקהילה): נספר על אותו מתכון במאגר
+  if (src?.kind === 'community' && typeof src.identity === 'string' && /^pub:[\w:-]{3,200}$/.test(src.identity)) return src.identity;
   if (!src || typeof src.url !== 'string' || !src.url || src.text) return null;
   if (['whatsapp', 'photo', 'manual'].includes(src.kind)) return null;
   if (typeof src.identity === 'string' && /^[a-z]+:.{3,600}$/.test(src.identity)) return src.identity;
@@ -23,11 +26,12 @@ export async function communityKey(identity) {
   return btoa(String.fromCharCode(...bytes.slice(0, 18))).replace(/\+/g, '-').replace(/\//g, '_');
 }
 
-// מה שמתפרסם: המתכון כמו שנבנה מהמקור, עם קרדיט וקישור. תמונה רק מהרשת (לא תמונה שהועלתה לספר של מישהו)
-export function publicCopy(r) {
+// מה שמתפרסם: המתכון כמו שנבנה מהמקור, עם קרדיט וקישור. תמונה רק מהרשת (לא תמונה שהועלתה לספר של מישהו),
+// חוץ ממתכון שהמשתמש פרסם בעצמו (keepImage – אחרי בדיקה)
+export function publicCopy(r, { keepImage = false } = {}) {
   const pick = (k) => (r[k] === undefined ? {} : { [k]: r[k] });
   const src = r.source || {};
-  const image = typeof r.image === 'string' && /^https:\/\//.test(r.image) && !/\/img\/[^/]+\/[0-9a-f-]{36}$/.test(r.image) ? r.image : null;
+  const image = typeof r.image === 'string' && /^https:\/\//.test(r.image) && (keepImage || !/\/img\/[^/]+\/[0-9a-f-]{36}$/.test(r.image)) ? r.image : null;
   return {
     ...['title', 'originalTitle', 'description', 'category', 'categories', 'tags', 'servings', 'prepTime', 'cookTime', 'totalTime',
       'ingredients', 'steps', 'tips', 'nutrition', 'basis', 'confidence', 'notes'].reduce((o, k) => ({ ...o, ...pick(k) }), {}),
@@ -80,7 +84,7 @@ export function dietOf(r) {
 }
 
 // סיכום לחיפוש (נשמר בנפרד מהמתכון המלא, כדי שהחיפוש יהיה מהיר)
-export function summarize(key, r, stats = { saves: 0, ratingSum: 0, ratingCount: 0 }) {
+export function summarize(key, r, stats = { saves: 0, ratingSum: 0, ratingCount: 0 }, author = null) {
   const ingredients = (r.ingredients || []).flatMap((s) => s.items || []).join(' · ').slice(0, 1500);
   return {
     key,
@@ -94,8 +98,9 @@ export function summarize(key, r, stats = { saves: 0, ratingSum: 0, ratingCount:
     calories: Number(r.nutrition?.calories) || null,
     ...dietOf(r),
     basis: r.basis || 'source',
-    credit: r.source?.author || r.source?.site || '',
+    credit: author ? `מתכון של ${author.name}` : r.source?.author || r.source?.site || '',
     url: r.source?.url || '',
+    ...(author ? { personal: true, authorId: author.id, author: author.name } : {}),
     saves: stats.saves,
     ratingSum: stats.ratingSum,
     ratingCount: stats.ratingCount,
@@ -104,8 +109,8 @@ export function summarize(key, r, stats = { saves: 0, ratingSum: 0, ratingCount:
 
 // מה שהאפליקציה רואה: ממוצע רק מ-MIN_RATINGS דירוגים
 export function publicSummary(s) {
-  const { ratingSum, ingredients, ...rest } = s;
-  void ingredients;
+  const { ratingSum, ingredients, authorId, reports, reportReasons, flagged, flagReason, hidden, ...rest } = s;
+  void ingredients, authorId, reports, reportReasons, flagged, flagReason, hidden;
   return {
     ...rest,
     rating: s.ratingCount >= MIN_RATINGS ? Math.round((ratingSum / s.ratingCount) * 10) / 10 : null,
@@ -119,7 +124,7 @@ export function searchCommunity(summaries, q, filters = {}) {
   const score = (s) => s.ratingCount >= MIN_RATINGS ? s.ratingSum / s.ratingCount : 0;
   const out = [];
   for (const s of summaries) {
-    if (!s.saves) continue;
+    if (!s.saves || s.hidden) continue;
     if (filters.maxMinutes && !(s.minutes && s.minutes <= filters.maxMinutes)) continue;
     if (filters.maxCalories && !(s.calories && s.calories <= filters.maxCalories)) continue;
     if (filters.kosher && s.kosher !== filters.kosher) continue;

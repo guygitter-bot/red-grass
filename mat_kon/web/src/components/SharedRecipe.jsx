@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { BookmarkPlus, ChefHat, Clock, ExternalLink, Loader2, Lock, Smartphone, Star, Users, X } from 'lucide-react';
-import { getCommunityRecipe, getSharedRecipe, getSharePreview, saveCommunityRecipe, saveSharedRecipe } from '../lib/api';
+import { BookmarkPlus, ChefHat, Clock, ExternalLink, Flag, Loader2, Lock, Smartphone, Star, Users, X } from 'lucide-react';
+import { getCommunityRecipe, getSharedRecipe, getSharePreview, reportCommunity, saveCommunityRecipe, saveSharedRecipe } from '../lib/api';
 import { isNative } from '../lib/native';
 
 const PLAY_URL = 'https://play.google.com/store/apps/details?id=app.matkon';
@@ -77,6 +77,7 @@ export default function SharedRecipe({ token, communityKey, session, onLogin, on
             {full?.summary && (
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-stone-600">
                 <CommunityStats s={full.summary} />
+                {full.summary.personal && <span className="text-orange-700 font-medium">{full.summary.credit}</span>}
                 {full.recipe.source?.url && (
                   <a href={full.recipe.source.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-orange-700">
                     <ExternalLink size={13} /> {full.summary.credit || 'המקור'}
@@ -98,6 +99,7 @@ export default function SharedRecipe({ token, communityKey, session, onLogin, on
             <Sections title="מצרכים" sections={full.recipe.ingredients} />
             <Sections title="אופן ההכנה" sections={full.recipe.steps} numbered />
             {error && <p className="mt-4 rounded-2xl bg-rose-50 text-rose-700 p-3 text-sm text-center">{error}</p>}
+            {communityKey && <Report session={session} communityKey={communityKey} />}
             <div className="sticky bottom-0 mt-6 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 bg-gradient-to-t from-[#fffbf5] via-[#fffbf5] to-transparent">
               <button onClick={save} disabled={busy} className="w-full rounded-2xl bg-orange-500 text-white font-bold py-3.5 flex items-center justify-center gap-2 disabled:opacity-60">
                 {busy ? <Loader2 className="animate-spin" size={20} /> : <BookmarkPlus size={20} />}
@@ -147,6 +149,36 @@ export default function SharedRecipe({ token, communityKey, session, onLogin, on
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// דיווח על מתכון בקהילה (פעם אחת לכל ספר). אחרי כמה דיווחים מתכון שמשתמש פרסם מוסתר עד בדיקה
+const REASONS = [['not-recipe', 'זה לא מתכון'], ['offensive', 'תוכן פוגעני'], ['personal', 'יש בו פרטים אישיים'], ['copied', 'הועתק בלי רשות'], ['other', 'משהו אחר']];
+function Report({ session, communityKey }) {
+  const [open, setOpen] = useState(false);
+  const [done, setDone] = useState(false);
+  const send = async (reason) => {
+    await reportCommunity(session, communityKey, reason).catch(() => {});
+    setDone(true);
+    setOpen(false);
+  };
+  if (done) return <p className="mt-6 text-center text-sm text-stone-500">תודה על הדיווח – נבדוק את המתכון.</p>;
+  return (
+    <div className="mt-6 text-center">
+      {!open ? (
+        <button onClick={() => setOpen(true)} className="text-sm text-stone-500 inline-flex items-center gap-1"><Flag size={14} /> דיווח על המתכון</button>
+      ) : (
+        <div className="rounded-2xl bg-white border border-stone-200 p-3 text-right">
+          <div className="font-bold text-sm mb-2">מה הבעיה במתכון?</div>
+          <div className="flex flex-wrap gap-2">
+            {REASONS.map(([id, label]) => (
+              <button key={id} onClick={() => send(id)} className="rounded-full border border-stone-200 px-3 py-1 text-sm hover:bg-stone-50">{label}</button>
+            ))}
+            <button onClick={() => setOpen(false)} className="px-2 text-sm text-stone-400">ביטול</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

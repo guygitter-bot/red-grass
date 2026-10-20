@@ -38,7 +38,7 @@ import { CATEGORIES } from './lib/categories';
 import { isNative } from './lib/native';
 import {
   addCategory, setCategoryPrefs, addRecipeAsync, addTextRecipe, getJob, getRecipe, deleteRecipe, removeCategory, getMe, getPlan, getShopping, listRecipes, logout as apiLogout, refreshRecipe,
-  updateRecipe, categorizeRecipe, estimateNutrition, safeRecipe, getPantry, shoppingOps, pantryOps, planOps, shareRecipe, recipeShareLink,
+  updateRecipe, categorizeRecipe, estimateNutrition, getProfile, setProfile, publishRecipe, unpublishRecipe, safeRecipe, getPantry, shoppingOps, pantryOps, planOps, shareRecipe, recipeShareLink,
 } from './lib/api';
 import { SORTS, categoriesOf, countByCategory, emojiOf, filterRecipes, freeLeft, linkFromShare, orderCategories, parseAuthHash, parseShareLink, sortRecipes } from './lib/recipes';
 import { usePersistentState } from './lib/storage';
@@ -788,6 +788,16 @@ export default function App() {
         onBack={back}
         onShareLink={async () => recipeShareLink(await shareRecipe(session, current.id))}
         onEstimateNutrition={async () => upsert(await estimateNutrition(session, current.id))}
+        community={{
+          getProfile: () => getProfile(session),
+          setProfile: (name, terms) => setProfile(session, name, terms),
+          publish: async (id) => {
+            const res = await publishRecipe(session, id);
+            upsert(safeRecipe(res.recipe));
+            return res;
+          },
+          unpublish: async (id) => upsert(safeRecipe((await unpublishRecipe(session, id)).recipe)),
+        }}
         onUpdate={async (patch) => {
           upsert({ ...current, ...patch });
           try {

@@ -28,10 +28,10 @@ export default function App() {
     setBusy(true);
     setError('');
     try {
-      const [overview, issues, security] = await Promise.all([
-        api(session, 'GET', '/admin/overview'), api(session, 'GET', '/admin/issues'), api(session, 'GET', '/admin/security'),
+      const [overview, issues, security, reports] = await Promise.all([
+        api(session, 'GET', '/admin/overview'), api(session, 'GET', '/admin/issues'), api(session, 'GET', '/admin/security'), api(session, 'GET', '/admin/reports'),
       ]);
-      setData({ ...overview, issueList: issues.issues, security });
+      setData({ ...overview, issueList: issues.issues, security, reportList: reports.items });
     } catch (e) {
       if (e.status === 401 || e.status === 403) signOut();
       else setError(e.message);
@@ -76,7 +76,7 @@ export default function App() {
             {tab === 'money' && <Money d={data} session={session} reload={load} />}
             {tab === 'issues' && <Issues list={data.issueList} session={session} reload={load} />}
             {tab === 'security' && <Security d={data} />}
-            {tab === 'content' && <Content d={data} />}
+            {tab === 'content' && <Content d={data} session={session} reload={load} />}
           </>
         )}
       </main>
@@ -303,6 +303,55 @@ function Money({ d, session, reload }) {
   );
 }
 
+const REASON = { 'not-recipe': 'לא מתכון', offensive: 'פוגעני', personal: 'פרטים אישיים', copied: 'הועתק', other: 'אחר' };
+
+// מתכון בקהילה שדווח, או שבדיקת ה-AI לא הייתה בטוחה לגביו: צפייה, אישור, הסרה או חסימת המפרסם
+function Report({ r, session, reload }) {
+  const [busy, setBusy] = useState(false);
+  const [recipe, setRecipe] = useState(null);
+  const act = async (action) => {
+    if (action === 'block' && !window.confirm(`לחסום את "${r.author}" מפרסום בקהילה? כל מה שפרסם/ה יורד.`)) return;
+    setBusy(true);
+    try {
+      if (action === 'view') setRecipe((await api(session, 'POST', `/admin/reports/${r.key}`, { action })).recipe);
+      else {
+        await api(session, 'POST', `/admin/reports/${r.key}`, { action });
+        await reload();
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="rounded-xl border border-line p-3">
+      <div className="flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="font-medium">{r.title}</div>
+          <div className="text-xs text-muted">{r.personal ? `פורסם ע"י ${r.author}` : r.credit}</div>
+        </div>
+        {r.hidden && <span className="text-xs rounded-full px-2 py-0.5 bg-red-500/10 text-red-700 dark:text-red-300 shrink-0">מוסתר</span>}
+      </div>
+      <div className="mt-1 text-sm">
+        {r.reports > 0 && <div>{r.reports} דיווחים: {r.reasons.map((x) => REASON[x] || x).join(', ')}</div>}
+        {r.flagged && <div className="text-amber-700 dark:text-amber-300">בדיקה אוטומטית: {r.flagReason || 'לא בטוח'}</div>}
+      </div>
+      {recipe && (
+        <div className="mt-2 rounded-lg bg-page p-2 text-sm max-h-60 overflow-auto">
+          {recipe.image && <img src={recipe.image} alt="" className="w-full max-h-40 object-cover rounded mb-2" />}
+          {(recipe.ingredients || []).flatMap((s) => s.items).map((i, k) => <div key={k}>• {i}</div>)}
+          {(recipe.steps || []).flatMap((s) => s.items).map((i, k) => <div key={`s${k}`}>{k + 1}. {i}</div>)}
+        </div>
+      )}
+      <div className="mt-2 flex flex-wrap gap-2">
+        {!recipe && <button disabled={busy} onClick={() => act('view')} className="text-sm rounded-full border border-line px-3 py-1">צפייה</button>}
+        <button disabled={busy} onClick={() => act('approve')} className="text-sm rounded-full bg-emerald-600 text-white px-3 py-1">אישור</button>
+        <button disabled={busy} onClick={() => act('remove')} className="text-sm rounded-full border border-line px-3 py-1">הסרה</button>
+        {r.personal && r.authorId !== 'owner' && <button disabled={busy} onClick={() => act('block')} className="text-sm rounded-full bg-red-600 text-white px-3 py-1">חסימת המפרסם</button>}
+      </div>
+    </div>
+  );
+}
+
 const STATUS_STYLE = { new: 'bg-red-500/10 text-red-700 dark:text-red-300', working: 'bg-amber-500/15 text-amber-800 dark:text-amber-300', fixed: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' };
 
 function Issues({ list, session, reload }) {
@@ -386,10 +435,16 @@ function Security({ d }) {
   );
 }
 
-function Content({ d }) {
+function Content({ d, session, reload }) {
   const c = d.community;
   return (
     <div className="space-y-4">
+      <Card title={`ממתינים לבדיקה (${d.reportList.length})`}>
+        {!d.reportList.length && <p className="text-sm text-muted">אין דיווחים או מתכונים שמחכים לבדיקה 🎉</p>}
+        <div className="space-y-3">
+          {d.reportList.map((r) => <Report key={r.key} r={r} session={session} reload={reload} />)}
+        </div>
+      </Card>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
         <Stat label="מתכונים בקהילה" value={c.recipes} />
         <Stat label="שמירות" value={c.saves} />

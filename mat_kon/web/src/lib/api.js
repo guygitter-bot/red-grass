@@ -135,6 +135,12 @@ export const searchCommunity = (s, q, filters = {}) => {
 };
 export const getCommunityRecipe = (s, key) => api(s, 'GET', `/community/${encodeURIComponent(key)}`).then((d) => ({ by: '', recipe: safeRecipe(d.recipe), summary: d.summary }));
 export const saveCommunityRecipe = (s, key) => api(s, 'POST', `/community/${encodeURIComponent(key)}/save`, {});
+// פרסום מתכון אישי לקהילה (שם תצוגה + תנאי שימוש), ודיווח על מתכון
+export const getProfile = (s) => api(s, 'GET', '/profile');
+export const setProfile = (s, displayName, acceptTerms) => api(s, 'PUT', '/profile', { displayName, acceptTerms });
+export const publishRecipe = (s, id) => api(s, 'POST', `/recipes/${id}/publish`, {});
+export const unpublishRecipe = (s, id) => api(s, 'DELETE', `/recipes/${id}/publish`);
+export const reportCommunity = (s, key, reason) => api(s, 'POST', `/community/${encodeURIComponent(key)}/report`, { reason });
 export const addTextRecipe = (s, item) => api(s, 'POST', '/recipes/text', item);
 
 // מתכון מתמונות / שנכתב ידנית

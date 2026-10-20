@@ -462,6 +462,30 @@ export class Accounts {
       return json({ share });
     }
 
+    // ---- פרופיל לקהילה: שם תצוגה ואישור תנאי השימוש (לבעל האפליקציה – owner-profile) ----
+    if (path === '/profile/get' || path === '/profile/set') {
+      const key = body.userId ? `user:${body.userId}` : 'owner-profile';
+      const rec = (await this.storage.get(key)) || {};
+      if (body.userId && !rec.id) return err(404, 'המשתמש לא נמצא');
+      if (path === '/profile/set') {
+        const name = String(body.displayName || '').trim().replace(/\s+/g, ' ');
+        if (name.length < 2 || name.length > 30) return err(400, 'שם התצוגה צריך להיות בין 2 ל-30 תווים');
+        if (/[@<>/\\]|\d{5,}|https?:|www\./i.test(name)) return err(400, 'בשם התצוגה אי אפשר לכתוב אימייל, טלפון או קישור');
+        if (/^(mat-?kon|admin|מנהל|מת-?כון)$/i.test(name)) return err(400, 'השם הזה שמור. בחרו שם אחר');
+        if (!body.acceptTerms && !rec.termsAt) return err(400, 'צריך לאשר את תנאי השימוש');
+        Object.assign(rec, { displayName: name, termsAt: rec.termsAt || now });
+        await this.storage.put(key, rec);
+      }
+      return json({ displayName: rec.displayName || '', terms: Boolean(rec.termsAt), blocked: Boolean(rec.blocked) });
+    }
+    // חסימה מהקהילה (אחרי דיווחים): המשתמש ממשיך להשתמש בספר שלו, רק לא יכול לפרסם
+    if (path === '/admin/block' && request.method === 'POST') {
+      const user = await this.storage.get(`user:${body.userId}`);
+      if (!user) return err(404, 'המשתמש לא נמצא');
+      await this.storage.put(`user:${user.id}`, { ...user, blocked: true, blockedAt: now });
+      return json({ ok: true });
+    }
+
     // ---- אפליקציית הניהול ----
     if (path === '/admin/stats' && request.method === 'GET') {
       const users = [...(await this.storage.list({ prefix: 'user:' })).values()].filter((u) => !u.removed);
