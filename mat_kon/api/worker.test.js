@@ -1371,3 +1371,30 @@ test('nutrition: estimated with a new recipe, on request for an old one, and cle
   assert.equal(again.recipe.edited.nutrition, undefined);
   assert.equal((await call('POST', '/recipes/nope/nutrition')).status, 404);
 });
+
+test('the same link gives the same recipe to every user (shared cache), also from a different link to the same page', async () => {
+  const inv1 = await invite('דנה');
+  const dana = (await (await register(inv1.token, 'dana@example.com')).json()).session;
+  const inv2 = await invite('רון');
+  const ron = (await (await register(inv2.token, 'ron@example.com')).json()).session;
+  const first = (await (await call('POST', '/recipes', { url: 'https://cake.example/same' }, dana)).json()).recipe;
+  const calls = apiCalls.length;
+  // הסוכן היה מחזיר משהו אחר – אבל אותו קישור לוקח את המתכון ששמור
+  reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_recipe', input: { ...recipeInput, title: 'משהו אחר', ingredients: [{ title: '', items: ['3 ביצים'] }] } }] });
+  const second = (await (await call('POST', '/recipes', { url: 'https://cake.example/same?utm_source=wa' }, ron)).json()).recipe;
+  assert.equal(apiCalls.length, calls);
+  assert.deepEqual([second.title, second.ingredients, second.steps, second.source.url], [first.title, first.ingredients, first.steps, first.source.url]);
+  // ברקע (עבודה) – אותו דבר
+  const { job } = await (await call('POST', '/recipes?async=1', { url: 'https://cake.example/same' }, ron)).json();
+  assert.ok(job.id);
+  assert.equal(apiCalls.length, calls);
+  // קישור אחר שמגיע לאותו דף (הפניה) – לפי הכתובת הסופית
+  deps.fetch = async (url) => (String(url) === 'https://short.example/x'
+    ? new Response('', { status: 302, headers: { location: 'https://cake.example/same' } })
+    : new Response('<html><head><title>Cake</title></head><body>Chocolate cake recipe</body></html>'));
+  const viaShort = (await (await call('POST', '/recipes', { url: 'https://short.example/x' }, ron)).json()).recipe;
+  assert.equal(viaShort.title, first.title);
+  assert.equal(apiCalls.length, calls);
+  // קישור חדש – הסוכן כן נקרא
+  assert.equal((await (await call('POST', '/recipes', { url: 'https://cake.example/new' }, ron)).json()).recipe.title, 'משהו אחר');
+});

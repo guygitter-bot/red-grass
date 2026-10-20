@@ -338,6 +338,7 @@ export async function gatherSource(url, fetchFn = fetch, { hint = '', igDocId } 
   // בפייסבוק דף רגיל מחזיר שגיאה או דף התחברות – אם הבוט כבר קיבל את הפוסט, אין טעם
   if (kind !== 'facebook' || !out.description) try {
     const { text: html, finalUrl } = await get(fetchFn, url);
+    out.finalUrl = finalUrl;
     const meta = metaTags(html);
     out.title = out.title || meta['og:title'] || meta['twitter:title'] || meta['<title>'] || '';
     out.siteName = meta['og:site_name'] || new URL(finalUrl).hostname.replace(/^www\./, '');
@@ -399,6 +400,7 @@ async function pinterest(fetchFn, url, out) {
     if (page.res.ok) html = await page.text();
   }
   const id = (new URL(pinUrl).pathname.match(PIN_ID) || [])[1];
+  out.pinId = id || '';
   let link = '';
   if (id) {
     const info = await getJson(fetchFn, `https://widgets.pinterest.com/v3/pidgets/pins/info/?pin_ids=${id}`);
@@ -448,6 +450,19 @@ async function pinterest(fetchFn, url, out) {
     }
   }
   if (!out.linked.length && !link) out.warnings.push('pinterest: the pin has no link to the original site');
+}
+
+// הזהות של המקור, כדי שאותו מתכון יזוהה גם מקישורים שונים (קישור מקוצר, פרמטרים, מובייל):
+// פין / סרטון לפי המזהה שלו, ודף רגיל לפי הכתובת הסופית אחרי הפניות
+export function sourceIdentity(src) {
+  if (src.kind === 'pinterest' && src.pinId) return `pinterest:${src.pinId}`;
+  const yt = src.kind === 'youtube' && youtubeId(src.url);
+  if (yt) return `youtube:${yt}`;
+  const tt = String(src.embed || '').match(/tiktok\.com\/embed\/v2\/(\d+)/);
+  if (tt) return `tiktok:${tt[1]}`;
+  const ig = String(src.embed || '').match(/instagram\.com\/(?:p|reel|tv)\/([\w-]+)/);
+  if (ig) return `instagram:${ig[1]}`;
+  return `url:${(src.finalUrl && normalizeUrl(src.finalUrl)) || src.url}`;
 }
 
 // קישורים לאתרים שמופיעים בכיתוב או בתגובות של היוצר (למשל "המתכון המלא בבלוג"): קוראים עד 2
