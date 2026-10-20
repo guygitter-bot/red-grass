@@ -24,6 +24,8 @@ const JOIN_DAYS = 7;
 const SHARE_DAYS = 365; // קישור לשיתוף מתכון תקף שנה
 export const OWNER_BOOK = 'owner';
 
+import { createVapidKeys, sendPush, validSubscription } from './push.js';
+
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
 const err = (status, error) => json({ error }, status);
 
@@ -131,9 +133,44 @@ export class Accounts {
     }
   }
 
+  // ---- התראות לטלפון של בעל האפליקציה (אפליקציית הניהול) ----
+  async vapid() {
+    let vapid = await this.storage.get('admin-vapid');
+    if (!vapid) {
+      vapid = await createVapidKeys();
+      await this.storage.put('admin-vapid', vapid);
+    }
+    return vapid;
+  }
+
+  // throttle: אותו נושא (tag) לכל היותר פעם בשעה, כדי שתקלה שחוזרת לא תציף
+  async notifyAdmin({ title, body, tag = 'mat-kon', url = '' }, { force = false } = {}) {
+    const devices = (await this.storage.get('admin-push')) || [];
+    if (!devices.length) return 0;
+    const sentKey = `push-sent:${tag}`;
+    if (!force && Date.now() - ((await this.storage.get(sentKey)) || 0) < 3600000) return 0;
+    await this.storage.put(sentKey, Date.now());
+    const vapid = await this.vapid();
+    const app = (this.env.ADMIN_URL || 'https://mat-kon-admin.pages.dev/').replace(/\/?$/, '/');
+    let sent = 0;
+    const keep = [];
+    for (const d of devices) {
+      try {
+        const result = await sendPush(d.sub, { title, body: String(body).slice(0, 180), tag, url: `${app}${url}` }, vapid, app, this.pushFetch || fetch);
+        if (result === 'ok') sent++;
+        if (result !== 'gone') keep.push(d);
+      } catch (e) {
+        console.log('push failed', e?.message || e);
+        keep.push(d);
+      }
+    }
+    if (keep.length !== devices.length) await this.storage.put('admin-push', keep);
+    return sent;
+  }
+
   // תקלה חוזרת מקובצת לפי סוג (בלי מספרים וקישורים), עם סטטוס שבעל האפליקציה מסמן: new / working / fixed
   async issue(entry, list) {
-    const shape = `${list}|${entry.where}|${entry.message.replace(/https?:\/\/\S+/g, 'URL').replace(/\d+/g, '#').slice(0, 140)}`;
+    const shape = entry.group ? `${list}|${entry.where}|${entry.group}` : `${list}|${entry.where}|${entry.message.replace(/https?:\/\/\S+/g, 'URL').replace(/\d+/g, '#').slice(0, 140)}`;
     const sig = (await sha256(shape)).replace(/[^\w]/g, '').slice(0, 16);
     const key = `issue:${sig}`;
     const old = await this.storage.get(key);
@@ -144,6 +181,10 @@ export class Accounts {
     // תקלה שסומנה "תוקנה" וחזרה – נפתחת מחדש
     if (old?.status === 'fixed') Object.assign(next, { status: 'new', reopened: true });
     await this.storage.put(key, next);
+    // התראה לטלפון: תקלה חדשה, או תקלה שחזרה אחרי תיקון
+    if (!old || old.status === 'fixed') {
+      await this.notifyAdmin({ title: old ? '🔁 תקלה חזרה ב-mat-kon' : '🐞 תקלה חדשה ב-mat-kon', body: entry.message, tag: `issue-${sig}`, url: '#issues' });
+    }
   }
 
   // גרסת הסוד של בעל האפליקציה: החלפת הסיסמה מנתקת את כל מכשירי הבעלים
@@ -486,6 +527,27 @@ export class Accounts {
       return json({ ok: true });
     }
 
+    // ---- התראות לטלפון: מפתח, רישום מכשיר, בדיקה, והתראה מהשרת ----
+    if (path === '/admin/push/key') return json({ publicKey: (await this.vapid()).publicKey });
+    if (path === '/admin/push/subscribe' && request.method === 'POST') {
+      if (!validSubscription(body.subscription)) return err(400, 'המכשיר לא תומך בהתראות');
+      const sub = { endpoint: body.subscription.endpoint, keys: { p256dh: body.subscription.keys.p256dh, auth: body.subscription.keys.auth } };
+      const devices = ((await this.storage.get('admin-push')) || []).filter((d) => d.sub.endpoint !== sub.endpoint);
+      await this.storage.put('admin-push', [{ sub, at: now }, ...devices].slice(0, 5));
+      return json({ ok: true, devices: Math.min(devices.length + 1, 5) });
+    }
+    if (path === '/admin/push/status') {
+      const devices = (await this.storage.get('admin-push')) || [];
+      return json({ devices: devices.length, endpoints: devices.map((d) => d.sub.endpoint.slice(-24)) });
+    }
+    if (path === '/admin/push/test' && request.method === 'POST') {
+      const sent = await this.notifyAdmin({ title: '🔔 בדיקת התראה', body: 'ההתראות מ-mat-kon ניהול עובדות!', tag: 'test' }, { force: true });
+      return json({ sent });
+    }
+    if (path === '/admin/notify' && request.method === 'POST') {
+      return json({ sent: await this.notifyAdmin({ title: String(body.title || '').slice(0, 80), body: String(body.body || ''), tag: String(body.tag || 'mat-kon').slice(0, 60), url: String(body.url || '') }) });
+    }
+
     // ---- אפליקציית הניהול ----
     if (path === '/admin/stats' && request.method === 'GET') {
       const users = [...(await this.storage.list({ prefix: 'user:' })).values()].filter((u) => !u.removed);
@@ -558,10 +620,13 @@ export class Accounts {
     if (path === '/errors/add' && request.method === 'POST') {
       const key = body.list === 'client' ? 'client-errors' : 'errors';
       const list = (await this.storage.get(key)) || [];
-      const entry = { at: now, where: String(body.where || '').slice(0, 80), message: String(body.message || '').slice(0, 300), status: body.status ?? null, user: String(body.user || '').slice(0, 120) };
+      // עבודה ברקע מדווחת מזהה משתמש – מציגים את האימייל שלו
+      let who = String(body.user || '').slice(0, 120);
+      if (/^[0-9a-f-]{36}$/.test(who)) who = (await this.storage.get(`user:${who}`))?.email || who;
+      const entry = { at: now, where: String(body.where || '').slice(0, 80), message: String(body.message || '').slice(0, 300), status: body.status ?? null, user: who };
       list.unshift(entry);
       await this.storage.put(key, list.slice(0, 50));
-      await this.issue(entry, body.list === 'client' ? 'client' : 'server');
+      await this.issue({ ...entry, group: String(body.group || '').slice(0, 100) }, body.list === 'client' ? 'client' : 'server');
       return json({ ok: true });
     }
     if (path === '/errors' && request.method === 'GET') {

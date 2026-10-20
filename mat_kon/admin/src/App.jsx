@@ -12,7 +12,20 @@ const TABS = [
 
 export default function App() {
   const [session, setSession] = useState(() => localStorage.getItem('admin_session') || '');
-  const [tab, setTab] = useState('overview');
+  // לשונית מהכתובת (#issues, #content) – כך לחיצה על התראה פותחת ישר את המקום הנכון
+  const [tab, setTabState] = useState(() => (TABS.some(([id]) => `#${id}` === window.location.hash) ? window.location.hash.slice(1) : 'overview'));
+  const setTab = useCallback((id) => {
+    setTabState(id);
+    window.history.replaceState(null, '', `#${id}`);
+  }, []);
+  useEffect(() => {
+    const onHash = () => {
+      const id = window.location.hash.slice(1);
+      if (TABS.some(([t]) => t === id)) setTabState(id);
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -71,7 +84,7 @@ export default function App() {
           <div className="py-20 flex justify-center text-muted"><Loader2 className="animate-spin" size={28} /></div>
         ) : (
           <>
-            {tab === 'overview' && <Overview d={data} go={setTab} />}
+            {tab === 'overview' && <Overview d={data} go={setTab} session={session} />}
             {tab === 'users' && <UsersTab d={data} />}
             {tab === 'money' && <Money d={data} session={session} reload={load} />}
             {tab === 'issues' && <Issues list={data.issueList} session={session} reload={load} />}
@@ -146,7 +159,7 @@ const Stat = ({ label, value, sub, onClick }) => (
 
 const LEVEL = { serious: 'bg-red-500/10 text-red-700 dark:text-red-300', warning: 'bg-amber-500/15 text-amber-800 dark:text-amber-300' };
 
-function Overview({ d, go }) {
+function Overview({ d, go, session }) {
   const s = d.stats;
   return (
     <div className="space-y-4">
@@ -163,6 +176,8 @@ function Overview({ d, go }) {
           <CheckCircle2 size={18} /> הכול תקין – אין התראות
         </div>
       )}
+
+      <PushCard session={session} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
         <Stat label="משתמשים" value={s.users} sub={`+${s.today} היום · +${s.week} השבוע`} onClick={() => go('users')} />
@@ -189,6 +204,83 @@ function Overview({ d, go }) {
         </Card>
       </div>
     </div>
+  );
+}
+
+// התראות לטלפון: תקלה חדשה / תקלה שחזרה / מתכון בקהילה שמחכה לבדיקה – קופצות עם צליל ורטט
+function PushCard({ session }) {
+  const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  const [state, setState] = useState('loading'); // loading | on | off | blocked
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    if (!supported) {
+      setState('off');
+      return;
+    }
+    if (Notification.permission === 'denied') {
+      setState('blocked');
+      return;
+    }
+    navigator.serviceWorker.ready
+      .then((reg) => reg.pushManager.getSubscription())
+      .then((sub) => setState(sub && Notification.permission === 'granted' ? 'on' : 'off'))
+      .catch(() => setState('off'));
+  }, [supported]);
+
+  const enable = async () => {
+    setBusy(true);
+    setMsg('');
+    try {
+      if ((await Notification.requestPermission()) !== 'granted') {
+        setState('blocked');
+        return;
+      }
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        const { publicKey } = await api(session, 'GET', '/admin/push/key');
+        const key = Uint8Array.from(atob(publicKey.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (publicKey.length % 4)) % 4)), (c) => c.charCodeAt(0));
+        sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+      }
+      await api(session, 'POST', '/admin/push/subscribe', { subscription: sub.toJSON() });
+      setState('on');
+      await api(session, 'POST', '/admin/push/test');
+      setMsg('נשלחה התראת בדיקה – היא אמורה לקפוץ עכשיו.');
+    } catch (e) {
+      setMsg(e.message || 'לא הצלחתי להפעיל התראות');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const test = async () => {
+    setBusy(true);
+    try {
+      const { sent } = await api(session, 'POST', '/admin/push/test');
+      setMsg(sent ? 'נשלחה התראת בדיקה.' : 'לא נמצא מכשיר רשום – לחצו "הפעלת התראות".');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!supported) return null;
+  return (
+    <Card>
+      <div className="flex items-center gap-2">
+        <span className="text-xl">🔔</span>
+        <div className="flex-1 text-sm">
+          {state === 'on' ? <b>התראות לטלפון פעילות</b> : state === 'blocked' ? 'ההתראות חסומות בדפדפן' : 'קבלו התראה קופצת עם צליל כשיש תקלה'}
+          {state === 'blocked' && <div className="text-xs text-muted">כדי לאשר: הגדרות כרום ← הגדרות אתר ← התראות ← mat-kon-admin</div>}
+        </div>
+        {state === 'on' ? (
+          <button disabled={busy} onClick={test} className="text-sm rounded-full border border-line px-3 py-1">בדיקה</button>
+        ) : state !== 'blocked' && (
+          <button disabled={busy || state === 'loading'} onClick={enable} className="text-sm rounded-full bg-brand text-white font-bold px-3 py-1.5">הפעלת התראות</button>
+        )}
+      </div>
+      {msg && <p className="text-xs text-muted mt-2">{msg}</p>}
+    </Card>
   );
 }
 

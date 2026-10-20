@@ -1,4 +1,4 @@
-import { buildRecipe, failure } from './jobs.js';
+import { buildRecipe, errorGroup, failure } from './jobs.js';
 import { trackedClient } from './deps.js';
 import { HIDE_AT_REPORTS, communityIdentity, communityKey, publicCopy, searchCommunity, summarize } from './community.js';
 // ספר המתכונים: Durable Object אחד שמחזיק את כל המתכונים (כל מתכון במפתח r:<id>).
@@ -115,11 +115,9 @@ export class RecipeBook {
       if (!s || (await this.storage.get(k))) return json({ ok: true });
       await this.storage.put(k, true);
       const reports = (s.reports || 0) + 1;
-      await save({
-        ...s, reports, reportReasons: [String(body.reason || '').slice(0, 100), ...(s.reportReasons || [])].slice(0, 5),
-        hidden: s.hidden || (s.personal && reports >= HIDE_AT_REPORTS),
-      });
-      return json({ ok: true });
+      const hidden = s.hidden || (s.personal && reports >= HIDE_AT_REPORTS);
+      await save({ ...s, reports, reportReasons: [String(body.reason || '').slice(0, 100), ...(s.reportReasons || [])].slice(0, 5), hidden });
+      return json({ ok: true, justHidden: hidden && !s.hidden, title: s.title });
     }
     // לבעל האפליקציה: מה מחכה לבדיקה (דיווחים, או בדיקת AI שלא הייתה בטוחה)
     if (url.pathname === '/community/reports') {
@@ -220,7 +218,10 @@ export class RecipeBook {
       return { status: 'done', recipeId: data.recipe.id, title: data.recipe.title, category: data.recipe.category, updated: data.updated };
     } catch (e) {
       await giveBack();
-      await toAccounts('/errors/add', { where: 'job', message: String(e?.message || e).slice(0, 300), status: e?.status || null, user: job.quota?.userId || 'owner' });
+      await toAccounts('/errors/add', {
+        where: 'job', message: String(e?.message || e).slice(0, 300), status: e?.status || null, user: job.quota?.userId || 'owner',
+        ...(job.input?.link ? { group: errorGroup(job.input.link, e) } : {}),
+      });
       const f = failure(e, { owner: job.owner });
       return { status: 'error', error: f.error, code: f.status };
     }

@@ -54,6 +54,17 @@ export async function buildRecipe(env, client, { link, text, hint }, categories)
   return recipe;
 }
 
+// סוג התקלה לקיבוץ במסך התקלות: לפי סוג השגיאה והאתר (הודעת ה-AI מנוסחת כל פעם אחרת)
+export function errorGroup(link, e) {
+  let host = '';
+  try {
+    host = new URL(link).hostname.replace(/^(www|m|web)\./, '');
+  } catch {
+    host = '';
+  }
+  return `${e?.constructor?.name || 'Error'}:${host}`;
+}
+
 // שגיאה -> {status, error} בעברית
 export function failure(e, { isPhoto = false, owner = false } = {}) {
   if (e instanceof NoRecipeError) return { status: 422, error: e.message };
