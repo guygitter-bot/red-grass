@@ -13,6 +13,7 @@ import { thumbnail } from '../lib/image';
 import { DAY_NAMES, MEALS, dateKey, shortDate } from '../lib/plan';
 import { categoriesOf, emojiOf, VIDEO_LABEL, isVideo, sectionsToText, shortUrl, textToSections } from '../lib/recipes';
 import { usePersistentState } from '../lib/storage';
+import { dietBadges, recipeDiet } from '../lib/diet';
 
 // רק נגני סרטונים מהאתרים המוכרים
 const SAFE_EMBED = /^https:\/\/(www\.youtube-nocookie\.com\/embed\/|www\.tiktok\.com\/embed\/|www\.instagram\.com\/(p|reel|tv)\/|player\.vimeo\.com\/video\/)/;
@@ -244,6 +245,16 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
             {times.map(([label, value]) => (
               <span key={label} className="flex items-center gap-1.5"><Clock size={16} className="text-orange-500" /> {label}: {value}</span>
             ))}
+          </div>
+        )}
+
+        {/* מה המתכון: כשרות, גלוטן, טבעוני, זמן וציוד (לפי המצרכים) */}
+        {recipe.ingredients.length > 0 && dietBadges(recipeDiet(recipe)).length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
+            {dietBadges(recipeDiet(recipe)).map((b) => (
+              <span key={b} className={`rounded-full px-2.5 py-1 border ${b === 'לא כשר' ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'}`}>{b}</span>
+            ))}
+            <span className="text-stone-400">לפי המצרכים</span>
           </div>
         )}
 

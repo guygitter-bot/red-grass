@@ -1,5 +1,6 @@
 // הסוכן: מקבל את החומר שנאסף מהקישור ומחזיר מתכון מסודר בעברית עם קטגוריה.
 // כשהחומר חסר (סרטון בלי מתכון בתיאור, אתר שחוסם) הוא קורא את הקישור בעצמו ומחפש ברשת.
+import { AI_DIETS, cleanDiet } from './diet.js';
 import { CATEGORIES, DEFAULT_CATEGORY } from './categories.js';
 import { isVideoKind, looksComplete } from './source.js';
 
@@ -22,6 +23,33 @@ const sectionList = (what) => ({
 
 // הערכה תזונתית למנה (הערכה בלבד – לפי המצרכים והכמויות)
 export const NUTRIENTS = ['calories', 'protein', 'carbs', 'sugar', 'fat', 'saturated_fat', 'fiber', 'sodium'];
+// סימון לסינון (כשר, ללא גלוטן, צליאק…) – לפי המצרכים כפי שנכתבו במתכון
+const DIET_HINTS = {
+  kosher: 'kosher by ingredients: no pork, shellfish or other forbidden foods, no meat with dairy, no meat with fish',
+  parve: 'neither meat nor dairy (fish and eggs are parve)',
+  dairy: 'contains dairy and no meat',
+  meat: 'contains meat or poultry and no dairy',
+  pesach: 'kosher for Passover: no chametz (wheat, barley, oats, rye, spelt, regular flour, bread, pasta, yeast dough, beer; matzah and matzah meal are fine)',
+  kitniyot: 'kosher for Passover AND no kitniyot (rice, corn, legumes, soy, peanuts, sesame, mustard, buckwheat)',
+  gf: 'no gluten-containing ingredients',
+  celiac: 'safe for celiac: no gluten, no regular oats, and no ingredients that usually hide gluten (soup powder, stock cubes, soy sauce, malt, many sauces) unless marked gluten free',
+  lactose: 'no lactose (no dairy unless marked lactose free)',
+  eggs: 'contains no eggs',
+  nuts: 'contains no tree nuts or peanuts',
+  nosugar: 'no added sugar, honey, syrup or sweetened products',
+  lowsodium: 'low salt: no salty products (soy sauce, stock cubes, pickles, olives, cured meat, salty cheese) and at most a little salt',
+  baby: 'suitable for babies/toddlers: no honey, alcohol, hot spices, caffeine, cured meat, added sugar, much salt or whole nuts',
+  vegan: 'no animal products at all',
+  vegetarian: 'no meat, poultry or fish',
+};
+const DIET_SCHEMA = {
+  type: 'object',
+  description: 'True/false for each diet, judged from the ingredients you wrote (the user filters the recipe book by these)',
+  properties: Object.fromEntries(AI_DIETS.map((k) => [k, { type: 'boolean', description: DIET_HINTS[k] }])),
+  required: AI_DIETS,
+  additionalProperties: false,
+};
+
 const NUTRITION_SCHEMA = {
   type: 'object',
   description: 'Estimated nutrition for ONE serving, calculated from the ingredients and their amounts (standard food composition values). Grams, except calories (kcal) and sodium (mg).',
@@ -77,6 +105,7 @@ export const RECIPE_TOOL = {
       steps: sectionList('Preparation steps in order, one action per item, without numbering'),
       tips: { type: 'array', items: { type: 'string' }, description: 'Hebrew tips, storage, substitutions from the source' },
       nutrition: NUTRITION_SCHEMA,
+      diet: DIET_SCHEMA,
       basis: {
         type: 'string', enum: ['source', 'completed', 'guessed'],
         description: '"source": the recipe is written in the source (or the creator\'s own recipe was found). "completed": mostly from the source, with gaps filled in. "guessed": the source only shows the dish (e.g. a video or photo with no written recipe and the original could not be found) and the recipe was reconstructed.',
@@ -89,7 +118,7 @@ export const RECIPE_TOOL = {
     },
     required: [
       'found', 'title', 'original_title', 'description', 'category', 'more_categories', 'tags', 'servings', 'prep_time',
-      'cook_time', 'total_time', 'ingredients', 'steps', 'tips', 'nutrition', 'basis', 'confidence', 'notes',
+      'cook_time', 'total_time', 'ingredients', 'steps', 'tips', 'nutrition', 'diet', 'basis', 'confidence', 'notes',
     ],
     additionalProperties: false,
   },
@@ -196,6 +225,8 @@ const cleanSections = (a) =>
 
 // מאחד את תשובת הסוכן עם מה שנאסף מהדף לרשומת מתכון
 export function toRecipe(input, src, categories = CATEGORIES) {
+  const ingredients = cleanSections(input.ingredients);
+  const diet = cleanDiet(input.diet, ingredients.flatMap((g) => g.items));
   return {
     title: clean(input.title) || clean(src.title) || 'מתכון',
     originalTitle: clean(input.original_title) || clean(src.title),
@@ -206,10 +237,11 @@ export function toRecipe(input, src, categories = CATEGORIES) {
     prepTime: clean(input.prep_time),
     cookTime: clean(input.cook_time),
     totalTime: clean(input.total_time),
-    ingredients: cleanSections(input.ingredients),
+    ingredients,
     steps: cleanSections(input.steps),
     tips: cleanList(input.tips),
     nutrition: cleanNutrition(input.nutrition),
+    ...(diet ? { diet } : {}),
     basis: ['source', 'completed', 'guessed'].includes(input.basis) ? input.basis : 'source',
     confidence: ['high', 'medium', 'low'].includes(input.confidence) ? input.confidence : 'medium',
     notes: clean(input.notes),
