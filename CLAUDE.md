@@ -165,6 +165,10 @@
 - סיסמאות: `ISPORT_ADMIN_PASSWORD` = המשתמש (מי שבנה); לבעל החנות סיסמה נפרדת שנקבעת בהגדרות. גיבוי לילי ל-R2 (30 יום) ושחזור בהגדרות. מפתח Claude נפרד: `ISPORT_ANTHROPIC_API_KEY`.
 - סרטוני הדרכה ב-`isport/tutorials` (אותו נוהל כמו mat-kon: נועה + מוזיקה, `isport-voice.yml`). **לא להקליט מחדש בלי לשאול**: אחרי שינוי במסך – לשאול את המשתמש אם לעדכן את הסרטונים.
 
+### קורס ערוץ מוזיקה מסונו (`suno_course/`)
+- תיאור: `suno_course/README.md`. דף HTML אחד שמפורסם כ-Artifact (לא Cloudflare): לערוך ב-`src/`, להריץ `build.sh`, ולפרסם מחדש לאותה כתובת.
+- כל נתון "קשה" (מחיר, סף, מכסה) עם מקור ותאריך; איורי מסכים מסומנים כאיור ולא כצילום.
+
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).
 
