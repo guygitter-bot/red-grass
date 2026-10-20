@@ -24,6 +24,7 @@ const cleanRecipes = (list) => (Array.isArray(list) ? list.filter((r) => r && ty
 import InvitesView from './components/InvitesView';
 import ShareView from './components/ShareView';
 import SharedRecipe from './components/SharedRecipe';
+import UpdateBanner from './components/UpdateBanner';
 import PrivacyView from './components/PrivacyView';
 import AdminView from './components/AdminView';
 import HelpView from './components/HelpView';
@@ -829,6 +830,7 @@ export default function App() {
       {paywall && <Paywall user={user} paymentUrl={paywall.paymentUrl} onClose={() => setPaywall(null)} />}
       <header className="bg-gradient-to-bl from-orange-500 to-amber-500 text-white px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-5 rounded-b-3xl shadow-sm">
         <div className="max-w-3xl mx-auto">
+          <UpdateBanner />
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-3xl font-black tracking-tight" dir="ltr">mat-kon</h1>
