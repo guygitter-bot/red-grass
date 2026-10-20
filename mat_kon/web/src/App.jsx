@@ -25,6 +25,7 @@ import InvitesView from './components/InvitesView';
 import ShareView from './components/ShareView';
 import SharedRecipe from './components/SharedRecipe';
 import UpdateBanner from './components/UpdateBanner';
+import AppInvite from './components/AppInvite';
 import PrivacyView from './components/PrivacyView';
 import AdminView from './components/AdminView';
 import HelpView from './components/HelpView';
@@ -877,6 +878,7 @@ export default function App() {
       </header>
 
       <main className="max-w-3xl mx-auto px-4">
+        <AppInvite user={ownerDevice ? null : user} />
         {sharedOffer && (
           <div className="mt-4 rounded-2xl bg-white shadow-sm p-3 border border-orange-200">
             <div className="font-bold">להוסיף לספר את מה ששותף?</div>
