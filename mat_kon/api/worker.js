@@ -11,11 +11,11 @@ import { buildRecipe, failure } from './jobs.js';
 import { RecipeBook } from './store.js';
 import { Accounts, canAdd } from './accounts.js';
 import { gatherSource, normalizeUrl, sourceKind } from './source.js';
-import { NoRecipeError, aiMessage, categoryFields, cleanNutrition, estimateNutrition, extractRecipe, ideasFromPantry, organizeShopping, scanPantry, searchRecipes, suggestCategories } from './extract.js';
+import { NoRecipeError, aiMessage, categoryFields, cleanNutrition, estimateNutrition, extractRecipe, moderateRecipe, ideasFromPantry, organizeShopping, scanPantry, searchRecipes, suggestCategories } from './extract.js';
 import { findStores } from './stores.js';
 import { CATEGORIES } from './categories.js';
 import { backupStatus, restoreBook, runBackup } from './backup.js';
-import { publicSummary } from './community.js';
+import { communityKey, publicCopy, publicSummary } from './community.js';
 
 export { RecipeBook, Accounts };
 
@@ -367,6 +367,17 @@ export default {
       return { res, data };
     };
 
+    // ---- פרופיל לקהילה: שם תצוגה (בלי אימייל) ואישור תנאי השימוש ----
+    if (url.pathname === '/profile') {
+      if (request.method === 'GET') return pass(await internal(accounts, 'POST', '/profile/get', { userId: user?.id || null }));
+      if (request.method === 'PUT') {
+        const { body, error } = await readJson();
+        if (error) return error;
+        return pass(await internal(accounts, 'POST', '/profile/set', { userId: user?.id || null, displayName: body.displayName, acceptTerms: body.acceptTerms === true }));
+      }
+      return fail(405, 'Method not allowed');
+    }
+
     // ---- מאגר הקהילה: חיפוש במתכונים מקישורים שמשתמשים שמרו (עם דירוג ומספר שמירות, בלי שמות) ----
     if (parts[0] === 'community') {
       const stub = env.BOOK.get(env.BOOK.idFromName('community'));
@@ -387,6 +398,16 @@ export default {
       if (!res.ok) return fail(404, 'המתכון כבר לא במאגר');
       const { recipe, summary } = await res.json();
       if (parts.length === 2 && request.method === 'GET') return reply(200, { recipe, summary: publicSummary(summary) });
+      // דיווח על מתכון (פעם אחת לכל ספר)
+      if (parts.length === 3 && parts[2] === 'report' && request.method === 'POST') {
+        const limited = await rate([{ key: `report:${bookKeyOf(user)}`, limit: 30, window: 86400 }], 'הגעתם למגבלת הדיווחים היומית.');
+        if (limited) return limited;
+        const { body, error } = await readJson();
+        if (error) return error;
+        const reason = ['not-recipe', 'offensive', 'personal', 'copied', 'other'].includes(body.reason) ? body.reason : 'other';
+        await internal(stub, 'POST', '/community/report', { key: parts[1], rater: bookKeyOf(user), reason });
+        return reply(200, { ok: true });
+      }
       if (parts.length === 3 && parts[2] === 'save' && request.method === 'POST') {
         const limited = await rate([{ key: `share-save:${bookKeyOf(user)}`, limit: 200, window: 86400 }], 'הגעתם למגבלה היומית. נסו שוב מחר.');
         if (limited) return limited;
@@ -443,6 +464,7 @@ export default {
       if (!user) return fail(400, 'לבעל האפליקציה אין חשבון למחוק');
       const res = await internal(accounts, 'POST', '/account/delete', { userId: user.id });
       const data = await res.json();
+      if (res.ok) await internal(env.BOOK.get(env.BOOK.idFromName('community')), 'POST', '/community/remove-author', { authorId: user.id });
       if (res.ok && data.deletedBook) await internal(bookOf(user.id), 'DELETE', '/recipes');
       return reply(res.status, data);
     }
@@ -635,7 +657,7 @@ export default {
       if (url.pathname === '/admin/overview' && request.method === 'GET') {
         const now = new Date();
         const months = [0, 1, 2].map((i) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1)).toISOString().slice(0, 7));
-        const [stats, costs, community, backups, issues, settings] = await Promise.all([
+        const [stats, costs, community, backups, issues, settings, reports] = await Promise.all([
           internal(accounts, 'GET', '/admin/stats').then((r) => r.json()),
           Promise.all(months.map(async (m) => {
             const rows = await usage(m);
@@ -646,19 +668,22 @@ export default {
           backupStatus(env).catch(() => null),
           internal(accounts, 'GET', '/admin/issues').then((r) => r.json()),
           internal(accounts, 'GET', '/admin/settings').then((r) => r.json()),
+          internal(env.BOOK.get(env.BOOK.idFromName('community')), 'POST', '/community/reports', {}).then((r) => r.json()),
         ]);
         const open = issues.issues.filter((i) => i.status !== 'fixed');
         const alerts = [];
         const spend = settings.settings.spendAlert;
         if (spend && costs[0].usd >= spend) alerts.push({ level: 'serious', text: `ההוצאה על AI החודש ($${costs[0].usd}) עברה את הסף שקבעת ($${spend})` });
         if (open.some((i) => i.status === 'new')) alerts.push({ level: 'warning', text: `${open.filter((i) => i.status === 'new').length} תקלות חדשות שעוד לא טופלו` });
-        if (stats.today >= 50) alerts.push({ level: 'warning', text: `${stats.today} הרשמות היום – הרבה יותר מהרגיל` });
+        const hidden = reports.items.filter((r) => r.hidden).length;
+        if (reports.items.length) alerts.push({ level: hidden ? 'serious' : 'warning', text: `${reports.items.length} מתכונים בקהילה מחכים לבדיקה שלך${hidden ? ` (${hidden} מוסתרים אחרי דיווחים)` : ''}` });
+                if (stats.today >= 50) alerts.push({ level: 'warning', text: `${stats.today} הרשמות היום – הרבה יותר מהרגיל` });
         const lastBackup = backups?.days?.at(-1);
         if (backups?.enabled && (!lastBackup || Date.now() - Date.parse(`${lastBackup}T00:00:00Z`) > 2 * 86400000)) alerts.push({ level: 'serious', text: 'הגיבוי הלילי לא רץ ביומיים האחרונים' });
         return reply(200, {
           stats, costs, community, backups: backups?.enabled ? { last: lastBackup || null, count: backups.days.length, ok: Boolean(backups.last) } : null,
           issues: { open: open.length, new: open.filter((i) => i.status === 'new').length, fixed: issues.issues.length - open.length },
-          settings: settings.settings, alerts,
+          settings: settings.settings, alerts, reports: { pending: reports.items.length, hidden },
         });
       }
       if (url.pathname === '/admin/issues' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/admin/issues'));
@@ -668,6 +693,21 @@ export default {
         return pass(await internal(accounts, 'POST', '/admin/issues/update', { sig: parts[2], status: body.status, note: body.note }));
       }
       if (url.pathname === '/admin/security' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/admin/security'));
+      // דיווחים ומתכונים שבדיקת ה-AI לא הייתה בטוחה לגביהם: אישור / הסרה / חסימת המפרסם
+      const community = env.BOOK.get(env.BOOK.idFromName('community'));
+      if (url.pathname === '/admin/reports' && request.method === 'GET') return pass(await internal(community, 'POST', '/community/reports', {}));
+      if (parts[1] === 'reports' && parts.length === 3 && request.method === 'POST') {
+        const { body, error } = await readJson();
+        if (error) return error;
+        if (body.action === 'view') return pass(await internal(community, 'POST', '/community/get', { key: parts[2], admin: true }));
+        const res = await internal(community, 'POST', '/community/moderate', { key: parts[2], action: body.action === 'approve' ? 'approve' : 'remove' });
+        const data = await res.json();
+        if (res.ok && body.action === 'block' && data.authorId && data.authorId !== 'owner') {
+          await internal(accounts, 'POST', '/admin/block', { userId: data.authorId });
+          await internal(community, 'POST', '/community/remove-author', { authorId: data.authorId });
+        }
+        return reply(res.status, data);
+      }
       if (url.pathname === '/admin/settings' && request.method === 'PUT') {
         const { body, error } = await readJson();
         if (error) return error;
@@ -835,6 +875,44 @@ export default {
       return reply(res.status, data);
     }
 
+    // פרסום מתכון אישי לקהילה (עם שם תצוגה), אחרי בדיקת AI. ביטול פרסום – בכל רגע
+    if (parts.length === 3 && parts[2] === 'publish' && ['POST', 'DELETE'].includes(request.method)) {
+      const res = await internal(book, 'GET', `/recipes/${id}`);
+      if (!res.ok) return fail(404, 'המתכון לא נמצא');
+      const { recipe } = await res.json();
+      const comm = env.BOOK.get(env.BOOK.idFromName('community'));
+      if (request.method === 'DELETE') {
+        if (recipe.published) await internal(comm, 'POST', '/community/unpublish', { key: recipe.published });
+        return pass(await internal(book, 'PUT', `/recipes/${id}`, { published: null }));
+      }
+      if (recipe.source?.url) return fail(400, 'מתכון מקישור כבר נמצא בקהילה, עם קרדיט למקור');
+      if (recipe.source?.kind === 'community') return fail(400, 'זה מתכון שמישהו אחר פרסם בקהילה');
+      const profile = await (await internal(accounts, 'POST', '/profile/get', { userId: user?.id || null })).json();
+      if (profile.blocked) return fail(403, 'החשבון לא יכול לפרסם בקהילה');
+      if (!profile.displayName || !profile.terms) return fail(409, 'צריך לבחור שם תצוגה ולאשר את תנאי השימוש', { needProfile: true });
+      const limited = await rate([{ key: `publish:${bookKeyOf(user)}`, limit: 20, window: 86400 }], 'הגעתם למגבלת הפרסומים היומית. נסו שוב מחר.');
+      if (limited) return limited;
+      const budget = await aiBudget();
+      if (budget) return budget;
+      const image = typeof recipe.image === 'string' && /^https:\/\//.test(recipe.image) ? recipe.image : null;
+      let review;
+      try {
+        review = await moderateRecipe(ai(), recipe, image);
+      } catch (e) {
+        return aiFail(e, (!e.status && e.message) || 'הבדיקה לפני הפרסום לא הצליחה');
+      }
+      if (review.decision === 'reject') return fail(422, review.reason || 'המתכון לא מתאים לפרסום בקהילה');
+      const identity = `pub:${bookKeyOf(user)}:${id}`;
+      const key = recipe.published || (await communityKey(identity));
+      const copy = publicCopy({ ...recipe, image: review.imageOk ? image : null }, { keepImage: true });
+      copy.source = { url: null, key: `community:${key}`, kind: 'community', identity, author: profile.displayName };
+      await internal(comm, 'POST', '/community/publish', {
+        key, recipe: copy, author: { id: user?.id || 'owner', name: profile.displayName }, flagged: review.decision === 'review', reason: review.reason,
+      });
+      const saved = await (await internal(book, 'PUT', `/recipes/${id}`, { published: key })).json();
+      return reply(200, { ...saved, review: { decision: review.decision, imageRemoved: Boolean(image && !review.imageOk), reason: review.reason } });
+    }
+
     // שיתוף מתכון בקישור: נשמר עותק של המתכון (בלי ההערות האישיות והדירוג), ולא גישה לספר
     if (parts.length === 3 && parts[2] === 'share' && request.method === 'POST') {
       const limited = await rate([{ key: `share:${bookKeyOf(user)}`, limit: 100, window: 86400 }], 'הגעתם למגבלת השיתופים היומית. נסו שוב מחר.');
@@ -882,6 +960,7 @@ export default {
     if (parts.length === 2 && request.method === 'PUT') {
       const { body: patch, error } = await readJson(MAX_EDIT_BYTES);
       if (error) return error;
+      delete patch.published; // רק דרך /publish
       // ערכים תזונתיים: רק בצורה הנכונה. שינוי במצרכים או במספר המנות – ההערכה הישנה כבר לא נכונה
       if ('nutrition' in patch) patch.nutrition = cleanNutrition(patch.nutrition);
       else if ('ingredients' in patch || 'servings' in patch) patch.nutrition = null;
@@ -1038,7 +1117,7 @@ function restoredRecipe(r, categories) {
   if (!title || (!ingredients.length && !steps.length)) return null;
   const src = r.source && typeof r.source === 'object' ? r.source : {};
   const url = typeof src.url === 'string' && /^https?:\/\//.test(src.url) ? normalizeUrl(src.url) : null;
-  const key = !url && typeof src.key === 'string' && /^(wa|photo|manual):[\w:-]{1,80}$/.test(src.key) ? src.key : null;
+  const key = !url && typeof src.key === 'string' && /^(wa|photo|manual|community):[\w:-]{1,80}$/.test(src.key) ? src.key : null;
   const str = (v, n = 150) => String(v ?? '').trim().slice(0, n);
   const source = {
     url,
@@ -1046,7 +1125,7 @@ function restoredRecipe(r, categories) {
     ...(key ? { key } : url ? {} : { key: `manual:restored-${textHash(title)}` }),
     kind: /^[a-z]{2,20}$/.test(src.kind) ? src.kind : url ? sourceKind(url) : 'manual',
     ...['title', 'author', 'site', 'chat', 'date', 'hint'].reduce((o, k) => (src[k] ? { ...o, [k]: str(src[k]) } : o), {}),
-    ...(url && typeof src.identity === 'string' && /^[a-z]+:.{3,600}$/.test(src.identity) ? { identity: src.identity } : {}),
+    ...((url || key?.startsWith('community:')) && typeof src.identity === 'string' && /^[a-z]+:.{3,600}$/.test(src.identity) ? { identity: src.identity } : {}),
     ...(typeof src.text === 'string' ? { text: src.text.slice(0, 20000) } : {}),
     ...(typeof src.embed === 'string' && EMBED_ORIGIN.test(src.embed) ? { embed: src.embed.slice(0, 500) } : {}),
   };

@@ -1525,3 +1525,79 @@ test('admin app: overview, issues with status, security events and settings – 
   const pre = await worker.fetch(new Request('https://api.example/admin/overview', { method: 'OPTIONS', headers: { origin: 'https://mat-kon-admin.pages.dev' } }), env);
   assert.equal(pre.headers.get('access-control-allow-origin'), 'https://mat-kon-admin.pages.dev');
 });
+
+test('community: publishing a personal recipe with a display name, AI check, reports, moderation and blocking', async () => {
+  env.OWNER_PASSWORD = 'owner-secret-1';
+  const owner = (await (await call('POST', '/owner-login', { password: 'owner-secret-1' })).json()).session;
+  const people = [];
+  for (const [name, email] of [['דנה', 'dana@example.com'], ['רון', 'ron@example.com'], ['גל', 'gal@example.com'], ['טל', 'tal@example.com']]) {
+    const inv = await invite(name, owner);
+    people.push((await (await register(inv.token, email)).json()).session);
+  }
+  const [dana, ron, gal, tal] = people;
+  let review = { decision: 'publish', image_ok: true, reason: '' };
+  deps.anthropic = () => ({ beta: { messages: { create: async (p) => {
+    apiCalls.push(p);
+    return { stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_review', input: review }] };
+  } } } });
+  const mine = (await (await call('POST', '/recipes/manual', { title: 'עוגת השמרים של סבתא', ingredients: [{ title: '', items: ['קמח', 'שמרים'] }], steps: [{ title: '', items: ['לשים'] }], myNotes: 'סוד' }, dana)).json()).recipe;
+
+  // קודם שם תצוגה ותנאי שימוש
+  const need = await call('POST', `/recipes/${mine.id}/publish`, {}, dana);
+  assert.equal(need.status, 409);
+  assert.equal((await need.json()).needProfile, true);
+  assert.equal((await call('PUT', '/profile', { displayName: 'dana@x.com', acceptTerms: true }, dana)).status, 400);
+  assert.equal((await call('PUT', '/profile', { displayName: 'דנה מבשלת' }, dana)).status, 400); // בלי אישור תנאים
+  assert.deepEqual(await (await call('PUT', '/profile', { displayName: 'דנה מבשלת', acceptTerms: true }, dana)).json(), { displayName: 'דנה מבשלת', terms: true, blocked: false });
+
+  // נדחה בבדיקה
+  review = { decision: 'reject', image_ok: true, reason: 'זה לא נראה כמו מתכון' };
+  const rejected = await call('POST', `/recipes/${mine.id}/publish`, {}, dana);
+  assert.deepEqual([rejected.status, (await rejected.json()).error], [422, 'זה לא נראה כמו מתכון']);
+  // מתפרסם
+  review = { decision: 'publish', image_ok: true, reason: '' };
+  const pub = await (await call('POST', `/recipes/${mine.id}/publish`, {}, dana)).json();
+  assert.ok(pub.recipe.published);
+  const found = (await (await call('GET', '/community?q=שמרים', undefined, ron)).json()).results;
+  assert.deepEqual([found.length, found[0].credit, found[0].personal, found[0].saves], [1, 'מתכון של דנה מבשלת', true, 1]);
+  assert.equal(JSON.stringify(found).includes('dana@example.com'), false);
+  const full = await (await call('GET', `/community/${found[0].key}`, undefined, ron)).json();
+  assert.equal(full.recipe.myNotes, undefined);
+  assert.equal(full.summary.authorId, undefined);
+
+  // רון שומר עותק – נספר כשמירה, ואפשר לדרג
+  const copy = (await (await call('POST', `/community/${found[0].key}/save`, {}, ron)).json()).recipe;
+  assert.equal(copy.source.kind, 'community');
+  assert.equal(copy.source.author, 'דנה מבשלת');
+  assert.equal((await (await call('GET', '/community?q=שמרים', undefined, ron)).json()).results[0].saves, 2);
+  assert.equal((await call('POST', `/recipes/${copy.id}/publish`, {}, ron)).status, 400); // לא אפשר לפרסם מתכון של מישהו אחר
+
+  // שלושה דיווחים – מוסתר; בעל האפליקציה מאשר – חוזר
+  for (const s of [ron, gal, gal, tal]) await call('POST', `/community/${found[0].key}/report`, { reason: 'offensive' }, s);
+  assert.equal((await (await call('GET', '/community?q=שמרים', undefined, ron)).json()).results.length, 0);
+  assert.equal((await call('GET', '/admin/reports', undefined, dana)).status, 403);
+  const reports = (await (await call('GET', '/admin/reports', undefined, owner)).json()).items;
+  assert.deepEqual([reports[0].reports, reports[0].hidden, reports[0].author], [3, true, 'דנה מבשלת']);
+  assert.ok((await (await call('GET', '/admin/overview', undefined, owner)).json()).alerts.some((a) => /מחכים לבדיקה/.test(a.text)));
+  await call('POST', `/admin/reports/${found[0].key}`, { action: 'approve' }, owner);
+  assert.equal((await (await call('GET', '/community?q=שמרים', undefined, ron)).json()).results.length, 1);
+
+  // לא בטוח – מתפרסם, ומחכה לבדיקה
+  const other = (await (await call('POST', '/recipes/manual', { title: 'מרק חריף מאוד', ingredients: [{ title: '', items: ['פלפל'] }] }, dana)).json()).recipe;
+  review = { decision: 'review', image_ok: false, reason: 'לא בטוח' };
+  const flagged = await (await call('POST', `/recipes/${other.id}/publish`, {}, dana)).json();
+  assert.equal(flagged.review.decision, 'review');
+  assert.ok((await (await call('GET', '/admin/reports', undefined, owner)).json()).items.some((r) => r.flagged && r.title === 'מרק חריף מאוד'));
+
+  // אי אפשר לסמן "פורסם" מהאפליקציה בלי לפרסם
+  assert.equal((await (await call('PUT', `/recipes/${copy.id}`, { published: 'fake' }, ron)).json()).recipe.published, undefined);
+
+  // ביטול פרסום
+  await call('DELETE', `/recipes/${other.id}/publish`, undefined, dana);
+  assert.equal((await (await call('GET', '/community?q=חריף', undefined, ron)).json()).results.length, 0);
+
+  // חסימה: כל מה שפרסמה יורד, ולא יכולה לפרסם שוב
+  await call('POST', `/admin/reports/${found[0].key}`, { action: 'block' }, owner);
+  assert.equal((await (await call('GET', '/community?q=שמרים', undefined, ron)).json()).results.length, 0);
+  assert.equal((await call('POST', `/recipes/${mine.id}/publish`, {}, dana)).status, 403);
+});

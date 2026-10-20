@@ -1,10 +1,10 @@
 import { buildRecipe, failure } from './jobs.js';
 import { trackedClient } from './deps.js';
-import { communityIdentity, communityKey, publicCopy, searchCommunity, summarize } from './community.js';
+import { HIDE_AT_REPORTS, communityIdentity, communityKey, publicCopy, searchCommunity, summarize } from './community.js';
 // ספר המתכונים: Durable Object אחד שמחזיק את כל המתכונים (כל מתכון במפתח r:<id>).
 
 const PREFIX = 'r:';
-const EDITABLE = ['title', 'description', 'category', 'categories', 'tags', 'servings', 'prepTime', 'cookTime', 'totalTime', 'ingredients', 'steps', 'tips', 'notes', 'favorite', 'myNotes', 'image', 'rating', 'nutrition'];
+const EDITABLE = ['title', 'description', 'category', 'categories', 'tags', 'servings', 'prepTime', 'cookTime', 'totalTime', 'ingredients', 'steps', 'tips', 'notes', 'favorite', 'myNotes', 'image', 'rating', 'nutrition', 'published'];
 
 const SRC = 'src:';
 const CACHE_DAYS = 90; // מתכון במטמון המשותף מתחדש אחרי 3 חודשים
@@ -77,8 +77,64 @@ export class RecipeBook {
     if (url.pathname === '/community/search') return json({ results: searchCommunity([...index.values()], body.q || '', body.filters || {}) });
     if (url.pathname === '/community/get') {
       const s = index.get(body.key);
-      const recipe = s && s.saves && (await this.storage.get(`cr:${body.key}`));
+      const recipe = s && s.saves && (!s.hidden || body.admin) && (await this.storage.get(`cr:${body.key}`));
       return recipe ? json({ recipe, summary: s }) : json({ error: 'not found' }, 404);
+    }
+
+    // ---- מתכון שמשתמש פרסם בעצמו (עם שם תצוגה) ----
+    const unpublish = async (key) => {
+      if (!index.has(key)) return;
+      index.delete(key);
+      const extra = [...(await this.storage.list({ prefix: `rt:${key}:` })).keys(), ...(await this.storage.list({ prefix: `rep:${key}:` })).keys()];
+      const keys = [`cs:${key}`, `cr:${key}`, ...extra];
+      for (let i = 0; i < keys.length; i += 128) await this.storage.delete(keys.slice(i, i + 128));
+    };
+    if (url.pathname === '/community/publish') {
+      const old = index.get(body.key);
+      await this.storage.put(`cr:${body.key}`, body.recipe);
+      const stats = old ? { saves: old.saves, ratingSum: old.ratingSum, ratingCount: old.ratingCount } : { saves: 1, ratingSum: 0, ratingCount: 0 };
+      await save({
+        ...summarize(body.key, body.recipe, stats, body.author), publishedAt: old?.publishedAt || new Date().toISOString(),
+        reports: old?.reports || 0, reportReasons: old?.reportReasons || [], hidden: Boolean(old?.hidden),
+        flagged: Boolean(body.flagged), flagReason: body.flagged ? String(body.reason || '').slice(0, 200) : '',
+      });
+      return json({ ok: true });
+    }
+    if (url.pathname === '/community/unpublish') {
+      await unpublish(body.key);
+      return json({ ok: true });
+    }
+    if (url.pathname === '/community/remove-author') {
+      for (const s of [...index.values()].filter((x) => x.authorId && x.authorId === body.authorId)) await unpublish(s.key);
+      return json({ ok: true });
+    }
+    // דיווח: פעם אחת לכל ספר; אחרי HIDE_AT_REPORTS דיווחים המתכון מוסתר עד בדיקה
+    if (url.pathname === '/community/report') {
+      const s = index.get(body.key);
+      const k = `rep:${body.key}:${String(body.rater).slice(0, 100)}`;
+      if (!s || (await this.storage.get(k))) return json({ ok: true });
+      await this.storage.put(k, true);
+      const reports = (s.reports || 0) + 1;
+      await save({
+        ...s, reports, reportReasons: [String(body.reason || '').slice(0, 100), ...(s.reportReasons || [])].slice(0, 5),
+        hidden: s.hidden || (s.personal && reports >= HIDE_AT_REPORTS),
+      });
+      return json({ ok: true });
+    }
+    // לבעל האפליקציה: מה מחכה לבדיקה (דיווחים, או בדיקת AI שלא הייתה בטוחה)
+    if (url.pathname === '/community/reports') {
+      const list = [...index.values()].filter((s) => s.reports || s.flagged).sort((a, b) => Number(b.hidden) - Number(a.hidden) || (b.reports || 0) - (a.reports || 0));
+      return json({ items: list.slice(0, 100).map((s) => ({ key: s.key, title: s.title, author: s.author || '', authorId: s.authorId || '', credit: s.credit, personal: Boolean(s.personal), reports: s.reports || 0, reasons: s.reportReasons || [], flagged: Boolean(s.flagged), flagReason: s.flagReason || '', hidden: Boolean(s.hidden) })) });
+    }
+    if (url.pathname === '/community/moderate') {
+      const s = index.get(body.key);
+      if (!s) return json({ error: 'not found' }, 404);
+      if (body.action === 'remove') await unpublish(body.key);
+      else {
+        for (const k of (await this.storage.list({ prefix: `rep:${body.key}:` })).keys()) await this.storage.delete(k);
+        await save({ ...s, reports: 0, reportReasons: [], flagged: false, flagReason: '', hidden: false, reviewed: true });
+      }
+      return json({ ok: true, authorId: s.authorId || '' });
     }
     return json({ error: 'not found' }, 404);
   }
@@ -99,7 +155,8 @@ export class RecipeBook {
   async communityItem(recipe, { fresh = true } = {}) {
     const identity = communityIdentity(recipe);
     if (!identity) return null;
-    const original = fresh && !recipe.restored && !(recipe.edited && Object.keys(recipe.edited).length);
+    // תוכן נכנס למאגר רק ממתכון מקישור ציבורי (מתכון אישי מתפרסם רק בפרסום מפורש)
+    const original = fresh && Boolean(recipe.source?.url) && !recipe.restored && !(recipe.edited && Object.keys(recipe.edited).length);
     return { key: await communityKey(identity), recipe: original ? publicCopy(recipe) : null };
   }
 
@@ -494,7 +551,7 @@ export class RecipeBook {
       // סידור הקטגוריות על ידי הסוכן (פעם אחת לכל מתכון)
       if (patch.categorized) next.categorized = true;
       // שדות שהמשתמש ערך בעצמו – רענון מהמקור לא ידרוס אותם
-      const edited = EDITABLE.filter((k) => k in patch && !['favorite', 'myNotes', 'rating', 'nutrition'].includes(k) && !patch.categorized);
+      const edited = EDITABLE.filter((k) => k in patch && !['favorite', 'myNotes', 'rating', 'nutrition', 'published'].includes(k) && !patch.categorized);
       if (edited.length) next.edited = { ...(current.edited || {}), ...Object.fromEntries(edited.map((k) => [k, true])) };
       await this.storage.put(PREFIX + id, next);
       if ('image' in patch && current.image !== next.image) await this.dropImage(current.image);
@@ -509,6 +566,7 @@ export class RecipeBook {
       await this.storage.put('recipe-count', Math.max(0, (await this.recipeCount()) - 1));
       const identity = communityIdentity(current);
       if (identity) await this.community('/community/remove', { key: await communityKey(identity), rater: this.state.id?.toString?.() || 'book' });
+      if (current.published) await this.community('/community/unpublish', { key: current.published });
       await this.dropImage(current.image);
       const key = sourceKey(current);
       if (key) await this.storage.delete(SRC + key);
