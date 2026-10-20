@@ -36,6 +36,15 @@ await record('book', async ({ page, say, tap, type, wait, card, uncard, hideDot,
   await tap(page.getByRole('button', { name: /מתכונים מועדפים/ }), { after: 2200 });
   await tap(page.getByRole('button', { name: /מתכונים מועדפים/ }), { after: 600 });
 
+  await say('צריכים מתכון כשר, ללא גלוטן, לצליאקים או טבעוני? לוחצים כאן', 1400, true);
+  await tap(page.getByRole('button', { name: /כשר, ללא גלוטן ועוד/ }), { after: 1400 });
+  await say('בוחרים מה מתאים לכם – אפשר כמה ביחד', 1200, true);
+  await tap(page.getByRole('button', { name: 'פרווה', exact: true }), { after: 1600 });
+  await say('הבחירה נשמרת, ואותו סינון עובד גם בחיפוש בקהילה', 2600, true);
+  await tap(page.getByRole('button', { name: 'ניקוי הסינון' }), { after: 400 });
+  await tap(page.getByRole('button', { name: 'סגירה', exact: true }), { after: 800 });
+  await hideDot();
+
   await say('ובאפשרות <b>מיון</b> בוחרים סדר: החדשים, א-ב או הדירוג הגבוה', 1600, true);
   const sort = page.locator('select').first();
   await tap(sort, { after: 300 });

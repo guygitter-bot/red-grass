@@ -1465,6 +1465,9 @@ test('community: link recipes are searchable with saves and ratings (no names), 
   // סינונים
   assert.equal((await (await call('GET', '/community?q=שוקולד&kosher=meat', undefined, ron)).json()).results.length, 0);
   assert.equal((await (await call('GET', '/community?q=שוקולד&minutes=60', undefined, ron)).json()).results.length, 1);
+  // המתכון בבדיקות: ביצים וסוכר – פרווה, כשר, ללא גלוטן, לא טבעוני
+  assert.equal((await (await call('GET', '/community?q=שוקולד&diets=kosher,parve,celiac', undefined, ron)).json()).results.length, 1);
+  assert.equal((await (await call('GET', '/community?q=שוקולד&diets=vegan', undefined, ron)).json()).results.length, 0);
   // רשימת הספר נטענת – לא נספר פעמיים
   await call('GET', '/recipes', undefined, ron);
   assert.equal((await (await call('GET', '/community?q=שוקולד', undefined, ron)).json()).results[0].saves, 2);

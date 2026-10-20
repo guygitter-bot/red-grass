@@ -12,8 +12,8 @@ await record('search', async ({ page, say, tap, type, wait, card, uncard, point 
   await say('קודם מופיעים מתכונים <b>מהקהילה</b>: מה שמשתמשים אחרים שמרו בספר שלהם', 3600, true);
   await point(page.getByText('(18 דירוגים)').first(), 1500);
   await say('לכל מתכון רואים <b>דירוג</b>, בכמה ספרים הוא נשמר, זמן הכנה וקלוריות', 3600, true);
-  await say('אפשר לסנן: עד 30 דקות, פרווה, חלבי, בשרי, טבעוני או ללא גלוטן', 3400, true);
-  await point(page.getByRole('button', { name: 'עד 30 דק׳' }), 1200);
+  await say('אפשר לסנן: כשר, פרווה, ללא גלוטן, מתאים לצליאקים, טבעוני, עד 30 דקות ועוד', 3400, true);
+  await point(page.getByRole('button', { name: /כשר, ללא גלוטן ועוד/ }), 1200);
   await tap(page.getByText('פשטידת תרד וגבינות קלה').first(), { after: 900 });
   await say('לוחצים על מתכון ורואים אותו במלואו', 2600, true);
   await say('אהבתם? לוחצים <b>שמירה בספר שלי</b>', 2200, true);

@@ -1,4 +1,5 @@
 // עזרים לספר המתכונים: קישורים משותפים, חיפוש, עריכה כטקסט.
+import { matchesDiets, recipeDiet } from './diet';
 
 // קישור שהגיע משיתוף (share target) או מהדבקה: ?url=... או טקסט שמכיל קישור
 export function linkFromShare(search) {
@@ -36,13 +37,14 @@ const haystack = (r) =>
   ].join(' '));
 
 // חיפוש לפי שם, מצרך, תגית או ערוץ. כל המילים צריכות להופיע.
-export function filterRecipes(recipes, { query = '', category = null, favorites = false, tag = null } = {}) {
+export function filterRecipes(recipes, { query = '', category = null, favorites = false, tag = null, diets = [] } = {}) {
   const words = normalize(query).split(' ').filter(Boolean);
   return recipes.filter(
     (r) =>
       (!category || categoriesOf(r).includes(category)) &&
       (!favorites || r.favorite) &&
       (!tag || (r.tags || []).includes(tag)) &&
+      (!diets.length || matchesDiets(recipeDiet(r), diets)) &&
       (!words.length || words.every((w) => haystack(r).includes(w))),
   );
 }

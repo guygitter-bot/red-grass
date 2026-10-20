@@ -16,6 +16,7 @@ import { findStores } from './stores.js';
 import { CATEGORIES } from './categories.js';
 import { backupStatus, restoreBook, runBackup } from './backup.js';
 import { communityKey, publicCopy, publicSummary } from './community.js';
+import { DIET_IDS } from './diet.js';
 import { fixAction, fixConfigured, fixStatus, sendFix } from './fixes.js';
 
 export { RecipeBook, Accounts };
@@ -392,6 +393,7 @@ export default {
           maxMinutes: num('minutes'), maxCalories: num('calories'),
           kosher: ['meat', 'dairy', 'parve'].includes(p.get('kosher')) ? p.get('kosher') : '',
           vegan: p.get('vegan') === '1', glutenFree: p.get('gf') === '1',
+          diets: String(p.get('diets') || '').split(',').filter((d) => DIET_IDS.includes(d)),
         };
         return pass(await internal(stub, 'POST', '/community/search', { q: String(p.get('q') || '').slice(0, 100), filters }));
       }
