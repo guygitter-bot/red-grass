@@ -4,7 +4,7 @@
 const COURSE_API = 'https://suno-course-api.guygitter.workers.dev';
 const KEY_NAME = 'sc_aikey';
 const getKey = () => { try { return localStorage.getItem(KEY_NAME) || ''; } catch (e) { return ''; } };
-const setKey = v => { try { v ? localStorage.setItem(KEY_NAME, v) : localStorage.removeItem(KEY_NAME); } catch (e) { } };
+const setKey = v => { try { v ? localStorage.setItem(KEY_NAME, v) : localStorage.removeItem(KEY_NAME); } catch (e) { } document.dispatchEvent(new Event('course-key')); };
 
 // חלון קטן להקלדת הסיסמה (פעם אחת; נשמרת בטלפון)
 function askKey(msg) {

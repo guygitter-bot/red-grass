@@ -1458,7 +1458,7 @@ function initTutor() {
     add('ai', `שלום! אני המדריך האישי שלך. אני רואה איפה את/ה בקורס${next ? ` – הפרק הבא הוא **${next.title}**` : ''}.\nאפשר לשאול כל שאלה, לשלוח צילום מסך (📷) מסונו או מיוטיוב, או ללחוץ "מה הצעד הבא?" ואוביל אותך צעד אחרי צעד.`);
   };
   const redraw = () => { chat.innerHTML = ''; greet(); tutorTurns.forEach(t => add(t.role === 'user' ? 'me' : 'ai', t.content)); };
-  redraw();
+  redraw(); window.tutorRedraw = redraw; // לסנכרון: לצייר מחדש אחרי שהגיעו נתונים ממכשיר אחר
   const open = () => { $('#drawer').hidden = false; $('#tutorIn').focus(); chat.scrollTop = chat.scrollHeight; };
   $('#fab').onclick = () => { $('#drawer').hidden ? open() : ($('#drawer').hidden = true); };
   $('#drawerClose').onclick = () => { $('#drawer').hidden = true; };

@@ -12,7 +12,9 @@
 ## אפליקציה (PWA)
 - `web/` → Cloudflare Pages "suno-course" → https://suno-course.pages.dev (מותקנת מהדפדפן למסך הבית). נבנית מאותם קבצים ב-`src/` (`web/build.mjs`),
   עם `web/app-shim.js` שמחליף את ה-AI של claude.ai בשרת שלנו. בלי `db`: המעקב נשמר בדפדפן.
-- `api/` → Worker `suno-course-api`: ‏`POST /ai` עם `Authorization: Bearer <סיסמה>`. סודות: `ANTHROPIC_API_KEY`, `COURSE_PASSWORD` (אם לא קיים – `OWNER_PASSWORD`).
+- `api/` → Worker `suno-course-api`: ‏`POST /ai` עם `Authorization: Bearer <סיסמה>`.
+- סנכרון בין מכשירים: `web/sync.js` + `POST /sync/get|put` (Durable Object `Vault` אחד, `api/vault.js`). אותה סיסמה = אותם נתונים;
+  לכל מפתח זמן עדכון, האחרון מנצח; בפעם הראשונה במכשיר פרקים ורשימות מתאחדים. צילומי מסך לא נשמרים בשרת. סודות: `ANTHROPIC_API_KEY`, `COURSE_PASSWORD` (אם לא קיים – `OWNER_PASSWORD`).
 - עלייה: `.github/workflows/suno-course.yml` אחרי מיזוג ל-main. בדיקה: `cd suno_course/api && npm test` · `cd suno_course/web && npm test`.
 - שינוי ב-`web/public/sw.js` או בתוכן: להעלות את מספר `CACHE` ב-sw.js כדי שהגרסה החדשה תיטען.
 

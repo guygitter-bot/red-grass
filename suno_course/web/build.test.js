@@ -14,7 +14,7 @@ test('הבנייה יוצרת אפליקציה עם כל הפרקים', () => {
   // מריצים את התוכן בלי דפדפן ובודקים שכל פרק נבנה
   const ctx = { window: {}, document: { addEventListener() {}, querySelector: () => ({ insertAdjacentHTML() {} }), getElementById: () => ({}) }, location: { hash: '' }, localStorage: { getItem: () => null, setItem() {} }, navigator: {}, console };
   vm.createContext(ctx);
-  vm.runInContext(js.replace(/boot\(\);\s*$/, '') + '\n;globalThis.__n = MODULES.map(m => m.body().length > 100).filter(Boolean).length;', ctx);
+  vm.runInContext(js.replace(/boot\(\);\s*courseSyncStart\(\);\s*$/, '') + '\n;globalThis.__n = MODULES.map(m => m.body().length > 100).filter(Boolean).length;', ctx);
   assert.equal(ctx.__n, 18);
   for (const f of ['manifest.webmanifest', 'sw.js', 'icon-192.png', 'img/yt-ypp.jpg']) assert.ok(fs.existsSync('dist/' + f), f);
 });

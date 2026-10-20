@@ -14,11 +14,13 @@ const shell = read('02-shell.html');
 const js = [
   fs.readFileSync(path.join(here, 'app-shim.js'), 'utf8'),
   ...['03-helpers.js', '04-mocks.js', '05-content-a.js', '05-content-b.js', '06-engine.js', '07-tools.js'].map(read),
+  fs.readFileSync(path.join(here, 'sync.js'), 'utf8'),
   // כפתור "חיבור ה-AI" בתפריט, ו-service worker להתקנה במסך הבית
   `document.querySelector('.side-tools').insertAdjacentHTML('beforeend', '<button class="btn sm" id="keyBtn" type="button">חיבור ה-AI (סיסמה)</button>');
 document.getElementById('keyBtn').onclick = () => window.courseAskKey('מקלידים את סיסמת הקורס. היא נשמרת בטלפון הזה.');
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-boot();`,
+boot();
+courseSyncStart();`,
 ].join('\n;\n');
 
 const html = `<!doctype html>
