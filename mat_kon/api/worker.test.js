@@ -1483,3 +1483,45 @@ test('community: recipes saved before the community existed are added once per b
   const results = (await (await call('GET', '/community?q=פשטידה')).json()).results;
   assert.deepEqual(results.map((r) => [r.title, r.saves]), [['פשטידה ישנה', 1]]);
 });
+
+test('admin app: overview, issues with status, security events and settings – owner only', async () => {
+  env.OWNER_PASSWORD = 'owner-secret-1';
+  assert.equal((await call('POST', '/owner-login', { password: 'wrong-pass' })).status, 401);
+  const owner = (await (await call('POST', '/owner-login', { password: 'owner-secret-1' })).json()).session;
+  const inv = await invite('דנה', owner);
+  const dana = (await (await register(inv.token)).json()).session;
+  await call('POST', '/recipes', { url: 'https://cake.example/admin' }, dana);
+  // אותה תקלה פעמיים (עם מספרים שונים) – תקלה אחת עם ספירה
+  await call('POST', '/client-error', { where: 'App', message: 'boom 1' }, dana);
+  await call('POST', '/client-error', { where: 'App', message: 'boom 22' }, dana);
+
+  assert.equal((await call('GET', '/admin/overview', undefined, dana)).status, 403);
+  const o = await (await call('GET', '/admin/overview', undefined, owner)).json();
+  assert.equal(o.stats.users, 1);
+  assert.equal(o.stats.sources.invite, 1);
+  assert.equal(o.stats.active30, 1);
+  assert.equal(o.stats.plans.free, 1);
+  assert.equal(o.community.recipes, 1);
+  assert.equal(o.costs.length, 3);
+  assert.ok(o.alerts.some((a) => /תקלות חדשות/.test(a.text)));
+
+  const { issues } = await (await call('GET', '/admin/issues', undefined, owner)).json();
+  assert.equal(issues.length, 1);
+  assert.deepEqual([issues[0].count, issues[0].status], [2, 'new']);
+  const fixed = (await (await call('POST', `/admin/issues/${issues[0].sig}`, { status: 'fixed', note: 'תוקן בגרסה 32' }, owner)).json()).issue;
+  assert.deepEqual([fixed.status, fixed.note], ['fixed', 'תוקן בגרסה 32']);
+  // חוזרת אחרי תיקון – נפתחת מחדש
+  await call('POST', '/client-error', { where: 'App', message: 'boom 3' }, dana);
+  const again = (await (await call('GET', '/admin/issues', undefined, owner)).json()).issues[0];
+  assert.deepEqual([again.status, again.reopened], ['new', true]);
+
+  const sec = await (await call('GET', '/admin/security', undefined, owner)).json();
+  assert.ok(sec.events.some((e) => e.type === 'ownerFail'));
+  assert.ok(sec.events.some((e) => e.type === 'ownerLogin'));
+  assert.equal(sec.days[0].signup, 1);
+
+  await call('PUT', '/admin/settings', { spendAlert: 0.0001 }, owner);
+  assert.equal((await (await call('GET', '/admin/overview', undefined, owner)).json()).settings.spendAlert, 0.0001);
+  const pre = await worker.fetch(new Request('https://api.example/admin/overview', { method: 'OPTIONS', headers: { origin: 'https://mat-kon-admin.pages.dev' } }), env);
+  assert.equal(pre.headers.get('access-control-allow-origin'), 'https://mat-kon-admin.pages.dev');
+});

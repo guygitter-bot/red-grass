@@ -69,6 +69,11 @@ export class RecipeBook {
       }
       return json({ ok: true });
     }
+    if (url.pathname === '/community/stats') {
+      const all = [...index.values()].filter((s) => s.saves);
+      const top = all.sort((a, b) => b.saves - a.saves).slice(0, 10).map((s) => ({ title: s.title, saves: s.saves, ratingCount: s.ratingCount, rating: s.ratingCount ? Math.round((s.ratingSum / s.ratingCount) * 10) / 10 : null, credit: s.credit }));
+      return json({ recipes: all.length, saves: all.reduce((n, s) => n + s.saves, 0), ratings: all.reduce((n, s) => n + s.ratingCount, 0), guessed: all.filter((s) => s.basis === 'guessed').length, top });
+    }
     if (url.pathname === '/community/search') return json({ results: searchCommunity([...index.values()], body.q || '', body.filters || {}) });
     if (url.pathname === '/community/get') {
       const s = index.get(body.key);

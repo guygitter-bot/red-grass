@@ -99,6 +99,8 @@ export class Accounts {
     const today = new Date(now).toISOString().slice(0, 10);
     for (const k of (await this.storage.list({ prefix: 'open-day:' })).keys()) if (k.slice(9) < today) drop.push(k);
     for (const [k, v] of await this.storage.list({ prefix: 'share:' })) if (now - Date.parse(v.createdAt) > SHARE_DAYS * 86400000) drop.push(k);
+    const oldDay = new Date(now - 90 * 86400000).toISOString().slice(0, 10);
+    for (const k of (await this.storage.list({ prefix: 'sec:' })).keys()) if (k.slice(4) < oldDay) drop.push(k);
     for (let i = 0; i < drop.length; i += 128) await this.storage.delete(drop.slice(i, i + 128));
     await this.storage.setAlarm?.(now + 86400000);
   }
@@ -114,6 +116,34 @@ export class Accounts {
       await this.storage.put('migrated-invite-paid', true);
     }
     if (this.storage.getAlarm && !(await this.storage.getAlarm())) await this.storage.setAlarm(Date.now() + 3600000);
+  }
+
+  // ---- אבטחה (לאפליקציית הניהול): מונים לכל יום, ו-100 האירועים האחרונים ----
+  async security(type, detail = '') {
+    const day = new Date().toISOString().slice(0, 10);
+    const counts = (await this.storage.get(`sec:${day}`)) || {};
+    counts[type] = (counts[type] || 0) + 1;
+    await this.storage.put(`sec:${day}`, counts);
+    if (['ownerLogin', 'ownerFail', 'rateLimited', 'loginFail'].includes(type)) {
+      const events = (await this.storage.get('sec-events')) || [];
+      events.unshift({ at: new Date().toISOString(), type, detail: String(detail).slice(0, 80) });
+      await this.storage.put('sec-events', events.slice(0, 100));
+    }
+  }
+
+  // תקלה חוזרת מקובצת לפי סוג (בלי מספרים וקישורים), עם סטטוס שבעל האפליקציה מסמן: new / working / fixed
+  async issue(entry, list) {
+    const shape = `${list}|${entry.where}|${entry.message.replace(/https?:\/\/\S+/g, 'URL').replace(/\d+/g, '#').slice(0, 140)}`;
+    const sig = (await sha256(shape)).replace(/[^\w]/g, '').slice(0, 16);
+    const key = `issue:${sig}`;
+    const old = await this.storage.get(key);
+    const now = entry.at;
+    const next = old
+      ? { ...old, count: old.count + 1, lastAt: now, message: entry.message, users: [...new Set([entry.user, ...(old.users || [])])].filter(Boolean).slice(0, 5) }
+      : { sig, list, where: entry.where, message: entry.message, count: 1, firstAt: now, lastAt: now, status: 'new', note: '', users: entry.user ? [entry.user] : [] };
+    // תקלה שסומנה "תוקנה" וחזרה – נפתחת מחדש
+    if (old?.status === 'fixed') Object.assign(next, { status: 'new', reopened: true });
+    await this.storage.put(key, next);
   }
 
   // גרסת הסוד של בעל האפליקציה: החלפת הסיסמה מנתקת את כל מכשירי הבעלים
@@ -249,6 +279,7 @@ export class Accounts {
       const user = id && (await this.storage.get(`user:${id}`));
       // אותה הודעה לכל כישלון (גם לחשבון גוגל), כדי שאי אפשר לבדוק אילו אימיילים רשומים
       const ok = user?.hash ? await passwordMatches(user, String(body.password || '')) : await hashPassword(String(body.password || ''), 'none').then(() => false);
+      if (!ok) await this.security('loginFail', body.country || '');
       if (!ok) return err(401, 'האימייל או הסיסמה שגויים. נרשמתם עם גוגל? היכנסו עם הכפתור "המשך עם Google".');
       if ((user.iter || OLD_ITERATIONS) < PBKDF2_ITERATIONS) {
         Object.assign(user, await newPassword(String(body.password)));
@@ -361,6 +392,7 @@ export class Accounts {
     // ---- בעל האפליקציה: מכשיר שנכנס, והגבלת ניסיונות סיסמה (10 ברבע שעה) ----
     if (path === '/owner-session' && request.method === 'POST') {
       await this.rememberDevice('owner', body.device);
+      await this.security('ownerLogin', body.country || '');
       const token = randomToken(32);
       await this.storage.put(`session:${await sha256(token)}`, { owner: true, v: await this.ownerVersion(), createdAt: now });
       return json({ session: token, user: null, owner: true });
@@ -373,6 +405,7 @@ export class Accounts {
       for (const c of Array.isArray(body.checks) ? body.checks : []) {
         if (c.global && trusted) continue;
         if (!(await this.allow(String(c.key).slice(0, 200), Number(c.limit) || 10, Number(c.window) || 900))) {
+          await this.security('rateLimited', String(c.key).split(':')[0]);
           return err(429, body.message || 'יותר מדי ניסיונות. נסו שוב מאוחר יותר.');
         }
       }
@@ -429,13 +462,82 @@ export class Accounts {
       return json({ share });
     }
 
+    // ---- אפליקציית הניהול ----
+    if (path === '/admin/stats' && request.method === 'GET') {
+      const users = [...(await this.storage.list({ prefix: 'user:' })).values()].filter((u) => !u.removed);
+      const invites = new Map([...(await this.storage.list({ prefix: 'invite:' })).values()].map((i) => [i.token, i]));
+      const shares = [...(await this.storage.list({ prefix: 'share:' })).values()];
+      const day = (d) => String(d || '').slice(0, 10);
+      const ago = (days) => new Date(Date.now() - days * 86400000).toISOString();
+      const source = (u) => (u.bookId ? 'family' : !u.invite ? 'other' : invites.get(u.invite)?.open ? 'app' : 'invite');
+      const holders = users.filter((u) => !u.bookId);
+      const count = (list, fn) => list.reduce((o, u) => ({ ...o, [fn(u)]: (o[fn(u)] || 0) + 1 }), {});
+      const signupsByDay = {};
+      for (const u of users) if (u.createdAt >= ago(30)) signupsByDay[day(u.createdAt)] = (signupsByDay[day(u.createdAt)] || 0) + 1;
+      return json({
+        users: users.length,
+        today: users.filter((u) => day(u.createdAt) === day(now)).length,
+        week: users.filter((u) => u.createdAt >= ago(7)).length,
+        month: users.filter((u) => u.createdAt >= ago(30)).length,
+        active7: users.filter((u) => u.lastSeen >= ago(7)).length,
+        active30: users.filter((u) => u.lastSeen >= ago(30)).length,
+        sources: count(users, source),
+        plans: {
+          paying: holders.filter((u) => u.plan === 'paid' && u.paidVia).length, // תשלום אמיתי – כשיחובר
+          gifted: holders.filter((u) => u.plan === 'paid' && !u.paidVia).length,
+          free: holders.filter((u) => u.plan !== 'paid').length,
+          atLimit: holders.filter((u) => u.plan !== 'paid' && u.added >= this.freeLimit).length,
+        },
+        freeLimit: this.freeLimit,
+        books: holders.length,
+        google: users.filter((u) => u.google).length,
+        signupsByDay,
+        shares: { links: shares.length, saves: shares.reduce((n, s) => n + (s.saves || 0), 0) },
+        recent: users.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 20)
+          .map((u) => ({ name: u.name, email: u.email, createdAt: u.createdAt, lastSeen: u.lastSeen || null, plan: u.plan, added: u.added, source: source(u) })),
+      });
+    }
+    if (path === '/admin/issues' && request.method === 'GET') {
+      const issues = [...(await this.storage.list({ prefix: 'issue:' })).values()];
+      const order = { new: 0, working: 1, fixed: 2 };
+      issues.sort((a, b) => order[a.status] - order[b.status] || b.lastAt.localeCompare(a.lastAt));
+      return json({ issues: issues.slice(0, 200) });
+    }
+    if (path === '/admin/issues/update' && request.method === 'POST') {
+      const key = `issue:${String(body.sig || '')}`;
+      const issue = await this.storage.get(key);
+      if (!issue) return err(404, 'התקלה לא נמצאה');
+      if (['new', 'working', 'fixed'].includes(body.status)) issue.status = body.status;
+      if (typeof body.note === 'string') issue.note = body.note.slice(0, 500);
+      if (issue.status === 'fixed') Object.assign(issue, { fixedAt: now, reopened: false });
+      await this.storage.put(key, issue);
+      return json({ issue });
+    }
+    if (path === '/admin/security' && request.method === 'GET') {
+      const days = [...(await this.storage.list({ prefix: 'sec:' }))].map(([k, v]) => ({ day: k.slice(4), ...v })).sort((a, b) => b.day.localeCompare(a.day)).slice(0, 30);
+      return json({ days, events: (await this.storage.get('sec-events')) || [] });
+    }
+    if (path === '/admin/security/event' && request.method === 'POST') {
+      if (['ownerFail'].includes(body.type)) await this.security(body.type, body.detail || '');
+      return json({ ok: true });
+    }
+    if (path === '/admin/settings') {
+      if (request.method === 'POST') {
+        const spendAlert = Number(body.spendAlert);
+        await this.storage.put('admin-settings', { spendAlert: Number.isFinite(spendAlert) && spendAlert > 0 ? Math.min(spendAlert, 100000) : 0 });
+      }
+      return json({ settings: (await this.storage.get('admin-settings')) || { spendAlert: 0 } });
+    }
+
     // ---- תקלות אחרונות (למסך הניהול) ----
     // תקלות שרת ותקלות מהאפליקציה נשמרות ברשימות נפרדות (כך שדיווחים מבחוץ לא דוחקים תקלות שרת)
     if (path === '/errors/add' && request.method === 'POST') {
       const key = body.list === 'client' ? 'client-errors' : 'errors';
       const list = (await this.storage.get(key)) || [];
-      list.unshift({ at: now, where: String(body.where || '').slice(0, 80), message: String(body.message || '').slice(0, 300), status: body.status ?? null, user: String(body.user || '').slice(0, 120) });
+      const entry = { at: now, where: String(body.where || '').slice(0, 80), message: String(body.message || '').slice(0, 300), status: body.status ?? null, user: String(body.user || '').slice(0, 120) };
+      list.unshift(entry);
       await this.storage.put(key, list.slice(0, 50));
+      await this.issue(entry, body.list === 'client' ? 'client' : 'server');
       return json({ ok: true });
     }
     if (path === '/errors' && request.method === 'GET') {
@@ -466,6 +568,8 @@ export class Accounts {
       const stored = session && (await this.storage.get(`user:${session.userId}`));
       const user = stored && (await this.effectiveUser(stored));
       if (!user) return err(401, 'צריך להיכנס מחדש');
+      // פעילות אחרונה (לספירת משתמשים פעילים) – נשמרת לכל היותר פעם בשעה
+      if (!stored.lastSeen || Date.now() - Date.parse(stored.lastSeen) > 3600000) await this.storage.put(`user:${stored.id}`, { ...stored, lastSeen: now });
       return json({ user });
     }
     // מכסת המתכונים החינמיים נלקחת לפני העבודה (כדי ששתי בקשות במקביל לא יעברו את המכסה),
@@ -554,6 +658,7 @@ export class Accounts {
     if (invite) puts[`invite:${invite.token}`] = { ...invite, userId: user.id };
     if (join) puts[`join:${join.token}`] = { ...join, usedBy: user.id };
     await this.storage.put(puts);
+    await this.security('signup');
     return this.signedIn(user);
   }
 

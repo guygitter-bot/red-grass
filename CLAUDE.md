@@ -101,6 +101,11 @@
   Google TTS רק כגיבוי. **בלי ניקוד** – ניסינו, ונשמע גרוע יותר.
 - מוזיקה: `tutorials/music.m4a` – "Stylish Modern" של Beat and Shine מ-ElevenLabs (רישיון מסחרי במנוי), מחוברת לעצמה ללופ.
 
+#### אפליקציית הניהול (`mat_kon/admin`)
+- → https://mat-kon-admin.pages.dev, רק לבעלים (סיסמת הבעלים), מותקנת מהדפדפן (לא דרך Google Play). עולה ב-`mat-kon.yml` (job `admin`).
+- נתונים מ-`/admin/overview`, `/admin/issues`, `/admin/security`, `/admin/settings` (בדיקה בשרת: רק session של בעלים). תקלות מקובצות לפי סוג עם סטטוס (`issue:` ב-Accounts).
+- בדיקה: `cd mat_kon/admin && npm test && npm run build`. טלפון + מחשב + מצב לילה (`bg-card` / `bg-page`).
+
 #### גיבוי
 - גיבוי לילי ל-R2 (`api/backup.js`, דלי `mat-kon-backups`, 30 ימים); שחזור ספר: `mat-kon-restore.yml`. שינוי במבנה הנתונים של ספר –
   לוודא שהגיבוי והשחזור (`/backup/export`, `/backup/import`) עדיין מכסים אותו.
