@@ -118,3 +118,17 @@ test('a Pinterest pin: reads the pin and the recipe on the site it links to', as
   assert.equal(src2.linked[0].url, 'https://food.example/pasta');
   assert.match(src2.linked[0].text, /Boil pasta/);
 });
+
+test('an old Hebrew site in windows-1255 is read as Hebrew, not gibberish', async () => {
+  // "עוגת גבינה" ב-windows-1255
+  const title = [0xf2, 0xe5, 0xe2, 0xfa, 0x20, 0xe2, 0xe1, 0xe9, 0xf0, 0xe4];
+  const bytes = new Uint8Array([...new TextEncoder().encode('<html><head><title>'), ...title, ...new TextEncoder().encode('</title></head><body><p>'), ...title, ...new TextEncoder().encode('</p></body></html>')]);
+  const src = await gatherSource('https://old.example/r/1', async () => new Response(bytes, { headers: { 'content-type': 'text/html; charset=windows-1255' } }));
+  assert.equal(src.title, 'עוגת גבינה');
+  assert.match(src.text, /עוגת גבינה/);
+  // בלי כותרת: הקידוד מתגית meta
+  const withMeta = new Uint8Array([...new TextEncoder().encode('<html><head><meta charset="windows-1255"><title>'), ...title, ...new TextEncoder().encode('</title></head></html>')]);
+  assert.equal((await gatherSource('https://old.example/r/2', async () => new Response(withMeta))).title, 'עוגת גבינה');
+  // UTF-8 רגיל לא משתנה
+  assert.equal((await gatherSource('https://new.example/r', async () => new Response('<title>שקשוקה</title>'))).title, 'שקשוקה');
+});
