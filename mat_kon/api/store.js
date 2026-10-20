@@ -6,6 +6,7 @@ const PREFIX = 'r:';
 const EDITABLE = ['title', 'description', 'category', 'categories', 'tags', 'servings', 'prepTime', 'cookTime', 'totalTime', 'ingredients', 'steps', 'tips', 'notes', 'favorite', 'myNotes', 'image', 'rating', 'nutrition'];
 
 const SRC = 'src:';
+const CACHE_DAYS = 90; // מתכון במטמון המשותף מתחדש אחרי 3 חודשים
 export const MAX_RECIPES = 2000; // תקרה לספר, כדי שאי אפשר יהיה למלא את האחסון
 const STALE_JOB_MS = 5 * 60 * 1000;
 // המקור של מתכון: קישור, או מפתח (הודעת ווטסאפ, צילום...)
@@ -116,6 +117,27 @@ export class RecipeBook {
   async fetch(request) {
     const url = new URL(request.url);
     const id = url.pathname.split('/')[2] || '';
+
+    // ---- מטמון משותף של מתכונים מקישורים (רק במופע recipe-cache, ראו jobs.js) ----
+    if (url.pathname === '/cache/get' && request.method === 'POST') {
+      const { keys } = await request.json();
+      for (const k of (Array.isArray(keys) ? keys : []).slice(0, 4)) {
+        const hit = await this.storage.get(`cache:${k}`);
+        if (hit && Date.now() - hit.at < CACHE_DAYS * 86400000) return json({ recipe: hit.recipe });
+      }
+      return json({ recipe: null });
+    }
+    if (url.pathname === '/cache/put' && request.method === 'POST') {
+      const { keys, recipe } = await request.json();
+      if (!recipe || JSON.stringify(recipe).length > 100000) return json({ ok: false });
+      for (const k of (Array.isArray(keys) ? keys : []).slice(0, 4)) await this.storage.put(`cache:${k}`, { at: Date.now(), recipe });
+      // ניקוי מדי פעם של מתכונים ישנים במטמון
+      if (Math.random() < 0.02) {
+        const old = [...(await this.storage.list({ prefix: 'cache:' }))].filter(([, v]) => Date.now() - v.at > CACHE_DAYS * 86400000).map(([k]) => k);
+        for (let i = 0; i < old.length; i += 128) await this.storage.delete(old.slice(i, i + 128));
+      }
+      return json({ ok: true });
+    }
 
     // ---- גיבוי (רק מתוך השרת, backup.js): כל הנתונים בלי התמונות, והתמונות אחת-אחת ----
     if (url.pathname === '/backup/export' && request.method === 'GET') {
