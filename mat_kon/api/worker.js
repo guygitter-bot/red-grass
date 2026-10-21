@@ -17,7 +17,7 @@ import { CATEGORIES } from './categories.js';
 import { backupStatus, restoreBook, runBackup } from './backup.js';
 import { communityKey, publicCopy, publicSummary } from './community.js';
 import { DIET_IDS } from './diet.js';
-import { fixAction, fixConfigured, fixStatus, sendFix } from './fixes.js';
+import { cleanShots, fixAction, fixConfigured, fixStatus, getShot, pruneShots, saveShots, sendFix } from './fixes.js';
 
 export { RecipeBook, Accounts };
 
@@ -64,6 +64,7 @@ const internal = (stub, method, path, body) =>
 export default {
   // גיבוי לילי ל-R2 (ראו backup.js ו-[triggers] ב-wrangler.toml). תקלה נרשמת במסך "עלויות ותקלות"
   async scheduled(event, env, ctx) {
+    ctx.waitUntil(pruneShots(env).catch((e) => console.error('fix shots', e)));
     ctx.waitUntil(runBackup(env).catch((e) => {
       console.error('backup', e);
       return internal(env.ACCOUNTS.get(env.ACCOUNTS.idFromName('accounts')), 'POST', '/errors/add', { where: 'backup', message: String(e?.message || e).slice(0, 300), user: 'owner' }).catch(() => {});
@@ -700,8 +701,10 @@ export default {
       // "שלח ל-Claude לטיפול": התקלה נפתחת ב-GitHub (בלי פרטי משתמשים) ו-Claude מכין תיקון לאישור
       if (parts[1] === 'issues' && parts.length === 4 && parts[3] === 'fix' && request.method === 'POST') {
         if (!fixConfigured(env)) return fail(503, 'השליחה ל-Claude לא מוגדרת בשרת');
-        const { body, error } = await readJson();
+        const { body, error } = await readJson(MAX_PHOTO_BYTES);
         if (error) return error;
+        const shots = cleanShots(body.images);
+        if (shots.length && !env.BACKUPS) return fail(503, 'שמירת צילומי מסך לא מוגדרת בשרת');
         const { issues } = await (await internal(accounts, 'GET', '/admin/issues')).json();
         const issue = issues.find((i) => i.sig === parts[2]);
         if (!issue) return fail(404, 'התקלה לא נמצאה');
@@ -711,11 +714,17 @@ export default {
         }
         let number;
         try {
-          number = await sendFix(env, issue, typeof body.note === 'string' ? body.note : '');
+          number = await sendFix(env, issue, typeof body.note === 'string' ? body.note : '', await saveShots(env, shots));
         } catch (e) {
           return fail(502, `לא הצלחתי לשלוח ל-Claude (${e.message})`);
         }
         return pass(await internal(accounts, 'POST', '/admin/issues/update', { sig: issue.sig, status: 'working', fix: number }));
+      }
+      // צילום מסך שצורף לבקשה ל-Claude (רק לבעלים – התהליך ב-GitHub נכנס עם סיסמת הבעלים)
+      if (parts[1] === 'fix-shot' && parts.length === 3 && request.method === 'GET') {
+        const obj = await getShot(env, parts[2]);
+        if (!obj) return fail(404, 'הצילום לא נמצא');
+        return new Response(await obj.arrayBuffer(), { headers: { ...cors, 'content-type': 'image/jpeg', 'cache-control': 'private, no-store' } });
       }
       if (parts[1] === 'fix' && /^\d+$/.test(parts[2] || '') && fixConfigured(env)) {
         const number = Number(parts[2]);
@@ -727,9 +736,11 @@ export default {
           if (parts.length === 3 && request.method === 'GET') return reply(200, await fixStatus(env, number));
           const action = parts.length === 4 && request.method === 'POST' && ['approve', 'reject', 'retry', 'reply'].includes(parts[3]) ? parts[3] : '';
           if (!action) return fail(404, 'Not found');
-          const { body, error } = await readJson();
+          const { body, error } = await readJson(action === 'reply' ? MAX_PHOTO_BYTES : MAX_SMALL_BYTES);
           if (error) return error;
-          const out = await fixAction(env, number, action, body.text);
+          const shots = action === 'reply' ? cleanShots(body.images) : [];
+          if (shots.length && !env.BACKUPS) return fail(503, 'שמירת צילומי מסך לא מוגדרת בשרת');
+          const out = await fixAction(env, number, action, body.text, await saveShots(env, shots));
           if (out.status === 200 && action === 'approve') await internal(accounts, 'POST', '/admin/issues/update', { sig: issue.sig, status: 'fixed' });
           if (out.status === 200 && action === 'reject') await internal(accounts, 'POST', '/admin/issues/update', { sig: issue.sig, status: 'new', fix: null });
           return reply(out.status, out.data);

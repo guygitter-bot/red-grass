@@ -80,6 +80,10 @@ jobs:
           (cd mat_kon/admin && npm ci)
           npm install -g @anthropic-ai/claude-code
       - name: Read the request
+        env:
+          # צילומי מסך שבעל האפליקציה צירף נשמרים בשרת (המאגר ציבורי) – מורידים אותם בכניסת בעלים
+          OWNER_PASSWORD: ${{ secrets.OWNER_PASSWORD }}
+          API: ${{ vars.MATKON_API_URL || 'https://mat-kon-api.guygitter.workers.dev' }}
         run: python3 mat_kon/fixbot/fixbot.py prepare
       - name: Claude fixes
         env:

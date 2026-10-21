@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  AlertTriangle, Bot, Bug, CheckCircle2, ChefHat, DollarSign, LayoutDashboard, Loader2, LogOut, RefreshCw, Shield, Star, Users,
+  AlertTriangle, Bot, Bug, CheckCircle2, ImagePlus, X, ChefHat, DollarSign, LayoutDashboard, Loader2, LogOut, RefreshCw, Shield, Star, Users,
 } from 'lucide-react';
-import { ISSUE_STATUS, SECURITY, SOURCES, ago, api, lastDays, usd } from './lib';
+import { ISSUE_STATUS, SECURITY, SOURCES, ago, api, lastDays, shrinkImage, usd } from './lib';
 
 // אפליקציית הניהול של mat-kon: רק לבעל האפליקציה (כניסה עם סיסמת הבעלים; הכול נבדק בשרת)
 const TABS = [
@@ -560,10 +560,41 @@ const FIX_STATUS = {
   received: 'נשלח – Claude עוד מעט מתחיל', working: 'Claude עובד על זה… (כמה דקות)', ready: 'יש תיקון מוכן לאישור',
   question: 'ל-Claude יש שאלה', nobug: 'Claude בדק – זה לא באג בקוד', failed: 'הטיפול נכשל', done: 'התיקון עלה ✓', rejected: 'נדחה', closed: 'נסגר',
 };
+// צילומי מסך לצרף ל-Claude (עד 3): תמונות קטנות עם איקס, וכפתור הוספה מהגלריה
+function Shots({ shots, setShots, setError }) {
+  const add = async (files) => {
+    setError('');
+    try {
+      const next = [...shots];
+      for (const f of [...files].slice(0, 3 - shots.length)) next.push(await shrinkImage(f));
+      setShots(next);
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {shots.map((src, n) => (
+        <div key={n} className="relative">
+          <img src={src} alt={`צילום מסך ${n + 1}`} className="w-14 h-14 rounded-lg object-cover border border-line" />
+          <button type="button" onClick={() => setShots(shots.filter((_, k) => k !== n))} className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full bg-ink text-card flex items-center justify-center" aria-label="הסרת הצילום"><X size={12} /></button>
+        </div>
+      ))}
+      {shots.length < 3 && (
+        <label className="text-sm rounded-full border border-line px-3 py-1 inline-flex items-center gap-1 cursor-pointer hover:bg-page">
+          <ImagePlus size={15} /> {shots.length ? 'עוד צילום' : 'צירוף צילום מסך'}
+          <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => { add(e.target.files); e.target.value = ''; }} />
+        </label>
+      )}
+    </div>
+  );
+}
+
 function ClaudeFix({ i, session, reload }) {
   const [fix, setFix] = useState(null);
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
+  const [shots, setShots] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const load = useCallback(async () => {
@@ -591,6 +622,7 @@ function ClaudeFix({ i, session, reload }) {
     try {
       await api(session, method, path, body);
       setText('');
+      setShots([]);
       setOpen(false);
       await reload();
       await load();
@@ -609,9 +641,10 @@ function ClaudeFix({ i, session, reload }) {
         ) : (
           <div className="space-y-2">
             <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder="פרטים נוספים ל-Claude (לא חובה): מתי זה קורה, מה ציפית שיקרה" className="w-full rounded-xl border border-line bg-page px-3 py-2 text-sm" />
-            <p className="text-xs text-muted">Claude יחקור, יתקן ויריץ בדיקות (בערך 5–15 דקות). שום דבר לא עולה לאוויר בלי האישור שלך. פרטי המשתמשים לא נשלחים.</p>
+            <Shots shots={shots} setShots={setShots} setError={setError} />
+            <p className="text-xs text-muted">Claude יחקור, יתקן ויריץ בדיקות (בערך 5–15 דקות). שום דבר לא עולה לאוויר בלי האישור שלך. פרטי המשתמשים לא נשלחים, וצילומי המסך נשמרים רק בשרת שלך (30 יום).</p>
             <div className="flex gap-2">
-              <button disabled={busy} onClick={() => run('POST', `/admin/issues/${i.sig}/fix`, { note: text })} className={`${btn} bg-brand text-white inline-flex items-center gap-1`}>
+              <button disabled={busy} onClick={() => run('POST', `/admin/issues/${i.sig}/fix`, { note: text, images: shots })} className={`${btn} bg-brand text-white inline-flex items-center gap-1`}>
                 {busy ? <Loader2 size={15} className="animate-spin" /> : <Bot size={15} />} שליחה
               </button>
               <button onClick={() => setOpen(false)} className={`${btn} border border-line`}>ביטול</button>
@@ -643,9 +676,14 @@ function ClaudeFix({ i, session, reload }) {
         </div>
       )}
       {open && (
-        <div className="flex gap-2">
-          <input value={text} onChange={(e) => setText(e.target.value)} placeholder="התשובה שלך ל-Claude" className="flex-1 min-w-0 rounded-xl border border-line bg-page px-3 py-1.5 text-sm" />
-          <button disabled={busy || !text.trim()} onClick={() => run('POST', `/admin/fix/${i.fix}/reply`, { text })} className="text-sm rounded-xl bg-brand text-white px-3 disabled:opacity-50">שליחה</button>
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <input value={text} onChange={(e) => setText(e.target.value)} placeholder="התשובה שלך ל-Claude" className="flex-1 min-w-0 rounded-xl border border-line bg-page px-3 py-1.5 text-sm" />
+            <button disabled={busy || (!text.trim() && !shots.length)} onClick={() => run('POST', `/admin/fix/${i.fix}/reply`, { text, images: shots })} className="text-sm rounded-xl bg-brand text-white px-3 disabled:opacity-50">
+              {busy ? <Loader2 size={15} className="animate-spin" /> : 'שליחה'}
+            </button>
+          </div>
+          <Shots shots={shots} setShots={setShots} setError={setError} />
         </div>
       )}
       {s === 'done' && <p className="text-xs text-muted">השינוי עולה לאוויר בדקות הקרובות. אחר כך לסגור ולפתוח את האפליקציה.</p>}

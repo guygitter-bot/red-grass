@@ -49,3 +49,30 @@ export function ago(iso, now = Date.now()) {
 }
 
 export const usd = (n) => `$${(Number(n) || 0).toFixed(2)}`;
+
+// צילום מסך לשליחה ל-Claude: מוקטן בדפדפן (עד 1600 פיקסלים, JPEG), כדי שיהיה קטן אבל קריא
+export async function shrinkImage(file, maxSide = 1600) {
+  // קריאה כ-data URL (מדיניות האבטחה של האפליקציה לא מתירה blob: לתמונות)
+  const url = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('לא הצלחתי לקרוא את התמונה'));
+    reader.readAsDataURL(file);
+  });
+  const img = await new Promise((resolve, reject) => {
+    const el = new Image();
+    el.onload = () => resolve(el);
+    el.onerror = () => reject(new Error('לא הצלחתי לפתוח את התמונה'));
+    el.src = url;
+  });
+  const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+  canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+  for (const q of [0.85, 0.7, 0.55]) {
+    const out = canvas.toDataURL('image/jpeg', q);
+    if (out.length < 1_900_000) return out;
+  }
+  throw new Error('התמונה גדולה מדי');
+}
