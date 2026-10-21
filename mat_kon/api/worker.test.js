@@ -1728,3 +1728,44 @@ test('recipe from a link: if the API says the schema is too large, retry once wi
   assert.ok(apiCalls[0].tools.find((t) => t.name === 'submit_recipe').input_schema.properties.diet);
   assert.equal(apiCalls[1].tools.find((t) => t.name === 'submit_recipe').input_schema.properties.diet, undefined);
 });
+
+test('admin app: screenshots for Claude are kept on the server (not in the public issue) and only the owner can download them', async () => {
+  env.OWNER_PASSWORD = 'owner-secret-1';
+  env.FIX_GITHUB_TOKEN = 'gh-token';
+  env.GITHUB_REPO = 'me/repo';
+  env.BACKUPS = fakeBucket();
+  const owner = (await (await call('POST', '/owner-login', { password: 'owner-secret-1' })).json()).session;
+  const inv = await invite('דנה', owner);
+  const dana = (await (await register(inv.token)).json()).session;
+  await call('POST', '/client-error', { where: 'NewRecipeView', message: 'boom' }, dana);
+  const sig = (await (await call('GET', '/admin/issues', undefined, owner)).json()).issues[0].sig;
+  const gh = [];
+  deps.fetch = async (url, init = {}) => {
+    const u = new URL(url);
+    gh.push({ method: init.method || 'GET', path: u.pathname, body: init.body ? JSON.parse(init.body) : null });
+    if (u.pathname === '/repos/me/repo/issues' && init.method === 'POST') return Response.json({ number: 9 }, { status: 201 });
+    if (u.pathname === '/repos/me/repo/issues/9') return Response.json({ number: 9, state: 'open', labels: [{ name: 'matkon-fix' }, { name: 'matkon-question' }] });
+    return Response.json({});
+  };
+  const jpeg = `data:image/jpeg;base64,${btoa('fake-jpeg-bytes')}`;
+  const res = await call('POST', `/admin/issues/${sig}/fix`, { note: 'ככה זה נראה', images: [jpeg, 'data:text/html;base64,PHA+', jpeg] }, owner);
+  assert.equal(res.status, 200);
+  const body = gh.find((c) => c.path === '/repos/me/repo/issues').body.body;
+  const ids = [...body.matchAll(/<!-- matkon-fix-shot: (\S+) -->/g)].map((m) => m[1]);
+  assert.equal(ids.length, 2);
+  assert.match(body, /צורפו 2 צילומי מסך/);
+  assert.ok(!body.includes(btoa('fake-jpeg-bytes')));
+  assert.equal([...env.BACKUPS.files.keys()].filter((k) => k.startsWith('fix-shots/')).length, 2);
+  // רק הבעלים מוריד
+  assert.equal((await call('GET', `/admin/fix-shot/${ids[0]}`, undefined, dana)).status, 403);
+  const shot = await call('GET', `/admin/fix-shot/${ids[0]}`, undefined, owner);
+  assert.equal(shot.headers.get('content-type'), 'image/jpeg');
+  assert.equal(new TextDecoder().decode(await shot.arrayBuffer()), 'fake-jpeg-bytes');
+  assert.equal((await call('GET', '/admin/fix-shot/../../daily', undefined, owner)).status, 404);
+  // תשובה עם צילום בלבד
+  assert.equal((await call('POST', '/admin/fix/9/reply', { text: '', images: [jpeg] }, owner)).status, 200);
+  assert.match(gh.find((c) => c.path === '/repos/me/repo/issues/9/comments').body.body, /צורף צילום מסך[\s\S]*matkon-fix-shot/);
+  // ניקוי אחרי 30 יום
+  const { pruneShots } = await import('./fixes.js');
+  assert.equal(await pruneShots(env, new Date(Date.now() + 31 * 86400000)), 3);
+});

@@ -31,7 +31,58 @@ export function fixTitle(issue) {
   const line = redact(issue.message).split('\n')[0].trim();
   return `mat-kon: ${line.length > 70 ? `${line.slice(0, 70)}…` : line}`;
 }
-export function fixBody(issue, note) {
+// ---------- צילומי מסך: נשמרים ב-R2 (לא ב-issue – המאגר ציבורי), ורק התהליך ב-GitHub מוריד אותם בכניסת בעלים ----------
+const MAX_SHOTS = 3;
+const MAX_SHOT_CHARS = 2_000_000; // JPEG מוקטן ב-base64
+const KEEP_SHOT_DAYS = 30;
+const SHOT_ID = /^(\d{8})-[A-Za-z0-9_-]{16,40}$/;
+const shotKey = (id) => `fix-shots/${id.slice(0, 8)}/${id}.jpg`;
+
+// רק תמונות JPEG בגודל סביר (data URL מהאפליקציה)
+export function cleanShots(list) {
+  return (Array.isArray(list) ? list : [])
+    .map((u) => (typeof u === 'string' ? u.match(/^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/)?.[1] : null))
+    .filter((b) => b && b.length <= MAX_SHOT_CHARS)
+    .slice(0, MAX_SHOTS);
+}
+
+export async function saveShots(env, shots, now = new Date()) {
+  const ids = [];
+  for (const b64 of shots) {
+    const rand = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(18)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const id = `${now.toISOString().slice(0, 10).replace(/-/g, '')}-${rand}`;
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    await env.BACKUPS.put(shotKey(id), bytes, { httpMetadata: { contentType: 'image/jpeg' } });
+    ids.push(id);
+  }
+  return ids;
+}
+
+export async function getShot(env, id) {
+  if (!env.BACKUPS || !SHOT_ID.test(String(id))) return null;
+  return env.BACKUPS.get(shotKey(id));
+}
+
+// מוחק צילומים ישנים מ-30 יום (מהגיבוי הלילי)
+export async function pruneShots(env, now = new Date()) {
+  if (!env.BACKUPS) return 0;
+  const oldest = new Date(now.getTime() - KEEP_SHOT_DAYS * 86400000).toISOString().slice(0, 10).replace(/-/g, '');
+  let removed = 0;
+  let cursor;
+  do {
+    const page = await env.BACKUPS.list({ prefix: 'fix-shots/', cursor });
+    const old = page.objects.map((o) => o.key).filter((k) => k.slice(10, 18) < oldest);
+    if (old.length) await env.BACKUPS.delete(old);
+    removed += old.length;
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+  return removed;
+}
+
+// שורה לכל צילום – התהליך ב-GitHub מוריד לפיה (רק מזהה, בלי כתובת)
+const shotLines = (ids) => (ids.length ? `\n\n${ids.length === 1 ? 'צורף צילום מסך' : `צורפו ${ids.length} צילומי מסך`} (שמורים בשרת של האפליקציה, לא ציבוריים)\n${ids.map((id) => `<!-- matkon-fix-shot: ${id} -->`).join('\n')}` : '');
+
+export function fixBody(issue, note, shotIds = []) {
   const details = [
     `- איפה: ${WHERE[issue.list] || issue.list} · \`${redact(issue.where)}\``,
     issue.group && `- קבוצה: \`${redact(issue.group)}\``,
@@ -40,7 +91,7 @@ export function fixBody(issue, note) {
     issue.reopened && '- התקלה חזרה אחרי שסומנה כמתוקנת',
   ].filter(Boolean);
   const extra = redact(note).trim().slice(0, MAX_NOTE);
-  return `התקלה כפי שנרשמה:\n\n\`\`\`\n${redact(issue.message).slice(0, 1000)}\n\`\`\`\n\n${details.join('\n')}${extra ? `\n\nהערה של בעל האפליקציה:\n${extra}` : ''}`;
+  return `התקלה כפי שנרשמה:\n\n\`\`\`\n${redact(issue.message).slice(0, 1000)}\n\`\`\`\n\n${details.join('\n')}${extra ? `\n\nהערה של בעל האפליקציה:\n${extra}` : ''}${shotLines(shotIds)}`;
 }
 
 // ---------- GitHub ----------
@@ -86,8 +137,8 @@ async function setLabels(env, number, status) {
 export const fixConfigured = (env) => Boolean(env.FIX_GITHUB_TOKEN && env.FIX_GITHUB_TOKEN !== 'none' && env.GITHUB_REPO);
 
 // שליחת תקלה ל-Claude: מחזיר את מספר ה-issue
-export async function sendFix(env, issue, note) {
-  const created = await github(env, '/issues', { method: 'POST', body: { title: fixTitle(issue), body: fixBody(issue, note), labels: [LABEL] } });
+export async function sendFix(env, issue, note, shotIds = []) {
+  const created = await github(env, '/issues', { method: 'POST', body: { title: fixTitle(issue), body: fixBody(issue, note, shotIds), labels: [LABEL] } });
   return created.number;
 }
 
@@ -100,7 +151,7 @@ export async function fixStatus(env, number) {
 }
 
 // פעולות: אישור (מיזוג), דחייה, ניסיון חוזר, תשובה ל-Claude. מחזיר { status, data }
-export async function fixAction(env, number, action, text) {
+export async function fixAction(env, number, action, text, shotIds = []) {
   const issue = await github(env, `/issues/${number}`);
   const names = (issue.labels || []).map((l) => (typeof l === 'string' ? l : l.name));
   if (!names.includes(LABEL)) return { status: 404, data: { error: 'הבקשה לא נמצאה' } };
@@ -108,9 +159,9 @@ export async function fixAction(env, number, action, text) {
   const status = statusOf(issue);
   if (action === 'reply') {
     const clean = redact(text).trim().slice(0, MAX_NOTE);
-    if (!clean) return { status: 400, data: { error: 'כתבו תשובה' } };
+    if (!clean && !shotIds.length) return { status: 400, data: { error: 'כתבו תשובה' } };
     // תגובה בשם בעל המאגר מפעילה את Claude שוב עם כל השיחה
-    await github(env, `/issues/${number}/comments`, { method: 'POST', body: { body: clean } });
+    await github(env, `/issues/${number}/comments`, { method: 'POST', body: { body: `${clean}${shotLines(shotIds)}`.trim() } });
     return { status: 200, data: { ok: true } };
   }
   if (action === 'retry') {

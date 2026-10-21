@@ -1,13 +1,14 @@
 """Helper for .github/workflows/mat-kon-fix.yml ("send to Claude" from the mat-kon admin app's issues screen).
 
   start    mark the request as "working" (labels are what the app shows)
-  prepare  read the issue and its comments, write .fix/prompt.txt
+  prepare  read the issue and its comments, download the owner's screenshots, write .fix/prompt.txt
   check    read .fix/result.json and the changed files, decide what to publish
   report   comment on the issue (the app shows the last comment) and set the status label
 
 The owner approves the PR from inside the admin app (api/fixes.js merges it).
 
-Uses only the standard library. GitHub calls use GH_TOKEN.
+Uses only the standard library. GitHub calls use GH_TOKEN; screenshots are downloaded from the mat-kon
+server with an owner session (OWNER_PASSWORD), because the repository is public.
 """
 
 from __future__ import annotations
@@ -24,6 +25,8 @@ from pathlib import Path
 FIX = Path(".fix")
 PROMPT = Path(__file__).with_name("prompt.md")
 BOT_LOGIN = "github-actions[bot]"
+SHOT_RE = re.compile(r"<!-- matkon-fix-shot: (\d{8}-[A-Za-z0-9_-]{16,40}) -->")
+MAX_SHOTS = 6
 
 
 def env(name: str) -> str:
@@ -67,12 +70,68 @@ def start() -> None:
     set_status(env("ISSUE"), "matkon-working")
 
 
+def api(path: str, data: dict | None = None, session: str = "", raw: bool = False):
+    base = env("API") or "https://mat-kon-api.guygitter.workers.dev"
+    req = urllib.request.Request(
+        f"{base}{path}",
+        data=json.dumps(data).encode() if data is not None else None,
+        method="POST" if data is not None else "GET",
+        headers={
+            "content-type": "application/json",
+            "origin": "https://mat-kon-admin.pages.dev",
+            **({"authorization": f"Bearer {session}"} if session else {}),
+        },
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        body = resp.read()
+    return body if raw else json.loads(body or b"null")
+
+
+def shot_ids(issue: dict, comments: list[dict]) -> list[str]:
+    """Screenshot ids the server wrote, only in the issue body or in comments by the repository owner."""
+    owner = env("GITHUB_REPOSITORY").split("/")[0]
+    texts = [issue.get("body") or ""] + [c["body"] for c in comments if c["user"]["login"] == owner]
+    ids: list[str] = []
+    for text in texts:
+        for match in SHOT_RE.findall(text):
+            if match not in ids:
+                ids.append(match)
+    return ids[-MAX_SHOTS:]
+
+
+def download_shots(ids: list[str]) -> str:
+    if not ids:
+        return "No screenshots were attached."
+    if not env("OWNER_PASSWORD"):
+        return "The owner attached screenshots, but they could not be downloaded (no OWNER_PASSWORD)."
+    saved: list[str] = []
+    session = ""
+    try:
+        session = api("/owner-login", {"password": env("OWNER_PASSWORD")}).get("session", "")
+        for i, shot in enumerate(ids, start=1):
+            path = FIX / f"screenshot-{i}.jpg"
+            path.write_bytes(api(f"/admin/fix-shot/{urllib.parse.quote(shot)}", session=session, raw=True))
+            saved.append(str(path))
+    except Exception as err:  # noqa: BLE001 - a missing screenshot should not stop the fix
+        print(f"::warning::Could not download a screenshot: {err}")
+    finally:
+        if session:
+            try:
+                api("/logout", {}, session=session)
+            except Exception:  # noqa: BLE001
+                pass
+    if not saved:
+        return "The owner attached screenshots, but they could not be downloaded."
+    return "The owner attached screenshots (oldest first). Read them with the Read tool: " + ", ".join(saved)
+
+
 def prepare() -> None:
     number = env("ISSUE")
     issue = github(f"/issues/{number}")
     comments = github(f"/issues/{number}/comments?per_page=100")
     FIX.mkdir(exist_ok=True)
-    prompt = PROMPT.read_text(encoding="utf-8").format(issue=number, request=conversation(issue, comments))
+    screenshots = download_shots(shot_ids(issue, comments))
+    prompt = PROMPT.read_text(encoding="utf-8").format(issue=number, request=conversation(issue, comments), screenshots=screenshots)
     (FIX / "prompt.txt").write_text(prompt, encoding="utf-8")
 
 

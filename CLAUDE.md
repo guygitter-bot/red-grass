@@ -112,6 +112,7 @@
   לכל היותר התראה אחת בשעה לכל נושא. תקלות מקישורים מקובצות לפי סוג השגיאה והאתר (`errorGroup`), לא לפי הנוסח של ה-AI.
 - "שלח ל-Claude לטיפול" בתקלה: `api/fixes.js` פותח issue עם התווית `matkon-fix` (בלי אימיילים, קישורים רק כשם אתר – המאגר ציבורי),
   `mat-kon-fix.yml` + `mat_kon/fixbot/` מריצים את Claude ופותחים PR מ-`matkon-fix/<n>`; "לאשר ולהעלות" ממזג. טוקן: `MATKON_GITHUB_TOKEN` או `POINTS_GITHUB_TOKEN`.
+  צילומי מסך מצורפים נשמרים ב-R2 (`fix-shots/`, 30 יום), ב-issue רק מזהה; ה-fixbot מוריד אותם בכניסת בעלים (`OWNER_PASSWORD`) ל-`.fix/` (לא נכנס ל-commit).
 - בדיקה: `cd mat_kon/admin && npm test && npm run build`. טלפון + מחשב + מצב לילה (`bg-card` / `bg-page`).
 
 #### גיבוי
