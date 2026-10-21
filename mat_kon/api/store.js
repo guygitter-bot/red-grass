@@ -1,4 +1,4 @@
-import { buildRecipe, errorGroup, failure } from './jobs.js';
+import { buildRecipe, errorGroup, failure, recipeKind } from './jobs.js';
 import { trackedClient } from './deps.js';
 import { HIDE_AT_REPORTS, communityIdentity, communityKey, publicCopy, searchCommunity, summarize } from './community.js';
 // ספר המתכונים: Durable Object אחד שמחזיק את כל המתכונים (כל מתכון במפתח r:<id>).
@@ -209,7 +209,7 @@ export class RecipeBook {
     const giveBack = () => job.quota && toAccounts('/quota/give', { userId: job.quota.userId });
     const month = new Date().toISOString().slice(0, 7);
     try {
-      const client = trackedClient(this.env, (u) => self('/costs/add', { month, ...u }));
+      const client = trackedClient(this.env, (u) => self('/costs/add', { month, kind: recipeKind(job.input), ...u }));
       const recipe = await buildRecipe(this.env, client, job.input, job.categories);
       delete recipe.more; // מקישור – תמיד מתכון אחד
       const res = await self('/recipes', recipe);
@@ -368,10 +368,15 @@ export class RecipeBook {
 
     // מעקב עלויות AI לפי חודש: טוקנים, חיפושים ופעולות
     if (url.pathname === '/costs/add' && request.method === 'POST') {
-      const { month, input = 0, output = 0, searches = 0 } = await request.json();
+      const { month, input = 0, output = 0, searches = 0, kind, first } = await request.json();
       const key = `costs:${month}`;
       const c = (await this.storage.get(key)) || { ops: 0, calls: 0, input: 0, output: 0, searches: 0 };
       Object.assign(c, { calls: c.calls + 1, input: c.input + input, output: c.output + output, searches: c.searches + searches });
+      // פירוט לפי סוג פעולה (מתכון מסרטון, חיפוש ברשת…): כמה פעמים ומה נצרך
+      const k = typeof kind === 'string' && /^[a-z-]{2,30}$/.test(kind) ? kind : 'other';
+      const byKind = c.byKind || (c.byKind = {});
+      const row = byKind[k] || (byKind[k] = { ops: 0, input: 0, output: 0, searches: 0 });
+      Object.assign(row, { ops: row.ops + (first ? 1 : 0), input: row.input + input, output: row.output + output, searches: row.searches + searches });
       await this.storage.put(key, c);
       return json(c);
     }

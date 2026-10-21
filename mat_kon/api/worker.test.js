@@ -1769,3 +1769,18 @@ test('admin app: screenshots for Claude are kept on the server (not in the publi
   const { pruneShots } = await import('./fixes.js');
   assert.equal(await pruneShots(env, new Date(Date.now() + 31 * 86400000)), 3);
 });
+
+test('admin app: AI costs broken down by kind of action (recipe from a site / video / photo, search…)', async () => {
+  env.OWNER_PASSWORD = 'owner-secret-1';
+  const owner = (await (await call('POST', '/owner-login', { password: 'owner-secret-1' })).json()).session;
+  reply = () => ({ stop_reason: 'tool_use', usage: { input_tokens: 1000, output_tokens: 200 }, content: [{ type: 'tool_use', name: 'submit_recipe', input: recipeInput }] });
+  await call('POST', '/recipes', { url: 'https://cake.example/one' }, owner);
+  await call('POST', '/recipes', { url: 'https://cake.example/two' }, owner);
+  await call('POST', '/recipes/photo', { images: [{ type: 'image/jpeg', data: btoa('x') }] }, owner);
+  const o = await (await call('GET', '/admin/overview', undefined, owner)).json();
+  const kinds = Object.fromEntries(o.costs[0].byKind.map((k) => [k.kind, k]));
+  assert.equal(kinds['recipe-link'].ops, 2);
+  assert.equal(kinds['recipe-photo'].ops, 1);
+  // 1000 טוקנים ב-$5 למיליון + 200 ב-$25 = 1 סנט לפעולה
+  assert.equal(kinds['recipe-link'].avg, 0.01);
+});

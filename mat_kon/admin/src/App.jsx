@@ -432,6 +432,7 @@ function Money({ d, session, reload }) {
         <div className="text-2xl font-black">{usd(d.costs[0].usd / users)}</div>
         <p className="text-xs text-muted mt-1">רק עלויות AI (Claude). השרתים (Cloudflare) ושמירת הקבצים לא כלולים.</p>
       </Card>
+      <CostByKind costs={d.costs} />
       <Card title="מי עלה הכי הרבה החודש">
         {d.costs[0].top.length ? (
           <Rows rows={d.costs[0].top.map((t) => [t.name || t.email || '—', usd(t.usd)])} />
@@ -446,6 +447,44 @@ function Money({ d, session, reload }) {
       </Card>
       <Card title="הכנסות"><p className="text-sm text-muted">יופיעו כאן כשנחבר תשלומים באפליקציה.</p></Card>
     </div>
+  );
+}
+
+// כמה עלתה כל סוג פעולה (מהיקרה לזולה): פעמים, סך הכול וממוצע לפעולה. נמדד מאז שהפירוט נוסף
+const KINDS = {
+  'recipe-video': 'מתכון מסרטון / רשת חברתית', 'recipe-link': 'מתכון מאתר', 'recipe-photo': 'מתכון מצילום', 'recipe-text': 'מתכון מווטסאפ / טקסט',
+  search: 'חיפוש מתכון ברשת', ideas: 'מה לבשל ממה שיש', stores: 'איפה הכי זול', 'pantry-scan': 'סריקת מקרר / מזווה',
+  shopping: 'סידור רשימת קניות', nutrition: 'ערכים תזונתיים', moderation: 'בדיקה לפני פרסום בקהילה', categories: 'שיבוץ בקטגוריות', other: 'אחר (לפני שהתחלנו למדוד)',
+};
+function CostByKind({ costs }) {
+  const [m, setM] = useState(0);
+  const rows = costs[m]?.byKind || [];
+  return (
+    <Card title="לפי סוג פעולה">
+      <div className="flex gap-2 mb-2">
+        {costs.map((c, n) => (
+          <button key={c.month} onClick={() => setM(n)} className={`px-3 py-1 rounded-full text-sm border ${m === n ? 'bg-ink text-card border-ink' : 'bg-card border-line'}`}>{c.month}</button>
+        ))}
+      </div>
+      {!rows.length ? <p className="text-sm text-muted">אין עדיין נתונים לחודש הזה (הפירוט נמדד מעכשיו)</p> : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr className="text-muted text-xs text-right"><th className="font-normal py-1">פעולה</th><th className="font-normal">פעמים</th><th className="font-normal">ממוצע</th><th className="font-normal">סך הכול</th></tr></thead>
+            <tbody className="divide-y divide-line">
+              {rows.map((k) => (
+                <tr key={k.kind}>
+                  <td className="py-1.5">{KINDS[k.kind] || k.kind}</td>
+                  <td dir="ltr" className="text-right">{k.ops}</td>
+                  <td dir="ltr" className="text-right">{k.avg === null ? '—' : `$${k.avg.toFixed(3)}`}</td>
+                  <td dir="ltr" className="text-right font-bold">{usd(k.usd)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="text-xs text-muted mt-2">מתכון מקישור שמישהו כבר הוסיף מגיע מהמטמון – בחינם, ולא נספר כאן.</p>
+    </Card>
   );
 }
 
