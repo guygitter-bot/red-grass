@@ -1348,6 +1348,12 @@ test('a note with two different dishes becomes two recipes, each counted, with i
   assert.match(apiCalls.at(-1).system[0].text, /השלמה \(לא מהמקור\)/);
   await call('POST', '/recipes', { url: 'https://cake.example/one' });
   assert.equal(apiCalls.at(-1).tools.find((t) => t.name === 'submit_recipe').input_schema.properties.more_recipes, undefined);
+  // צילום / כמה מתכונים: בלי סימון ה-AI לסינון (אחרת הסכמה גדולה מדי ל-API)
+  assert.equal(tool.input_schema.properties.diet, undefined);
+  assert.equal(tool.input_schema.properties.more_recipes.items.properties.diet, undefined);
+  assert.ok(!tool.input_schema.required.includes('diet'));
+  // קישור: עם הסימון
+  assert.ok(apiCalls.at(-1).tools.find((t) => t.name === 'submit_recipe').input_schema.required.includes('diet'));
 });
 
 test('nutrition: estimated with a new recipe, on request for an old one, and cleared when the ingredients change', async () => {
@@ -1707,4 +1713,18 @@ test('admin app: turning on Bis scoring for one user by email', async () => {
   assert.deepEqual((await (await call('GET', '/admin/features', undefined, owner)).json()).users.map((u) => u.email), [email]);
   await call('POST', '/admin/features', { email, feature: 'bis', on: false }, owner);
   assert.equal((await (await call('GET', '/me', undefined, dana)).json()).user.features, undefined);
+});
+
+test('recipe from a link: if the API says the schema is too large, retry once without the AI diet marking', async () => {
+  let calls = 0;
+  deps.anthropic = () => ({ beta: { messages: { create: async (p) => {
+    apiCalls.push(p);
+    calls += 1;
+    if (calls === 1) throw Object.assign(new Error('400 The compiled grammar is too large'), { status: 400 });
+    return { stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_recipe', input: recipeInput }] };
+  } } } });
+  const res = await call('POST', '/recipes', { url: 'https://cake.example/big' });
+  assert.ok(res.ok);
+  assert.ok(apiCalls[0].tools.find((t) => t.name === 'submit_recipe').input_schema.properties.diet);
+  assert.equal(apiCalls[1].tools.find((t) => t.name === 'submit_recipe').input_schema.properties.diet, undefined);
 });

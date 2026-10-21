@@ -432,10 +432,16 @@ export class NoRecipeError extends Error {}
 
 // הכלי עם רשימת הקטגוריות של הספר (הקבועות + אלה שהמשתמש הוסיף).
 // multi: צילום / הודעה בלי קישור יכולים להכיל כמה מתכונים שונים (למשל פתק עם קניידלך וכיסוני בשר) – כל אחד נשמר בנפרד
-export function recipeTool(categories = CATEGORIES, { multi = false } = {}) {
+export function recipeTool(categories = CATEGORIES, { multi = false, withDiet = true } = {}) {
   const tool = structuredClone(RECIPE_TOOL);
   tool.input_schema.properties.category.enum = [...new Set([...CATEGORIES, ...categories])];
   tool.input_schema.properties.more_categories.items.enum = tool.input_schema.properties.category.enum;
+  // כמה מתכונים: בלי סימון ה-AI לסינון – אחרת הסכמה (כפולה, לכל מתכון) גדולה מדי ל-API ("too large").
+  // המתכונים האלה מסוננים לפי המצרכים
+  if (multi || !withDiet) {
+    delete tool.input_schema.properties.diet;
+    tool.input_schema.required = tool.input_schema.required.filter((k) => k !== 'diet');
+  }
   if (multi) {
     const { found, ...one } = tool.input_schema.properties;
     void found;
@@ -460,7 +466,7 @@ export async function extractRecipe(client, src, { categories = CATEGORIES } = {
     : '');
   // כמה מתכונים ממקור אחד: רק בצילום / הודעה בלי קישור (מתכון מקישור מזוהה לפי הקישור, ואי אפשר לשמור שניים לאותו קישור)
   const multi = Boolean(src.images || (src.fromText && !src.url));
-  const RECIPE_TOOL = recipeTool(categories, { multi });
+  let RECIPE_TOOL = recipeTool(categories, { multi });
   // פין בלי קישור לאתר: גם התמונה שלו נשלחת, כדי שהסוכן יקרא סימן מים / שם יוצר ויחפש את המתכון המקורי
   const pinImage = src.kind === 'pinterest' && !src.linked?.length && /^https:\/\//.test(src.image || '') ? src.image : null;
   const content = src.images
@@ -482,10 +488,15 @@ export async function extractRecipe(client, src, { categories = CATEGORIES } = {
     try {
       response = await request();
     } catch (e) {
-      // תמונת הפין לא נטענה אצל המודל – ממשיכים בלעדיה
-      if (!(pinImage && step === 0 && e?.status === 400)) throw e;
-      messages[0] = { role: 'user', content: text };
-      response = await request();
+      // הסכמה גדולה מדי ל-API: שוב בלי סימון ה-AI לסינון (הסינון יהיה לפי המצרכים)
+      if (step === 0 && e?.status === 400 && /too large|too complex|grammar/i.test(`${e?.message || ''}`) && RECIPE_TOOL.input_schema.properties.diet) {
+        RECIPE_TOOL = recipeTool(categories, { multi, withDiet: false });
+        response = await request();
+      } else if (pinImage && step === 0 && e?.status === 400) {
+        // תמונת הפין לא נטענה אצל המודל – ממשיכים בלעדיה
+        messages[0] = { role: 'user', content: text };
+        response = await request();
+      } else throw e;
     }
     if (response.stop_reason === 'refusal') throw new Error('הבקשה נדחתה על ידי המודל.');
     const submit = response.content.find((b) => b.type === 'tool_use' && b.name === RECIPE_TOOL.name);
