@@ -129,9 +129,8 @@ function Sources({ urls }) {
 }
 
 export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, onSaveFood, onRename, fav, favorites = [], onClose }) {
-  // כשיש מועדפים, נפתחים ישר על רשימת המועדפים
-  const [tab, setTab] = useState(favorites.length ? 'favorites' : 'search');
-  const [favSearch, setFavSearch] = useState('');
+  // נפתחים תמיד על החיפוש הכללי
+  const [tab, setTab] = useState('search');
   const [meal, setMeal] = useState(defaultMeal);
   const [plate, setPlate] = useState([]);
 
@@ -154,6 +153,13 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
   const results = useMemo(() => searchFoods(db, search), [db, search]);
   const total = round1(plate.reduce((s, p) => s + p.points * p.qty, 0));
   const hasKey = aiReady(settings);
+
+  // אותו טקסט חיפוש משמש גם במועדפים, כדי שמעבר בין הלשוניות לא ימחק את מה שנכתב
+  const onSearchChange = (e) => {
+    setSearch(e.target.value);
+    setCustomName(e.target.value);
+    setSavedMsg('');
+  };
 
   const addToPlate = (item) => setPlate((p) => [...p, { ...item, id: newId() }]);
 
@@ -253,13 +259,13 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
             </div>
           ) : (
             <>
-              {favorites.length > 5 && (
+              {(favorites.length > 5 || search) && (
                 <div className="relative">
                   <Search className="absolute right-3 top-3.5 text-slate-400" size={18} />
-                  <Input placeholder="חפש במועדפים..." className="pr-10" value={favSearch} onChange={(e) => setFavSearch(e.target.value)} />
+                  <Input placeholder="חפש במועדפים..." className="pr-10" value={search} onChange={onSearchChange} />
                 </div>
               )}
-              {(favSearch ? searchFoods(favorites, favSearch, 100) : favorites).map((item) => (
+              {(search ? searchFoods(favorites, search, 100) : favorites).map((item) => (
                 <FoodRow key={item.name} item={item} onAdd={addToPlate} fav={fav} onRename={onRename} />
               ))}
             </>
@@ -275,11 +281,7 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
               placeholder="חפש מאכל..."
               className="pr-10"
               value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setCustomName(e.target.value);
-                setSavedMsg('');
-              }}
+              onChange={onSearchChange}
             />
           </div>
 
