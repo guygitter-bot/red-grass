@@ -315,6 +315,7 @@ export default function App() {
             remoteFoods={remoteFoods}
             sharedOn={sharedOn}
             isAdmin={isAdmin}
+            onFoodsImported={refreshShared}
             exportData={exportData}
             importData={importData}
           />

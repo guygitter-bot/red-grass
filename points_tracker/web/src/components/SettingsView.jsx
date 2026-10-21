@@ -5,6 +5,7 @@ import { MODELS, aiReady, describeError, testApiKey } from '../lib/ai';
 import InviteManager from './InviteManager';
 import { parseInviteToken } from '../lib/proxy';
 import FoodDbManager from './FoodDbManager';
+import FoodImport from './FoodImport';
 import FeedbackCard from './FeedbackCard';
 
 function NumberField({ label, value, onChange }) {
@@ -29,7 +30,7 @@ function NumberField({ label, value, onChange }) {
 }
 
 export default function SettingsView({
-  user, setUser, settings, setSettings, proxyUrl, owner, onJoin, foodDb, renameFood, fav, userFoods, saveFood, removeUserFood, remoteFoods, sharedOn, isAdmin,
+  user, setUser, settings, setSettings, proxyUrl, owner, onJoin, onFoodsImported, foodDb, renameFood, fav, userFoods, saveFood, removeUserFood, remoteFoods, sharedOn, isAdmin,
   exportData, importData,
 }) {
   const [keyStatus, setKeyStatus] = useState('');
@@ -213,6 +214,8 @@ export default function SettingsView({
       )}
 
       {proxyUrl && (owner || invited) && <FeedbackCard settings={ai} />}
+
+      {owner && sharedOn && <FoodImport settings={ai} onDone={onFoodsImported} />}
 
       <FoodDbManager
         foodDb={foodDb}
