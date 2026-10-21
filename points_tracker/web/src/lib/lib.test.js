@@ -4,6 +4,7 @@ import { addDays, greeting, weekDates } from './dates';
 import { extractUserFoods, mergeFoodDb, searchFoods, SHARED_FOODS, upsertUserFood } from './foodDb';
 import { researchToFood, scoreComponents } from './ai';
 import { parseInviteToken } from './proxy';
+import { parseFoodList } from './foodImport';
 import { GENERIC_UNITS, baseName, plateItem, portionLabel, portionPoints, saveChoices, unitsFor } from './measures';
 
 describe('points', () => {
@@ -168,3 +169,13 @@ describe('measures', () => {
   });
 });
 
+
+describe('parseFoodList', () => {
+  it('reads JSON and text lines, and skips bad or duplicate rows', () => {
+    expect(parseFoodList('{"foods":[{"name":"אגס","points":2},{"name":"x","points":"bad"}]}')).toEqual([{ name: 'אגס', points: 2 }]);
+    expect(parseFoodList("אורז, כוס\t5\nטחינה, כף,1\nאורז, כוס\t6\n\nבלי ניקוד")).toEqual([
+      { name: 'אורז, כוס', points: 5 },
+      { name: 'טחינה, כף', points: 1 },
+    ]);
+  });
+});
