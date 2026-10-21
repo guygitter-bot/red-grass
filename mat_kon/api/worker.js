@@ -7,7 +7,7 @@
 //   - משתמש שהוזמן (Authorization: Bearer <session>): נרשם מקישור הזמנה, מקבל ספר ריק משלו
 //     (user:<id>), ו-FREE_RECIPES מתכונים בחינם. אחר כך צריך מנוי (plan=paid).
 import { deps, trackedClient } from './deps.js';
-import { buildRecipe, errorGroup, failure } from './jobs.js';
+import { buildRecipe, errorGroup, failure, recipeKind } from './jobs.js';
 import { RecipeBook } from './store.js';
 import { Accounts, canAdd } from './accounts.js';
 import { gatherSource, normalizeUrl, sourceKind } from './source.js';
@@ -252,7 +252,8 @@ export default {
 
     // לקוח AI שסופר טוקנים לספר (מעקב עלויות לבעל האפליקציה)
     const month = () => new Date().toISOString().slice(0, 7);
-    const ai = () => trackedClient(env, (u) => internal(bookFor(user), 'POST', '/costs/add', { month: month(), ...u }).catch(() => {}));
+    // kind: סוג הפעולה – לפירוט העלויות באפליקציית הניהול
+    const ai = (kind = 'other') => trackedClient(env, (u) => internal(bookFor(user), 'POST', '/costs/add', { month: month(), kind, ...u }).catch(() => {}));
     // תקלות נשמרות (50 אחרונות) כדי שבעל האפליקציה יראה אותן במסך הניהול
     const recordError = (where, e, group = '') => {
       console.error(where, e);
@@ -342,7 +343,7 @@ export default {
       const limited = await aiBudget();
       if (limited) return limited;
       try {
-        return reply(200, { results: await searchRecipes(ai(), q) });
+        return reply(200, { results: await searchRecipes(ai('search'), q) });
       } catch (e) {
         return aiFail(e, (!e.status && e.message) || 'החיפוש נכשל');
       }
@@ -559,7 +560,7 @@ export default {
         const limited = await aiBudget(photos.images.length > 1 ? 2 : 1);
         if (limited) return limited;
         try {
-          const items = await scanPantry(ai(), photos.images, {
+          const items = await scanPantry(ai('pantry-scan'), photos.images, {
             mode: body.mode === 'single' ? 'single' : 'many',
             place: body.place === 'pantry' ? 'pantry' : 'fridge',
           });
@@ -580,7 +581,7 @@ export default {
         const limited = await aiBudget();
         if (limited) return limited;
         try {
-          return reply(200, { results: await ideasFromPantry(ai(), items, { wish: String(body.wish || '').trim().slice(0, 200) }) });
+          return reply(200, { results: await ideasFromPantry(ai('ideas'), items, { wish: String(body.wish || '').trim().slice(0, 200) }) });
         } catch (e) {
           return aiFail(e, (!e.status && e.message) || 'החיפוש נכשל');
         }
@@ -599,7 +600,7 @@ export default {
       const limited = await aiBudget(items.length ? 2 : 1);
       if (limited) return limited;
       try {
-        return reply(200, await findStores({ lat, lon, items }, { fetch: deps.fetch, client: ai(), cheapersalKey: env.CHEAPERSAL_API_KEY }));
+        return reply(200, await findStores({ lat, lon, items }, { fetch: deps.fetch, client: ai('stores'), cheapersalKey: env.CHEAPERSAL_API_KEY }));
       } catch (e) {
         return aiFail(e, (!e.status && e.message) || 'לא הצלחתי למצוא חנויות');
       }
@@ -625,7 +626,7 @@ export default {
         const limited = await aiBudget();
         if (limited) return limited;
         try {
-          return reply(200, { groups: await organizeShopping(ai(), items) });
+          return reply(200, { groups: await organizeShopping(ai('shopping'), items) });
         } catch (e) {
           return aiFail(e, (!e.status && e.message) || 'לא הצלחתי לסדר את הרשימה');
         }
@@ -668,7 +669,18 @@ export default {
           Promise.all(months.map(async (m) => {
             const rows = await usage(m);
             const usd = Math.round(rows.reduce((n, r) => n + r.usd, 0) * 100) / 100;
-            return { month: m, usd, top: rows.filter((r) => r.usd > 0).sort((a, b) => b.usd - a.usd).slice(0, 5).map((r) => ({ name: r.name, email: r.email, usd: r.usd })) };
+            // לפי סוג פעולה, מכל הספרים: כמה פעמים, כמה עלה בסך הכול, ובממוצע לפעולה
+            const kinds = {};
+            for (const r of rows) {
+              for (const [k, v] of Object.entries(r.byKind || {})) {
+                const t = kinds[k] || (kinds[k] = { kind: k, ops: 0, usd: 0, searches: 0 });
+                t.ops += v.ops;
+                t.searches += v.searches;
+                t.usd += (v.input * price.in + v.output * price.out) / 1e6 + v.searches * price.search;
+              }
+            }
+            const byKind = Object.values(kinds).map((t) => ({ ...t, usd: Math.round(t.usd * 100) / 100, avg: t.ops ? Math.round((t.usd / t.ops) * 1000) / 1000 : null })).sort((a, b) => b.usd - a.usd);
+            return { month: m, usd, byKind, top: rows.filter((r) => r.usd > 0).sort((a, b) => b.usd - a.usd).slice(0, 5).map((r) => ({ name: r.name, email: r.email, usd: r.usd })) };
           })),
           internal(env.BOOK.get(env.BOOK.idFromName('community')), 'POST', '/community/stats', {}).then((r) => r.json()),
           backupStatus(env).catch(() => null),
@@ -913,7 +925,7 @@ export default {
       }
       let recipe;
       try {
-        recipe = await buildRecipe(env, ai(), { link, text, hint }, categories);
+        recipe = await buildRecipe(env, ai(recipeKind({ link, text })), { link, text, hint }, categories);
       } catch (e) {
         await giveBack();
         await recordError('extract', e, link ? errorGroup(link, e) : '');
@@ -971,7 +983,7 @@ export default {
       const image = typeof recipe.image === 'string' && /^https:\/\//.test(recipe.image) ? recipe.image : null;
       let review;
       try {
-        review = await moderateRecipe(ai(), recipe, image);
+        review = await moderateRecipe(ai('moderation'), recipe, image);
       } catch (e) {
         return aiFail(e, (!e.status && e.message) || 'הבדיקה לפני הפרסום לא הצליחה');
       }
@@ -1013,7 +1025,7 @@ export default {
       const limited = await aiBudget();
       if (limited) return limited;
       try {
-        const fields = await suggestCategories(ai(), recipe, await allCategories());
+        const fields = await suggestCategories(ai('categories'), recipe, await allCategories());
         return pass(await internal(book, 'PUT', `/recipes/${id}`, { ...fields, categorized: true }));
       } catch (e) {
         return aiFail(e, (!e.status && e.message) || 'לא הצלחתי לסדר את הקטגוריות');
@@ -1027,7 +1039,7 @@ export default {
       const limited = await aiBudget();
       if (limited) return limited;
       try {
-        return pass(await internal(book, 'PUT', `/recipes/${id}`, { nutrition: await estimateNutrition(ai(), recipe) }));
+        return pass(await internal(book, 'PUT', `/recipes/${id}`, { nutrition: await estimateNutrition(ai('nutrition'), recipe) }));
       } catch (e) {
         return aiFail(e, (!e.status && e.message) || 'לא הצלחתי להעריך את הערכים התזונתיים');
       }

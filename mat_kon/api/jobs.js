@@ -1,5 +1,5 @@
 // בניית מתכון ממקור (קישור / טקסט / תמונות): משותף לבקשה רגילה ולעבודה ברקע (Durable Object alarm)
-import { gatherSource, sourceIdentity } from './source.js';
+import { gatherSource, isVideoKind, sourceIdentity, sourceKind } from './source.js';
 import { NoRecipeError, aiMessage, categoryFields, extractRecipe } from './extract.js';
 import { deps } from './deps.js';
 
@@ -30,6 +30,16 @@ function fromCache(recipe, categories, hint) {
     source: { ...copy.source, ...(hint ? { hint } : {}) },
     more: [],
   };
+}
+
+// סוג הפעולה למעקב עלויות: סרטון / אתר / צילום / טקסט
+export function recipeKind({ link, text } = {}) {
+  if (text) return text.images ? 'recipe-photo' : 'recipe-text';
+  try {
+    return isVideoKind(sourceKind(link)) ? 'recipe-video' : 'recipe-link';
+  } catch {
+    return 'recipe-link';
+  }
 }
 
 export async function buildRecipe(env, client, { link, text, hint }, categories) {
