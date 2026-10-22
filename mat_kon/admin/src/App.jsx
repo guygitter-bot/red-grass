@@ -41,10 +41,11 @@ export default function App() {
     setBusy(true);
     setError('');
     try {
-      const [overview, issues, security, reports] = await Promise.all([
+      const [overview, issues, security, reports, talk] = await Promise.all([
         api(session, 'GET', '/admin/overview'), api(session, 'GET', '/admin/issues'), api(session, 'GET', '/admin/security'), api(session, 'GET', '/admin/reports'),
+        api(session, 'GET', '/admin/talk').catch(() => ({ items: [] })),
       ]);
-      setData({ ...overview, issueList: issues.issues, security, reportList: reports.items });
+      setData({ ...overview, issueList: issues.issues, security, reportList: reports.items, talkList: talk.items });
     } catch (e) {
       if (e.status === 401 || e.status === 403) signOut();
       else setError(e.message);
@@ -537,6 +538,43 @@ function Report({ r, session, reload }) {
   );
 }
 
+// תגובה / "הכנתי!" בקהילה שדווחה או שבדיקת ה-AI לא הייתה בטוחה לגביה
+const TALK_REASON = { offensive: 'פוגעני', personal: 'פרטים אישיים', spam: 'ספאם', other: 'אחר' };
+function TalkReport({ t, session, reload }) {
+  const [busy, setBusy] = useState(false);
+  const act = async (action) => {
+    if (action === 'block' && !window.confirm(`לחסום את "${t.author}" מכתיבה ופרסום בקהילה? כל מה שכתב/ה יורד.`)) return;
+    setBusy(true);
+    try {
+      await api(session, 'POST', `/admin/talk/${t.key}/${t.id}`, { action });
+      await reload();
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="rounded-xl border border-line p-3">
+      <div className="flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="text-xs text-muted">{t.recipe} · {t.author}{t.kind === 'made' ? ' · 📸 הכנתי!' : ''}</div>
+          {t.text && <div className="mt-1 whitespace-pre-line break-words" dir="auto">{t.text}</div>}
+          {t.image && <img src={t.image} alt="" className="mt-2 w-32 h-32 object-cover rounded-lg" />}
+        </div>
+        {t.hidden && <span className="text-xs rounded-full px-2 py-0.5 bg-red-500/10 text-red-700 dark:text-red-300 shrink-0">מוסתר</span>}
+      </div>
+      <div className="mt-1 text-sm">
+        {t.reports > 0 && <div>{t.reports} דיווחים: {t.reasons.map((x) => TALK_REASON[x] || x).join(', ')}</div>}
+        {t.flagged && <div className="text-amber-700 dark:text-amber-300">בדיקה אוטומטית: {t.flagReason || 'לא בטוח'}</div>}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button disabled={busy} onClick={() => act('approve')} className="text-sm rounded-full bg-emerald-600 text-white px-3 py-1">אישור</button>
+        <button disabled={busy} onClick={() => act('remove')} className="text-sm rounded-full border border-line px-3 py-1">הסרה</button>
+        {t.authorId !== 'owner' && <button disabled={busy} onClick={() => act('block')} className="text-sm rounded-full bg-red-600 text-white px-3 py-1">חסימת הכותב</button>}
+      </div>
+    </div>
+  );
+}
+
 const STATUS_STYLE = { new: 'bg-red-500/10 text-red-700 dark:text-red-300', working: 'bg-amber-500/15 text-amber-800 dark:text-amber-300', fixed: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' };
 
 function Issues({ list, session, reload }) {
@@ -767,6 +805,12 @@ function Content({ d, session, reload }) {
         {!d.reportList.length && <p className="text-sm text-muted">אין דיווחים או מתכונים שמחכים לבדיקה 🎉</p>}
         <div className="space-y-3">
           {d.reportList.map((r) => <Report key={r.key} r={r} session={session} reload={reload} />)}
+        </div>
+      </Card>
+      <Card title={`תגובות שמחכות לבדיקה (${(d.talkList || []).length})`}>
+        {!(d.talkList || []).length && <p className="text-sm text-muted">אין תגובות שמחכות לבדיקה 🎉</p>}
+        <div className="space-y-3">
+          {(d.talkList || []).map((t) => <TalkReport key={t.id} t={t} session={session} reload={reload} />)}
         </div>
       </Card>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">

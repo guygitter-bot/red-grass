@@ -11,11 +11,11 @@ import { buildRecipe, errorGroup, failure, recipeKind } from './jobs.js';
 import { RecipeBook } from './store.js';
 import { Accounts, canAdd } from './accounts.js';
 import { gatherSource, normalizeUrl, sourceKind } from './source.js';
-import { NoRecipeError, aiMessage, categoryFields, cleanNutrition, estimateNutrition, extractRecipe, moderateRecipe, ideasFromPantry, organizeShopping, scanPantry, searchRecipes, suggestCategories } from './extract.js';
+import { NoRecipeError, aiMessage, moderateTalk, categoryFields, cleanNutrition, estimateNutrition, extractRecipe, moderateRecipe, ideasFromPantry, organizeShopping, scanPantry, searchRecipes, suggestCategories } from './extract.js';
 import { findStores } from './stores.js';
 import { CATEGORIES } from './categories.js';
 import { backupStatus, restoreBook, runBackup } from './backup.js';
-import { communityKey, publicCopy, publicSummary } from './community.js';
+import { communityIdentity, communityKey, publicCopy, publicSummary } from './community.js';
 import { DIET_IDS } from './diet.js';
 import { cleanShots, fixAction, fixConfigured, fixStatus, getShot, pruneShots, saveShots, sendFix } from './fixes.js';
 
@@ -153,8 +153,10 @@ export default {
 
     // ---- תמונות מתכונים: קישור עם מזהה אקראי שאי אפשר לנחש (תגית img לא שולחת כניסה) ----
     if (parts[0] === 'img' && parts.length === 3 && request.method === 'GET') {
-      if (!/^(book|[0-9a-f-]{36})$/.test(parts[1]) || !/^[0-9a-f-]{36}$/.test(parts[2])) return fail(404, 'Not found');
-      const res = await internal(bookOf(parts[1] === 'book' ? null : parts[1]), 'GET', `/img/${parts[2]}`);
+      if (!/^(book|community|[0-9a-f-]{36})$/.test(parts[1]) || !/^[0-9a-f-]{36}$/.test(parts[2])) return fail(404, 'Not found');
+      // community: תמונות "הכנתי!" שמשתמשים העלו לשיחה על מתכון בקהילה
+      const owner = parts[1] === 'community' ? env.BOOK.get(env.BOOK.idFromName('community')) : bookOf(parts[1] === 'book' ? null : parts[1]);
+      const res = await internal(owner, 'GET', `/img/${parts[2]}`);
       if (!res.ok) return fail(404, 'Not found');
       return new Response(res.body, {
         headers: {
@@ -404,6 +406,71 @@ export default {
       if (!res.ok) return fail(404, 'המתכון כבר לא במאגר');
       const { recipe, summary } = await res.json();
       if (parts.length === 2 && request.method === 'GET') return reply(200, { recipe, summary: publicSummary(summary) });
+      // ---- שיחה על המתכון: טיפים, שאלות, תשובות ו"הכנתי!" (עם שם תצוגה, אחרי בדיקת AI) ----
+      if (parts[2] === 'talk') {
+        const viewer = user?.id || 'owner';
+        if (parts.length === 3 && request.method === 'GET') return pass(await internal(stub, 'POST', '/community/talk/list', { key: parts[1], viewer }));
+        if (parts.length === 3 && request.method === 'POST') {
+          const profile = await (await internal(accounts, 'POST', '/profile/get', { userId: user?.id || null })).json();
+          if (profile.blocked) return fail(403, 'החשבון לא יכול לכתוב בקהילה');
+          if (!profile.displayName || !profile.terms) return fail(409, 'צריך לבחור שם תצוגה ולאשר את תנאי השימוש', { needProfile: true });
+          const { body, error } = await readJson(MAX_PHOTO_BYTES);
+          if (error) return error;
+          const kind = body.parent ? 'reply' : body.kind === 'made' ? 'made' : 'tip';
+          const text = String(body.text || '').replace(/\s+\n/g, '\n').trim().slice(0, 1000);
+          const rating = kind === 'made' && Number.isInteger(body.rating) && body.rating >= 1 && body.rating <= 5 ? body.rating : 0;
+          const photo = kind === 'made' && typeof body.image === 'string' ? body.image.match(/^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/)?.[1] : null;
+          if (photo && photo.length > 540000) return fail(413, 'התמונה גדולה מדי');
+          if (kind !== 'made' && text.length < 2) return fail(400, 'כתבו כמה מילים');
+          if (kind === 'made' && !text && !rating && !photo) return fail(400, 'הוסיפו תמונה, דירוג או כמה מילים');
+          const limited = await rate([{ key: `talk:${viewer}`, limit: 40, window: 86400 }], 'הגעתם למגבלה היומית של תגובות. נסו שוב מחר.')
+            || (photo && (await rate([{ key: `talk-img:${viewer}`, limit: 10, window: 86400 }], 'הגעתם למגבלה היומית של תמונות. נסו שוב מחר.')));
+          if (limited) return limited;
+          const budget = await aiBudget();
+          if (budget) return budget;
+          let review = { decision: 'publish', imageOk: true, reason: '' };
+          if (text || photo) {
+            try {
+              review = await moderateTalk(ai('moderation'), { text, image: photo, recipeTitle: recipe.title });
+            } catch (e) {
+              return aiFail(e, (!e.status && e.message) || 'הבדיקה לפני הפרסום לא הצליחה');
+            }
+          }
+          if (review.decision === 'reject') return fail(422, review.reason || 'התגובה לא מתאימה לקהילה');
+          let image = null;
+          if (photo && review.imageOk) {
+            const saved = await internal(stub, 'POST', '/img', { type: 'image/jpeg', data: photo });
+            if (saved.ok) image = `${url.origin}/img/community/${(await saved.json()).id}`;
+          }
+          const item = {
+            id: crypto.randomUUID().replace(/-/g, '').slice(0, 16), kind, text, rating, image, parent: kind === 'reply' ? String(body.parent).slice(0, 40) : null,
+            authorId: viewer, author: profile.displayName, at: new Date().toISOString(), likes: [],
+            flagged: review.decision === 'review', flagReason: review.decision === 'review' ? review.reason : '',
+          };
+          const added = await internal(stub, 'POST', '/community/talk/add', { key: parts[1], item });
+          if (added.ok && item.flagged) await internal(accounts, 'POST', '/admin/notify', { title: '👀 תגובה בקהילה מחכה לבדיקה', body: `${recipe.title}: ${text.slice(0, 80)}`, tag: `talk-${item.id}`, url: '#content' });
+          const data = await added.json();
+          return reply(added.status, { ...data, imageRemoved: Boolean(photo && !image) });
+        }
+        if (!/^[a-f0-9]{16}$/.test(parts[3] || '')) return fail(404, 'Not found');
+        if (parts.length === 4 && request.method === 'DELETE') return pass(await internal(stub, 'POST', '/community/talk/remove', { key: parts[1], id: parts[3], by: viewer }));
+        if (parts.length === 5 && parts[4] === 'like' && request.method === 'POST') {
+          const limited = await rate([{ key: `talk-like:${viewer}`, limit: 300, window: 3600 }]);
+          if (limited) return limited;
+          return pass(await internal(stub, 'POST', '/community/talk/like', { key: parts[1], id: parts[3], liker: viewer }));
+        }
+        if (parts.length === 5 && parts[4] === 'report' && request.method === 'POST') {
+          const limited = await rate([{ key: `report:${bookKeyOf(user)}`, limit: 30, window: 86400 }], 'הגעתם למגבלת הדיווחים היומית.');
+          if (limited) return limited;
+          const { body, error } = await readJson();
+          if (error) return error;
+          const reason = ['offensive', 'personal', 'spam', 'other'].includes(body.reason) ? body.reason : 'other';
+          const reported = await (await internal(stub, 'POST', '/community/talk/report', { key: parts[1], id: parts[3], rater: viewer, reason })).json();
+          if (reported.justHidden) await internal(accounts, 'POST', '/admin/notify', { title: '🚩 תגובה הוסתרה אחרי דיווחים', body: String(reported.text || '').slice(0, 80), tag: `talk-${parts[3]}`, url: '#content' });
+          return reply(200, { ok: true });
+        }
+        return fail(405, 'Method not allowed');
+      }
       // דיווח על מתכון (פעם אחת לכל ספר)
       if (parts.length === 3 && parts[2] === 'report' && request.method === 'POST') {
         const limited = await rate([{ key: `report:${bookKeyOf(user)}`, limit: 30, window: 86400 }], 'הגעתם למגבלת הדיווחים היומית.');
@@ -664,7 +731,7 @@ export default {
       if (url.pathname === '/admin/overview' && request.method === 'GET') {
         const now = new Date();
         const months = [0, 1, 2].map((i) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1)).toISOString().slice(0, 7));
-        const [stats, costs, community, backups, issues, settings, reports] = await Promise.all([
+        const [stats, costs, community, backups, issues, settings, reports, talk] = await Promise.all([
           internal(accounts, 'GET', '/admin/stats').then((r) => r.json()),
           Promise.all(months.map(async (m) => {
             const rows = await usage(m);
@@ -687,6 +754,7 @@ export default {
           internal(accounts, 'GET', '/admin/issues').then((r) => r.json()),
           internal(accounts, 'GET', '/admin/settings').then((r) => r.json()),
           internal(env.BOOK.get(env.BOOK.idFromName('community')), 'POST', '/community/reports', {}).then((r) => r.json()),
+          internal(env.BOOK.get(env.BOOK.idFromName('community')), 'POST', '/community/talk/flagged', {}).then((r) => r.json()),
         ]);
         const open = issues.issues.filter((i) => i.status !== 'fixed');
         const alerts = [];
@@ -694,6 +762,7 @@ export default {
         if (spend && costs[0].usd >= spend) alerts.push({ level: 'serious', text: `ההוצאה על AI החודש ($${costs[0].usd}) עברה את הסף שקבעת ($${spend})` });
         if (open.some((i) => i.status === 'new')) alerts.push({ level: 'warning', text: `${open.filter((i) => i.status === 'new').length} תקלות חדשות שעוד לא טופלו` });
         const hidden = reports.items.filter((r) => r.hidden).length;
+        if (talk.items.length) alerts.push({ level: talk.items.some((t) => t.hidden) ? 'serious' : 'warning', text: `${talk.items.length} תגובות בקהילה מחכות לבדיקה שלך` });
         if (reports.items.length) alerts.push({ level: hidden ? 'serious' : 'warning', text: `${reports.items.length} מתכונים בקהילה מחכים לבדיקה שלך${hidden ? ` (${hidden} מוסתרים אחרי דיווחים)` : ''}` });
                 if (stats.today >= 50) alerts.push({ level: 'warning', text: `${stats.today} הרשמות היום – הרבה יותר מהרגיל` });
         const lastBackup = backups?.days?.at(-1);
@@ -701,7 +770,7 @@ export default {
         return reply(200, {
           stats, costs, community, backups: backups?.enabled ? { last: lastBackup || null, count: backups.days.length, ok: Boolean(backups.last) } : null,
           issues: { open: open.length, new: open.filter((i) => i.status === 'new').length, fixed: issues.issues.length - open.length },
-          settings: settings.settings, alerts, reports: { pending: reports.items.length, hidden },
+          settings: settings.settings, alerts, reports: { pending: reports.items.length + talk.items.length, hidden },
         });
       }
       if (url.pathname === '/admin/issues' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/admin/issues'));
@@ -787,6 +856,19 @@ export default {
         if (error) return error;
         if (body.action === 'view') return pass(await internal(community, 'POST', '/community/get', { key: parts[2], admin: true }));
         const res = await internal(community, 'POST', '/community/moderate', { key: parts[2], action: body.action === 'approve' ? 'approve' : 'remove' });
+        const data = await res.json();
+        if (res.ok && body.action === 'block' && data.authorId && data.authorId !== 'owner') {
+          await internal(accounts, 'POST', '/admin/block', { userId: data.authorId });
+          await internal(community, 'POST', '/community/remove-author', { authorId: data.authorId });
+        }
+        return reply(res.status, data);
+      }
+      // תגובות בקהילה שדווחו / שה-AI לא היה בטוח לגביהן
+      if (url.pathname === '/admin/talk' && request.method === 'GET') return pass(await internal(community, 'POST', '/community/talk/flagged', {}));
+      if (parts[1] === 'talk' && parts.length === 4 && request.method === 'POST') {
+        const { body, error } = await readJson();
+        if (error) return error;
+        const res = await internal(community, 'POST', '/community/talk/moderate', { key: parts[2], id: parts[3], action: body.action === 'approve' ? 'approve' : 'remove' });
         const data = await res.json();
         if (res.ok && body.action === 'block' && data.authorId && data.authorId !== 'owner') {
           await internal(accounts, 'POST', '/admin/block', { userId: data.authorId });
@@ -959,6 +1041,19 @@ export default {
       }
       delete data.counted;
       return reply(res.status, data);
+    }
+
+    // המתכון הזה במאגר הקהילה (מקישור, עותק ממישהו, או שפרסמתי): המפתח, בשביל השיחה עליו בדף המתכון
+    if (parts.length === 3 && parts[2] === 'community' && request.method === 'GET') {
+      const res = await internal(book, 'GET', `/recipes/${id}`);
+      if (!res.ok) return fail(404, 'המתכון לא נמצא');
+      const { recipe } = await res.json();
+      const identity = communityIdentity(recipe);
+      const key = recipe.published || (identity ? await communityKey(identity) : null);
+      if (!key) return reply(200, { key: null });
+      const found = await internal(env.BOOK.get(env.BOOK.idFromName('community')), 'POST', '/community/get', { key });
+      if (!found.ok) return reply(200, { key: null });
+      return reply(200, { key, summary: publicSummary((await found.json()).summary) });
     }
 
     // פרסום מתכון אישי לקהילה (עם שם תצוגה), אחרי בדיקת AI. ביטול פרסום – בכל רגע

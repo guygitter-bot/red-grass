@@ -39,7 +39,7 @@ import { CATEGORIES } from './lib/categories';
 import { isNative } from './lib/native';
 import {
   addCategory, setCategoryPrefs, addRecipeAsync, addTextRecipe, getJob, getRecipe, deleteRecipe, removeCategory, getMe, getPlan, getShopping, listRecipes, logout as apiLogout, refreshRecipe,
-  updateRecipe, categorizeRecipe, estimateNutrition, getProfile, setProfile, publishRecipe, unpublishRecipe, safeRecipe, getPantry, shoppingOps, pantryOps, planOps, shareRecipe, recipeShareLink,
+  updateRecipe, categorizeRecipe, estimateNutrition, getProfile, setProfile, publishRecipe, unpublishRecipe, safeRecipe, talkApi, getPantry, shoppingOps, pantryOps, planOps, shareRecipe, recipeShareLink,
 } from './lib/api';
 import { SORTS, categoriesOf, countByCategory, emojiOf, filterRecipes, freeLeft, linkFromShare, orderCategories, parseAuthHash, parseShareLink, sortRecipes } from './lib/recipes';
 import { usePersistentState } from './lib/storage';
@@ -133,6 +133,8 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState(null);
   const [favorites, setFavorites] = useState(false);
+  // שיחה על מתכונים בקהילה (טיפים, "הכנתי!") – אותו אובייקט כל עוד ה-session לא השתנה
+  const talk = useMemo(() => talkApi(session), [session]);
   // סינון לפי כשרות / רגישויות / תזונה – נשמר במכשיר (מי שצליאקי רוצה אותו תמיד)
   const [diets, setDiets] = usePersistentState('matkon_diets', []);
   // תמונות שצולמו מהמסך הראשי ("צילום מתכון"), עוברות למסך בניית המתכון
@@ -795,6 +797,7 @@ export default function App() {
         onEstimateNutrition={async () => upsert(await estimateNutrition(session, current.id))}
         bis={Boolean(user?.features?.bis)}
         community={{
+          talk,
           getProfile: () => getProfile(session),
           setProfile: (name, terms) => setProfile(session, name, terms),
           publish: async (id) => {

@@ -419,6 +419,50 @@ The reason is in simple Hebrew, addressed to the user. Call submit_review.`,
   return { decision: ['publish', 'review', 'reject'].includes(decision) ? decision : 'review', imageOk: imageOk !== false, reason: clean(reason) };
 }
 
+// בדיקה לפני שתגובה / "הכנתי!" מופיעה בקהילה: טקסט קצר ותמונה אופציונלית (base64 JPEG)
+export async function moderateTalk(client, { text = '', image = null, recipeTitle = '' }) {
+  const tool = {
+    name: 'submit_review',
+    description: 'Submit the review of a comment or photo a user wants to post under a recipe in a public recipe community.',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: {
+        decision: { type: 'string', enum: ['publish', 'review', 'reject'] },
+        image_ok: { type: 'boolean', description: 'false if the image is not a photo of food / cooking, or shows faces, documents, screens with personal details or anything inappropriate' },
+        reason: { type: 'string', description: 'Short Hebrew reason for the user when the decision is reject or review (or why the image was removed); empty otherwise' },
+      },
+      required: ['decision', 'image_ok', 'reason'],
+      additionalProperties: false,
+    },
+  };
+  const response = await client.beta.messages.create({
+    model: MODEL,
+    max_tokens: 600,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: { effort: 'low' },
+    system: `You review comments and photos that users of a Hebrew family recipe app post under a recipe in the app's public community (tips, questions, answers, "I made it!").
+publish: a friendly comment, tip, question or answer about cooking (it may be short, critical or negative about the recipe – that is fine).
+reject: spam, ads or links to sell something, hateful/sexual/violent or insulting content toward people, or personal details (phone numbers, addresses, emails, ID numbers, full names of private people).
+review: you are not sure.
+image_ok=false if the image is not food/cooking or shows faces, documents or personal details.
+The reason is in simple Hebrew, addressed to the user. Call submit_review.`,
+    tools: [tool],
+    messages: [{
+      role: 'user',
+      content: [
+        ...(image ? [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: image } }] : []),
+        { type: 'text', text: `Recipe: ${recipeTitle}\nComment: ${text || '(no text)'}` },
+      ],
+    }],
+  });
+  const submit = response.content.find((b) => b.type === 'tool_use' && b.name === tool.name);
+  if (!submit) throw new Error('הבדיקה לפני הפרסום לא הצליחה. נסו שוב.');
+  const { decision, image_ok: imageOk, reason } = submit.input;
+  return { decision: ['publish', 'review', 'reject'].includes(decision) ? decision : 'review', imageOk: imageOk !== false, reason: clean(reason) };
+}
+
 // קטגוריות של מתכון: category = הראשית (גם בשביל מתכונים ונתונים ישנים), categories = כולן, הראשית ראשונה
 export const MAX_RECIPE_CATEGORIES = 4;
 export function categoryFields(list, categories = CATEGORIES) {
