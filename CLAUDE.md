@@ -179,3 +179,7 @@
 
 ### חשבוניות סקאלה (`scala_invoices/`)
 - תיאור: `scala_invoices/README.md`. רץ פעם בחודש (`scala-invoices.yml`).
+
+### כתוביות לרילים (`reels/`)
+- סרטון אווטאר (ג'מיני/HeyGen) + התסריט → כתוביות בעברית צרובות: `node reels/captions.mjs <video> <script.txt|.srt> [out.mp4]`. פרטים: `reels/README.md`.
+- בדיקה: `node --test reels/captions.test.mjs`. תוצרים לא נכנסים למאגר.
