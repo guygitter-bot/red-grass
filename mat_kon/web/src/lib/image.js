@@ -41,3 +41,13 @@ export async function thumbnail(file) {
   }
   return null;
 }
+
+// תמונת "הכנתי!" לקהילה: עד 1024 פיקסלים ופחות מ-380KB (מגבלת השרת)
+export async function talkPhoto(file) {
+  const img = await loadImage(file);
+  for (const [side, q] of [[1024, 0.8], [900, 0.7], [720, 0.6]]) {
+    const url = draw(img, side, q);
+    if (url.length < 500 * 1024) return url;
+  }
+  throw new Error('התמונה גדולה מדי');
+}

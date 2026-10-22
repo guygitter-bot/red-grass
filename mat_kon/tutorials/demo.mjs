@@ -203,3 +203,12 @@ export const STORES = {
     ],
   },
 };
+
+// שיחה על מתכון בקהילה (סרטון "הקהילה")
+const hoursAgo = (h) => new Date(Date.now() - h * 3600000).toISOString();
+export const TALK = [
+  { id: 'a100000000000000', kind: 'made', text: 'יצאה מושלמת! הגשתי עם סלט ירוק והילדים חיסלו הכול', rating: 5, image: null, parent: null, author: 'מיכל אופה', at: hoursAgo(5), likes: 7, liked: false, mine: false },
+  { id: 'a200000000000000', kind: 'tip', text: 'טיפ: לסחוט היטב את התרד אחרי ההפשרה – אחרת הפשטידה יוצאת מימית', rating: 0, image: null, parent: null, author: 'יוסי בישל', at: hoursAgo(30), likes: 12, liked: false, mine: false },
+  { id: 'a300000000000000', kind: 'reply', text: 'תודה! זה בדיוק מה שקרה לי בפעם הקודמת', rating: 0, image: null, parent: 'a200000000000000', author: 'רונית', at: hoursAgo(20), likes: 2, liked: false, mine: false },
+  { id: 'a400000000000000', kind: 'tip', text: 'אפשר להכין בלי קמח? למישהו יש ניסיון?', rating: 0, image: null, parent: null, author: 'שירה', at: hoursAgo(50), likes: 1, liked: false, mine: false },
+];

@@ -124,6 +124,17 @@ function mockApi(opts = {}) {
     if (p === '/categories') { state.custom = [...state.custom, body.name]; return { custom: state.custom }; }
     if (p === '/categories/remove') { state.custom = state.custom.filter((c) => c !== body.name); return { custom: state.custom }; }
     if (p === '/community' && method === 'GET') return { results: opts.community ?? demo.COMMUNITY };
+    // שיחה על מתכון בקהילה (טיפים, "הכנתי!")
+    m = p.match(/^\/community\/([\w-]+)\/talk$/);
+    if (m) {
+      state.talk ||= clone(opts.talk ?? demo.TALK);
+      if (method === 'GET') return { items: state.talk };
+      if (!state.profile?.terms) return [409, { error: 'צריך לבחור שם תצוגה ולאשר את תנאי השימוש', needProfile: true }];
+      await sleep(1200);
+      const item = { id: `t${state.talk.length + 1}`.padEnd(16, '0'), kind: body.parent ? 'reply' : body.kind, text: body.text || '', rating: body.rating || 0, image: null, parent: body.parent || null, author: state.profile.displayName, at: new Date().toISOString(), likes: 0, liked: false, mine: true };
+      state.talk = [...state.talk, item];
+      return { item };
+    }
     m = p.match(/^\/community\/([\w-]+)(\/save)?$/);
     if (m) {
       const s = (opts.community ?? demo.COMMUNITY).find((x) => x.key === m[1]);

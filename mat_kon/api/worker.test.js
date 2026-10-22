@@ -1784,3 +1784,81 @@ test('admin app: AI costs broken down by kind of action (recipe from a site / vi
   // 1000 טוקנים ב-$5 למיליון + 200 ב-$25 = 1 סנט לפעולה
   assert.equal(kinds['recipe-link'].avg, 0.01);
 });
+
+test('community talk: tips, replies, "I made it!" with a photo, likes, reports, moderation and the recipe page key', async () => {
+  env.OWNER_PASSWORD = 'owner-secret-1';
+  const owner = (await (await call('POST', '/owner-login', { password: 'owner-secret-1' })).json()).session;
+  const people = [];
+  for (const [name, email] of [['דנה', 'dana@example.com'], ['רון', 'ron@example.com'], ['גל', 'gal@example.com'], ['טל', 'tal@example.com']]) {
+    const inv = await invite(name, owner);
+    people.push((await (await register(inv.token, email)).json()).session);
+  }
+  const [dana, ron, gal, tal] = people;
+  // דנה שומרת מתכון מקישור – הוא נכנס למאגר; המפתח מגיע מדף המתכון שלה
+  const mine = (await (await call('POST', '/recipes', { url: 'https://cake.example/talk' }, dana)).json()).recipe;
+  const { key, summary } = await (await call('GET', `/recipes/${mine.id}/community`, undefined, dana)).json();
+  assert.ok(key);
+  assert.equal(summary.saves, 1);
+  const manual = (await (await call('POST', '/recipes/manual', { title: 'פרטי', ingredients: [{ title: '', items: ['א'] }], steps: [{ title: '', items: ['ב'] }] }, dana)).json()).recipe;
+  assert.equal((await (await call('GET', `/recipes/${manual.id}/community`, undefined, dana)).json()).key, null);
+
+  let review = { decision: 'publish', image_ok: true, reason: '' };
+  deps.anthropic = () => ({ beta: { messages: { create: async (p) => {
+    apiCalls.push(p);
+    return { stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_review', input: review }] };
+  } } } });
+  const talk = (who) => call('GET', `/community/${key}/talk`, undefined, who).then((r) => r.json()).then((d) => d.items);
+  assert.deepEqual(await talk(ron), []);
+  // צריך שם תצוגה
+  const need = await call('POST', `/community/${key}/talk`, { text: 'הוספתי עוד לימון' }, ron);
+  assert.deepEqual([need.status, (await need.json()).needProfile], [409, true]);
+  for (const [who, name] of [[ron, 'רון'], [dana, 'דנה'], [gal, 'גל'], [tal, 'טל']]) await call('PUT', '/profile', { displayName: name, acceptTerms: true }, who);
+
+  const tip = (await (await call('POST', `/community/${key}/talk`, { text: 'הוספתי עוד לימון – מושלם' }, ron)).json()).item;
+  assert.deepEqual([tip.kind, tip.author, tip.mine], ['tip', 'רון', true]);
+  assert.match(apiCalls.at(-1).messages[0].content.at(-1).text, /הוספתי עוד לימון/);
+  // תשובה, ו"הכנתי!" עם תמונה ודירוג
+  const answer = (await (await call('POST', `/community/${key}/talk`, { parent: tip.id, text: 'תודה, ננסה!' }, dana)).json()).item;
+  assert.equal(answer.kind, 'reply');
+  const made = await (await call('POST', `/community/${key}/talk`, { kind: 'made', rating: 5, text: 'יצא מעולה', image: `data:image/jpeg;base64,${btoa('jpeg-bytes')}` }, gal)).json();
+  assert.match(made.item.image, /\/img\/community\/[0-9a-f-]{36}$/);
+  const img = await worker.fetch(new Request(made.item.image), env);
+  assert.equal(new TextDecoder().decode(await img.arrayBuffer()), 'jpeg-bytes');
+  assert.equal((await call('POST', `/community/${key}/talk`, { parent: 'nope', text: 'שלום' }, tal)).status, 404);
+  assert.equal((await call('POST', `/community/${key}/talk`, { text: 'x' }, tal)).status, 400);
+  // נדחה בבדיקה
+  review = { decision: 'reject', image_ok: true, reason: 'יש כאן מספר טלפון' };
+  const bad = await call('POST', `/community/${key}/talk`, { text: 'תתקשרו 050-1234567' }, tal);
+  assert.deepEqual([bad.status, (await bad.json()).error], [422, 'יש כאן מספר טלפון']);
+  review = { decision: 'publish', image_ok: true, reason: '' };
+
+  // מה שאחרים רואים: שם, בלי מזהה ובלי אימייל
+  const seen = await talk(tal);
+  assert.equal(seen.length, 3);
+  assert.ok(!JSON.stringify(seen).includes('authorId') && !JSON.stringify(seen).includes('@example.com'));
+  assert.deepEqual(seen.map((t) => t.mine), [false, false, false]);
+  // לייק (הפעלה וביטול)
+  assert.equal((await (await call('POST', `/community/${key}/talk/${tip.id}/like`, {}, tal)).json()).item.likes, 1);
+  assert.equal((await (await call('POST', `/community/${key}/talk/${tip.id}/like`, {}, tal)).json()).item.likes, 0);
+  // מונים בחיפוש בקהילה
+  const found = (await (await call('GET', '/community?q=', undefined, tal)).json()).results.find((r) => r.key === key);
+  assert.deepEqual([found.talkCount, found.madeCount], [2, 1]);
+
+  // רק הכותב מוחק
+  assert.equal((await call('DELETE', `/community/${key}/talk/${tip.id}`, undefined, dana)).status, 403);
+  // 3 דיווחים – מוסתר עד בדיקה; בעל האפליקציה מאשר
+  for (const who of [dana, gal, tal]) await call('POST', `/community/${key}/talk/${tip.id}/report`, { reason: 'spam' }, who);
+  assert.equal((await talk(tal)).some((t) => t.id === tip.id), false);
+  assert.equal((await talk(ron)).find((t) => t.id === tip.id).hidden, true); // הכותב עדיין רואה (מסומן)
+  const flagged = (await (await call('GET', '/admin/talk', undefined, owner)).json()).items;
+  assert.deepEqual([flagged[0].id, flagged[0].hidden, flagged[0].reports], [tip.id, true, 3]);
+  assert.equal((await call('GET', '/admin/talk', undefined, dana)).status, 403);
+  await call('POST', `/admin/talk/${key}/${tip.id}`, { action: 'approve' }, owner);
+  assert.equal((await talk(tal)).some((t) => t.id === tip.id), true);
+  // מחיקה של הכותב – גם התשובות עליה יורדות
+  assert.equal((await call('DELETE', `/community/${key}/talk/${tip.id}`, undefined, ron)).status, 200);
+  assert.deepEqual((await talk(tal)).map((t) => t.kind), ['made']);
+  // מחיקת "הכנתי!" מוחקת גם את התמונה
+  await call('DELETE', `/community/${key}/talk/${made.item.id}`, undefined, gal);
+  assert.equal((await worker.fetch(new Request(made.item.image), env)).status, 404);
+});

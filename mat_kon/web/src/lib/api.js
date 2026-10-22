@@ -142,6 +142,20 @@ export const setProfile = (s, displayName, acceptTerms) => api(s, 'PUT', '/profi
 export const publishRecipe = (s, id) => api(s, 'POST', `/recipes/${id}/publish`, {});
 export const unpublishRecipe = (s, id) => api(s, 'DELETE', `/recipes/${id}/publish`);
 export const reportCommunity = (s, key, reason) => api(s, 'POST', `/community/${encodeURIComponent(key)}/report`, { reason });
+// שיחה על מתכון בקהילה: טיפים, שאלות, תשובות ו"הכנתי!" (כל הפעולות עם אותו session)
+export const talkApi = (s) => {
+  const base = (key) => `/community/${encodeURIComponent(key)}/talk`;
+  return {
+    keyOf: (recipeId) => api(s, 'GET', `/recipes/${recipeId}/community`),
+    list: (key) => api(s, 'GET', base(key)).then((d) => d.items || []),
+    post: (key, item) => api(s, 'POST', base(key), item),
+    like: (key, id) => api(s, 'POST', `${base(key)}/${id}/like`, {}).then((d) => d.item),
+    remove: (key, id) => api(s, 'DELETE', `${base(key)}/${id}`),
+    report: (key, id, reason) => api(s, 'POST', `${base(key)}/${id}/report`, { reason }),
+    getProfile: () => getProfile(s),
+    setProfile: (name, terms) => setProfile(s, name, terms),
+  };
+};
 export const addTextRecipe = (s, item) => api(s, 'POST', '/recipes/text', item);
 
 // מתכון מתמונות / שנכתב ידנית

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import CookMode from './CookMode';
 import PublishPanel from './PublishPanel';
+import Talk from './Talk';
 import { isNative, shareText } from '../lib/native';
 import { STAPLES, missingLines } from '../lib/fridge';
 import { shoppingName } from '../lib/shopping';
@@ -369,6 +370,9 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
             {/* מתכון אישי (לא מקישור ולא של מישהו אחר מהקהילה) אפשר לפרסם לקהילה */}
             {community && !recipe.source.url && recipe.source.kind !== 'community' && <PublishPanel recipe={recipe} community={community} />}
 
+            {/* מתכון שנמצא גם בקהילה (מקישור, מהקהילה, או שפרסמתי): השיחה עליו – טיפים, שאלות ו"הכנתי!" */}
+            {community?.talk && <RecipeTalk recipe={recipe} api={community.talk} />}
+
             <div className="print:hidden"><MyNotes value={recipe.myNotes || ''} onSave={(myNotes) => quiet({ myNotes })} /></div>
             {recipe.myNotes && <p className="hidden print:block mt-6 text-sm"><b>ההערות שלי:</b> {recipe.myNotes}</p>}
 
@@ -522,6 +526,20 @@ function BisScore({ value, title }) {
       <p className="mt-1.5 text-xs text-stone-500">לפי הערכים התזונתיים המשוערים של מנה אחת.</p>
     </div>
   );
+}
+
+function RecipeTalk({ recipe, api }) {
+  const [key, setKey] = useState(null);
+  const inCommunity = Boolean(recipe.source?.url || recipe.published || recipe.source?.kind === 'community');
+  useEffect(() => {
+    if (!inCommunity) return undefined;
+    let alive = true;
+    api.keyOf(recipe.id).then((d) => alive && setKey(d.key)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [api, recipe.id, recipe.published, inCommunity]);
+  return key ? <Talk api={api} communityKey={key} /> : null;
 }
 
 function ActionButton({ onClick, icon, children, className = '', disabled }) {

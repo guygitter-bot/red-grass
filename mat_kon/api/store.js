@@ -1,6 +1,6 @@
 import { buildRecipe, errorGroup, failure, recipeKind } from './jobs.js';
 import { trackedClient } from './deps.js';
-import { HIDE_AT_REPORTS, communityIdentity, communityKey, publicCopy, searchCommunity, summarize } from './community.js';
+import { HIDE_AT_REPORTS, communityIdentity, communityKey, publicCopy, searchCommunity, summarize, publicTalk, talkImageKey, TALK_MAX } from './community.js';
 // ספר המתכונים: Durable Object אחד שמחזיק את כל המתכונים (כל מתכון במפתח r:<id>).
 
 const PREFIX = 'r:';
@@ -36,6 +36,19 @@ export class RecipeBook {
     const save = async (s) => {
       index.set(s.key, s);
       await this.storage.put(`cs:${s.key}`, s);
+    };
+    const readTalk = async (key) => (await this.storage.get(`talk:${key}`)) || [];
+    // שומר את השיחה, מוחק תמונות של מה שירד, ומעדכן את המונים בסיכום (לחיפוש ולרשימה)
+    const writeTalk = async (key, list, before = []) => {
+      const gone = before.filter((t) => !list.some((x) => x.id === t.id)).map(talkImageKey).filter(Boolean);
+      if (gone.length) await this.storage.delete(gone);
+      if (list.length) await this.storage.put(`talk:${key}`, list);
+      else await this.storage.delete(`talk:${key}`);
+      const s = index.get(key);
+      if (s) {
+        const visible = list.filter((t) => !t.hidden);
+        await save({ ...s, talkCount: visible.filter((t) => t.kind !== 'made').length, madeCount: visible.filter((t) => t.kind === 'made').length });
+      }
     };
     if (url.pathname === '/community/add') {
       for (const { key, recipe } of (body.items || []).slice(0, 2000)) {
@@ -86,7 +99,8 @@ export class RecipeBook {
       if (!index.has(key)) return;
       index.delete(key);
       const extra = [...(await this.storage.list({ prefix: `rt:${key}:` })).keys(), ...(await this.storage.list({ prefix: `rep:${key}:` })).keys()];
-      const keys = [`cs:${key}`, `cr:${key}`, ...extra];
+      const talkImages = ((await this.storage.get(`talk:${key}`)) || []).map(talkImageKey).filter(Boolean);
+      const keys = [`cs:${key}`, `cr:${key}`, `talk:${key}`, ...talkImages, ...extra];
       for (let i = 0; i < keys.length; i += 128) await this.storage.delete(keys.slice(i, i + 128));
     };
     if (url.pathname === '/community/publish') {
@@ -97,6 +111,7 @@ export class RecipeBook {
         ...summarize(body.key, body.recipe, stats, body.author), publishedAt: old?.publishedAt || new Date().toISOString(),
         reports: old?.reports || 0, reportReasons: old?.reportReasons || [], hidden: Boolean(old?.hidden),
         flagged: Boolean(body.flagged), flagReason: body.flagged ? String(body.reason || '').slice(0, 200) : '',
+        talkCount: old?.talkCount || 0, madeCount: old?.madeCount || 0,
       });
       return json({ ok: true });
     }
@@ -106,6 +121,10 @@ export class RecipeBook {
     }
     if (url.pathname === '/community/remove-author') {
       for (const s of [...index.values()].filter((x) => x.authorId && x.authorId === body.authorId)) await unpublish(s.key);
+      for (const [k, list] of await this.storage.list({ prefix: 'talk:' })) {
+        if (!list.some((t) => t.authorId === body.authorId)) continue;
+        await writeTalk(k.slice(5), list.filter((t) => t.authorId !== body.authorId && !list.some((p) => p.id === t.parent && p.authorId === body.authorId)), list);
+      }
       return json({ ok: true });
     }
     // דיווח: פעם אחת לכל ספר; אחרי HIDE_AT_REPORTS דיווחים המתכון מוסתר עד בדיקה
@@ -124,6 +143,74 @@ export class RecipeBook {
       const list = [...index.values()].filter((s) => s.reports || s.flagged).sort((a, b) => Number(b.hidden) - Number(a.hidden) || (b.reports || 0) - (a.reports || 0));
       return json({ items: list.slice(0, 100).map((s) => ({ key: s.key, title: s.title, author: s.author || '', authorId: s.authorId || '', credit: s.credit, personal: Boolean(s.personal), reports: s.reports || 0, reasons: s.reportReasons || [], flagged: Boolean(s.flagged), flagReason: s.flagReason || '', hidden: Boolean(s.hidden) })) });
     }
+    // ---- שיחה על מתכון: טיפים, שאלות, תשובות ו"הכנתי!" (עם תמונה ודירוג) ----
+    if (url.pathname === '/community/talk/list') {
+      const list = await readTalk(body.key);
+      return json({ items: list.filter((t) => body.admin || !t.hidden || t.authorId === body.viewer).map((t) => publicTalk(t, body.viewer)) });
+    }
+    if (url.pathname === '/community/talk/add') {
+      if (!index.get(body.key)) return json({ error: 'not found' }, 404);
+      const list = await readTalk(body.key);
+      const item = body.item;
+      if (item.parent && !list.some((t) => t.id === item.parent && !t.parent)) return json({ error: 'התגובה שעניתם לה כבר לא קיימת' }, 404);
+      if (list.length >= TALK_MAX) return json({ error: 'יש כבר הרבה תגובות על המתכון הזה' }, 409);
+      await writeTalk(body.key, [...list, item], list);
+      return json({ item: publicTalk(item, item.authorId) });
+    }
+    if (url.pathname === '/community/talk/like') {
+      const list = await readTalk(body.key);
+      const t = list.find((x) => x.id === body.id);
+      if (!t) return json({ error: 'not found' }, 404);
+      const likes = new Set(t.likes || []);
+      if (likes.has(body.liker)) likes.delete(body.liker);
+      else likes.add(body.liker);
+      t.likes = [...likes].slice(-2000);
+      await this.storage.put(`talk:${body.key}`, list);
+      return json({ item: publicTalk(t, body.liker) });
+    }
+    if (url.pathname === '/community/talk/remove') {
+      const list = await readTalk(body.key);
+      const t = list.find((x) => x.id === body.id);
+      if (!t) return json({ error: 'not found' }, 404);
+      if (!body.admin && t.authorId !== body.by) return json({ error: 'אפשר למחוק רק את מה שכתבתם' }, 403);
+      await writeTalk(body.key, list.filter((x) => x.id !== t.id && x.parent !== t.id), list);
+      return json({ ok: true, authorId: t.authorId });
+    }
+    // דיווח על תגובה: פעם אחת לכל משתמש; אחרי HIDE_AT_REPORTS דיווחים התגובה מוסתרת עד בדיקה
+    if (url.pathname === '/community/talk/report') {
+      const list = await readTalk(body.key);
+      const t = list.find((x) => x.id === body.id);
+      if (!t || (t.reporters || []).includes(body.rater)) return json({ ok: true });
+      t.reporters = [...(t.reporters || []), body.rater].slice(-50);
+      t.reports = (t.reports || 0) + 1;
+      t.reportReasons = [String(body.reason || '').slice(0, 100), ...(t.reportReasons || [])].slice(0, 5);
+      const justHidden = !t.hidden && t.reports >= HIDE_AT_REPORTS;
+      if (justHidden) t.hidden = true;
+      await writeTalk(body.key, list, list);
+      return json({ ok: true, justHidden, text: t.text });
+    }
+    // לבעל האפליקציה: תגובות שדווחו או שבדיקת ה-AI לא הייתה בטוחה לגביהן
+    if (url.pathname === '/community/talk/flagged') {
+      const out = [];
+      for (const [k, list] of await this.storage.list({ prefix: 'talk:' })) {
+        const key = k.slice(5);
+        for (const t of list) if (t.reports || t.flagged) out.push({ ...publicTalk(t, null), key, recipe: index.get(key)?.title || '', authorId: t.authorId, reports: t.reports || 0, reasons: t.reportReasons || [], flagged: Boolean(t.flagged), flagReason: t.flagReason || '', hidden: Boolean(t.hidden) });
+      }
+      out.sort((a, b) => Number(b.hidden) - Number(a.hidden) || b.reports - a.reports);
+      return json({ items: out.slice(0, 100) });
+    }
+    if (url.pathname === '/community/talk/moderate') {
+      const list = await readTalk(body.key);
+      const t = list.find((x) => x.id === body.id);
+      if (!t) return json({ error: 'not found' }, 404);
+      if (body.action === 'remove') await writeTalk(body.key, list.filter((x) => x.id !== t.id && x.parent !== t.id), list);
+      else {
+        Object.assign(t, { reports: 0, reporters: [], reportReasons: [], flagged: false, flagReason: '', hidden: false });
+        await writeTalk(body.key, list, list);
+      }
+      return json({ ok: true, authorId: t.authorId });
+    }
+
     if (url.pathname === '/community/moderate') {
       const s = index.get(body.key);
       if (!s) return json({ error: 'not found' }, 404);

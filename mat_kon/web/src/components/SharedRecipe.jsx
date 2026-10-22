@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BookmarkPlus, ChefHat, Clock, ExternalLink, Flag, Loader2, Lock, Smartphone, Star, Users, X } from 'lucide-react';
-import { getCommunityRecipe, getSharedRecipe, getSharePreview, reportCommunity, saveCommunityRecipe, saveSharedRecipe } from '../lib/api';
+import { getCommunityRecipe, getSharedRecipe, getSharePreview, reportCommunity, saveCommunityRecipe, saveSharedRecipe, talkApi } from '../lib/api';
+import Talk from './Talk';
 import { isNative } from '../lib/native';
 
 const PLAY_URL = 'https://play.google.com/store/apps/details?id=app.matkon';
@@ -13,6 +14,7 @@ export default function SharedRecipe({ token, communityKey, session, onLogin, on
   const [full, setFull] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const talk = useMemo(() => talkApi(session), [session]);
 
   useEffect(() => {
     let alive = true;
@@ -106,6 +108,8 @@ export default function SharedRecipe({ token, communityKey, session, onLogin, on
                 שמירה בספר שלי
               </button>
             </div>
+            {/* אחרי כפתור השמירה – כדי שהפס הדביק לא יסתיר את הכתיבה */}
+            {communityKey && <Talk api={talk} communityKey={communityKey} />}
           </>
         )}
 
@@ -193,6 +197,8 @@ export function CommunityStats({ s }) {
         <span className="text-stone-400">עוד אין מספיק דירוגים</span>
       )}
       <span>נשמר ב-{s.saves} {s.saves === 1 ? 'ספר' : 'ספרים'}</span>
+      {s.madeCount > 0 && <span>📸 {s.madeCount} הכינו</span>}
+      {s.talkCount > 0 && <span>💬 {s.talkCount}</span>}
     </>
   );
 }

@@ -124,3 +124,23 @@ export function searchCommunity(summaries, q, filters = {}) {
   out.sort((a, b) => b.relevance - a.relevance || score(b.s) - score(a.s) || b.s.saves - a.s.saves);
   return out.slice(0, 30).map((x) => publicSummary(x.s));
 }
+
+// ---------- שיחה על מתכון (טיפים, שאלות, תשובות, "הכנתי!") ----------
+export const TALK_MAX = 500;
+export const TALK_KINDS = ['tip', 'made', 'reply'];
+
+// מפתח התמונה באחסון של מופע הקהילה (תמונת "הכנתי!")
+export function talkImageKey(t) {
+  const m = typeof t?.image === 'string' && t.image.match(/\/img\/community\/([0-9a-f-]{36})$/);
+  return m ? `img:${m[1]}` : null;
+}
+
+// מה שמשתמשים רואים: בלי מזהה הכותב ובלי מי עשה לייק – רק כמה, והאם זה שלי
+export function publicTalk(t, viewer) {
+  return {
+    id: t.id, kind: t.kind, text: t.text || '', rating: t.rating || 0, image: t.image || null, parent: t.parent || null,
+    author: t.author, at: t.at, likes: (t.likes || []).length,
+    liked: Boolean(viewer && (t.likes || []).includes(viewer)), mine: Boolean(viewer && t.authorId === viewer),
+    ...(t.hidden ? { hidden: true } : {}),
+  };
+}
