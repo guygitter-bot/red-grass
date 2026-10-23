@@ -11,7 +11,7 @@ import { IconSpeaker, IconReplay } from '../components/Icons';
 const FRETS = [0, 2, 5, 7, 12];
 const ROUNDS = 5;
 
-export default function Lesson1({ type }) {
+export default function Lesson1({ type, teacher }) {
   const [idx, setIdx] = useState(0);
   const [stage, setStage] = useState(null);
   const [fret, setFret] = useState(0);
@@ -151,6 +151,7 @@ export default function Lesson1({ type }) {
       stageNode={
         <GuitarStage
           type={type}
+          teacher={teacher}
           className="min-h-0 flex-1"
           onStage={setStage}
           onPick={(i) => {

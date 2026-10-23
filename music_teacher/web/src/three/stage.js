@@ -2,6 +2,8 @@
 import * as THREE from 'three';
 import { createGuitar } from './guitar.js';
 import { createTeacher } from './teacher.js';
+import { createModelTeacher, loadTeacherModel, loadedTeacherModel } from './teacherModel.js';
+import { teacherById, teacherUrl } from '../lib/teachers.js';
 import { PRESETS, PART_NAMES } from '../lib/parts.js';
 import { playString, unlockAudio } from '../lib/audio.js';
 
@@ -68,6 +70,11 @@ export function createStage(canvas, labelsEl, opts = {}) {
 
   // ----- גיטרה + מורה -----
   let type = opts.type || 'classical';
+  let teacherId = teacherById(opts.teacher).id;
+  let rightMode = 'play';
+  let camName = 'wide';
+  let buildToken = 0;
+  let waveEnd = 0; // עד מתי המורה מנופף (כדי שלא יאבד בהחלפה מבובה לדגם)
   let guitar = null;
   let teacher = null;
   let leftSpec = null;
@@ -94,6 +101,30 @@ export function createStage(canvas, labelsEl, opts = {}) {
     updateBadgeClasses();
   }
 
+  // מורה דגם (GLB); אם נכשל – המורה הבובה
+  function makeTeacher(gltf) {
+    const fit = teacherById(teacherId).fit;
+    if (gltf) {
+      try {
+        return createModelTeacher(guitar, gltf, fit);
+      } catch (e) {
+        console.warn('teacher model failed', e);
+      }
+    }
+    return createTeacher(guitar);
+  }
+  function adopt(t) {
+    teacher = t;
+    scene.add(teacher.group);
+    teacher.onRelease = soundFor;
+    teacher.setLeftHand(leftSpec);
+    teacher.setRightHand(rightMode);
+    const left = (waveEnd - performance.now()) / 1000;
+    if (left > 0.3) teacher.wave(left);
+    guitar.group.updateMatrixWorld(true);
+    teacher.update(0.016, performance.now() / 1000);
+  }
+
   function build() {
     if (teacher) {
       scene.remove(teacher.group);
@@ -105,14 +136,28 @@ export function createStage(canvas, labelsEl, opts = {}) {
     }
     guitar = createGuitar(type);
     scene.add(guitar.group);
-    teacher = createTeacher(guitar);
-    scene.add(teacher.group);
-    teacher.onRelease = soundFor;
-    teacher.setLeftHand(leftSpec);
+    const url = teacherUrl(teacherById(teacherId));
+    const ready = loadedTeacherModel(url);
+    adopt(makeTeacher(ready));
     guitar.setHighlight(focus.parts);
     buildLabels();
-    guitar.group.updateMatrixWorld(true);
-    teacher.update(0.016, performance.now() / 1000);
+    // הדגם עוד לא נטען: בינתיים הבובה, ואז מחליפים (המצלמה מחושבת מחדש כי הגיטרה זזה)
+    if (!ready) {
+      const tok = ++buildToken;
+      const g = guitar;
+      loadTeacherModel(url)
+        .then((gltf) => {
+          if (!alive || tok !== buildToken || g !== guitar) return;
+          scene.remove(teacher.group);
+          teacher.dispose();
+          adopt(makeTeacher(gltf));
+          buildLabels();
+          setCamera(camName, { instant: true });
+        })
+        .catch(() => {
+          /* נשארים עם הבובה */
+        });
+    } else buildToken++;
   }
 
   // ----- תוויות -----
@@ -198,6 +243,7 @@ export function createStage(canvas, labelsEl, opts = {}) {
   }
   function setCamera(name, o = {}) {
     if (!guitar) return;
+    camName = name;
     const goal = resolve(name);
     to = goal;
     if (o.instant || reduced()) {
@@ -317,6 +363,13 @@ export function createStage(canvas, labelsEl, opts = {}) {
       build();
       setCamera('wide', { instant: true });
     },
+    setTeacher(id) {
+      const next = teacherById(id).id;
+      if (next === teacherId) return;
+      teacherId = next;
+      build();
+      setCamera(camName, { instant: true });
+    },
     setCamera,
     setFocus(f) {
       focus = { parts: f.parts || [], labels: f.labels || [] };
@@ -335,6 +388,7 @@ export function createStage(canvas, labelsEl, opts = {}) {
       teacher.setLeftHand(spec);
     },
     setRightHand(mode) {
+      rightMode = mode;
       teacher.setRightHand(mode);
     },
     pluck(i, amp = 1) {
@@ -346,6 +400,7 @@ export function createStage(canvas, labelsEl, opts = {}) {
       teacher.strum(dir, strings, ms, amp);
     },
     wave(sec) {
+      waveEnd = performance.now() + sec * 1000;
       teacher.wave(sec);
     },
     // לבדיקות
