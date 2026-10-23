@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { addRecipeAndWait, addTextRecipe } from '../lib/api';
 import { findCandidates, parseChat, readChatFile } from '../lib/whatsapp';
+import { isKeepTakeout, readKeepTakeout } from '../lib/keep';
 import PasteBox from './PasteBox';
 import { freeLeft } from '../lib/recipes';
 
@@ -35,12 +36,16 @@ export default function ImportView({ session, user, recipes, onBack, onRecipe, o
   const load = async (file) => {
     setError('');
     try {
-      const { name, text } = await readChatFile(file);
-      const messages = parseChat(text);
+      // קובץ Google Takeout עם פתקים מ-Google Keep – כל פתק כמו הודעה
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const keep = isKeepTakeout(bytes);
+      const { name, text } = keep ? { name: 'Google Keep', text: '' } : await readChatFile(file);
+      const messages = keep ? readKeepTakeout(bytes) : parseChat(text);
       if (!messages.length) throw new Error('לא נמצאו הודעות בקובץ. ודאו שזה צ\'אט שיוצא מווטסאפ.');
       const items = findCandidates(messages, {
         existingUrls: recipes.map((r) => r.source?.url),
         existingKeys: recipes.map((r) => r.source?.key),
+        allText: keep,
       });
       setChat({ name, items, messages: messages.length });
       setSelected(Object.fromEntries(items.map((i) => [i.id, i.likely && !i.saved])));
@@ -136,9 +141,17 @@ export default function ImportView({ session, user, recipes, onBack, onRecipe, o
               </ol>
               <p className="mt-2 text-stone-500">הסריקה נעשית בטלפון. רק המתכונים שתבחרו נשלחים לסידור.</p>
             </div>
+            <div className="mt-3 rounded-2xl bg-white shadow-sm p-4 text-stone-700 leading-relaxed text-sm">
+              <h2 className="font-bold text-base text-stone-900 mb-2">מתכונים בפתקים של Google Keep?</h2>
+              <ol className="list-decimal pr-5 space-y-1">
+                <li>נכנסים ל-<a href="https://takeout.google.com" target="_blank" rel="noopener noreferrer" className="text-orange-700 underline">takeout.google.com</a> ← <b>ביטול הבחירה</b> בכל השירותים ← מסמנים רק את <b>Keep</b>.</li>
+                <li>יוצרים את הייצוא. גוגל שולחת קישור להורדה במייל (בדרך כלל תוך כמה דקות).</li>
+                <li>מורידים את קובץ ה-ZIP ובוחרים אותו כאן. בוחרים אילו פתקים הם מתכונים – רק הם נשלחים לסידור.</li>
+              </ol>
+            </div>
             <label className="mt-4 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-orange-300 bg-orange-50 p-8 text-orange-800 cursor-pointer hover:bg-orange-100">
               <FileUp size={32} />
-              <span className="font-bold">בחירת קובץ הצ'אט</span>
+              <span className="font-bold">בחירת קובץ הצ'אט או קובץ Keep</span>
               <span className="text-sm text-orange-700">‎.txt או ‎.zip</span>
               <input
                 type="file"
@@ -154,7 +167,7 @@ export default function ImportView({ session, user, recipes, onBack, onRecipe, o
         {chat && (
           <>
             <p className="mt-4 text-sm text-stone-600">
-              נסרקו {chat.messages} הודעות. נמצאו {items.filter((i) => i.type === 'link').length} קישורים
+              נסרקו {chat.messages} {chat.name === 'Google Keep' ? 'פתקים' : 'הודעות'}. נמצאו {items.filter((i) => i.type === 'link').length} קישורים
               ו-{items.filter((i) => i.type === 'text').length} מתכונים כתובים.
               {items.some((i) => !i.likely && !i.saved) && !showAll && (
                 <button onClick={() => setShowAll(true)} className="mr-1 text-orange-700 underline">הצג גם קישורים אחרים</button>
