@@ -1,3 +1,5 @@
+import { TEACHERS, DEFAULT_TEACHER, teacherById } from './teachers.js';
+
 // שמירה מקומית בטוחה: תמיד עם ברירת מחדל, גם במצב פרטי או אחרי ניקוי נתונים
 export function readJSON(key, fallback) {
   try {
@@ -29,6 +31,17 @@ export function getGuitarType() {
 }
 export function setGuitarType(t) {
   if (GUITAR_TYPES.includes(t)) writeJSON(GUITAR_KEY, t);
+}
+
+const TEACHER_KEY = 'mt_teacher';
+
+// המורה: "male" (ברירת מחדל) / "female". ערך לא מוכר או מורה שעוד לא מוכן -> male
+export function getTeacher() {
+  return teacherById(readJSON(TEACHER_KEY, DEFAULT_TEACHER)).id;
+}
+export function setTeacher(id) {
+  const t = TEACHERS.find((x) => x.id === id);
+  if (t && !t.comingSoon) writeJSON(TEACHER_KEY, id);
 }
 
 // התקדמות בשיעורים: { "1": true, "2": true }

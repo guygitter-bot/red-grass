@@ -16,7 +16,7 @@ const PATTERN = [
   { dir: 'd', label: 'למטה' },
 ];
 
-export default function Lesson2({ type }) {
+export default function Lesson2({ type, teacher }) {
   const [idx, setIdx] = useState(0);
   const [stage, setStage] = useState(null);
   const step = LESSON2[idx];
@@ -132,7 +132,7 @@ export default function Lesson2({ type }) {
       onFinish={() => {
         window.location.hash = '#/';
       }}
-      stageNode={<GuitarStage type={type} className="min-h-0 flex-1" onStage={setStage} />}
+      stageNode={<GuitarStage type={type} teacher={teacher} className="min-h-0 flex-1" onStage={setStage} />}
     />
   );
 }

@@ -34,3 +34,6 @@ export const IconReplay = (p) => (
 export const IconLock = (p) => (
   <svg {...base} {...p}><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 018 0v3" /></svg>
 );
+export const IconPerson = (p) => (
+  <svg {...base} {...p}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4.400 3.600-7 8-7s8 2.600 8 7" /></svg>
+);

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { LESSON_LIST } from '../lib/lessons';
 import { getProgress } from '../lib/storage';
 import { GUITAR_NAMES } from '../lib/parts';
+import { TEACHERS } from '../lib/teachers';
 import { IconTune, IconNext, IconLock, IconCheck } from '../components/Icons';
 
 const CLASSICAL_ICON = (
@@ -26,7 +27,7 @@ const ELECTRIC_ICON = (
   </svg>
 );
 
-export default function Home({ type, onType }) {
+export default function Home({ type, onType, teacher, onTeacher }) {
   const [progress, setProgress] = useState({});
   useEffect(() => {
     setProgress(getProgress());
@@ -52,6 +53,25 @@ export default function Home({ type, onType }) {
             {t === 'classical' ? CLASSICAL_ICON : ELECTRIC_ICON}
             <span className="text-base">{GUITAR_NAMES[t]}</span>
             <span className="text-[13px] font-normal text-muted">{t === 'classical' ? 'מיתרי ניילון, צליל חם' : 'מיתרי פלדה, צליל בהיר'}</span>
+          </button>
+        ))}
+      </div>
+
+      <h2 className="mb-2 mt-5 font-display text-lg font-bold">המורה שלך</h2>
+      <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="המורה שלך">
+        {TEACHERS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="radio"
+            aria-checked={teacher === t.id}
+            disabled={!!t.comingSoon}
+            onClick={() => onTeacher(t.id)}
+            className={`relative flex flex-col items-center gap-1 rounded-2xl border-2 p-3 text-center font-bold ${teacher === t.id ? 'border-accent bg-soft' : 'border-line bg-card'} text-ink disabled:opacity-70`}
+          >
+            <span className="grid h-14 w-14 place-items-center rounded-full bg-soft text-3xl" aria-hidden="true">{t.id === 'female' ? '👩' : '👨'}</span>
+            <span className="text-base">{t.label}</span>
+            {t.comingSoon && <span className="absolute end-2 top-2 rounded-full bg-line px-2.5 py-0.5 text-xs font-bold text-muted">בקרוב</span>}
           </button>
         ))}
       </div>

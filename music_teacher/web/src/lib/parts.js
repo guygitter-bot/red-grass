@@ -33,7 +33,7 @@ export const PART_NAMES = {
 // מצלמה: part = החלק שמסתכלים עליו (null = כל הסצנה), dist = מרחק, az/el = זווית במעלות
 export const PRESETS = {
   classical: {
-    wide: { part: null, dist: 138, az: 6, el: 5 },
+    wide: { part: null, dist: 178, az: 6, el: 5 },
     head: { part: 'head', dist: 22, az: 12, el: 14 },
     nut: { part: 'nut', dist: 15, az: 10, el: 16 },
     fretboard: { part: 'fretboard', dist: 34, az: 4, el: 12 },
@@ -45,7 +45,7 @@ export const PRESETS = {
     hands: { part: 'strings', dist: 62, az: 0, el: 8 },
   },
   electric: {
-    wide: { part: null, dist: 138, az: 6, el: 5 },
+    wide: { part: null, dist: 178, az: 6, el: 5 },
     head: { part: 'head', dist: 22, az: 12, el: 14 },
     nut: { part: 'nut', dist: 15, az: 10, el: 16 },
     fretboard: { part: 'fretboard', dist: 34, az: 4, el: 12 },

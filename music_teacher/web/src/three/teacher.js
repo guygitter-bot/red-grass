@@ -17,7 +17,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const ease = (t) => t * t * (3 - 2 * t);
 
 // ---------- עזרים ----------
-function twoBone(A, T, l1, l2, pole) {
+export function twoBone(A, T, l1, l2, pole) {
   const AT = new THREE.Vector3().subVectors(T, A);
   const d = AT.length();
   const dd = clamp(d, Math.abs(l1 - l2) + 1e-3, l1 + l2 - 1e-3);
@@ -138,6 +138,31 @@ class Hand {
   }
 }
 
+// שרפרף (וגם הדום לגיטרה קלאסית). seatY = מרכז המושב. משותף למורה הבובה ולמורה הדגם.
+export function buildStool(group, classical, seatY = -3) {
+  const FLOOR = -30;
+  const wood = new THREE.MeshStandardMaterial({ color: 0x9c6b3f, roughness: 0.7, metalness: 0 });
+  const mats = [wood];
+  const seat = new THREE.Mesh(new THREE.CylinderGeometry(10, 10, 1.6, 32), wood);
+  seat.position.set(0, seatY, 4);
+  group.add(seat);
+  [[-6, -3], [6, -3], [0, 8]].forEach(([x, z]) => {
+    const a = V(x * 0.8, seatY - 0.6, 4 + z * 0.8);
+    const b = V(x * 1.35, FLOOR, 4 + z * 1.35);
+    const l = new Limb(group, wood, 0.7, 0.55);
+    l.set(a, b);
+  });
+  if (classical) {
+    // הדום קטן לרגל שמאל – כמו שמנגנים בגיטרה קלאסית
+    const fm = new THREE.MeshStandardMaterial({ color: 0x7b5232, roughness: 0.8, metalness: 0 });
+    mats.push(fm);
+    const fs = new THREE.Mesh(new THREE.BoxGeometry(11, 8, 12), fm);
+    fs.position.set(7, FLOOR + 4, 24);
+    group.add(fs);
+  }
+  return mats;
+}
+
 // ---------- המורה ----------
 export function createTeacher(guitar) {
   const type = guitar.type;
@@ -163,21 +188,7 @@ export function createTeacher(guitar) {
 
   // שרפרף
   const FLOOR = -30;
-  const seat = new THREE.Mesh(new THREE.CylinderGeometry(10, 10, 1.6, 32), wood);
-  seat.position.set(0, -3.0, 4);
-  group.add(seat);
-  [[-6, -3], [6, -3], [0, 8]].forEach(([x, z]) => {
-    const a = V(x * 0.8, -3.6, 4 + z * 0.8);
-    const b = V(x * 1.35, FLOOR, 4 + z * 1.35);
-    const l = new Limb(group, wood, 0.7, 0.55);
-    l.set(a, b);
-  });
-  if (classical) {
-    // הדום קטן לרגל שמאל – כמו שמנגנים בגיטרה קלאסית
-    const fs = new THREE.Mesh(new THREE.BoxGeometry(11, 8, 12), mat(0x7b5232, 0.8));
-    fs.position.set(7, FLOOR + 4, 24);
-    group.add(fs);
-  }
+  const stool = buildStool(group, classical, -3);
 
   // גוף
   const body = new THREE.Group();
@@ -661,7 +672,7 @@ export function createTeacher(guitar) {
       group.traverse((o) => {
         if (o.geometry) o.geometry.dispose();
       });
-      [skin, nailMat, shirt, pants, shoe, hairMat, dark, wood].forEach((m) => m.dispose());
+      [skin, nailMat, shirt, pants, shoe, hairMat, dark, wood, ...stool].forEach((m) => m.dispose());
     },
     // לבדיקות/דיבוג
     _state: st,
