@@ -121,7 +121,7 @@
   לוודא שהגיבוי והשחזור (`/backup/export`, `/backup/import`) עדיין מכסים אותו.
 
 #### ייבוא
-- My Recipe Box / RecetteTek (`.rtk`): `web/src/lib/importers.js`, דרך הגדרות ← "ייבוא מאפליקציה אחרת". מתכון בלי מצרכים
+- My Recipe Box / RecetteTek (`.rtk`), Paprika (`.paprikarecipes`), Recipe Keeper (ZIP עם `recipes.html`), Cookmate (`.mcb` / XML): `web/src/lib/importers.js` (`readImportFile` מזהה לפי התוכן), דרך הגדרות ← "ייבוא מאפליקציה אחרת". מתכון בלי מצרכים
   אפשר "להשלים מהמקור" (נשלח לסוכן ברקע).
 
 ### מאגר AI (`ai_maagar/`)
