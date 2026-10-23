@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Camera, ImagePlus, Loader2, PenLine, X } from 'lucide-react';
-import { addManualRecipe, addPhotoRecipe } from '../lib/api';
+import { addManualRecipe, addPhotoRecipe, bugMessage } from '../lib/api';
 import { dataUrlToPart, photoForReading, thumbnail } from '../lib/image';
 import { textToSections } from '../lib/recipes';
 
@@ -73,7 +73,7 @@ function PhotoForm({ session, initialFiles, onFilesTaken, onSaved, onPaywall }) 
       onSaved(recipe, user, more || []);
     } catch (e) {
       if (e.status === 402) onPaywall(e.data.paymentUrl || '');
-      setError(e.message);
+      setError(bugMessage('NewRecipeView:photo', e));
       setBusy(false);
     }
   };
@@ -148,7 +148,7 @@ function ManualForm({ session, categories, onSaved }) {
       });
       onSaved(recipe);
     } catch (err) {
-      setError(err.message);
+      setError(bugMessage('NewRecipeView:manual', err));
       setBusy(false);
     }
   };
