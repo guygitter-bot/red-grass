@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Globe, Heart, LogOut, MessageCircle, PenLine, Search, Settings, X } from 'lucide-react';
+import { Globe, Heart, Loader2, LogOut, MessageCircle, PenLine, Search, Settings, X } from 'lucide-react';
 import SearchView from './components/SearchView';
 import DietFilter from './components/DietFilter';
 import SettingsView from './components/SettingsView';
@@ -39,7 +39,7 @@ import { CATEGORIES } from './lib/categories';
 import { isNative } from './lib/native';
 import {
   addCategory, setCategoryPrefs, addRecipeAsync, addTextRecipe, getJob, getRecipe, deleteRecipe, removeCategory, getMe, getPlan, getShopping, listRecipes, logout as apiLogout, refreshRecipe,
-  updateRecipe, categorizeRecipe, estimateNutrition, getProfile, setProfile, publishRecipe, unpublishRecipe, safeRecipe, talkApi, getPantry, shoppingOps, pantryOps, planOps, shareRecipe, recipeShareLink,
+  updateRecipe, categorizeRecipe, estimateNutrition, getProfile, setProfile, publishRecipe, unpublishRecipe, safeRecipe, searchCommunity, talkApi, getPantry, shoppingOps, pantryOps, planOps, shareRecipe, recipeShareLink,
 } from './lib/api';
 import { SORTS, categoriesOf, countByCategory, emojiOf, filterRecipes, freeLeft, linkFromShare, orderCategories, parseAuthHash, parseShareLink, sortRecipes } from './lib/recipes';
 import { usePersistentState } from './lib/storage';
@@ -663,28 +663,29 @@ export default function App() {
     );
   }
 
+  // מתכון מהקהילה (מהחיפוש, או מהמתכונים הפופולריים בספר ריק)
+  if ((nav.view === 'search' || nav.view === 'home') && communityOpen) {
+    return (
+      <>
+        {paywall && <Paywall user={user} paymentUrl={paywall.paymentUrl} onClose={() => setPaywall(null)} />}
+        <SharedRecipe
+          communityKey={communityOpen.key}
+          session={session}
+          onClose={() => setCommunityOpen(null)}
+          onSaved={(data) => {
+            if (data.user && session && !ownerDevice) setUser(data.user);
+            upsert(safeRecipe(data.recipe));
+            setCommunityOpen(null);
+            setToast(data.updated ? 'המתכון כבר היה בספר שלך' : 'המתכון נשמר בספר שלך');
+            open(data.recipe.id);
+          }}
+          onPaywall={(url) => setPaywall({ paymentUrl: url || paymentUrl })}
+        />
+      </>
+    );
+  }
   if (nav.view === 'search') {
     const savedUrls = savedUrlSet(recipes);
-    if (communityOpen) {
-      return (
-        <>
-          {paywall && <Paywall user={user} paymentUrl={paywall.paymentUrl} onClose={() => setPaywall(null)} />}
-          <SharedRecipe
-            communityKey={communityOpen.key}
-            session={session}
-            onClose={() => setCommunityOpen(null)}
-            onSaved={(data) => {
-              if (data.user && session && !ownerDevice) setUser(data.user);
-              upsert(safeRecipe(data.recipe));
-              setCommunityOpen(null);
-              setToast(data.updated ? 'המתכון כבר היה בספר שלך' : 'המתכון נשמר בספר שלך');
-              open(data.recipe.id);
-            }}
-            onPaywall={(url) => setPaywall({ paymentUrl: url || paymentUrl })}
-          />
-        </>
-      );
-    }
     return (
       <>
         {paywall && <Paywall user={user} paymentUrl={paywall.paymentUrl} onClose={() => setPaywall(null)} />}
@@ -997,7 +998,7 @@ export default function App() {
           </>
         )}
 
-        {recipes.length === 0 && !pending.length && !loadError && <Empty />}
+        {recipes.length === 0 && !pending.length && !loadError && <Empty session={session} onOpenCommunity={setCommunityOpen} />}
 
         {recipes.length > 0 && visible.length === 0 && (
           <p className="text-center text-stone-500 mt-10">
@@ -1040,22 +1041,78 @@ function Chip({ active, onClick, children }) {
   );
 }
 
-function Empty() {
+// ספר ריק (משתמש חדש): מתכונים פופולריים מהקהילה לשמירה בלחיצה, ודרכים ברורות להוסיף מתכון
+function Empty({ session, onOpenCommunity }) {
+  const [popular, setPopular] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    searchCommunity(session, '', {})
+      .then((list) => alive && setPopular(list.slice(0, 6)))
+      .catch(() => alive && setPopular([]));
+    return () => {
+      alive = false;
+    };
+  }, [session]);
+  const ways = [
+    ['#/search', '🔎', 'חיפוש מתכון', 'כותבים שם של מנה'],
+    ['#/new', '📷', 'צילום מתכון', 'דף מספר או פתק'],
+    ['#/import', '📥', 'ייבוא', 'מאפליקציה אחרת'],
+  ];
   return (
-    <div className="text-center mt-12 px-6 text-stone-600">
-      <div className="text-6xl mb-4">🍳</div>
-      <h2 className="text-xl font-bold text-stone-800 mb-2">ספר המתכונים ריק</h2>
-      <p className="leading-relaxed">
-        הדביקו למעלה קישור למתכון מכל אתר, או לסרטון ב-YouTube, TikTok או Instagram.
-        <br />
-        המתכון יסודר עם מצרכים ואופן הכנה וייכנס לקטגוריה המתאימה.
-      </p>
-      <p className="text-sm mt-4 text-stone-500">
-        בטלפון: אחרי "הוסף למסך הבית" אפשר גם לשתף קישור ישירות ל-mat-kon.
-      </p>
-      <a href="#/help" className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-orange-100 text-orange-800 font-bold px-5 py-3">
-        🎬 סרטוני הדרכה
-      </a>
+    <div className="mt-6">
+      <div className="text-center px-4 text-stone-600">
+        <div className="text-5xl mb-2">🍳</div>
+        <h2 className="text-xl font-bold text-stone-800">בואו נמלא את הספר שלכם</h2>
+        <p className="mt-1 leading-relaxed">מדביקים למעלה קישור מכל אתר, יוטיוב, טיקטוק או אינסטגרם – או בוחרים דרך אחרת:</p>
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        {ways.map(([href, emoji, title, sub]) => (
+          <a key={href} href={href} className="rounded-2xl bg-white shadow-sm p-3 text-center hover:shadow">
+            <div className="text-2xl">{emoji}</div>
+            <div className="font-bold text-stone-800 text-sm mt-1">{title}</div>
+            <div className="text-xs text-stone-500">{sub}</div>
+          </a>
+        ))}
+      </div>
+
+      {(popular === null || popular.length > 0) && (
+        <>
+          <h3 className="mt-7 mb-1 font-black text-stone-900 flex items-center gap-2">⭐ פופולרי בקהילה</h3>
+          <p className="text-sm text-stone-500 mb-3">מתכונים שמשתמשים אחרים שמרו ואהבו. לוחצים – ושומרים בספר שלכם.</p>
+          {popular === null ? (
+            <div className="py-6 flex justify-center text-stone-400"><Loader2 className="animate-spin" size={22} /></div>
+          ) : (
+            <ul className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {popular.map((r) => (
+                <li key={r.key}>
+                  <button onClick={() => onOpenCommunity(r)} className="w-full text-right rounded-2xl bg-white shadow-sm overflow-hidden hover:shadow">
+                    {r.image ? (
+                      <img src={r.image} alt="" loading="lazy" className="w-full aspect-[4/3] object-cover bg-stone-100" />
+                    ) : (
+                      <div className="w-full aspect-[4/3] bg-orange-50 flex items-center justify-center text-3xl">🍽️</div>
+                    )}
+                    <div className="p-2">
+                      <div className="font-bold text-sm text-stone-900 leading-snug line-clamp-2">{r.title}</div>
+                      <div className="mt-1 text-xs text-stone-500 flex flex-wrap gap-x-2">
+                        {r.rating ? <span>⭐ {r.rating}</span> : null}
+                        <span>נשמר ב-{r.saves} {r.saves === 1 ? 'ספר' : 'ספרים'}</span>
+                        {r.madeCount > 0 && <span>📸 {r.madeCount}</span>}
+                      </div>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <a href="#/search" className="mt-3 block text-center text-orange-700 font-medium">עוד מתכונים מהקהילה ←</a>
+        </>
+      )}
+
+      <div className="text-center mt-6">
+        <a href="#/help" className="inline-flex items-center gap-2 rounded-2xl bg-orange-100 text-orange-800 font-bold px-5 py-3">
+          🎬 סרטוני הדרכה
+        </a>
+      </div>
     </div>
   );
 }
