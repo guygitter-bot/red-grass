@@ -1,0 +1,1121 @@
+<title>שיעור ראשון בגיטרה</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&family=Rubik:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* פריסה: בטלפון הבמה (תלת־ממד) למעלה והפאנל למטה; במסך רחב הפאנל מימין והבמה גדולה משמאל */
+:root {
+  --bg: #e4e1dc;
+  --surface: #f8f6f3;
+  --card: #ffffff;
+  --fg: #231d18;
+  --muted: #655b52;
+  --line: #d2cbc2;
+  --accent: #a95f00;
+  --accent-ink: #ffffff;
+  --accent-soft: #f3e2c6;
+  --good: #1c7f46;
+  --good-soft: #d5ecdc;
+  --bad: #a8381a;
+  --bad-soft: #f4dcd3;
+  --scene: #d6d1ca;
+  --spot: rgba(214, 140, 30, 0.16);
+  --vignette: rgba(60, 40, 20, 0.22);
+  --shadow-op: 0.32;
+  --font-display: 'Rubik', 'Heebo', 'Arial Hebrew', system-ui, sans-serif;
+  --font-body: 'Assistant', 'Heebo', 'Arial Hebrew', system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f0c0a;
+    --surface: #1b1612;
+    --card: #261e18;
+    --fg: #f3ece2;
+    --muted: #b9ab98;
+    --line: #3b3027;
+    --accent: #ffb23e;
+    --accent-ink: #1a1005;
+    --accent-soft: #3d2c14;
+    --good: #66d390;
+    --good-soft: #17301f;
+    --bad: #ff8d6b;
+    --bad-soft: #3a1d14;
+    --scene: #1a1410;
+    --spot: rgba(255, 170, 60, 0.13);
+    --vignette: rgba(0, 0, 0, 0.55);
+    --shadow-op: 0.6;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f0c0a;
+  --surface: #1b1612;
+  --card: #261e18;
+  --fg: #f3ece2;
+  --muted: #b9ab98;
+  --line: #3b3027;
+  --accent: #ffb23e;
+  --accent-ink: #1a1005;
+  --accent-soft: #3d2c14;
+  --good: #66d390;
+  --good-soft: #17301f;
+  --bad: #ff8d6b;
+  --bad-soft: #3a1d14;
+  --scene: #1a1410;
+  --spot: rgba(255, 170, 60, 0.13);
+  --vignette: rgba(0, 0, 0, 0.55);
+  --shadow-op: 0.6;
+  color-scheme: dark;
+}
+
+html { height: 100%; box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.45; }
+*, *::before, *::after { box-sizing: border-box; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+#app {
+  height: 100%;
+  display: flex; flex-direction: column; gap: 8px;
+  padding-block: 8px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  overflow: hidden;
+}
+.top { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.top h1 { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 17px; letter-spacing: 0; }
+.sketch-tag {
+  font-size: 12px; font-weight: 600; color: var(--accent);
+  border: 1px dashed var(--accent); border-radius: 999px; padding: 2px 10px;
+}
+
+.main { flex: 1; min-height: 0; display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 48fr) minmax(0, 52fr); grid-template-areas: "stage" "panel"; }
+.stage { grid-area: stage; position: relative; border-radius: 16px; overflow: hidden; background: var(--scene); border: 1px solid var(--line); min-height: 0; }
+.panel { grid-area: panel; }
+#cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+#cv:active { cursor: grabbing; }
+.stage::before { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 1; background: radial-gradient(ellipse 70% 60% at 50% 42%, var(--spot), transparent 70%); }
+.stage::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 1; background: radial-gradient(ellipse at 50% 45%, transparent 45%, var(--vignette) 100%); }
+#labels { position: absolute; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
+.lb { position: absolute; left: 0; top: 0; will-change: transform; display: none; }
+.lb.on { display: block; }
+.badge {
+  min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; display: grid; place-items: center;
+  font: 700 12px/1 var(--font-display); background: rgba(20, 14, 8, 0.78); color: #fff; border: 1.5px solid rgba(255, 255, 255, 0.45);
+  transition: background .2s, color .2s, transform .2s;
+}
+.badge.hot { background: var(--accent); color: var(--accent-ink); border-color: var(--accent-ink); transform: scale(1.25); }
+.badge.x { background: var(--bad); color: #fff; border-color: #fff; }
+.badge.o { background: transparent; color: #fff; border: 2px solid #fff; background: rgba(20,14,8,.55); }
+.fnum { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font: 700 13px/1 var(--font-display); background: var(--accent); color: var(--accent-ink); border: 2px solid #fff; }
+.ring { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; border: 3px solid var(--bad); animation: ring 1.1s ease-out infinite; }
+@keyframes ring { from { transform: scale(.5); opacity: 1; } to { transform: scale(1.5); opacity: 0; } }
+#cap {
+  position: absolute; z-index: 3; top: 10px; right: 10px; max-width: calc(100% - 20px);
+  background: rgba(20, 14, 8, 0.82); color: #fff; font-weight: 700; font-size: 14px; padding: 5px 12px; border-radius: 999px;
+  border: 1px solid rgba(255, 190, 90, 0.5); pointer-events: none; opacity: 0; transition: opacity .25s;
+}
+#cap.on { opacity: 1; }
+#btn-replay { position: absolute; z-index: 3; bottom: 8px; left: 10px; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border-radius: 999px; cursor: pointer; font-weight: 700; font-size: 13px;
+  background: rgba(20, 14, 8, 0.82); color: #fff; border: 1px solid rgba(255, 190, 90, 0.5); }
+#btn-replay[hidden] { display: none; }
+#hint { position: absolute; z-index: 3; bottom: 10px; left: 90px; right: 12px; text-align: right; font-size: 12px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.8); pointer-events: none; opacity: .85; }
+#stage-msg[hidden] { display: none; }
+#stage-msg { position: absolute; inset: 0; z-index: 4; display: grid; place-items: center; padding: 20px; text-align: center; background: var(--scene); }
+
+.panel {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 16px; min-height: 0; min-width: 0;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.panel-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 14px 8px; display: flex; flex-direction: column; gap: 8px; }
+.progress { display: flex; flex-direction: column; gap: 6px; }
+.progress-meta { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; color: var(--muted); }
+.progress-meta b { color: var(--fg); font-family: var(--font-display); font-weight: 500; font-size: 14px; }
+.segs { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.seg { height: 10px; padding: 0; border: 0; border-radius: 99px; background: var(--line); cursor: pointer; position: relative; }
+.seg::after { content: ""; position: absolute; inset: -9px -1px; }
+.seg.done { background: var(--accent-soft); outline: 1px solid var(--accent); outline-offset: -1px; }
+.seg.cur { background: var(--accent); }
+
+.teacher { display: flex; gap: 10px; align-items: flex-start; }
+.avatar { flex: none; width: 42px; height: 42px; }
+.bubble { position: relative; flex: 1; min-width: 0; background: var(--card); border: 1px solid var(--line); border-radius: 4px 14px 14px 14px; padding: 8px 12px; }
+.bubble::before { content: ""; position: absolute; top: 12px; right: -7px; width: 12px; height: 12px; background: var(--card); border-top: 1px solid var(--line); border-right: 1px solid var(--line); transform: rotate(45deg); }
+.bubble h2 { margin: 0 0 2px; font-family: var(--font-display); font-weight: 700; font-size: 16px; text-wrap: balance; }
+.bubble p { margin: 0; font-size: 15px; max-width: 62ch; }
+
+.tools { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.tools[hidden], .ring[hidden] { display: none; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.btn {
+  min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--card);
+  font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; text-wrap: balance;
+}
+.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn svg { flex: none; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.good { background: var(--good); color: #fff; border-color: var(--good); }
+.btn.bad { background: var(--card); color: var(--bad); border-color: var(--bad); }
+.btn.small { min-height: 38px; padding: 0 12px; font-size: 14px; }
+.chips { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.chip { min-height: 40px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--card); font: 600 13px var(--font-display); cursor: pointer; padding: 0 2px; }
+.chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.note { font-size: 13px; color: var(--muted); margin: 0; }
+.note.box { border: 1px dashed var(--line); border-radius: 10px; padding: 5px 10px; font-size: 12.5px; line-height: 1.35; }
+
+.fingers { display: flex; gap: 10px; align-items: stretch; }
+.legend { list-style: none; margin: 0; padding: 0; flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.legend li { display: flex; align-items: center; gap: 8px; padding: 2px 6px; border-radius: 8px; opacity: .45; transition: opacity .3s, background .3s; }
+.legend li.on { opacity: 1; background: var(--accent-soft); }
+.legend .dot { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font: 700 12px var(--font-display); background: var(--accent); color: var(--accent-ink); }
+.legend .dot.x { background: var(--bad); color: #fff; }
+.legend .dot.o { background: transparent; color: var(--fg); border: 2px solid var(--fg); }
+.chord-card { flex: none; width: 96px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 6px 6px 4px; text-align: center; color: var(--fg); }
+.chord-card b { display: block; font: 700 15px var(--font-display); }
+.chord-card svg { display: block; width: 100%; height: auto; direction: ltr; }
+
+.beats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.beat { border: 1.5px solid var(--line); background: var(--card); border-radius: 12px; padding: 6px 0 4px; text-align: center; display: grid; gap: 2px; justify-items: center; color: var(--muted); transition: background .08s, color .08s, transform .08s; }
+.beat small { font-size: 12px; display: none; }
+.beat b { font: 700 12px var(--font-display); }
+.beat.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); transform: translateY(2px) scale(1.04); }
+.tempo { display: flex; align-items: center; gap: 10px; }
+.tempo label { font-weight: 600; white-space: nowrap; }
+.tempo input { flex: 1; min-width: 0; accent-color: var(--accent); height: 28px; }
+.tempo output { min-width: 3.5em; text-align: left; font-variant-numeric: tabular-nums; font-weight: 700; }
+
+.result { border-radius: 12px; padding: 8px 12px; font-weight: 600; font-size: 14px; line-height: 1.35; display: none; }
+.result.on { display: block; }
+.result.ok { background: var(--good-soft); color: var(--good); border: 1px solid var(--good); }
+.result.no { background: var(--bad-soft); color: var(--bad); border: 1px solid var(--bad); }
+
+.nav { flex: none; display: flex; justify-content: space-between; gap: 10px; padding: 8px 14px 10px; border-top: 1px solid var(--line); background: var(--surface); }
+.nav .btn { flex: 1; max-width: 220px; }
+
+@media (min-width: 1024px) {
+  #app { gap: 12px; padding-block: 14px; }
+  .top h1 { font-size: 20px; }
+  .main { grid-template-columns: 410px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); grid-template-areas: "panel stage"; gap: 14px; }
+  .panel-scroll { padding: 16px 18px 10px; gap: 14px; }
+  .nav { padding: 12px 18px 16px; }
+  .avatar { width: 50px; height: 50px; }
+  .bubble h2 { font-size: 18px; }
+  .bubble p { font-size: 16px; }
+  .chord-card { width: 128px; }
+  .beat small { display: block; }
+  .beat { padding: 8px 0 6px; }
+}
+@media (max-width: 420px) {
+  .bubble p { font-size: 14.5px; }
+  .teacher { gap: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+}
+</style>
+
+<div id="app" dir="rtl" lang="he">
+  <div class="top">
+    <h1>שיעור 1: אקורד Am</h1>
+    <span class="sketch-tag">סקיצה – לא האפליקציה הסופית</span>
+  </div>
+
+  <div class="main">
+    <section class="stage" id="stage" aria-label="גיטרה בתלת־ממד">
+      <canvas id="cv"></canvas>
+      <div id="labels"></div>
+      <div id="cap"></div>
+      <button class="replay" id="btn-replay" type="button" hidden>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.500 8a5.500 5.500 0 1 0 1.800-4.100M2.500 2v3.500H6"/></svg>
+        <span>שוב</span>
+      </button>
+      <div id="hint">גררו עם האצבע כדי להסתכל מזווית אחרת</div>
+      <div id="stage-msg" hidden>לא הצלחנו לטעון את התלת־ממד. בדקו חיבור לאינטרנט ורעננו את הדף.</div>
+    </section>
+
+    <section class="panel" aria-label="השיעור">
+      <div class="panel-scroll">
+        <div class="progress">
+          <div class="progress-meta"><span id="prog-text">שלב 1 מתוך 6</span><b id="prog-name">ברוכים הבאים</b></div>
+          <div class="segs" id="segs"></div>
+        </div>
+
+        <div class="teacher">
+          <svg class="avatar" viewBox="0 0 48 48" aria-hidden="true">
+            <circle cx="24" cy="24" r="24" fill="var(--accent)"/>
+            <path d="M24 10c7 0 12.5 2.2 12.5 8.5 0 7.5-6.5 18.5-12.5 20.5-6-2-12.5-13-12.5-20.5C11.5 12.200 17 10 24 10z" fill="var(--accent-ink)"/>
+          </svg>
+          <div class="bubble" aria-live="polite">
+            <h2 id="say-title"></h2>
+            <p id="say-text"></p>
+          </div>
+        </div>
+
+        <!-- שלב 2 -->
+        <div class="tools" data-tools="2" hidden>
+          <div class="chips" id="chips"></div>
+        </div>
+
+        <!-- שלב 3 -->
+        <div class="tools" data-tools="3" hidden>
+          <div class="fingers">
+            <ul class="legend" id="legend">
+              <li data-k="1"><span class="dot">1</span><span>מורה · מיתר 2 · שריג 1</span></li>
+              <li data-k="2"><span class="dot">2</span><span>אמה · מיתר 4 · שריג 2</span></li>
+              <li data-k="3"><span class="dot">3</span><span>קמיצה · מיתר 3 · שריג 2</span></li>
+              <li data-k="x"><span class="dot x">X</span><span>מיתר 6 · לא מנגנים</span></li>
+              <li data-k="o"><span class="dot o">O</span><span>מיתרים 5 ו-1 · פתוחים</span></li>
+            </ul>
+            <div class="chord-card" aria-label="דיאגרמת אקורד Am">
+              <b>Am</b>
+              <svg viewBox="0 0 120 142" role="img" aria-label="דיאגרמת אקורד Am: אצבע 1 במיתר 2 שריג 1, אצבע 2 במיתר 4 שריג 2, אצבע 3 במיתר 3 שריג 2">
+                <g stroke="currentColor" stroke-width="1.4" fill="none">
+                  <line x1="20" y1="30" x2="100" y2="30" stroke-width="4"/>
+                  <line x1="20" y1="54" x2="100" y2="54"/><line x1="20" y1="78" x2="100" y2="78"/><line x1="20" y1="102" x2="100" y2="102"/><line x1="20" y1="126" x2="100" y2="126"/>
+                  <line x1="20" y1="30" x2="20" y2="126"/><line x1="36" y1="30" x2="36" y2="126"/><line x1="52" y1="30" x2="52" y2="126"/>
+                  <line x1="68" y1="30" x2="68" y2="126"/><line x1="84" y1="30" x2="84" y2="126"/><line x1="100" y1="30" x2="100" y2="126"/>
+                </g>
+                <g font-family="Rubik, sans-serif" font-weight="700" text-anchor="middle">
+                  <text x="20" y="22" font-size="13" fill="var(--bad)">×</text>
+                  <circle cx="36" cy="17" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+                  <circle cx="100" cy="17" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/>
+                  <circle cx="84" cy="42" r="8" fill="var(--accent)"/><text x="84" y="46.500" font-size="11" fill="var(--accent-ink)">1</text>
+                  <circle cx="52" cy="66" r="8" fill="var(--accent)"/><text x="52" y="70.500" font-size="11" fill="var(--accent-ink)">2</text>
+                  <circle cx="68" cy="66" r="8" fill="var(--accent)"/><text x="68" y="70.500" font-size="11" fill="var(--accent-ink)">3</text>
+                  <g font-size="9" font-weight="600" fill="var(--muted)"><text x="20" y="138">6</text><text x="36" y="138">5</text><text x="52" y="138">4</text><text x="68" y="138">3</text><text x="84" y="138">2</text><text x="100" y="138">1</text></g>
+                </g>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- שלב 4 -->
+        <div class="tools" data-tools="4" hidden>
+          <div class="row">
+            <button class="btn primary" id="btn-play-chord" type="button">
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 1.500v13l11-6.500z" fill="currentColor"/></svg>
+              <span>נגן את האקורד</span>
+            </button>
+          </div>
+          <p class="note">הצליל נוצר בדפדפן, כמו מיתרים אמיתיים שנפרטים: לה, מי, לה, דו ומי.</p>
+        </div>
+
+        <!-- שלב 5 -->
+        <div class="tools" data-tools="5" hidden>
+          <div class="beats" id="beats">
+            <div class="beat" data-i="0"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v15M6 13l6 6 6-6"/></svg><small>למטה</small><b>1</b></div>
+            <div class="beat" data-i="1"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v15M6 13l6 6 6-6"/></svg><small>למטה</small><b>2</b></div>
+            <div class="beat" data-i="2"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20V5M6 11l6-6 6 6"/></svg><small>למעלה</small><b>3</b></div>
+            <div class="beat" data-i="3"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v15M6 13l6 6 6-6"/></svg><small>למטה</small><b>4</b></div>
+          </div>
+          <div class="tempo">
+            <label for="tempo">קצב</label>
+            <input type="range" id="tempo" min="50" max="100" value="70" step="1">
+            <output id="tempo-out" for="tempo">70 פעמים בדקה</output>
+          </div>
+          <div class="row">
+            <button class="btn primary" id="btn-rhythm" type="button">
+              <svg id="ic-play" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 1.500v13l11-6.500z" fill="currentColor"/></svg>
+              <svg id="ic-stop" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" hidden><rect x="3" y="3" width="10" height="10" rx="1.500" fill="currentColor"/></svg>
+              <span id="rhythm-label">התחילו לנגן</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- שלב 6 -->
+        <div class="tools" data-tools="6" hidden>
+          <p class="note box">בסקיצה: אין מיקרופון – לוחצים כדי לדמות. באפליקציה האמיתית המורה מקשיב לנגינה שלכם.</p>
+          <div class="row">
+            <button class="btn good" id="sim-good" type="button">יצא נקי</button>
+            <button class="btn bad" id="sim-buzz" type="button">משהו זמזם</button>
+            <button class="btn small" id="sim-retry" type="button" hidden>נסו שוב</button>
+          </div>
+          <div class="result" id="result" role="status"></div>
+        </div>
+      </div>
+
+      <div class="nav">
+        <button class="btn" id="btn-prev" type="button">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.200" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg>
+          <span>הקודם</span>
+        </button>
+        <button class="btn primary" id="btn-next" type="button">
+          <span id="next-label">הבא</span>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.200" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3L5 8l5 5"/></svg>
+        </button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var root = document.documentElement;
+
+  /* ---------- טקסטים של המורה ---------- */
+  var STEPS = [
+    { name: 'ברוכים הבאים', say: 'שלום! אני המורה שלכם לגיטרה. היום נלמד אקורד אחד: Am, שקוראים לו "לה מינור". הוא קל, נשמע יפה ומעט עצוב, ואפשר לנגן איתו הרבה שירים. בואו נתחיל.' },
+    { name: 'הכירו את המיתרים', say: 'לגיטרה יש שישה מיתרים, ואנחנו סופרים מהעבה לדק: מיתר 6 הוא העבה והנמוך, מיתר 1 הוא הדק והגבוה. כאן העבה למטה והדק למעלה, כמו בטאבים. לחצו על מיתר כדי לראות אותו.' },
+    { name: 'איפה שמים את האצבעות', say: 'שלוש אצבעות, כל אחת קרוב לפס המתכת (השריג) ולא עליו. מיתר 6 לא מנגנים, ומיתרים 5 ו-1 נשארים פתוחים.' },
+    { name: 'שומעים איך זה נשמע', say: 'לחצו על הכפתור ותראו את המיתרים רוטטים. הפריטה מתחילה ממיתר 5 ויורדת עד מיתר 1. מיתר 6 נשאר שקט.' },
+    { name: 'מקצב', say: 'עכשיו פורטים ארבע פעמים בשורה: למטה, למטה, למעלה, למטה. מתחילים לאט, ואפשר להאיץ בהדרגה.' },
+    { name: 'התור שלך', say: 'נגנו את האקורד, ואני מקשיב.' }
+  ];
+  var FINISH = { name: 'סיימנו', say: 'כל הכבוד, סיימתם את שיעור 1! אתם יודעים אקורד Am ופריטה בסיסית. בשיעור הבא נלמד אקורד C ונעבור ביניהם.' };
+  var NAMES = {
+    6: ['מיתר 6 (העבה)', 'E', 'מי נמוך'], 5: ['מיתר 5', 'A', 'לה'], 4: ['מיתר 4', 'D', 'רה'],
+    3: ['מיתר 3', 'G', 'סול'], 2: ['מיתר 2', 'B', 'סי'], 1: ['מיתר 1 (הדק)', 'e', 'מי גבוה']
+  };
+
+  var reduced = false;
+  try { reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+
+  /* ---------- בניית הפאנל ---------- */
+  var segs = $('segs');
+  for (var s = 0; s < 6; s++) {
+    (function (n) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'seg'; b.id = 'seg-' + (n + 1);
+      b.setAttribute('aria-label', 'לשלב ' + (n + 1) + ': ' + STEPS[n].name);
+      b.addEventListener('click', function () { go(n + 1); });
+      segs.appendChild(b);
+    })(s);
+  }
+  var chipsEl = $('chips');
+  [6, 5, 4, 3, 2, 1].forEach(function (n) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip'; b.id = 'chip-' + n;
+    b.textContent = n + ' · ' + NAMES[n][1];
+    b.setAttribute('aria-label', NAMES[n][0] + ', ' + NAMES[n][2]);
+    b.addEventListener('click', function () { seqId++; flashString(n, true); });
+    chipsEl.appendChild(b);
+  });
+
+  if (!window.THREE) { $('stage-msg').hidden = false; return; }
+  var THREE = window.THREE;
+
+  /* ---------- הגדרות כלליות של הגיטרה (יחידות מצוירות, לא מילימטרים) ---------- */
+  var S = 40; // אורך המיתר מהאום עד הגשר
+  var sp = function (x) { return 0.64 + 0.0075 * x; };       // המרחק בין מיתרים
+  var zS = function (i, x) { return (i - 3.5) * sp(x); };    // מיתר 6 קרוב למצלמה (למטה במסך), מיתר 1 רחוק (למעלה)
+  var ys = function (x) { return 0.15 + 0.0085 * x; };       // גובה המיתר
+  var hwF = function (x) { return 2.5 * sp(x) + 0.55; };     // חצי רוחב השדרה
+  var fretX = function (n) { return S * (1 - Math.pow(2, -n / 12)); };
+  var rad = Math.PI / 180;
+
+  /* ---------- רנדרר, במה ותאורה ---------- */
+  var cv = $('cv'), stage = $('stage');
+  var renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(36, 1, 0.5, 400);
+
+  var hemi = new THREE.HemisphereLight(0xfff1dc, 0x4a3828, 0.85);
+  scene.add(hemi);
+  var key = new THREE.DirectionalLight(0xffe6c0, 0.95);
+  key.position.set(-6, 46, 28);
+  key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048);
+  var sc = key.shadow.camera; sc.left = -34; sc.right = 34; sc.top = 24; sc.bottom = -24; sc.near = 5; sc.far = 120;
+  key.shadow.bias = -0.0006; key.shadow.radius = 3;
+  key.target.position.set(20, 0, 0);
+  scene.add(key); scene.add(key.target);
+  var warm = new THREE.PointLight(0xffa640, 0.55, 140, 1.6);
+  warm.position.set(8, 16, 12);
+  scene.add(warm);
+
+  var groundMat = new THREE.ShadowMaterial({ opacity: 0.35 });
+  var ground = new THREE.Mesh(new THREE.PlaneGeometry(260, 160), groundMat);
+  ground.rotation.x = -Math.PI / 2; ground.position.set(20, -3.15, 0); ground.receiveShadow = true;
+  scene.add(ground);
+
+  /* צבעי הבמה לפי הנושא (בהיר/כהה) */
+  function readTheme() {
+    var cs = getComputedStyle(root);
+    var c = cs.getPropertyValue('--scene').trim() || '#1a1410';
+    renderer.setClearColor(new THREE.Color(c), 1);
+    var op = parseFloat(cs.getPropertyValue('--shadow-op')) || 0.4;
+    groundMat.opacity = op;
+    var dark = (cs.colorScheme || '').indexOf('dark') >= 0 || root.getAttribute('data-theme') === 'dark' || (root.getAttribute('data-theme') !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    hemi.intensity = dark ? 0.7 : 0.95;
+    key.intensity = dark ? 0.95 : 0.85;
+    warm.intensity = dark ? 0.7 : 0.35;
+  }
+  readTheme();
+  try {
+    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    (mq.addEventListener ? mq.addEventListener('change', readTheme) : mq.addListener(readTheme));
+    new MutationObserver(readTheme).observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+  } catch (e) {}
+
+  /* ---------- טקסטורות מצוירות (עץ) ---------- */
+  function woodCanvas(base, dark, opts) {
+    var c = document.createElement('canvas'); c.width = 512; c.height = 512;
+    var g = c.getContext('2d');
+    g.fillStyle = base; g.fillRect(0, 0, 512, 512);
+    var i, y;
+    for (i = 0; i < 160; i++) {
+      y = Math.random() * 512;
+      g.strokeStyle = dark; g.globalAlpha = 0.04 + Math.random() * 0.1; g.lineWidth = 0.5 + Math.random() * 1.8;
+      g.beginPath(); g.moveTo(0, y);
+      g.bezierCurveTo(170, y + (Math.random() - 0.5) * 14, 340, y + (Math.random() - 0.5) * 14, 512, y + (Math.random() - 0.5) * 8);
+      g.stroke();
+    }
+    g.globalAlpha = 1;
+    if (opts && opts.burst) {
+      var r = g.createRadialGradient(opts.cx * 512, 256, 20, opts.cx * 512, 256, 330);
+      r.addColorStop(0, 'rgba(255,214,140,0.28)'); r.addColorStop(0.45, 'rgba(0,0,0,0)'); r.addColorStop(1, 'rgba(60,24,6,0.62)');
+      g.fillStyle = r; g.fillRect(0, 0, 512, 512);
+    }
+    var t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = 4;
+    return t;
+  }
+  var topTex = woodCanvas('#c48a45', '#7a4a1c', { burst: true, cx: 0.33 });
+  topTex.repeat.set(1 / 26, 1 / 20); topTex.offset.set(0, 0.5);
+  var neckTex = woodCanvas('#8c5a31', '#4a2a12');
+  neckTex.repeat.set(1 / 8, 1);
+  var boardTex = woodCanvas('#2b1b12', '#0c0604');
+  boardTex.repeat.set(1 / 6, 1);
+
+  var M = {
+    top: new THREE.MeshStandardMaterial({ map: topTex, roughness: 0.55, metalness: 0.0 }),
+    side: new THREE.MeshStandardMaterial({ color: 0x5a3118, roughness: 0.5, metalness: 0.0 }),
+    neck: new THREE.MeshStandardMaterial({ map: neckTex, roughness: 0.6 }),
+    board: new THREE.MeshStandardMaterial({ map: boardTex, color: 0xffffff, roughness: 0.65 }),
+    head: new THREE.MeshStandardMaterial({ color: 0x1e120b, roughness: 0.4 }),
+    fret: new THREE.MeshStandardMaterial({ color: 0xd9d4ca, roughness: 0.3, metalness: 0.55 }),
+    bone: new THREE.MeshStandardMaterial({ color: 0xe4dcc6, roughness: 0.55 }),
+    pearl: new THREE.MeshStandardMaterial({ color: 0xb8ad94, roughness: 0.5 }),
+    dark: new THREE.MeshStandardMaterial({ color: 0x0c0705, roughness: 0.8 }),
+    rosette: new THREE.MeshStandardMaterial({ color: 0x2a170b, roughness: 0.6 }),
+    metal: new THREE.MeshStandardMaterial({ color: 0xbdb7ab, roughness: 0.35, metalness: 0.7 }),
+    bridge: new THREE.MeshStandardMaterial({ color: 0x2a1a10, roughness: 0.5 }),
+    skin: new THREE.MeshStandardMaterial({ color: 0xe0a882, roughness: 0.55, metalness: 0.0 }),
+    nail: new THREE.MeshStandardMaterial({ color: 0xf0cdb4, roughness: 0.3 }),
+    pick: new THREE.MeshStandardMaterial({ color: 0xd9861f, roughness: 0.35, emissive: 0x2a1400, emissiveIntensity: 0.3 })
+  };
+
+  var guitar = new THREE.Group();
+  scene.add(guitar);
+
+  function prism(x0, x1, hw0, hw1, th, ytop, mat, cast) {
+    var sh = new THREE.Shape();
+    sh.moveTo(x0, -hw0); sh.lineTo(x1, -hw1); sh.lineTo(x1, hw1); sh.lineTo(x0, hw0); sh.closePath();
+    var g = new THREE.ExtrudeGeometry(sh, { depth: th, bevelEnabled: false });
+    var m = new THREE.Mesh(g, mat);
+    m.rotation.x = -Math.PI / 2; m.position.y = ytop - th;
+    m.castShadow = cast !== false; m.receiveShadow = true;
+    return m;
+  }
+  function segment(a, b, r, mat) {
+    var d = new THREE.Vector3().subVectors(b, a), L = d.length();
+    var m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, L, 8), mat);
+    m.position.copy(a).add(b).multiplyScalar(0.5);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
+    return m;
+  }
+
+  /* גוף הגיטרה: קו מתאר חלק שמסתובב סביב סימטריה */
+  (function buildBody() {
+    var half = [[0, 2.7], [2, 3.7], [5, 5.5], [8, 5.9], [11, 4.9], [13.2, 5.3], [16, 7.7], [20, 9.0], [23.4, 8.2], [25.4, 5.2], [26.2, 0]];
+    var pts = [], i;
+    for (i = 0; i < half.length; i++) pts.push(new THREE.Vector3(half[i][0], half[i][1], 0));
+    for (i = half.length - 2; i >= 1; i--) pts.push(new THREE.Vector3(half[i][0], -half[i][1], 0));
+    pts.push(new THREE.Vector3(0, -2.7, 0));
+    var curve = new THREE.CatmullRomCurve3(pts, true, 'centripetal');
+    var sh = new THREE.Shape(curve.getPoints(180).map(function (p) { return new THREE.Vector2(p.x, p.y); }));
+    var g = new THREE.ExtrudeGeometry(sh, { depth: 2.5, bevelEnabled: true, bevelThickness: 0.22, bevelSize: 0.2, bevelSegments: 3, curveSegments: 12 });
+    var body = new THREE.Mesh(g, [M.top, M.side]);
+    body.rotation.x = -Math.PI / 2; body.position.set(21, -2.87, 0);
+    body.castShadow = true; body.receiveShadow = true;
+    guitar.add(body);
+  })();
+
+  // חור הקול
+  (function () {
+    var cx = 29, y = -0.035;
+    var ring2 = new THREE.Mesh(new THREE.RingGeometry(3.55, 3.7, 64), M.bone); ring2.rotation.x = -Math.PI / 2; ring2.position.set(cx, y + 0.004, 0);
+    var ring = new THREE.Mesh(new THREE.RingGeometry(3.05, 3.55, 64), M.rosette); ring.rotation.x = -Math.PI / 2; ring.position.set(cx, y + 0.002, 0);
+    var hole = new THREE.Mesh(new THREE.CircleGeometry(3.05, 64), M.dark); hole.rotation.x = -Math.PI / 2; hole.position.set(cx, y, 0);
+    guitar.add(ring2, ring, hole);
+  })();
+
+  // שדרה: עץ, לוח אצבעות, שריגים, נקודות סימון, אום
+  (function buildNeck() {
+    guitar.add(prism(-0.1, 24, hwF(0) - 0.12, hwF(24) - 0.12, 1.0, -0.3, M.neck));
+    guitar.add(prism(0, 22.8, hwF(0), hwF(22.8), 0.3, 0, M.board));
+    var n;
+    for (n = 1; n <= 14; n++) {
+      var x = fretX(n), w = hwF(x);
+      var f = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.085, w * 2), M.fret);
+      f.position.set(x, 0.035, 0); f.castShadow = true; guitar.add(f);
+    }
+    var dots = { 3: 1, 5: 1, 7: 1, 9: 1, 12: 2 };
+    Object.keys(dots).forEach(function (k) {
+      var n0 = +k, xm = (fretX(n0 - 1) + fretX(n0)) / 2, zs = dots[k] === 2 ? [-1.1, 1.1] : [0];
+      zs.forEach(function (z) {
+        var d = new THREE.Mesh(new THREE.CircleGeometry(0.2, 20), M.bone);
+        d.rotation.x = -Math.PI / 2; d.position.set(xm, 0.012, z); guitar.add(d);
+      });
+    });
+    var nut = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.2, hwF(0) * 2), M.bone);
+    nut.position.set(-0.05, 0.1, 0); nut.castShadow = true; guitar.add(nut);
+  })();
+
+  // גשר
+  (function () {
+    var b = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.55, 7.4), M.bridge);
+    b.position.set(40.5, 0.22, 0); b.castShadow = true; b.receiveShadow = true; guitar.add(b);
+    var sd = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 6.4), M.bone);
+    sd.position.set(40.05, 0.5, 0); guitar.add(sd);
+    for (var i = 1; i <= 6; i++) {
+      var p = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.12, 10), M.bone);
+      p.position.set(41, 0.52, zS(i, 40)); guitar.add(p);
+    }
+  })();
+
+  // ראש הגיטרה ופקקי הכיוון
+  var head = new THREE.Group();
+  head.position.set(0, -0.12, 0); head.rotation.z = 0.2;
+  guitar.add(head);
+  var posts = [];
+  (function () {
+    var plate = prism(-8.2, 0, 2.15, 2.9, 0.7, 0, M.head); head.add(plate);
+    var hwH = function (x) { return 2.15 + (-x / 8.2) * 0.75; };
+    var xs = [-2.4, -4.6, -6.8];
+    [1, -1].forEach(function (side) { // side=+1 הצד הקרוב (מיתרים 6,5,4), -1 הרחוק (1,2,3)
+      xs.forEach(function (x, k) {
+        var z = side * 1.45;
+        var post = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 1.3, 14), M.metal);
+        post.position.set(x, 0.3, z); post.castShadow = true; head.add(post);
+        var edge = side * (hwH(x) + 0.6);
+        var ax = segment(new THREE.Vector3(x, -0.35, z), new THREE.Vector3(x, -0.35, edge), 0.1, M.metal); head.add(ax);
+        var pad = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.3, 0.75), M.pearl);
+        pad.position.set(x, -0.35, side * (hwH(x) + 0.95)); pad.castShadow = true; head.add(pad);
+        posts.push({ strIdx: side > 0 ? 6 - k : 1 + k, x: x, z: z });
+      });
+    });
+  })();
+
+  /* ---------- מיתרים ---------- */
+  var radii = { 1: 0.05, 2: 0.062, 3: 0.078, 4: 0.1, 5: 0.115, 6: 0.13 };
+  var STR = {};
+  var HLCOL = new THREE.Color(0xffb23e), BADCOL = new THREE.Color(0xff6a3d);
+  function makeString(i) {
+    var g = new THREE.CylinderGeometry(1, 1, 1, 6, 80, true);
+    g.rotateZ(-Math.PI / 2);
+    var pos = g.attributes.position, n = pos.count, base = new Float32Array(n * 3), xsA = new Float32Array(n), r = radii[i];
+    for (var k = 0; k < n; k++) {
+      var x = (pos.getX(k) + 0.5) * S, ry = pos.getY(k) * r, rz = pos.getZ(k) * r;
+      base[k * 3] = x; base[k * 3 + 1] = ys(x) + ry; base[k * 3 + 2] = zS(i, x) + rz; xsA[k] = x;
+      pos.setXYZ(k, base[k * 3], base[k * 3 + 1], base[k * 3 + 2]);
+    }
+    var wound = i >= 4;
+    var mat = new THREE.MeshStandardMaterial({ color: wound ? 0xc89a58 : 0xe6e3dc, roughness: wound ? 0.5 : 0.28, metalness: wound ? 0.45 : 0.75, emissive: 0xffb23e, emissiveIntensity: 0 });
+    var mesh = new THREE.Mesh(g, mat);
+    mesh.castShadow = true; mesh.frustumCulled = false;
+    guitar.add(mesh);
+    // הילה מתחת למיתר להדגשה
+    var glowMat = new THREE.MeshBasicMaterial({ color: 0xffb23e, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+    var gg = new THREE.BufferGeometry(), w = 0.3, y0 = ys(0) - 0.07, y1 = ys(S) - 0.07;
+    gg.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
+      0, y0, zS(i, 0) - w, 0, y0, zS(i, 0) + w, S, y1, zS(i, S) + w, S, y1, zS(i, S) - w]), 3));
+    gg.setIndex([0, 1, 2, 0, 2, 3]);
+    var glow = new THREE.Mesh(gg, glowMat); glow.renderOrder = 2;
+    guitar.add(glow);
+    STR[i] = { i: i, geom: g, base: base, xs: xsA, mat: mat, glowMat: glowMat, x0: 0, hl: 0, hlT: 0, bad: false,
+      amp: 0, t0: 0, tau: 0.55 + (6 - i) * 0.08, f: 15 + (i * 2.2), muted: i === 6 };
+  }
+  for (var si = 1; si <= 6; si++) makeString(si);
+
+  // קטעי מיתר בין האום לפקקים
+  (function () {
+    guitar.updateMatrixWorld(true);
+    head.updateMatrixWorld(true);
+    posts.forEach(function (p) {
+      var a = new THREE.Vector3(0, ys(0), zS(p.strIdx, 0));
+      var b = head.localToWorld(new THREE.Vector3(p.x, 0.9, p.z));
+      var wound = p.strIdx >= 4;
+      var m = segment(a, b, radii[p.strIdx] * 0.9, new THREE.MeshStandardMaterial({ color: wound ? 0xc89a58 : 0xe6e3dc, roughness: 0.35, metalness: 0.7 }));
+      m.castShadow = true; guitar.add(m);
+    });
+  })();
+
+  /* ---------- אצבעות ---------- */
+  var FING = [
+    { k: 1, str: 2, fret: 1, name: 'אצבע מורה' },
+    { k: 2, str: 4, fret: 2, name: 'אצבע אמה' },
+    { k: 3, str: 3, fret: 2, name: 'קמיצה' }
+  ];
+    FING.forEach(function (f) {
+    var xf = fretX(f.fret) - 0.3 * (fretX(f.fret) - fretX(f.fret - 1));
+    f.x = xf; f.z = zS(f.str, xf); f.y = 0.22;
+    var g = new THREE.Group();
+    // אצבע כפופה משני חלקים: קצה האצבע לוחץ כמעט ישר, והחלק העליון נשען לכיוון ראש הגיטרה
+    var a = new THREE.Group(); a.rotation.z = 0.08; a.rotation.x = 0.1;
+    var L1 = 1.0, L2 = 1.25;
+    var s1 = new THREE.Mesh(new THREE.CylinderGeometry(0.285, 0.26, L1, 20), M.skin); s1.position.y = L1 / 2;
+    var tip = new THREE.Mesh(new THREE.SphereGeometry(0.26, 20, 14), M.skin); tip.scale.y = 0.85;
+    var nail = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 10), M.nail); nail.scale.set(0.9, 0.35, 1); nail.position.set(0, 0.14, 0.0); nail.rotation.z = 0;
+    var jt = new THREE.Mesh(new THREE.SphereGeometry(0.295, 18, 12), M.skin); jt.position.y = L1;
+    var b = new THREE.Group(); b.position.y = L1; b.rotation.z = 0.5;
+    var s2 = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.285, L2, 20), M.skin); s2.position.y = L2 / 2;
+    var top = new THREE.Mesh(new THREE.SphereGeometry(0.3, 18, 12), M.skin); top.position.y = L2;
+    b.add(s2, top); a.add(s1, tip, jt, b);
+    [s1, tip, jt, s2, top].forEach(function (m) { m.castShadow = true; });
+    var inner = a;
+    g.add(inner); g.visible = false; guitar.add(g);
+    f.g = g; f.v = 0; f.vT = 0; f.pulse = 0;
+    g.position.set(f.x, f.y, f.z);
+  });
+
+  /* ---------- קלף (פיק) ---------- */
+  var PICKX = 9.5;
+  var pickMesh = (function () {
+    var sh = new THREE.Shape();
+    sh.moveTo(-0.62, 0.55); sh.quadraticCurveTo(0, 0.95, 0.62, 0.55);
+    sh.quadraticCurveTo(0.78, -0.1, 0.0, -0.95); sh.quadraticCurveTo(-0.78, -0.1, -0.62, 0.55);
+    var g = new THREE.ExtrudeGeometry(sh, { depth: 0.1, bevelEnabled: true, bevelThickness: 0.03, bevelSize: 0.03, bevelSegments: 2 });
+    var m = new THREE.Mesh(g, M.pick); m.rotation.x = -Math.PI / 2; m.rotation.z = 0;
+    var holder = new THREE.Group(); holder.add(m); holder.visible = false; m.castShadow = true;
+    guitar.add(holder); return holder;
+  })();
+  var pick = { z: 4.2, y: 1.8, z0: 4.2, y0: 1.8, anim: null, show: false };
+  pickMesh.position.set(PICKX, pick.y, pick.z);
+
+  /* ---------- שמע: Karplus-Strong ---------- */
+  var ac = null, master = null, bufs = {};
+  var NOTES = { 5: 110.0, 4: 164.81, 3: 220.0, 2: 261.63, 1: 329.63 }; // לה, מי, לה, דו, מי
+  function ksBuffer(freq, dur) {
+    var sr = ac.sampleRate, N = Math.max(2, Math.floor(sr / freq - 0.5)), line = new Float32Array(N), i;
+    for (i = 0; i < N; i++) line[i] = Math.random() * 2 - 1;
+    for (var p = 0; p < 2; p++) for (i = 1; i < N; i++) line[i] = 0.55 * line[i] + 0.45 * line[i - 1];
+    var len = Math.floor(sr * dur), out = new Float32Array(len), idx = 0, peak = 0;
+    for (i = 0; i < len; i++) {
+      var y = line[idx], nx = line[(idx + 1) % N];
+      line[idx] = 0.9985 * 0.5 * (y + nx); out[i] = y; idx = (idx + 1) % N;
+      if (Math.abs(y) > peak) peak = Math.abs(y);
+    }
+    var fade = Math.floor(sr * 0.25);
+    for (i = 0; i < len; i++) { var e = i > len - fade ? (len - i) / fade : 1; out[i] = out[i] / (peak || 1) * 0.9 * e; }
+    var b = ac.createBuffer(1, len, sr); b.copyToChannel(out, 0); return b;
+  }
+  function noiseTick() {
+    var sr = ac.sampleRate, len = Math.floor(sr * 0.09), b = ac.createBuffer(1, len, sr), d = b.getChannelData(0), last = 0;
+    for (var i = 0; i < len; i++) { last = 0.7 * last + 0.3 * (Math.random() * 2 - 1); d[i] = last * Math.exp(-i / (sr * 0.018)); }
+    return b;
+  }
+  function ensureAudio() {
+    if (ac) { if (ac.state === 'suspended') ac.resume(); return true; }
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return false;
+    try {
+      ac = new AC();
+      var lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4800; lp.Q.value = 0.5;
+      var comp = ac.createDynamicsCompressor();
+      master = ac.createGain(); master.gain.value = 0.55;
+      master.connect(lp); lp.connect(comp); comp.connect(ac.destination);
+      Object.keys(NOTES).forEach(function (k) { bufs[k] = ksBuffer(NOTES[k], 2.8); });
+      bufs.tick = noiseTick();
+      return true;
+    } catch (e) { ac = null; return false; }
+  }
+  function playBuf(buf, when, gain, pan) {
+    var src = ac.createBufferSource(); src.buffer = buf;
+    var g = ac.createGain(); g.gain.value = gain;
+    src.connect(g);
+    if (ac.createStereoPanner) { var p = ac.createStereoPanner(); p.pan.value = pan || 0; g.connect(p); p.connect(master); } else g.connect(master);
+    src.start(when);
+  }
+
+  /* ---------- פריטה (קול + אנימציה) ---------- */
+  var LEAD = 0.16, SWEEP = 0.22;
+  var triggers = [];
+  function strum(dir, amp, buzz) {
+    var now = performance.now() / 1000;
+    var order = dir === 'd' ? [5, 4, 3, 2, 1] : [1, 2, 3];
+    var zs = dir === 'd' ? zS(5, PICKX) + 0.7 : zS(1, PICKX) - 0.7;
+    var ze = dir === 'd' ? zS(1, PICKX) - 0.7 : zS(3, PICKX) + 0.5;
+    pick.anim = { t0: now, zs: zs, ze: ze, from: { z: pick.z, y: pick.y } };
+    var off = ac ? ac.currentTime - now : 0;
+    order.forEach(function (i, n) {
+      var frac = (zS(i, PICKX) - zs) / (ze - zs);
+      var t = now + LEAD + frac * SWEEP;
+      var a = amp * (dir === 'd' ? 1 - n * 0.06 : 0.85);
+      triggers.push({ i: i, t: t, amp: a });
+      if (ac) {
+        if (buzz && i === 2) playBuf(bufs.tick, off + t, 0.5 * a, 0.1);
+        else if (bufs[i]) playBuf(bufs[i], off + t, 0.34 * a, (3.5 - i) * 0.12);
+      }
+    });
+  }
+  function strumDownChord() { ensureAudio(); strum('d', 1, false); }
+
+  /* ---------- מצב והדגשות ---------- */
+  var step = 1, seqId = 0, timers = [];
+  function later(fn, ms) { var id = seqId; var h = setTimeout(function () { if (id === seqId) fn(); }, ms); timers.push(h); }
+  function clearTimers() { seqId++; timers.forEach(clearTimeout); timers = []; }
+  function flashString(i, keep) {
+    for (var k = 1; k <= 6; k++) { STR[k].hlT = (k === i) ? 1 : 0; STR[k].bad = false; var c = $('chip-' + k); if (c) c.classList.toggle('on', k === i); var b = LB.str[k]; if (b) b.el.firstChild.classList.toggle('hot', k === i); }
+    if (i) { setCap(NAMES[i][0] + ' · ' + NAMES[i][1] + ' · ' + NAMES[i][2]); } else setCap('');
+  }
+  var capEl = $('cap');
+  function setCap(t) { capEl.textContent = t; capEl.classList.toggle('on', !!t); }
+
+  /* ---------- תוויות HTML על הסצנה ---------- */
+  var labelsEl = $('labels'), LB = { str: {}, fin: {}, xo: {} };
+  function mkLabel(html, cls) {
+    var d = document.createElement('div'); d.className = 'lb';
+    d.style.willChange = 'transform';
+    d.innerHTML = html; if (cls) d.firstChild.className = cls;
+    labelsEl.appendChild(d);
+    return { el: d, w: new THREE.Vector3(), on: false };
+  }
+  function lbShow(l, on) { l.on = on; l.el.classList.toggle('on', on); }
+  for (var li = 1; li <= 6; li++) {
+    var l1 = mkLabel('<div class="badge">' + NAMES[li][1] + '</div>'); l1.w.set(-1.35, 0.35, zS(li, 0)); LB.str[li] = l1;
+  }
+  [6, 5, 1].forEach(function (i) {
+    var isX = i === 6;
+    var l2 = mkLabel('<div class="badge ' + (isX ? 'x' : 'o') + '">' + (isX ? '×' : 'O') + '</div>'); l2.w.set(-1.35, 0.35, zS(i, 0)); LB.xo[i] = l2;
+  });
+  FING.forEach(function (f) {
+    var l3 = mkLabel('<div class="fnum">' + f.k + '</div><div class="ring" hidden></div>'); l3.w.set(f.x, 0.55, f.z); LB.fin[f.k] = l3;
+    f.lbl = l3;
+  });
+
+  /* ---------- מצלמה ---------- */
+  var cam = { pos: new THREE.Vector3(20, 60, 40), tgt: new THREE.Vector3(20, -1, 0), roll: 0 };
+  var camFrom = null, camTo = null, camT0 = 0, camDur = 1;
+  var drag = { yaw: 0, pitch: 0, on: false, x: 0, y: 0, settle: false };
+  var tanV = Math.tan(camera.fov * rad / 2);
+
+  function frameFor(key) {
+    if (key === 'fingers_s6') key = 'fingers'; // שלב 6 משתמש באותה מסגרת כמו שלב 3
+    var a = camera.aspect || 1, portrait = a < 0.95;
+    var tx, tz = 0, ty = 0, hw, hh, pitch, roll = 0, d;
+    if (key === 'all') {
+      tx = 20; ty = -1.5; pitch = 56;
+      if (portrait) { roll = Math.PI / 2; d = Math.max(30 / tanV, 11 / (tanV * a)) * 1.0; }
+      else { d = Math.max(29.5 / (tanV * a), 11 / tanV); }
+    } else {
+      if (key === 'strings') { tx = 4.4; hw = 7.4; hh = 4.2; pitch = 60; }
+      else if (key === 'fingers') { tx = 3.1; tz = -0.2; hw = 5.9; hh = 3.6; pitch = 62; }
+      else if (key === 'strum') { tx = 5.3; hw = 7.6; hh = 4.6; pitch = 58; }
+      else { tx = 1.6; tz = -0.7; ty = 0.3; hw = 4.7; hh = 3.0; pitch = 60; } // focus
+      d = Math.max(hw / (tanV * a), hh / tanV);
+    }
+    var p = pitch * rad;
+    var tgt = new THREE.Vector3(tx, ty, tz);
+    var pos = new THREE.Vector3(tx, ty + Math.sin(p) * d, tz + Math.cos(p) * d);
+    return { pos: pos, tgt: tgt, roll: roll };
+  }
+  var curKey = 'all';
+  function goCam(key, instant) {
+    curKey = key;
+    camTo = frameFor(key);
+    camFrom = { pos: cam.pos.clone(), tgt: cam.tgt.clone(), roll: cam.roll };
+    camT0 = performance.now() / 1000; camDur = (instant || reduced) ? 0 : 1.0;
+    drag.settle = true;
+  }
+  var ease = function (t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
+  function updateCam(now) {
+    if (camTo) {
+      var t = camDur <= 0 ? 1 : Math.min(1, (now - camT0) / camDur), e = ease(t);
+      cam.pos.lerpVectors(camFrom.pos, camTo.pos, e);
+      cam.tgt.lerpVectors(camFrom.tgt, camTo.tgt, e);
+      cam.roll = camFrom.roll + (camTo.roll - camFrom.roll) * e;
+      if (t >= 1) camTo = null;
+    }
+    if (drag.settle && !drag.on) { drag.yaw *= 0.9; drag.pitch *= 0.9; if (Math.abs(drag.yaw) + Math.abs(drag.pitch) < 0.002) { drag.yaw = drag.pitch = 0; drag.settle = false; } }
+    var off = new THREE.Vector3().subVectors(cam.pos, cam.tgt);
+    off.applyAxisAngle(new THREE.Vector3(0, 1, 0), drag.yaw);
+    off.applyAxisAngle(new THREE.Vector3(1, 0, 0), drag.pitch);
+    camera.position.copy(cam.tgt).add(off);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(cam.tgt);
+    camera.rotateZ(cam.roll);
+  }
+  var clamp = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
+  cv.addEventListener('pointerdown', function (e) {
+    drag.on = true; drag.x = e.clientX; drag.y = e.clientY; drag.settle = false;
+    try { cv.setPointerCapture(e.pointerId); } catch (er) {}
+    $('hint').style.opacity = 0;
+  });
+  cv.addEventListener('pointermove', function (e) {
+    if (!drag.on) return;
+    var dx = (e.clientX - drag.x) * 0.006, dy = (e.clientY - drag.y) * 0.006;
+    drag.x = e.clientX; drag.y = e.clientY;
+    var r = Math.min(1, Math.abs(cam.roll) / (Math.PI / 2));
+    var yawD = (1 - r) * -dx + r * dy, pitchD = (1 - r) * -dy + r * dx;
+    drag.yaw = clamp(drag.yaw + yawD, -0.45, 0.45);
+    drag.pitch = clamp(drag.pitch + pitchD, -0.28, 0.28);
+  });
+  var endDrag = function () { drag.on = false; drag.settle = true; };
+  cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
+
+  function resize() {
+    var w = stage.clientWidth || 300, h = stage.clientHeight || 300;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+    if (!camTo || camDur === 0) { camTo = frameFor(curKey); camFrom = camTo; camDur = 0; }
+    else { camTo = frameFor(curKey); }
+  }
+  try { new ResizeObserver(resize).observe(stage); } catch (e) { window.addEventListener('resize', resize); }
+
+  /* ---------- שלבים ---------- */
+  var tools = document.querySelectorAll('[data-tools]');
+  var rh = { on: false, next: 0, i: 0 };
+  var buzzed = false;
+
+  function setFingers(count, animate) {
+    FING.forEach(function (f, n) {
+      f.vT = n < count ? 1 : 0;
+      if (!animate) f.v = f.vT;
+    });
+  }
+  function revealFingers() {
+    setFingers(0, false);
+    var ul = $('legend').children;
+    Array.prototype.forEach.call(ul, function (li) { li.classList.remove('on'); });
+    FING.forEach(function (f) { lbShow(f.lbl, false); });
+    [6, 5, 1].forEach(function (i) { lbShow(LB.xo[i], false); });
+    var t0 = reduced ? 50 : 1100;
+    FING.forEach(function (f, n) {
+      later(function () {
+        f.vT = 1; lbShow(f.lbl, true);
+        ul[n].classList.add('on');
+        setCap(f.name + ' · מיתר ' + f.str + ' · שריג ' + f.fret);
+      }, t0 + n * (reduced ? 100 : 1500));
+    });
+    later(function () {
+      [6, 5, 1].forEach(function (i) { lbShow(LB.xo[i], true); });
+      ul[3].classList.add('on'); ul[4].classList.add('on');
+      setCap('מיתר 6: לא מנגנים · מיתרים 5 ו-1: פתוחים');
+    }, t0 + 3 * (reduced ? 100 : 1500));
+  }
+  function runStringTour() {
+    flashString(0);
+    var order = [6, 5, 4, 3, 2, 1];
+    var t0 = reduced ? 50 : 1000;
+    order.forEach(function (i, n) { later(function () { flashString(i); }, t0 + n * (reduced ? 150 : 1150)); });
+    later(function () { flashString(0); setCap(''); }, t0 + 6 * (reduced ? 150 : 1150) + 600);
+  }
+
+  function stopRhythm() {
+    rh.on = false;
+    $('ic-play').hidden = false; $('ic-stop').hidden = true;
+    $('rhythm-label').textContent = 'התחילו לנגן';
+    Array.prototype.forEach.call(document.querySelectorAll('.beat'), function (b) { b.classList.remove('on'); });
+  }
+
+  function setResult(kind, text) {
+    var r = $('result');
+    r.className = 'result' + (kind ? ' on ' + kind : '');
+    r.textContent = text || '';
+  }
+  function go(n) {
+    n = clamp(n, 1, 7);
+    clearTimers(); stopRhythm(); resetTurnSilently();
+    step = n;
+    var fin = n === 7, info = fin ? FINISH : STEPS[n - 1];
+    $('say-title').textContent = info.name; $('say-text').textContent = info.say;
+    $('prog-text').textContent = fin ? 'השיעור הושלם' : 'שלב ' + n + ' מתוך 6';
+    $('prog-name').textContent = info.name;
+    for (var s = 1; s <= 6; s++) { var sg = $('seg-' + s); sg.classList.toggle('cur', s === n); sg.classList.toggle('done', s < n || fin); sg.setAttribute('aria-current', s === n ? 'step' : 'false'); }
+    Array.prototype.forEach.call(tools, function (t) { t.hidden = +t.getAttribute('data-tools') !== n; });
+    $('btn-prev').disabled = n === 1;
+    $('btn-next').disabled = fin;
+    $('next-label').textContent = n === 6 ? 'סיום השיעור' : 'הבא';
+
+    // מצב הסצנה
+    flashString(0); setCap('');
+    for (var i = 1; i <= 6; i++) { lbShow(LB.str[i], n === 2); if (LB.xo[i]) lbShow(LB.xo[i], false); }
+    FING.forEach(function (f) { lbShow(f.lbl, false); });
+    $('btn-replay').hidden = !(n === 2 || n === 3);
+    pick.show = n === 4 || n === 5;
+    pickMesh.visible = pick.show;
+    setFingers(n >= 3 && n <= 6 ? 3 : 0, false);
+    if (n < 3 || n > 6) FING.forEach(function (f) { f.v = f.vT = 0; });
+    STR.fretted = n >= 3 && n <= 6;
+    // המיתרים הלחוצים רוטטים רק מהשריג
+    STR[2].x0 = STR.fretted ? fretX(1) : 0;
+    STR[4].x0 = STR.fretted ? fretX(2) : 0;
+    STR[3].x0 = STR.fretted ? fretX(2) : 0;
+
+    if (n === 1 || n === 7) goCam('all');
+    else if (n === 2) { goCam('strings'); runStringTour(); }
+    else if (n === 3) { goCam('fingers'); revealFingers(); }
+    else if (n === 4 || n === 5) goCam('strum');
+    else if (n === 6) { goCam('fingers_s6'); }
+  }
+  function resetTurnSilently() {
+    buzzed = false; setResult('', '');
+    $('sim-retry').hidden = true; $('sim-good').disabled = false; $('sim-buzz').disabled = false;
+    FING[0].pulse = 0; var rg = FING[0].lbl.el.querySelector('.ring'); if (rg) rg.hidden = true;
+  }
+
+  /* ---------- כפתורים ---------- */
+  $('btn-next').addEventListener('click', function () { go(step + 1); });
+  $('btn-prev').addEventListener('click', function () { go(step - 1); });
+  $('btn-replay').addEventListener('click', function () {
+    clearTimers(); setCap('');
+    if (step === 2) runStringTour(); else if (step === 3) revealFingers();
+  });
+  $('btn-play-chord').addEventListener('click', function () { strumDownChord(); });
+  $('tempo').addEventListener('input', function () { $('tempo-out').textContent = this.value + ' פעמים בדקה'; });
+  var PAT = ['d', 'd', 'u', 'd'];
+  $('btn-rhythm').addEventListener('click', function () {
+    if (rh.on) { stopRhythm(); return; }
+    ensureAudio();
+    rh.on = true; rh.i = 0; rh.next = performance.now() / 1000 + 0.1;
+    $('ic-play').hidden = true; $('ic-stop').hidden = false; $('rhythm-label').textContent = 'עצרו';
+  });
+  $('sim-good').addEventListener('click', function () {
+    ensureAudio(); strum('d', 1, false);
+    setResult('ok', 'יצא נקי! כל חמשת המיתרים נשמעו ברור. כל הכבוד, זה האקורד הראשון שלכם.');
+    $('sim-retry').hidden = false;
+    STR[2].hlT = 0;
+  });
+  $('sim-buzz').addEventListener('click', function () {
+    ensureAudio(); strum('d', 1, true);
+    buzzed = true;
+    setResult('no', 'המיתר השני לא נשמע. תלחצו קצת יותר חזק עם אצבע 1, קרוב לשריג.');
+    $('sim-retry').hidden = false;
+    STR[2].hlT = 1; STR[2].bad = true;
+    var f = FING[0]; f.pulse = 1; lbShow(f.lbl, true);
+    var rg = f.lbl.el.querySelector('.ring'); if (rg) rg.hidden = false;
+    setCap('אצבע 1 · מיתר 2 · שריג 1');
+    goCam('focus');
+  });
+  $('sim-retry').addEventListener('click', function () {
+    resetTurnSilently(); STR[2].hlT = 0; STR[2].bad = false; setCap('');
+    lbShow(FING[0].lbl, false);
+    goCam('fingers_s6');
+  });
+
+  /* ---------- לולאת הציור ---------- */
+  var dummy = new THREE.Vector3();
+  function updateStrings(now) {
+    for (var q = triggers.length - 1; q >= 0; q--) {
+      var tr = triggers[q];
+      if (now >= tr.t) { var s0 = STR[tr.i]; s0.amp = 0.2 * tr.amp; s0.t0 = tr.t; triggers.splice(q, 1); }
+    }
+    for (var i = 1; i <= 6; i++) {
+      var s = STR[i];
+      s.hl += (s.hlT - s.hl) * 0.15;
+      s.mat.emissiveIntensity = s.hl * 0.9;
+      s.mat.emissive.copy(s.bad ? BADCOL : HLCOL);
+      s.glowMat.opacity = s.hl * (s.bad ? 0.3 : 0.5);
+      s.glowMat.color.copy(s.bad ? BADCOL : HLCOL);
+      if (s.amp > 0.0008) {
+        var t = now - s.t0, a = s.amp * Math.exp(-t / s.tau);
+        if (a < 0.0008) { s.amp = 0; a = 0; }
+        var pos = s.geom.attributes.position, b = s.base, xs = s.xs, ph = 6.2832 * s.f * t, sn = Math.sin(ph), cs = Math.cos(ph);
+        for (var k = 0, n = xs.length; k < n; k++) {
+          var x = xs[k], d = 0, dz = 0;
+          if (x > s.x0) { var env = Math.sin(Math.PI * (x - s.x0) / (S - s.x0)); d = a * env * sn; dz = a * 0.35 * env * cs; }
+          pos.setY(k, b[k * 3 + 1] + d); pos.setZ(k, b[k * 3 + 2] + dz);
+        }
+        pos.needsUpdate = true;
+        s.dirty = true;
+      } else if (s.dirty) {
+        var p2 = s.geom.attributes.position;
+        for (var m = 0; m < s.xs.length; m++) { p2.setY(m, s.base[m * 3 + 1]); p2.setZ(m, s.base[m * 3 + 2]); }
+        p2.needsUpdate = true; s.dirty = false;
+      }
+    }
+  }
+  function updateFingers(now) {
+    FING.forEach(function (f) {
+      f.v += (f.vT - f.v) * (reduced ? 1 : 0.12);
+      if (Math.abs(f.vT - f.v) < 0.003) f.v = f.vT;
+      f.g.visible = f.v > 0.01;
+      var up = (1 - f.v);
+      var pulse = f.pulse ? 1 + 0.16 * Math.abs(Math.sin(now * 5)) : 1;
+      f.g.position.set(f.x, f.y + up * 2.6, f.z + up * 0.9);
+      f.g.scale.setScalar(pulse);
+    });
+  }
+  function updatePick(now) {
+    if (!pick.show) return;
+    var a = pick.anim, lowY = ys(PICKX) + 0.34, hoverY = 1.7;
+    if (a) {
+      var t = now - a.t0;
+      if (t < LEAD) { var k = ease(t / LEAD); pick.z = a.from.z + (a.zs - a.from.z) * k; pick.y = a.from.y + (lowY - a.from.y) * k; }
+      else if (t < LEAD + SWEEP) { var k2 = (t - LEAD) / SWEEP; pick.z = a.zs + (a.ze - a.zs) * k2; pick.y = lowY; }
+      else { pick.z += (a.ze + (a.ze > a.zs ? 0.5 : -0.5) - pick.z) * 0.12; pick.y += (hoverY - pick.y) * 0.12; }
+    }
+    pickMesh.position.set(PICKX, pick.y, pick.z);
+    pickMesh.rotation.y = (a && a.ze > a.zs) ? Math.PI : 0;
+  }
+  var beatEls = document.querySelectorAll('.beat');
+  function updateRhythm(now) {
+    if (!rh.on) return;
+    if (now >= rh.next) {
+      var idx = rh.i % 4;
+      Array.prototype.forEach.call(beatEls, function (b, n) { b.classList.toggle('on', n === idx); });
+      strum(PAT[idx], PAT[idx] === 'd' ? 1 : 0.7, false);
+      rh.i++;
+      rh.next = Math.max(now, rh.next) + 60 / (+$('tempo').value || 70);
+    }
+  }
+  var projV = new THREE.Vector3();
+  function updateLabels() {
+    var w = stage.clientWidth, h = stage.clientHeight;
+    var all = [];
+    for (var i = 1; i <= 6; i++) { all.push(LB.str[i]); if (LB.xo[i]) all.push(LB.xo[i]); }
+    FING.forEach(function (f) { all.push(f.lbl); });
+    all.forEach(function (l) {
+      if (!l.on) return;
+      projV.copy(l.w); guitar.localToWorld(projV); projV.project(camera);
+      l.sx = (projV.x * 0.5 + 0.5) * w; l.sy = (-projV.y * 0.5 + 0.5) * h;
+    });
+    // התוויות של המיתרים קרובות מאוד בטלפון: מרווחים אותן אנכית כדי שלא יסתירו אחת את השנייה
+    var GAP = 23, rows = [], n;
+    for (n = 1; n <= 6; n++) { var lb = LB.str[n]; if (lb.on) rows.push(lb); }
+    for (n = 1; n <= 6; n++) { var lx = LB.xo[n]; if (lx && lx.on) { lx.dy = 0; } }
+    if (rows.length > 1) {
+      rows.sort(function (a, b) { return a.sy - b.sy; });
+      var mean = rows.reduce(function (t, r) { return t + r.sy; }, 0) / rows.length, ys2 = rows.map(function (r) { return r.sy; }), it;
+      for (it = 0; it < 30; it++) for (n = 1; n < ys2.length; n++) if (ys2[n] - ys2[n - 1] < GAP) { var m2 = (ys2[n] + ys2[n - 1]) / 2; ys2[n - 1] = m2 - GAP / 2; ys2[n] = m2 + GAP / 2; }
+      var mean2 = ys2.reduce(function (t, v) { return t + v; }, 0) / ys2.length;
+      rows.forEach(function (r, k) { r.sy = ys2[k] + (mean - mean2); });
+    }
+    all.forEach(function (l) {
+      if (!l.on) return;
+      l.el.style.transform = 'translate(' + (l.sx - 11).toFixed(1) + 'px,' + (l.sy - 11).toFixed(1) + 'px)';
+    });
+  }
+  function loop() {
+    requestAnimationFrame(loop);
+    var now = performance.now() / 1000;
+    updateCam(now);
+    updateStrings(now);
+    updateFingers(now);
+    updatePick(now);
+    updateRhythm(now);
+    renderer.render(scene, camera);
+    updateLabels();
+  }
+  document.addEventListener('visibilitychange', function () { if (document.hidden) stopRhythm(); });
+
+  // ביטול "×": כפתור המיתר 6 מסומן בחוץ כשמנגנים
+  resize();
+  go(1);
+  cam.pos.copy(camTo.pos); cam.tgt.copy(camTo.tgt); cam.roll = camTo.roll;
+  loop();
+  // לבדיקות אוטומטיות
+  window.__sketch = { go: go, strum: strumDownChord };
+})();
+</script>
