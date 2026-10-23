@@ -179,6 +179,7 @@
 - תיאור: `music_teacher/README.md`; תוכנית ועלויות: `music_teacher/IDEAS.md`. אפליקציה מסחרית ללימוד גיטרה לבד (קלאסית / חשמלית), מורה וידיים בתלת־ממד (Three.js).
 - `music_teacher/web` → Pages `music-teacher` (בלי שרת). עלייה: `music-teacher.yml` אחרי מיזוג ל-main. הסקיצה הישנה: `sketch/lesson1.html` (Artifact).
 - בדיקה: `cd music_teacher/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- **תמיד למזג לבד** את ה-PR (אחרי שהבדיקות ירוקות) ולעקוב שהעלייה (`music-teacher.yml` על main) הצליחה – ולדווח עם הקישור.
 - המורה מודול נפרד (`src/three/teacher.js`) כדי שאפשר יהיה להחליף בדמות קנויה. זיהוי צליל בטיונר: `src/lib/pitch.js` (פונקציה טהורה + בדיקות).
 
 ### טוטו (`toto_predictor/`)
