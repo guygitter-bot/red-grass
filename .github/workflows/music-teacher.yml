@@ -1,0 +1,71 @@
+name: music-teacher
+
+# מורה לגיטרה (music_teacher/):
+# music_teacher/web -> Cloudflare Pages "music-teacher" -> https://music-teacher.pages.dev
+on:
+  push:
+    branches: [main]
+    paths: ["music_teacher/**", ".github/workflows/music-teacher.yml"]
+  pull_request:
+    paths: ["music_teacher/**", ".github/workflows/music-teacher.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: music-teacher-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: App tests and build
+        working-directory: music_teacher/web
+        run: |
+          npm ci
+          npm test
+          npm run build
+
+  web:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build
+        working-directory: music_teacher/web
+        run: |
+          npm ci
+          npm run build
+      - name: Create the Pages project (first run only)
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: music_teacher/web
+          wranglerVersion: "4.146.0"
+          command: pages project create music-teacher --production-branch=main
+      - name: Publish
+        id: publish
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: music_teacher/web
+          wranglerVersion: "4.146.0"
+          command: pages deploy dist --project-name=music-teacher --branch=main --commit-dirty=true
+      - name: Summary
+        env:
+          URL: ${{ steps.publish.outputs.deployment-url }}
+        run: |
+          echo "Published: https://music-teacher.pages.dev ($URL)" >> "$GITHUB_STEP_SUMMARY"

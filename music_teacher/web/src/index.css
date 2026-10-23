@@ -1,0 +1,173 @@
+@import "tailwindcss";
+
+/* מצב לילה: מחלקה dark על html (נקבעת ב-src/lib/theme.js) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* כל הצבעים במקום אחד – במצב לילה מחליפים רק אותם:
+   page = רקע המסך, card = כרטיסים, ink = טקסט, muted = טקסט משני, line = מסגרות,
+   soft = רקע מודגש עדין, scene = רקע הבמה בתלת־ממד */
+@theme {
+  --color-page: #f6f1ea;
+  --color-card: #ffffff;
+  --color-ink: #231d18;
+  --color-muted: #675c52;
+  --color-line: #ddd3c7;
+  --color-soft: #f6e4c6;
+  --color-accent: #a95f00;
+  --color-accent-ink: #ffffff;
+  --color-good: #1c7f46;
+  --color-good-soft: #d5ecdc;
+  --color-bad: #a8381a;
+  --color-bad-soft: #f4dcd3;
+  --color-scene: #d9d3ca;
+  --font-sans: "Assistant", "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Rubik", "Assistant", system-ui, sans-serif;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-page: #120e0b;
+  --color-card: #231b15;
+  --color-ink: #f3ece2;
+  --color-muted: #bcae9b;
+  --color-line: #3b3027;
+  --color-soft: #3d2c14;
+  --color-accent: #ffb23e;
+  --color-accent-ink: #1a1005;
+  --color-good: #66d390;
+  --color-good-soft: #17301f;
+  --color-bad: #ff8d6b;
+  --color-bad-soft: #3a1d14;
+  --color-scene: #1c1611;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-page);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+#root {
+  height: 100%;
+}
+button {
+  font: inherit;
+  cursor: pointer;
+}
+:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* כפתורים */
+.btn {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1.5px solid var(--color-line);
+  background: var(--color-card);
+  color: var(--color-ink);
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-wrap: balance;
+}
+.btn:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.btn-primary {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  border-color: var(--color-accent);
+}
+.btn-good {
+  background: var(--color-good);
+  color: #fff;
+  border-color: var(--color-good);
+}
+.chip {
+  min-height: 42px;
+  border-radius: 10px;
+  border: 1.5px solid var(--color-line);
+  background: var(--color-card);
+  color: var(--color-ink);
+  font: 600 13px var(--font-display);
+  padding: 0 4px;
+}
+.chip.on {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  border-color: var(--color-accent);
+}
+
+/* הבמה בתלת־ממד */
+.stage-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: grab;
+}
+.stage-canvas:active {
+  cursor: grabbing;
+}
+.lb {
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform;
+  display: none;
+  pointer-events: none;
+}
+.lb.on {
+  display: block;
+}
+.lb-text {
+  transform: translate(-50%, -100%);
+  white-space: nowrap;
+  background: rgba(20, 14, 8, 0.86);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 190, 90, 0.7);
+}
+.lb-badge {
+  transform: translate(-50%, -50%);
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font: 700 12px/1 var(--font-display);
+  background: rgba(20, 14, 8, 0.8);
+  color: #fff;
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  transition: background 0.2s, transform 0.2s;
+}
+.lb-badge.hot {
+  background: #ffb23e;
+  color: #1a1005;
+  transform: translate(-50%, -50%) scale(1.25);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
