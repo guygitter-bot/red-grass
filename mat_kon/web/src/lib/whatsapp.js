@@ -84,7 +84,8 @@ function hashText(s) {
 }
 
 // מועמדים לייבוא: קישורים (פעם אחת כל קישור) ומתכונים שנכתבו כטקסט בצ'אט
-export function findCandidates(messages, { existingUrls = [], existingKeys = [] } = {}) {
+// allText: כל הודעה עם טקסט היא מועמדת (פתקים מ-Google Keep); מסומנת מראש רק אם נראית כמו מתכון או מתויגת
+export function findCandidates(messages, { existingUrls = [], existingKeys = [], allText = false } = {}) {
   const saved = new Set(existingUrls.filter(Boolean).map(urlKey));
   const savedText = new Set(existingKeys.filter(Boolean));
   const seen = new Map();
@@ -114,12 +115,13 @@ export function findCandidates(messages, { existingUrls = [], existingKeys = [] 
       out.push(item);
     }
     const textOnly = msg.text.replace(URL_RE, '').trim();
-    if (looksLikeRecipe(textOnly)) {
+    const recipeLike = looksLikeRecipe(textOnly) || (msg.tagged && textOnly.length >= 20);
+    if (recipeLike || (allText && textOnly.length >= 20 && !urls.length)) {
       const id = `wa:${hashText(textOnly)}`;
       if (!seen.has(id)) {
         const item = {
           id, type: 'text', text: textOnly, title: textOnly.split('\n')[0].slice(0, 80),
-          author: msg.author, date: msg.date, saved: savedText.has(id), likely: true,
+          author: msg.author, date: msg.date, saved: savedText.has(id), likely: recipeLike,
         };
         seen.set(id, item);
         out.push(item);

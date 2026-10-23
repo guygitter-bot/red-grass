@@ -36,9 +36,8 @@
 
 ## מתכונים ו-AI
 - [ ] **ייבוא מעוד אפליקציות** (בלי AI, כמו RecetteTek; לבדוק כל פורמט על קובץ אמיתי לפני שמשחררים):
-  **הבא בתור: Google Keep** (Google Takeout – בוחרים אילו פתקים הם מתכונים, וה-AI מסדר כמו טקסט מווטסאפ).
-  אחר כך: Mela (`.melarecipes`), Crouton (`.crumb`), Copy Me That (HTML), Plan to Eat (CSV), Mealie / Tandoor (JSON).
-  (Paprika, Recipe Keeper ו-Cookmate – בוצע; לבדוק עם קובץ אמיתי ממשתמש ראשון.)
+  הבא בתור: Mela (`.melarecipes`), Crouton (`.crumb`), Copy Me That (HTML), Plan to Eat (CSV), Mealie / Tandoor (JSON).
+  (Paprika, Recipe Keeper, Cookmate ו-Google Keep – בוצע; לבדוק עם קובץ אמיתי ממשתמש ראשון.)
   ולכל השאר: "ייבוא מקובץ" כללי (Word / PDF / טקסט) דרך ה-AI, כמו ווטסאפ.
 - [ ] סימון ה-AI לסינון (כשר, צליאק…) גם למתכונים ישנים ולמתכונים שנכתבו ידנית (היום – רק מתכונים חדשים שה-AI בונה; השאר לפי מילים במצרכים).
 - [ ] **מתכון מסרטון שהמשתמש מעלה:** חילוץ כמה תמונות מהסרטון ובניית מתכון מהן (כמו צילום).

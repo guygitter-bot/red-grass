@@ -173,6 +173,7 @@ export default function SettingsView({ session, isOwner, user, recipes, custom, 
             עוברים מאפליקציה אחרת? מייצאים שם גיבוי ובוחרים את הקובץ כאן. המתכונים נכנסים עם התמונות, הקטגוריות, המועדפים
             והדירוגים – בלי AI ובלי לספור במכסה. אפשר מ: <b>My Recipe Box</b> (‎.rtk), <b>Paprika</b> (‎.paprikarecipes),
             <b>Recipe Keeper</b> (קובץ ZIP), <b>Cookmate / My Cookbook</b> (‎.mcb).
+            {' '}מתכונים בפתקים של <b>Google Keep</b>? <a href="#/import" className="text-orange-700 underline">ייבוא מ-Keep</a>.
           </p>
           {!imported && (
             <button onClick={() => importRef.current?.click()} disabled={busy === 'import'} className="mt-3 rounded-xl bg-stone-100 px-4 py-2.5 font-medium flex items-center gap-1.5 disabled:opacity-40">
