@@ -175,6 +175,10 @@
 - בדיקה: `cd suno_course/api && npm test` · `cd suno_course/web && npm test`. אותם כללים: טלפון + מחשב + מצב לילה.
 - כל נתון "קשה" (מחיר, סף, מכסה) עם מקור ותאריך; איורי מסכים מסומנים כאיור ולא כצילום.
 
+### מורה לנגינה – סימולטור (`music_teacher/`)
+- רעיון בשלב תכנון: **`music_teacher/IDEAS.md`** (מיפוי, עלויות, סדר עבודה). אפליקציה מסחרית ללימוד גיטרה לבד, מורה ואצבעות בתלת־ממד.
+- סקיצה בלבד: `music_teacher/sketch/lesson1.html` (Three.js, מתפרסם כ-Artifact). עדיין אין אפליקציה, שרת או עלייה לאוויר.
+
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).
 
