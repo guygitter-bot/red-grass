@@ -606,6 +606,7 @@ export async function searchRecipes(client, query) {
   let searchOk = false;
   let searches = 0;
   let retried = false;
+  let forceSearch = false;
   for (let step = 0; step < 6; step++) {
     const response = await client.beta.messages.create({
       model: MODEL,
@@ -614,7 +615,8 @@ export async function searchRecipes(client, query) {
       fallbacks: 'default',
       output_config: { effort: 'medium' },
       system: SEARCH_SYSTEM,
-      tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 4 }, SEARCH_TOOL],
+      // אחרי שהמודל ויתר בלי לחפש בכלל – מציעים לו רק חיפוש ברשת עד שיחפש
+      tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 4 }, ...(forceSearch && !searches ? [] : [SEARCH_TOOL])],
       messages,
     });
     if (response.stop_reason === 'refusal') throw new Error('הבקשה נדחתה על ידי המודל.');
@@ -637,6 +639,12 @@ export async function searchRecipes(client, query) {
       // רשימה ריקה: פעם אחת מבקשים לחפש שוב בניסוח אחר (המודל לפעמים מוותר מהר מדי)
       if (!results.length && !retried) {
         retried = true;
+        if (!searches) {
+          // רשימה ריקה בלי אף חיפוש: מתחילים מחדש, והפעם בלי כלי ההגשה – רק חיפוש ברשת
+          forceSearch = true;
+          messages.splice(0, messages.length, { role: 'user', content: `Find recipes for: ${query}\n\nSearch the web now (Hebrew "מתכון ..." and English "... recipe").` });
+          continue;
+        }
         messages.push({ role: 'assistant', content: response.content });
         messages.push({ role: 'user', content: [{
           type: 'tool_result', tool_use_id: submit.id, is_error: true,
@@ -649,7 +657,7 @@ export async function searchRecipes(client, query) {
     }
     messages.push({ role: 'assistant', content: response.content });
     if (response.stop_reason === 'pause_turn') continue;
-    messages.push({ role: 'user', content: `Call ${SEARCH_TOOL.name} now with what you found.` });
+    messages.push({ role: 'user', content: searches ? `Call ${SEARCH_TOOL.name} now with what you found.` : 'Search the web for this dish now.' });
   }
   throw new Error('החיפוש לא החזיר תוצאות. נסו שוב.');
 }

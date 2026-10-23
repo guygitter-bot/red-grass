@@ -416,7 +416,7 @@ test('web search by dish name returns recipe links', async () => {
 
   // רשימה ריקה בלי תקלה: מבקשים פעם אחת לחפש שוב, ומחזירים את התוצאות של הניסיון השני
   apiCalls.length = 0;
-  reply = (n) => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', id: `t${n}`, name: 'submit_results', input: { results: n === 1 ? [] : [
+  reply = (n) => ({ stop_reason: 'tool_use', content: [{ type: 'server_tool_use', id: `s${n}`, name: 'web_search', input: { query: 'x' } }, { type: 'tool_use', id: `t${n}`, name: 'submit_results', input: { results: n === 1 ? [] : [
     { title: 'עוגת דבש', url: 'https://www.foodis.co.il/honey', site: 'פודיס', description: 'רכה' },
   ] } }] });
   const again = await (await call('POST', '/search', { q: 'עוגת דבש' })).json();
@@ -433,6 +433,25 @@ test('web search by dish name returns recipe links', async () => {
   const failed = await call('POST', '/search', { q: 'פסטה בולונז' });
   assert.equal(failed.status, 502);
   assert.match((await failed.json()).error, /unavailable/);
+
+  // רשימה ריקה בלי אף חיפוש: מתחילים מחדש עם חיפוש ברשת בלבד, ואחרי שחיפש – מבקשים להגיש
+  apiCalls.length = 0;
+  reply = (n) => (n === 1
+    ? { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 't1', name: 'submit_results', input: { results: [] } }] }
+    : n === 2
+      ? { stop_reason: 'end_turn', content: [
+        { type: 'server_tool_use', id: 's2', name: 'web_search', input: { query: 'מתכון שקשוקה' } },
+        { type: 'web_search_tool_result', tool_use_id: 's2', content: [] },
+      ] }
+      : { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 't3', name: 'submit_results', input: { results: [
+        { title: 'שקשוקה', url: 'https://www.10dakot.co.il/shakshuka', site: '10 דקות', description: 'חריפה' },
+      ] } }] });
+  const forced = await (await call('POST', '/search', { q: 'שקשוקה' })).json();
+  assert.deepEqual(forced.results.map((r) => r.url), ['https://www.10dakot.co.il/shakshuka']);
+  assert.equal(apiCalls.length, 3);
+  assert.deepEqual(apiCalls[1].tools.map((t) => t.name), ['web_search']);
+  assert.match(apiCalls[1].messages[0].content, /Search the web now/);
+  assert.ok(apiCalls[2].tools.some((t) => t.name === 'submit_results'));
 });
 
 test('backup restore: valid recipes saved as they were, bad ones skipped, same source updates', async () => {
