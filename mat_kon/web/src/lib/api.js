@@ -245,3 +245,9 @@ export const getAdminErrors = () => api(own(), 'GET', '/admin/errors');
 export const getBackups = () => api(own(), 'GET', '/admin/backups');
 export const linkGoogle = (s, credential) => api(s, 'POST', '/google', { credential, link: true }).then((d) => d.user);
 export const reportClientError = (where, message) => api(loadJson('matkon_session', ''), 'POST', '/client-error', { where, message }).catch(() => {});
+// שגיאה שהיא באג אצלנו (לא תשובה מהשרת): נרשמת גם במסך התקלות של בעל האפליקציה, ולמשתמש – הודעה בעברית
+export function bugMessage(where, e) {
+  if (e instanceof ApiError) return e.message;
+  reportClientError(where, String(e?.message || e).slice(0, 300));
+  return 'משהו השתבש. נסו שוב, ואם זה חוזר – ספרו לנו.';
+}

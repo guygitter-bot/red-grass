@@ -750,7 +750,7 @@ export default function App() {
           session={session}
           categories={allCategories}
           onBack={() => open(null)}
-          onSaved={(recipe, updatedUser, more) => {
+          onSaved={(recipe, updatedUser, more = []) => {
             // כמה מתכונים באותו צילום – כולם נוספו, ופותחים את הראשון
             for (const r of more) upsert(safeRecipe(r));
             upsert(recipe);
