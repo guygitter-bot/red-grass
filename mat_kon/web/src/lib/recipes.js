@@ -102,6 +102,10 @@ export const VIDEO_LABEL = {
 
 export const isVideo = (r) => Boolean(VIDEO_LABEL[r?.source?.kind]);
 
+// קישור לסרטון/פוסט ברשת חברתית (לפי הכתובת) – שם לפעמים אין מתכון כתוב בכלל
+export const isVideoLink = (url) =>
+  /(^|\.)(youtube\.com|youtu\.be|tiktok\.com|instagram\.com|facebook\.com|fb\.watch|vimeo\.com)$/.test(hostOf(url));
+
 export const CATEGORY_EMOJI = {
   'עוגות': '🎂',
   'עוגיות ומאפים מתוקים': '🍪',

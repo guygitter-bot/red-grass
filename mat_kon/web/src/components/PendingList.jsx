@@ -1,5 +1,5 @@
-import { AlertCircle, Loader2, RotateCw, X } from 'lucide-react';
-import { hostOf } from '../lib/recipes';
+import { AlertCircle, Loader2, PenLine, RotateCw, X } from 'lucide-react';
+import { hostOf, isVideoLink } from '../lib/recipes';
 import PasteBox from './PasteBox';
 
 export default function PendingList({ items, onRetry, onDismiss, onPaste }) {
@@ -21,7 +21,19 @@ export default function PendingList({ items, onRetry, onDismiss, onPaste }) {
             <div className={`text-xs ${item.error ? 'text-red-700' : 'text-stone-500'}`}>
               {item.error || 'קוראים את הקישור ומסדרים מתכון… (בסרטון זה יכול לקחת דקה-שתיים)'}
             </div>
+            {item.error && isVideoLink(item.url) && (
+              // סייג: לא בכל סרטון יש מתכון – לפעמים רק צילום של ההכנה, בלי מצרכים וכמויות
+              <p className="mt-1.5 text-xs text-stone-600 leading-relaxed">
+                לא מכל סרטון אפשר לבנות מתכון: לפעמים יש בו רק צילום של ההכנה, בלי מצרכים וכמויות כתובים. אפשר להדביק
+                את הטקסט או התגובה עם המתכון, לכתוב בשורת ההוספה את שם המנה ולחפש מתכון דומה, או לכתוב את המתכון בעצמכם.
+              </p>
+            )}
             {item.error && <PasteBox url={item.url} onSubmit={(text) => onPaste(item, text)} />}
+            {item.error && isVideoLink(item.url) && (
+              <a href="#/new?manual" className="mt-2 ms-2 inline-flex items-center gap-1.5 rounded-full bg-stone-100 text-stone-700 px-3 py-1.5 text-sm font-medium">
+                <PenLine size={15} /> כתיבת מתכון ידנית
+              </a>
+            )}
           </div>
           {item.error && (
             <>
