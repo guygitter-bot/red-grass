@@ -212,3 +212,12 @@ export const TALK = [
   { id: 'a300000000000000', kind: 'reply', text: 'תודה! זה בדיוק מה שקרה לי בפעם הקודמת', rating: 0, image: null, parent: 'a200000000000000', author: 'רונית', at: hoursAgo(20), likes: 2, liked: false, mine: false },
   { id: 'a400000000000000', kind: 'tip', text: 'אפשר להכין בלי קמח? למישהו יש ניסיון?', rating: 0, image: null, parent: null, author: 'שירה', at: hoursAgo(50), likes: 1, liked: false, mine: false },
 ];
+
+// תחליף למצרך (סרטון "דף המתכון")
+export const SUBSTITUTE = {
+  options: [
+    { name: 'פפריקה חריפה + קורט סוכר', amount: '1 כפית במקום הפפריקה המתוקה', how: 'מוסיפים יחד עם שאר התבלינים', effect: 'יוצא קצת יותר חריף' },
+    { name: 'רסק עגבניות נוסף', amount: '1 כף נוספת', how: 'מבשלים דקה יותר', effect: 'צבע אדום פחות עז, טעם עדין' },
+  ],
+  note: 'אפשר גם פשוט לוותר – השקשוקה תצא טעימה.',
+};

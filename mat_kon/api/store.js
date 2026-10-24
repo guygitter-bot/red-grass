@@ -507,6 +507,16 @@ export class RecipeBook {
       }
       return json({ error: 'method not allowed' }, 405);
     }
+    // תחליפים למצרך שחסר (תשובת ה-AI נשמרת למתכון+מצרך, כדי לא לשלם שוב על אותה שאלה). נמחקים עם המתכון
+    if (url.pathname === '/subs') {
+      const key = `sub:${String(url.searchParams.get('key') || '').slice(0, 200)}`;
+      if (request.method === 'GET') return json({ value: (await this.storage.get(key)) || null });
+      if (request.method === 'PUT') {
+        await this.storage.put(key, await request.json());
+        return json({ ok: true });
+      }
+      return json({ error: 'method not allowed' }, 405);
+    }
     // סדר הקטגוריות במסך ומועדפות (משותף לכל מי שבספר)
     if (url.pathname === '/category-prefs') {
       if (request.method === 'GET') return json((await this.storage.get('categoryPrefs')) || { order: [], favorites: [] });
@@ -663,6 +673,8 @@ export class RecipeBook {
       await this.dropImage(current.image);
       const key = sourceKey(current);
       if (key) await this.storage.delete(SRC + key);
+      const subs = [...(await this.storage.list({ prefix: `sub:${id}:` })).keys()];
+      if (subs.length) await this.storage.delete(subs);
       return json({ ok: true });
     }
 

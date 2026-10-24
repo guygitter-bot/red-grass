@@ -9,14 +9,14 @@
 import { deps, trackedClient } from './deps.js';
 import { buildRecipe, errorGroup, failure, recipeKind } from './jobs.js';
 import { RecipeBook } from './store.js';
-import { Accounts, canAdd } from './accounts.js';
+import { Accounts, canAdd, sha256 } from './accounts.js';
 import { gatherSource, normalizeUrl, sourceKind } from './source.js';
-import { NoRecipeError, aiMessage, moderateTalk, categoryFields, cleanNutrition, estimateNutrition, extractRecipe, moderateRecipe, ideasFromPantry, organizeShopping, scanPantry, searchRecipes, suggestCategories } from './extract.js';
+import { NoRecipeError, aiMessage, moderateTalk, suggestSubstitutes, categoryFields, cleanNutrition, estimateNutrition, extractRecipe, moderateRecipe, ideasFromPantry, organizeShopping, scanPantry, searchRecipes, suggestCategories } from './extract.js';
 import { findStores } from './stores.js';
 import { CATEGORIES } from './categories.js';
 import { backupStatus, restoreBook, runBackup } from './backup.js';
 import { communityIdentity, communityKey, publicCopy, publicSummary } from './community.js';
-import { DIET_IDS } from './diet.js';
+import { DIETS, DIET_IDS } from './diet.js';
 import { cleanShots, fixAction, fixConfigured, fixStatus, getShot, pruneShots, saveShots, sendFix } from './fixes.js';
 
 export { RecipeBook, Accounts };
@@ -1124,6 +1124,31 @@ export default {
         return pass(await internal(book, 'PUT', `/recipes/${id}`, { ...fields, categorized: true }));
       } catch (e) {
         return aiFail(e, (!e.status && e.message) || 'לא הצלחתי לסדר את הקטגוריות');
+      }
+    }
+    // חסר לי מצרך: תחליפים שמתאימים למתכון הזה (AI קצר; אותה שאלה שוב – מהזיכרון, בחינם)
+    if (parts.length === 3 && parts[2] === 'substitute' && request.method === 'POST') {
+      const { body, error } = await readJson();
+      if (error) return error;
+      const res = await internal(book, 'GET', `/recipes/${id}`);
+      if (!res.ok) return fail(404, 'המתכון לא נמצא');
+      const { recipe } = await res.json();
+      const item = String(body.item || '').trim();
+      // רק מצרך שבאמת מופיע במתכון (לא שאלה חופשית ל-AI)
+      if (!(recipe.ingredients || []).some((g) => (g.items || []).includes(item))) return fail(400, 'המצרך לא נמצא במתכון');
+      const diets = (Array.isArray(body.diets) ? body.diets : []).filter((d) => DIET_IDS.includes(d)).sort();
+      const label = Object.fromEntries(DIETS.map((d) => [d.id, d.label]));
+      const cacheKey = `${id}:${(await sha256(`${item}|${diets.join(',')}`)).replace(/[^\w]/g, '').slice(0, 24)}`;
+      const cached = await (await internal(book, 'GET', `/subs?key=${encodeURIComponent(cacheKey)}`)).json();
+      if (cached.value) return reply(200, cached.value);
+      const limited = await aiBudget();
+      if (limited) return limited;
+      try {
+        const out = { item, ...(await suggestSubstitutes(ai('substitute'), recipe, item, { diets: diets.map((d) => label[d]) })) };
+        await internal(book, 'PUT', `/subs?key=${encodeURIComponent(cacheKey)}`, out);
+        return reply(200, out);
+      } catch (e) {
+        return aiFail(e, (!e.status && e.message) || 'לא הצלחתי למצוא תחליף');
       }
     }
     // הערכה תזונתית למתכון קיים (מתכון ישן, או אחרי עריכת המצרכים): AI קצר, בלי מכסת מתכונים – רק בתקציב היומי

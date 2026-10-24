@@ -6,6 +6,7 @@ import {
 import CookMode from './CookMode';
 import PublishPanel from './PublishPanel';
 import Talk from './Talk';
+import SubstituteSheet from './SubstituteSheet';
 import { isNative, shareText } from '../lib/native';
 import { STAPLES, missingLines } from '../lib/fridge';
 import { shoppingName } from '../lib/shopping';
@@ -20,13 +21,14 @@ import { bisPoints, formatBis } from '../lib/bis';
 // רק נגני סרטונים מהאתרים המוכרים
 const SAFE_EMBED = /^https:\/\/(www\.youtube-nocookie\.com\/embed\/|www\.tiktok\.com\/embed\/|www\.instagram\.com\/(p|reel|tv)\/|player\.vimeo\.com\/video\/)/;
 
-export default function RecipeView({ recipe, pantryNames = [], categories, onBack, onUpdate, onRefresh, onDelete, onAddToShopping, onAddToPlan, onShareLink, onEstimateNutrition, community, bis = false }) {
+export default function RecipeView({ recipe, pantryNames = [], categories, onBack, onUpdate, onRefresh, onDelete, onAddToShopping, onAddToPlan, onShareLink, onEstimateNutrition, onSubstitute, community, bis = false }) {
   const [editing, setEditing] = useState(false);
   const [planning, setPlanning] = useState(false);
   const [cooking, setCooking] = useState(false);
   const [shopPick, setShopPick] = useState(null); // בחירת מצרכים לרשימת הקניות: { preselect }
   // מספר מנות: מכפיל לכמויות, נשמר לכל מתכון במכשיר
   const [factor, setFactor] = usePersistentState(`matkon_factor_${recipe.id}`, 1);
+  const [subFor, setSubFor] = useState(null); // המצרך שמחפשים לו תחליף
   const base = baseServings(recipe.servings);
   const ingredients = scaleSections(recipe.ingredients, factor);
   const canRefresh = Boolean(recipe.source.url) || recipe.source.kind === 'whatsapp';
@@ -298,13 +300,19 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
                     {s.items.map((item, i) => {
                       const key = `i${si}.${i}`;
                       return (
-                        <li key={key}>
-                          <button onClick={() => toggle(key)} className="w-full text-right flex items-start gap-3 py-1.5">
+                        <li key={key} className="flex items-start gap-1">
+                          <button onClick={() => toggle(key)} className="flex-1 text-right flex items-start gap-3 py-1.5">
                             <span className={`mt-0.5 w-5 h-5 rounded-md border-2 shrink-0 flex items-center justify-center ${checked[key] ? 'bg-orange-500 border-orange-500 text-white' : 'border-stone-300'}`}>
                               {checked[key] && <Check size={14} strokeWidth={3} />}
                             </span>
                             <span className={checked[key] ? 'line-through text-stone-400' : 'text-stone-800'}>{item}</span>
                           </button>
+                          {/* חסר לי: תחליף מתאים למתכון (לפי המצרך כמו שהוא כתוב במתכון המקורי) */}
+                          {onSubstitute && recipe.ingredients[si]?.items[i] && (
+                            <button onClick={() => setSubFor(recipe.ingredients[si].items[i])} className="shrink-0 mt-1 rounded-full px-2 py-0.5 text-xs text-orange-700 hover:bg-orange-50 print:hidden" aria-label={`תחליף ל${recipe.ingredients[si].items[i]}`}>
+                              חסר לי?
+                            </button>
+                          )}
                         </li>
                       );
                     })}
@@ -316,6 +324,14 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
                 pantryNames={pantryNames}
                 onShop={(lines) => setShopPick({ preselect: lines })}
               />
+              {subFor && (
+                <SubstituteSheet
+                  item={subFor}
+                  load={() => onSubstitute(subFor)}
+                  onClose={() => setSubFor(null)}
+                  onSaveNote={(line) => quiet({ myNotes: [recipe.myNotes, line].filter(Boolean).join('\n') })}
+                />
+              )}
               {shopPick && (
                 <ShoppingPicker
                   lines={ingredients.flatMap((s) => s.items)}

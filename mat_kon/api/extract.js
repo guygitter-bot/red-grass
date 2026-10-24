@@ -419,6 +419,58 @@ The reason is in simple Hebrew, addressed to the user. Call submit_review.`,
   return { decision: ['publish', 'review', 'reject'].includes(decision) ? decision : 'review', imageOk: imageOk !== false, reason: clean(reason) };
 }
 
+// תחליף למצרך שחסר: מה אפשר לשים במקומו במתכון הזה, בכמה, ומה זה משנה בתוצאה
+export async function suggestSubstitutes(client, recipe, item, { diets = [] } = {}) {
+  const tool = {
+    name: 'submit_substitutes',
+    description: 'Submit substitutes for one missing ingredient in this recipe.',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: {
+        options: {
+          type: 'array',
+          description: '1-3 substitutes, best first. Common Israeli home-kitchen products.',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Hebrew: what to use, e.g. "רסק תפוחים"' },
+              amount: { type: 'string', description: 'Hebrew: how much instead of the original amount in this recipe, e.g. "1/4 כוס לכל ביצה"' },
+              how: { type: 'string', description: 'Hebrew: one short sentence on how to use it (or empty)' },
+              effect: { type: 'string', description: 'Hebrew: one short sentence on how the result changes (taste / texture), or empty' },
+            },
+            required: ['name', 'amount', 'how', 'effect'],
+            additionalProperties: false,
+          },
+        },
+        note: { type: 'string', description: 'Hebrew: short note, e.g. that the ingredient can simply be left out, or that there is no good substitute. Empty otherwise.' },
+      },
+      required: ['options', 'note'],
+      additionalProperties: false,
+    },
+  };
+  const list = (sections) => (sections || []).flatMap((g) => g.items || []).slice(0, 60);
+  const response = await client.beta.messages.create({
+    model: MODEL,
+    max_tokens: 1500,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: { effort: 'low' },
+    system: `You help a home cook in Israel who is missing an ingredient. Suggest substitutes that work in THIS recipe (its role: binding, rising, fat, acid, sweetness, flavor...), with the amount adjusted to the recipe. Prefer things most homes have. If the ingredient can be left out, say so in note. Keep the kosher type of the dish (don't add meat to dairy or dairy to meat).${diets.length ? ` The cook keeps: ${diets.join(', ')} – every substitute must fit.` : ''} Everything in simple Hebrew. Call submit_substitutes.`,
+    tools: [tool],
+    messages: [{
+      role: 'user',
+      content: `Recipe: ${recipe.title || ''}\nServings: ${recipe.servings || ''}\nIngredients:\n${list(recipe.ingredients).map((i) => `- ${i}`).join('\n')}\nSteps:\n${list(recipe.steps).slice(0, 20).join('\n')}\n\nMissing ingredient: ${item}`,
+    }],
+  });
+  const submit = response.content.find((b) => b.type === 'tool_use' && b.name === tool.name);
+  if (!submit) throw new Error('לא הצלחתי למצוא תחליף. נסו שוב.');
+  const options = (Array.isArray(submit.input.options) ? submit.input.options : []).slice(0, 3)
+    .map((o) => ({ name: clean(o?.name), amount: clean(o?.amount), how: clean(o?.how), effect: clean(o?.effect) }))
+    .filter((o) => o.name);
+  return { options, note: clean(submit.input.note) };
+}
+
 // בדיקה לפני שתגובה / "הכנתי!" מופיעה בקהילה: טקסט קצר ותמונה אופציונלית (base64 JPEG)
 export async function moderateTalk(client, { text = '', image = null, recipeTitle = '' }) {
   const tool = {

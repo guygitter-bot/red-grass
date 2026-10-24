@@ -83,6 +83,8 @@ export const updateRecipe = (s, id, patch) => api(s, 'PUT', `/recipes/${id}`, pa
 // הסוכן משבץ מתכון קיים בכל הקטגוריות שמתאימות לו
 export const categorizeRecipe = (s, id) => api(s, 'POST', `/recipes/${id}/categorize`).then((d) => d.recipe);
 // הערכה תזונתית למנה (מתכון ישן, או אחרי עריכת המצרכים)
+// חסר מצרך: תחליפים שמתאימים למתכון (לפי הסינון שבחרתי – למשל טבעוני)
+export const substituteIngredient = (s, id, item, diets = []) => api(s, 'POST', `/recipes/${id}/substitute`, { item, diets });
 export const estimateNutrition = (s, id) => api(s, 'POST', `/recipes/${id}/nutrition`).then((d) => safeRecipe(d.recipe));
 export const deleteRecipe = (s, id) => api(s, 'DELETE', `/recipes/${id}`);
 

@@ -455,7 +455,7 @@ function Money({ d, session, reload }) {
 const KINDS = {
   'recipe-video': 'מתכון מסרטון / רשת חברתית', 'recipe-link': 'מתכון מאתר', 'recipe-photo': 'מתכון מצילום', 'recipe-text': 'מתכון מווטסאפ / טקסט',
   search: 'חיפוש מתכון ברשת', ideas: 'מה לבשל ממה שיש', stores: 'איפה הכי זול', 'pantry-scan': 'סריקת מקרר / מזווה',
-  shopping: 'סידור רשימת קניות', nutrition: 'ערכים תזונתיים', moderation: 'בדיקה לפני פרסום בקהילה', categories: 'שיבוץ בקטגוריות', other: 'אחר (לפני שהתחלנו למדוד)',
+  shopping: 'סידור רשימת קניות', substitute: 'תחליף למצרך', nutrition: 'ערכים תזונתיים', moderation: 'בדיקה לפני פרסום בקהילה', categories: 'שיבוץ בקטגוריות', other: 'אחר (לפני שהתחלנו למדוד)',
 };
 function CostByKind({ costs }) {
   const [m, setM] = useState(0);
