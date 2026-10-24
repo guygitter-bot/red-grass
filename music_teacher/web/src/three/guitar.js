@@ -143,7 +143,7 @@ export function createGuitar(type = 'classical') {
 
   for (let n = 1; n <= sp.frets; n++) {
     const x = fretX(n);
-    add(group, 'frets', new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.085, hw(x) * 2), std(0xd9d4ca, 0.3, 0.6, { emissive: 0x000000 })));
+    add(group, 'frets', new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.085, hw(x) * 2), std(0xdcd8cf, 0.22, 1, { emissive: 0x000000 })));
     parts.frets.meshes[parts.frets.meshes.length - 1].position.set(x, 0.035, 0);
   }
   sp.dots.forEach((n) => {
@@ -233,7 +233,7 @@ export function createGuitar(type = 'classical') {
     [[33.4, -6.9], [35.9, -7.2], [38.4, -7.6]].forEach(([x, z]) => {
       const k = add(group, 'knobs', new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.7, 0.8, 24), std(0xf3efe6, 0.35, 0, { emissive: 0x000000 })));
       k.position.set(x, 0.4, z);
-      const cap = add(group, 'knobs', new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.5, 0.18, 24), std(0xd9d4ca, 0.3, 0.6, { emissive: 0x000000 })));
+      const cap = add(group, 'knobs', new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.5, 0.18, 24), std(0xdcd8cf, 0.22, 1, { emissive: 0x000000 })));
       cap.position.set(x, 0.85, z);
     });
     const plate = add(group, 'knobs', new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.06, 3.0), std(0x0b0b0b, 0.5, 0, { emissive: 0x000000 })));
@@ -363,16 +363,19 @@ export function createGuitar(type = 'classical') {
   group.add(baseGroup);
   const HL_LEVEL = {};
 
+  // חומרים פיזיקליים: מיתר מתכת = מתכת חלקה שמחזירה את הסביבה; ניילון = שקוף מעט עם ברק רך (sheen) של סיב
   function strMat(i) {
     const wound = i > sp.plain;
+    const glow = { emissive: 0xffa11a, emissiveIntensity: 0 };
     if (classical) {
       return wound
-        ? std(0xc7cbd0, 0.35, 0.8, { emissive: 0xffa11a, emissiveIntensity: 0 })
-        : std(0xefe8d2, 0.3, 0.1, { emissive: 0xffa11a, emissiveIntensity: 0, transparent: true, opacity: 0.93 });
+        ? std(0xcfd3d8, 0.28, 1, glow)
+        : new THREE.MeshPhysicalMaterial({
+            color: 0xf1ead4, roughness: 0.34, metalness: 0, transparent: true, opacity: 0.9,
+            sheen: 1, sheenRoughness: 0.45, sheenColor: new THREE.Color(0xfff6dc), clearcoat: 0.25, clearcoatRoughness: 0.4, ...glow,
+          });
     }
-    return wound
-      ? std(0xb7b2a6, 0.38, 0.85, { emissive: 0xffa11a, emissiveIntensity: 0 })
-      : std(0xe2e3e4, 0.25, 0.95, { emissive: 0xffa11a, emissiveIntensity: 0 });
+    return wound ? std(0xc2bdb0, 0.3, 1, glow) : std(0xe6e7e8, 0.2, 1, glow);
   }
 
   for (let i = 1; i <= 6; i++) {
@@ -726,7 +729,7 @@ export function createGuitar(type = 'classical') {
   }
 
   return {
-    type, group, parts, strings, hitMeshes, spec: sp, S,
+    type, group, parts, strings, hitMeshes, stringMeshes, spec: sp, S,
     zS, ys, hw, fretX, spacing, stringPoint, fretPoint,
     pluckX: sp.rx,
     postPos,

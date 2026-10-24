@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import GuitarStage from '../components/GuitarStage';
 import LessonLayout from '../components/LessonLayout';
+import ChordOverlay from '../components/ChordOverlay';
 import { LESSON2, CHORDS, pick } from '../lib/lessons';
 import { FINGER_COLORS, handSpec } from '../lib/chord';
 import { playTick, unlockAudio } from '../lib/audio';
@@ -22,6 +23,8 @@ export default function Lesson2({ type, teacher }) {
   const step = LESSON2[idx];
   const chord = CHORDS[step.leftHand] || null; // האקורד של השלב (ממפרט הנתונים)
   const [ghost, setGhost] = useState(false); // יד שקופה
+  const [down, setDown] = useState([]); // אילו אצבעות כבר למטה (לאנימציית העיגולים בשכבת האקורד)
+  const [inset, setInset] = useState(0); // כמה מהבמה תפוס בתחתית בידי שכבת האקורד
   const [running, setRunning] = useState(false);
   const [bpm, setBpm] = useState(70);
   const [beat, setBeat] = useState(-1);
@@ -39,6 +42,11 @@ export default function Lesson2({ type, teacher }) {
     stage.setRightHand('play');
     if (step.pose === 'greet') stage.wave(2.6);
   }, [stage, idx, type]);
+
+  const onInset = useCallback((f) => setInset(f), []);
+  useEffect(() => {
+    if (stage) stage.setInset(step.tool === 'chord' ? inset : 0);
+  }, [stage, inset, idx]);
 
   useEffect(() => {
     if (stage) stage.setGhost(ghost);
@@ -141,16 +149,19 @@ export default function Lesson2({ type, teacher }) {
         window.location.hash = '#/';
       }}
       stageNode={(
-        <GuitarStage type={type} teacher={teacher} className="min-h-0 flex-1" onStage={setStage}>
+        <GuitarStage type={type} teacher={teacher} className="min-h-0 flex-1" onStage={setStage} onChordDown={setDown}>
           {step.tool === 'chord' && (
-            <div className="absolute inset-x-2 bottom-2 flex items-center justify-between gap-2">
-              <button type="button" className="btn btn-sm shadow-md" onClick={() => stage && stage.replayChord()}>
-                <IconPlay width={14} height={14} /> הצג שוב
-              </button>
-              <button type="button" className={`btn btn-sm shadow-md ${ghost ? 'btn-primary' : ''}`} aria-pressed={ghost} onClick={() => setGhost((g) => !g)}>
-                יד שקופה
-              </button>
-            </div>
+            <>
+              <div className="absolute inset-x-2 top-2 flex items-center justify-between gap-2">
+                <button type="button" className="btn btn-sm shadow-md" onClick={() => stage && stage.replayChord()}>
+                  <IconPlay width={14} height={14} /> הצג שוב
+                </button>
+                <button type="button" className={`btn btn-sm shadow-md ${ghost ? 'btn-primary' : ''}`} aria-pressed={ghost} onClick={() => setGhost((g) => !g)}>
+                  יד שקופה
+                </button>
+              </div>
+              <ChordOverlay chord={chord} down={down} onInset={onInset} />
+            </>
           )}
         </GuitarStage>
       )}
@@ -161,69 +172,32 @@ export default function Lesson2({ type, teacher }) {
 // "5 ו-1"
 const joinHe = (list) => list.join(' ו-');
 
-// דיאגרמת אקורד + מקרא האצבעות. הכול נגזר ממפרט האקורד: אותם מספרים וצבעים כמו על הצוואר בתלת־ממד
+// מקרא האצבעות. הדיאגרמה עצמה בשכבת האקורד שעל הבמה (ChordOverlay) – כאן רק הסבר במילים, באותם מספרים וצבעים
 function ChordInfo({ chord }) {
   const fingers = chord.fingers.slice().sort((a, b) => a.finger - b.finger);
   const open = chord.open || [];
   const muted = chord.muted || [];
-  const rows = Math.max(4, ...fingers.map((f) => f.fret));
-  const X0 = 20;
-  const DX = 16;
-  const Y0 = 30;
-  const DY = 24;
-  const sx = (s) => X0 + (6 - s) * DX; // מיתר 6 משמאל
-  const bottom = Y0 + rows * DY;
-  const desc = fingers.map((f) => `אצבע ${f.finger} במיתר ${f.string} שריג ${f.fret}`).join(', ');
   return (
-    <div className="flex items-stretch gap-3">
-      <ul className="m-0 flex min-w-0 flex-1 list-none flex-col gap-1.5 p-0 text-sm">
-        {fingers.map((f) => (
-          <li key={f.finger} className="flex items-center gap-2 rounded-lg bg-soft px-2 py-1">
-            <span className="grid h-6 w-6 flex-none place-items-center rounded-full font-display text-xs font-bold text-white" style={{ background: FINGER_COLORS[f.finger] }}>{f.finger}</span>
-            <span>{f.label} · מיתר {f.string} · שריג {f.fret}</span>
-          </li>
-        ))}
-        {muted.length > 0 && (
-          <li className="flex items-center gap-2 px-2 py-1">
-            <span className="grid h-6 w-6 flex-none place-items-center rounded-full bg-bad font-display text-xs font-bold text-white">X</span>
-            <span>{muted.length > 1 ? 'מיתרים' : 'מיתר'} {joinHe(muted)} · לא מנגנים</span>
-          </li>
-        )}
-        {open.length > 0 && (
-          <li className="flex items-center gap-2 px-2 py-1">
-            <span className="grid h-6 w-6 flex-none place-items-center rounded-full border-2 border-ink font-display text-xs font-bold">O</span>
-            <span>{open.length > 1 ? 'מיתרים' : 'מיתר'} {joinHe(open)} · פתוחים</span>
-          </li>
-        )}
-      </ul>
-      <div className="w-28 flex-none rounded-xl border border-line bg-page p-1.5 text-center text-ink lg:w-32">
-        <b className="block font-display">{chord.name}</b>
-        <svg viewBox={`0 0 120 ${bottom + 16}`} role="img" aria-label={`דיאגרמת אקורד ${chord.name}: ${desc}`} className="block h-auto w-full" style={{ direction: 'ltr' }}>
-          <g stroke="currentColor" strokeWidth="1.4" fill="none">
-            <line x1={X0} y1={Y0} x2={X0 + 5 * DX} y2={Y0} strokeWidth="4" />
-            {Array.from({ length: rows }, (_, r) => Y0 + (r + 1) * DY).map((y) => <line key={y} x1={X0} y1={y} x2={X0 + 5 * DX} y2={y} />)}
-            {[6, 5, 4, 3, 2, 1].map((s) => <line key={s} x1={sx(s)} y1={Y0} x2={sx(s)} y2={bottom} />)}
-          </g>
-          <g fontFamily="Rubik, sans-serif" fontWeight="700" textAnchor="middle">
-            {muted.map((s) => <text key={`x${s}`} x={sx(s)} y="22" fontSize="13" fill="var(--color-bad)">×</text>)}
-            {open.map((s) => <circle key={`o${s}`} cx={sx(s)} cy="17" r="4.500" fill="none" stroke="currentColor" strokeWidth="1.600" />)}
-            {fingers.map((f) => {
-              const x = sx(f.string);
-              const y = Y0 + (f.fret - 0.5) * DY;
-              return (
-                <g key={f.finger}>
-                  <circle cx={x} cy={y} r="8" fill={FINGER_COLORS[f.finger]} />
-                  <text x={x} y={y + 4.5} fontSize="11" fill="#fff">{f.finger}</text>
-                </g>
-              );
-            })}
-            <g fontSize="9" fontWeight="600" fill="var(--color-muted)">
-              {[6, 5, 4, 3, 2, 1].map((s) => <text key={s} x={sx(s)} y={bottom + 12}>{s}</text>)}
-            </g>
-          </g>
-        </svg>
-      </div>
-    </div>
+    <ul className="m-0 flex min-w-0 list-none flex-col gap-1.5 p-0 text-sm">
+      {fingers.map((f) => (
+        <li key={f.finger} className="flex items-center gap-2 rounded-lg bg-soft px-2 py-1">
+          <span className="grid h-6 w-6 flex-none place-items-center rounded-full font-display text-xs font-bold text-white" style={{ background: FINGER_COLORS[f.finger] }}>{f.finger}</span>
+          <span>{f.label} · מיתר {f.string} · שריג {f.fret}</span>
+        </li>
+      ))}
+      {muted.length > 0 && (
+        <li className="flex items-center gap-2 px-2 py-1">
+          <span className="grid h-6 w-6 flex-none place-items-center rounded-full bg-bad font-display text-xs font-bold text-white">X</span>
+          <span>{muted.length > 1 ? 'מיתרים' : 'מיתר'} {joinHe(muted)} · לא מנגנים</span>
+        </li>
+      )}
+      {open.length > 0 && (
+        <li className="flex items-center gap-2 px-2 py-1">
+          <span className="grid h-6 w-6 flex-none place-items-center rounded-full border-2 border-ink font-display text-xs font-bold">O</span>
+          <span>{open.length > 1 ? 'מיתרים' : 'מיתר'} {joinHe(open)} · פתוחים</span>
+        </li>
+      )}
+    </ul>
   );
 }
 

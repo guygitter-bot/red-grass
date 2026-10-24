@@ -10,65 +10,221 @@ import { PRESETS, PART_NAMES } from '../lib/parts.js';
 import { playString, unlockAudio } from '../lib/audio.js';
 import { createChordAids } from './chordAids.js';
 import { fingersDownAt, handSpec } from '../lib/chord.js';
+import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { TIERS, TOP, startTier, forcedTier, createGovernor } from './quality.js';
+import { createLookPass } from './lookPass.js';
 
 const ease = (t) => t * t * (3 - 2 * t);
 const rad = Math.PI / 180;
 
+// רקע הסטודיו: מעבר רדיאלי רך כהה (אותו דבר בשני המצבים; הממשק מסביב ממשיך לפי הנושא)
+function studioBackground() {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 512;
+  const g = c.getContext('2d');
+  const gr = g.createRadialGradient(256, 190, 20, 256, 230, 400);
+  gr.addColorStop(0, '#3d332b');
+  gr.addColorStop(0.45, '#221c17');
+  gr.addColorStop(1, '#0a0807');
+  g.fillStyle = gr;
+  g.fillRect(0, 0, 512, 512);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+// כתם רך (צל מזויף / שולי הרצפה)
+function softDisc(inner, alpha) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const gr = g.createRadialGradient(64, 64, inner * 64, 64, 64, 62);
+  gr.addColorStop(0, `rgba(255,255,255,${alpha})`);
+  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr;
+  g.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+}
+
 export function createStage(canvas, labelsEl, opts = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   const scene = new THREE.Scene();
+  scene.background = studioBackground();
   const camera = new THREE.PerspectiveCamera(30, 1, 1, 600);
 
-  const hemi = new THREE.HemisphereLight(0xfff3e2, 0x4a3828, 0.9);
-  const key = new THREE.DirectionalLight(0xffe9cc, 1.0);
-  key.position.set(-20, 70, 70);
-  const rim = new THREE.DirectionalLight(0xbcd2ff, 0.35);
-  rim.position.set(40, 30, -50);
-  const warm = new THREE.PointLight(0xffa640, 0.4, 200, 1.6);
-  warm.position.set(10, 25, 40);
-  scene.add(hemi, key, rim, warm);
+  // תאורת סטודיו: מפתח (עם צל רך) משמאל-למעלה-מלפנים, מילוי קר חלש מימין, וקונטור מאחור שמפריד מהרקע
+  const hemi = new THREE.HemisphereLight(0xfff0e0, 0x2a1f17, 0.25);
+  const key = new THREE.DirectionalLight(0xffe6c8, 1.9);
+  key.position.set(-42, 78, 96);
+  key.target.position.set(6, 6, 8);
+  key.shadow.camera.left = -52;
+  key.shadow.camera.right = 52;
+  key.shadow.camera.top = 56;
+  key.shadow.camera.bottom = -50;
+  key.shadow.camera.near = 40;
+  key.shadow.camera.far = 260;
+  key.shadow.bias = -0.0004;
+  key.shadow.normalBias = 0.12;
+  key.shadow.radius = 3;
+  const fill = new THREE.DirectionalLight(0xbdd0ff, 0.55);
+  fill.position.set(70, 30, 70);
+  const rim = new THREE.DirectionalLight(0xffd9b0, 1.5);
+  rim.position.set(-30, 60, -80);
+  scene.add(hemi, key, key.target, fill, rim);
 
-  // רצפה וצל רך מתחת לשרפרף
-  const floorMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 1 });
-  const floor = new THREE.Mesh(new THREE.CircleGeometry(48, 64), floorMat);
+  // סביבת סטודיו להחזרים (HDRI של Poly Haven, CC0); עד שנטענת (או אם נכשלה) – סביבת חדר מחושבת
+  scene.environmentIntensity = 0.35;
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  {
+    const fallback = () => {
+      if (scene.environment || !alive) return;
+      const rt = pmrem.fromScene(new RoomEnvironment(), 0.04);
+      scene.environment = rt.texture;
+      envTex = rt.texture;
+    };
+    new EXRLoader()
+      .setDataType(THREE.HalfFloatType)
+      .load(
+        `${import.meta.env.BASE_URL}env/studio.exr`,
+        (tex) => {
+          if (!alive) {
+            tex.dispose();
+            return;
+          }
+          tex.mapping = THREE.EquirectangularReflectionMapping;
+          const rt = pmrem.fromEquirectangular(tex);
+          tex.dispose();
+          envTex = rt.texture;
+          scene.environment = rt.texture;
+        },
+        undefined,
+        fallback,
+      );
+    setTimeout(fallback, 6000);
+  }
+  let envTex = null;
+
+  // רצפה בלי החזרי סביבה (אחרת ה-HDRI הבהיר מבריק עליה): סביבה שחורה משלה
+  const blackEnv = pmrem.fromScene(new THREE.Scene(), 0).texture;
+  // רצפת סטודיו: דיסק כהה ורך שמתמזג עם הרקע, מקבל את הצל האמיתי
+  const floorFade = softDisc(0.15, 1);
+  const floorMat = new THREE.MeshStandardMaterial({ color: 0x211b16, roughness: 0.85, metalness: 0, alphaMap: floorFade, transparent: true, envMap: blackEnv, envMapIntensity: 1 });
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(70, 64), floorMat);
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(8, -30.05, 12);
+  floor.receiveShadow = true;
   scene.add(floor);
-  let shadowTex = null;
-  {
-    const c = document.createElement('canvas');
-    c.width = c.height = 128;
-    const g = c.getContext('2d');
-    const gr = g.createRadialGradient(64, 64, 4, 64, 64, 62);
-    gr.addColorStop(0, 'rgba(0,0,0,0.5)');
-    gr.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = gr;
-    g.fillRect(0, 0, 128, 128);
-    shadowTex = new THREE.CanvasTexture(c);
-    const sh = new THREE.Mesh(new THREE.PlaneGeometry(56, 56), new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false }));
-    sh.rotation.x = -Math.PI / 2;
-    sh.position.set(2, -30.0, 18);
-    scene.add(sh);
+  // צל מזויף רק מתחת לשרפרף (ובמכשירים בלי צל אמיתי – הוא היחיד)
+  const blobTex = softDisc(0.05, 0.55);
+  const blobMat = new THREE.MeshBasicMaterial({ color: 0x000000, alphaMap: blobTex, transparent: true, depthWrite: false });
+  const blob = new THREE.Mesh(new THREE.PlaneGeometry(56, 56), blobMat);
+  blob.rotation.x = -Math.PI / 2;
+  blob.position.set(2, -30.0, 18);
+  scene.add(blob);
+
+  // ----- איכות מתכווננת (ראו quality.js) -----
+  const forced = forcedTier(typeof window !== 'undefined' && window.__MT_QUALITY != null ? window.__MT_QUALITY : opts.quality);
+  let tier = forced != null ? forced : startTier({
+    coarse: !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches),
+    cores: navigator.hardwareConcurrency || 8,
+    memory: navigator.deviceMemory || 8,
+  });
+  let composer = null;
+  let gtao = null;
+  let look = null;
+  let size = { w: 1, h: 1 };
+  let lookAmount = 0; // 0 = מצלמה רחבה, 1 = תקריב (דעיכה חלקה)
+  let lookGoal = 0;
+  const governor = createGovernor({
+    onDrop: () => {
+      if (tier > 0) setTier(tier - 1);
+    },
+  });
+  function markShadowFlags() {
+    // כל גוף חשוב מטיל ומקבל צל; מיתרים, עזרי הוראה ותיבות פגיעה לא (דקים מדי ויוצרים רעש)
+    const skip = new Set();
+    if (guitar) guitar.stringMeshes && guitar.stringMeshes.forEach((m) => skip.add(m));
+    scene.traverse((o) => {
+      if (!o.isMesh || o === floor || o === blob) return;
+      const isAid = aids && (isUnder(o, aids.group) || isUnder(o, aids.rings));
+      const thin = skip.has(o) || (guitar && guitar.hitMeshes && guitar.hitMeshes.includes(o)) || isAid;
+      o.castShadow = !thin;
+      o.receiveShadow = !isAid;
+    });
+  }
+  function isUnder(o, root) {
+    for (let p = o; p; p = p.parent) if (p === root) return true;
+    return false;
+  }
+  function setTier(t) {
+    const prev = tier;
+    tier = Math.max(0, Math.min(TOP, t));
+    const T = TIERS[tier];
+    const wantShadow = T.shadows > 0;
+    const hadShadow = renderer.shadowMap.enabled;
+    renderer.shadowMap.enabled = wantShadow;
+    key.castShadow = wantShadow;
+    if (wantShadow && key.shadow.mapSize.x !== T.shadows) {
+      key.shadow.mapSize.set(T.shadows, T.shadows);
+      if (key.shadow.map) {
+        key.shadow.map.dispose();
+        key.shadow.map = null;
+      }
+    }
+    blob.visible = !wantShadow;
+    blobMat.opacity = 1;
+    if (wantShadow !== hadShadow) scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => { m.needsUpdate = true; }); });
+    if (T.ao && !composer) buildComposer();
+    if (!T.ao && composer) disposeComposer();
+    governor.reset();
+    resize();
+    if (opts.onQuality) opts.onQuality(tier, TIERS[tier].name, prev);
+  }
+  function buildComposer() {
+    const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 });
+    composer = new EffectComposer(renderer, rt);
+    composer.addPass(new RenderPass(scene, camera));
+    gtao = new GTAOPass(scene, camera, 4, 4);
+    gtao.output = GTAOPass.OUTPUT.Default;
+    gtao.blendIntensity = 0.95;
+    gtao.updateGtaoMaterial({ radius: 3.2, distanceExponent: 1.4, thickness: 1.2, scale: 1.1, samples: 12, distanceFallOff: 1, screenSpaceRadius: false });
+    gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
+    // עזרי ההוראה (סימונים, טבעות) הם מישורים צפים: בלי להסתיר אותם, שלב העומק שלהם יוצר "כתמי צל" מרובעים סביבם
+    const gtaoRender = gtao.render.bind(gtao);
+    gtao.render = (...args) => {
+      const g = aids && aids.group;
+      const r = aids && aids.rings;
+      const vg = g && g.visible;
+      const vr = r && r.visible;
+      if (g) g.visible = false;
+      if (r) r.visible = false;
+      gtaoRender(...args);
+      if (g) g.visible = vg;
+      if (r) r.visible = vr;
+    };
+    composer.addPass(gtao);
+    look = createLookPass();
+    look.uniforms.tDepth.value = gtao.depthTexture;
+    composer.addPass(look);
+    composer.addPass(new OutputPass());
+  }
+  function disposeComposer() {
+    composer.passes.forEach((p) => p.dispose && p.dispose());
+    composer.dispose();
+    composer = null;
+    gtao = null;
+    look = null;
   }
 
-  // ----- נושא (בהיר / כהה) -----
-  let dark = false;
-  function readTheme() {
-    dark = document.documentElement.classList.contains('dark');
-    const cs = getComputedStyle(document.documentElement);
-    const c = cs.getPropertyValue('--color-scene').trim() || '#d9d3ca';
-    const col = new THREE.Color(c);
-    renderer.setClearColor(col, 1);
-    floorMat.color.copy(col).multiplyScalar(dark ? 1.35 : 0.9);
-    hemi.intensity = dark ? 0.75 : 0.95;
-    key.intensity = dark ? 0.95 : 0.9;
-    warm.intensity = dark ? 0.7 : 0.35;
-  }
-  readTheme();
-  const mo = new MutationObserver(readTheme);
-  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
   const mq = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
   const reduced = () => !!(mq && mq.matches);
 
@@ -119,6 +275,7 @@ export function createStage(canvas, labelsEl, opts = {}) {
     leftSpec = handSpec(chord.spec, down);
     teacher.setLeftHand(leftSpec);
     aids.setDown(down, reduced());
+    if (opts.onChordDown) opts.onChordDown(down);
   }
 
   // מורה דגם (GLB); אם נכשל – המורה הבובה
@@ -144,6 +301,7 @@ export function createStage(canvas, labelsEl, opts = {}) {
     if (left > 0.3) teacher.wave(left);
     guitar.group.updateMatrixWorld(true);
     teacher.update(0.016, performance.now() / 1000);
+    markShadowFlags();
   }
 
   function build() {
@@ -180,6 +338,7 @@ export function createStage(canvas, labelsEl, opts = {}) {
         .then((gltf) => {
           if (!alive || gtok !== guitarToken || gg !== guitar) return;
           gg.attachModel(gltf);
+          markShadowFlags();
           gg.setHighlight(focus.parts);
           buildLabels();
           setCamera(camName, { instant: true });
@@ -287,13 +446,13 @@ export function createStage(canvas, labelsEl, opts = {}) {
   }
 
   // ----- מצלמה -----
-  const rig = { target: new THREE.Vector3(6, 14, 8), dist: 118, az: 8 * rad, el: 6 * rad, k: 1, up: new THREE.Vector3(0, 1, 0) };
+  const rig = { target: new THREE.Vector3(6, 14, 8), dist: 118, az: 8 * rad, el: 6 * rad, k: 1, up: new THREE.Vector3(0, 1, 0), inset: 0 };
+  let insetFrac = 0; // כמה מגובה הבמה תפוס בתחתית (שכבת האקורד) – מסגרים את הצוואר בחלק העליון
   const UP = new THREE.Vector3(0, 1, 0);
   let from = null;
   let to = null;
   let tStart = 0;
   const drag = { az: 0, el: 0 };
-  let size = { w: 1, h: 1 };
 
   // מסגור אוטומטי: המורה והגיטרה ממלאים p.fit מגובה הבמה (וגם נכנסים לרוחב) – בטלפון ובמחשב
   const fitCam = new THREE.PerspectiveCamera(30, 1, 1, 1000);
@@ -390,13 +549,15 @@ export function createStage(canvas, labelsEl, opts = {}) {
     const psi = (p.psi || 0) * rad;
     const dir = D(0, 1, 0).multiplyScalar(Math.cos(phi) * Math.cos(psi)).addScaledVector(D(0, 0, 1), Math.sin(phi)).addScaledVector(D(1, 0, 0), -Math.sin(psi) * Math.cos(phi)).normalize();
     const up = D(0, 0, 1);
-    const f = fitPoints(pts, dir, up, 0.84, 0.94);
-    return { target: f.target, dist: f.dist, az: Math.atan2(dir.x, dir.z), el: Math.asin(dir.y), k: 1, up };
+    // הטיית מצלמה (roll): הצוואר באלכסון כמו בצילום וידאו של שיעור, בלי לאבד קריאות
+    const upR = up.clone().applyAxisAngle(dir, (p.roll || 0) * rad);
+    const f = fitPoints(pts, dir, upR, 0.9, 0.94 * (1 - insetFrac));
+    return { target: f.target, dist: f.dist, az: Math.atan2(dir.x, dir.z), el: Math.asin(dir.y), k: 1, up: upR, inset: insetFrac };
   }
   function resolve(name) {
     const p0 = (PRESETS[type] || PRESETS.classical)[name] || PRESETS[type].wide;
     if (p0.board) return boardView(p0);
-    return { ...resolveOrbit(name), up: UP.clone() };
+    return { ...resolveOrbit(name), up: UP.clone(), inset: 0 };
   }
   function resolveOrbit(name) {
     const p = (PRESETS[type] || PRESETS.classical)[name] || PRESETS[type].wide;
@@ -421,6 +582,8 @@ export function createStage(canvas, labelsEl, opts = {}) {
   function setCamera(name, o = {}) {
     if (!guitar) return;
     camName = name;
+    lookGoal = name === 'wide' ? 0 : 1;
+    if (canvas.parentElement) canvas.parentElement.dataset.look = name === 'wide' ? 'wide' : 'close';
     const goal = resolve(name);
     to = goal;
     if (o.instant || reduced()) {
@@ -430,12 +593,13 @@ export function createStage(canvas, labelsEl, opts = {}) {
       rig.az = goal.az;
       rig.el = goal.el;
       rig.up.copy(goal.up);
+      rig.inset = goal.inset;
       from = null;
       to = null;
       drag.az = drag.el = 0;
       return;
     }
-    from = { target: rig.target.clone(), dist: rig.dist, az: rig.az, el: rig.el, k: rig.k, up: rig.up.clone() };
+    from = { target: rig.target.clone(), dist: rig.dist, az: rig.az, el: rig.el, k: rig.k, up: rig.up.clone(), inset: rig.inset };
     tStart = performance.now();
     drag.az = drag.el = 0;
   }
@@ -450,6 +614,7 @@ export function createStage(canvas, labelsEl, opts = {}) {
       rig.az = from.az + (to.az - from.az) * e;
       rig.el = from.el + (to.el - from.el) * e;
       rig.up.lerpVectors(from.up, to.up, e).normalize();
+      rig.inset = from.inset + (to.inset - from.inset) * e;
       if (t >= 1) {
         from = null;
         to = null;
@@ -465,6 +630,9 @@ export function createStage(canvas, labelsEl, opts = {}) {
     );
     camera.up.copy(rig.up);
     camera.lookAt(rig.target);
+    // הזזת התמונה כלפי מעלה כדי לפנות מקום לשכבת האקורד בתחתית (בלי לשנות את קנה המידה)
+    if (rig.inset > 0.002) camera.setViewOffset(size.w, size.h, 0, Math.round(rig.inset * size.h * 0.5), size.w, size.h);
+    else if (camera.view && camera.view.enabled) camera.clearViewOffset();
   }
 
   // ----- גרירה ולחיצה -----
@@ -507,7 +675,10 @@ export function createStage(canvas, labelsEl, opts = {}) {
     const w = Math.max(1, Math.round(r.width));
     const h = Math.max(1, Math.round(r.height));
     size = { w, h };
+    const dpr = Math.min(window.devicePixelRatio || 1, TIERS[tier].dpr);
+    renderer.setPixelRatio(dpr);
     renderer.setSize(w, h, false);
+    if (composer) composer.setPixelRatio(dpr), composer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     // שינוי גודל (סיבוב מסך וכו'): מחשבים מחדש את המסגור, אלא אם באמצע מעבר
@@ -519,6 +690,7 @@ export function createStage(canvas, labelsEl, opts = {}) {
       rig.az = g.az;
       rig.el = g.el;
       rig.up.copy(g.up);
+      rig.inset = g.inset;
     }
   }
   const ro = new ResizeObserver(resize);
@@ -528,12 +700,17 @@ export function createStage(canvas, labelsEl, opts = {}) {
   // ----- לולאת ציור -----
   let raf = 0;
   let last = performance.now();
+  let frames = 0;
+  const perf = { n: 0, sum: 0, max: 0 }; // מדידת זמן ציור (לבדיקות)
   let alive = true;
   function frame(now) {
     if (!alive) return;
     raf = requestAnimationFrame(frame);
-    const dt = Math.min(0.05, (now - last) / 1000);
+    const rawMs = now - last;
+    const dt = Math.min(0.05, rawMs / 1000);
     last = now;
+    if (forced == null) governor.push(rawMs);
+    frames++;
     const t = performance.now() / 1000;
     if (guitar && teacher) {
       applyCamera();
@@ -545,9 +722,32 @@ export function createStage(canvas, labelsEl, opts = {}) {
       if (aids) aids.update(dt, chord ? teacher.tipFrames() : null);
       placeLabels(size.w, size.h);
     }
-    renderer.render(scene, camera);
+    // טשטוש עומק שדה: רק בתקריב ורק במדרגה הגבוהה
+    lookAmount += (lookGoal - lookAmount) * Math.min(1, dt * 4);
+    const tr0 = performance.now();
+    if (composer) {
+      const u = look.uniforms;
+      const focus = rig.dist * rig.k;
+      u.focus.value = focus;
+      u.range.value = focus * 0.3;
+      u.near.value = camera.near;
+      u.far.value = camera.far;
+      u.amount.value = TIERS[tier].dof ? lookAmount : 0;
+      const pr = renderer.getPixelRatio();
+      u.texel.value.set(1 / (size.w * pr), 1 / (size.h * pr));
+      u.maxBlur.value = 3.2 * pr;
+      composer.render(dt);
+    } else renderer.render(scene, camera);
+    if (opts.measure || (typeof window !== 'undefined' && window.__MT_MEASURE)) {
+      renderer.getContext().finish();
+      const ms = performance.now() - tr0;
+      perf.n++;
+      perf.sum += ms;
+      perf.max = Math.max(perf.max, ms);
+    }
   }
 
+  setTier(tier);
   build();
   setCamera('wide', { instant: true });
   raf = requestAnimationFrame(frame);
@@ -601,11 +801,24 @@ export function createStage(canvas, labelsEl, opts = {}) {
       aids.setDown([], reduced());
       leftSpec = handSpec(chord.spec, []);
       teacher.setLeftHand(leftSpec);
+      if (opts.onChordDown) opts.onChordDown([]);
     },
     hideChord() {
       chord = null;
+      if (opts.onChordDown) opts.onChordDown([]);
       if (aids) aids.setSpec(null);
     },
+    // כמה מגובה הבמה תפוס בתחתית (שכבת האקורד); המצלמה במצב תקריב לוח מסגרת את הצוואר מעליה
+    setInset(frac) {
+      const f = Math.max(0, Math.min(0.6, frac || 0));
+      if (Math.abs(f - insetFrac) < 0.005) return;
+      insetFrac = f;
+      if (camName === 'chord') setCamera('chord');
+    },
+    setQuality(t) {
+      setTier(t);
+    },
+    get quality() { return { tier, name: TIERS[tier].name, frames, perf }; },
     setGhost(on) {
       ghost = !!on;
       teacher.setGhost(ghost);
@@ -637,7 +850,6 @@ export function createStage(canvas, labelsEl, opts = {}) {
       cancelAnimationFrame(raf);
       clearTimeout(flashTimer);
       ro.disconnect();
-      mo.disconnect();
       clearLabels();
       if (aids) {
         scene.remove(aids.rings);
@@ -645,9 +857,17 @@ export function createStage(canvas, labelsEl, opts = {}) {
       }
       if (teacher) teacher.dispose();
       if (guitar) guitar.dispose();
-      shadowTex && shadowTex.dispose();
+      if (composer) disposeComposer();
       floor.geometry.dispose();
       floorMat.dispose();
+      floorFade.dispose();
+      blob.geometry.dispose();
+      blobMat.dispose();
+      blobTex.dispose();
+      scene.background.dispose();
+      if (envTex) envTex.dispose();
+      blackEnv.dispose();
+      pmrem.dispose();
       renderer.dispose();
       try { renderer.forceContextLoss(); } catch { /* לא קריטי */ }
     },
