@@ -8,6 +8,8 @@ import { createModelTeacher, loadTeacherModel, loadedTeacherModel } from './teac
 import { teacherById, teacherUrl } from '../lib/teachers.js';
 import { PRESETS, PART_NAMES } from '../lib/parts.js';
 import { playString, unlockAudio } from '../lib/audio.js';
+import { createChordAids } from './chordAids.js';
+import { fingersDownAt, handSpec } from '../lib/chord.js';
 
 const ease = (t) => t * t * (3 - 2 * t);
 const rad = Math.PI / 180;
@@ -81,6 +83,9 @@ export function createStage(canvas, labelsEl, opts = {}) {
   let guitar = null;
   let teacher = null;
   let leftSpec = null;
+  let aids = null; // עזרי הוראה לאקורד (סימונים, טבעות)
+  let chord = null; // { spec, t0 }: אקורד מוצג עם אנימציית הנחה
+  let ghost = false; // יד שקופה
   let focus = { parts: [], labels: [] };
   let badges = false;
   let activeString = 0;
@@ -104,6 +109,18 @@ export function createStage(canvas, labelsEl, opts = {}) {
     updateBadgeClasses();
   }
 
+  // אקורד עם אנימציית הנחה: האצבעות יורדות לפי הסדר (1, 2, 3...), ולכל אחת מופיע סימון. הפחתת תנועה = הכול מיד
+  function stepChord(nowMs) {
+    if (!chord || !teacher || !aids) return;
+    const down = fingersDownAt(chord.spec, (nowMs - chord.t0) / 1000, { reduced: reduced() });
+    const key = down.join(',');
+    if (key === chord.key) return;
+    chord.key = key;
+    leftSpec = handSpec(chord.spec, down);
+    teacher.setLeftHand(leftSpec);
+    aids.setDown(down, reduced());
+  }
+
   // מורה דגם (GLB); אם נכשל – המורה הבובה
   function makeTeacher(gltf) {
     const fit = teacherById(teacherId).fit;
@@ -122,6 +139,7 @@ export function createStage(canvas, labelsEl, opts = {}) {
     teacher.onRelease = soundFor;
     teacher.setLeftHand(leftSpec);
     teacher.setRightHand(rightMode);
+    teacher.setGhost(ghost);
     const left = (waveEnd - performance.now()) / 1000;
     if (left > 0.3) teacher.wave(left);
     guitar.group.updateMatrixWorld(true);
@@ -133,12 +151,24 @@ export function createStage(canvas, labelsEl, opts = {}) {
       scene.remove(teacher.group);
       teacher.dispose();
     }
+    if (aids) {
+      scene.remove(aids.rings);
+      aids.dispose();
+      aids = null;
+    }
     if (guitar) {
       scene.remove(guitar.group);
       guitar.dispose();
     }
     guitar = createGuitar(type);
     scene.add(guitar.group);
+    aids = createChordAids(guitar);
+    guitar.group.add(aids.group);
+    scene.add(aids.rings);
+    if (chord) {
+      aids.setSpec(chord.spec);
+      chord.key = null; // מחשבים מחדש אילו אצבעות למטה (הסימונים נוצרו מחדש)
+    }
     // גיטרה אמיתית (GLB): אם כבר נטענה – מחברים מיד; אחרת נטענת ברקע וה"מחושבת" נשארת עד אז (או אם נכשל)
     const gUrl = `${import.meta.env.BASE_URL}${MODEL_CAL[type].file}`;
     const gReady = loadedGuitarModel(gUrl);
@@ -257,7 +287,8 @@ export function createStage(canvas, labelsEl, opts = {}) {
   }
 
   // ----- מצלמה -----
-  const rig = { target: new THREE.Vector3(6, 14, 8), dist: 118, az: 8 * rad, el: 6 * rad, k: 1 };
+  const rig = { target: new THREE.Vector3(6, 14, 8), dist: 118, az: 8 * rad, el: 6 * rad, k: 1, up: new THREE.Vector3(0, 1, 0) };
+  const UP = new THREE.Vector3(0, 1, 0);
   let from = null;
   let to = null;
   let tStart = 0;
@@ -309,7 +340,65 @@ export function createStage(canvas, labelsEl, opts = {}) {
     const target = c.clone().addScaledVector(up, e.cy * halfH).addScaledVector(right, e.cx * halfH * fitCam.aspect);
     return { target, dist: hi };
   }
+  // מסגור נקודות (בעולם) ממבט נתון: dir = מהיעד אל המצלמה, up = כיוון "למעלה" במסך
+  function fitPoints(pts, dir, up, maxW, maxH) {
+    const c = new THREE.Vector3();
+    pts.forEach((p) => c.add(p));
+    c.divideScalar(pts.length);
+    fitCam.aspect = size.w / Math.max(size.h, 1);
+    fitCam.updateProjectionMatrix();
+    fitCam.up.copy(up);
+    const v = new THREE.Vector3();
+    const extent = (d) => {
+      fitCam.position.copy(c).addScaledVector(dir, d);
+      fitCam.lookAt(c);
+      fitCam.updateMatrixWorld(true);
+      let x0 = 9, x1 = -9, y0 = 9, y1 = -9;
+      pts.forEach((p) => {
+        v.copy(p).project(fitCam);
+        x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y);
+      });
+      return { w: (x1 - x0) / 2, h: (y1 - y0) / 2, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
+    };
+    let lo = 5;
+    let hi = 400;
+    for (let i = 0; i < 30; i++) {
+      const mid = (lo + hi) / 2;
+      const e = extent(mid);
+      if (e.h > maxH || e.w > maxW) lo = mid;
+      else hi = mid;
+    }
+    const e = extent(hi);
+    const halfH = hi * Math.tan((fitCam.fov * rad) / 2);
+    const upV = new THREE.Vector3().setFromMatrixColumn(fitCam.matrixWorld, 1);
+    const rightV = new THREE.Vector3().setFromMatrixColumn(fitCam.matrixWorld, 0);
+    const target = c.clone().addScaledVector(upV, e.cy * halfH).addScaledVector(rightV, e.cx * halfH * fitCam.aspect);
+    return { target, dist: hi };
+  }
+  // תקריב אקורד: מבט מלמעלה על פני הלוח, מהאום ועד שריג p.frets, כל ששת המיתרים נראים
+  function boardView(p) {
+    guitar.group.updateMatrixWorld(true);
+    const L = (x, y, z) => guitar.group.localToWorld(new THREE.Vector3(x, y, z));
+    const D = (x, y, z) => new THREE.Vector3(x, y, z).transformDirection(guitar.group.matrixWorld);
+    const x0 = -1.0;
+    const x1 = guitar.fretX(p.frets || 4) + 0.8;
+    const hwx = guitar.hw(x1) + 0.35;
+    const pts = [];
+    // מרווח נוסף בצד של היד (z שלילי) כדי שהיד לא תמלא את הבמה: רואים את האצבעות עולות אל הצוואר
+    for (const x of [x0, x1]) for (const z of [-hwx - 2.8, hwx]) for (const y of [0, 0.9]) pts.push(L(x, y, z));
+    const phi = (p.phi || 40) * rad;
+    const psi = (p.psi || 0) * rad;
+    const dir = D(0, 1, 0).multiplyScalar(Math.cos(phi) * Math.cos(psi)).addScaledVector(D(0, 0, 1), Math.sin(phi)).addScaledVector(D(1, 0, 0), -Math.sin(psi) * Math.cos(phi)).normalize();
+    const up = D(0, 0, 1);
+    const f = fitPoints(pts, dir, up, 0.84, 0.94);
+    return { target: f.target, dist: f.dist, az: Math.atan2(dir.x, dir.z), el: Math.asin(dir.y), k: 1, up };
+  }
   function resolve(name) {
+    const p0 = (PRESETS[type] || PRESETS.classical)[name] || PRESETS[type].wide;
+    if (p0.board) return boardView(p0);
+    return { ...resolveOrbit(name), up: UP.clone() };
+  }
+  function resolveOrbit(name) {
     const p = (PRESETS[type] || PRESETS.classical)[name] || PRESETS[type].wide;
     let target;
     if (p.fit) {
@@ -340,12 +429,13 @@ export function createStage(canvas, labelsEl, opts = {}) {
       rig.k = goal.k;
       rig.az = goal.az;
       rig.el = goal.el;
+      rig.up.copy(goal.up);
       from = null;
       to = null;
       drag.az = drag.el = 0;
       return;
     }
-    from = { target: rig.target.clone(), dist: rig.dist, az: rig.az, el: rig.el, k: rig.k };
+    from = { target: rig.target.clone(), dist: rig.dist, az: rig.az, el: rig.el, k: rig.k, up: rig.up.clone() };
     tStart = performance.now();
     drag.az = drag.el = 0;
   }
@@ -359,6 +449,7 @@ export function createStage(canvas, labelsEl, opts = {}) {
       rig.k = from.k + (to.k - from.k) * e;
       rig.az = from.az + (to.az - from.az) * e;
       rig.el = from.el + (to.el - from.el) * e;
+      rig.up.lerpVectors(from.up, to.up, e).normalize();
       if (t >= 1) {
         from = null;
         to = null;
@@ -372,6 +463,7 @@ export function createStage(canvas, labelsEl, opts = {}) {
       rig.target.y + d * Math.sin(el),
       rig.target.z + d * Math.cos(az) * Math.cos(el),
     );
+    camera.up.copy(rig.up);
     camera.lookAt(rig.target);
   }
 
@@ -424,6 +516,9 @@ export function createStage(canvas, labelsEl, opts = {}) {
       rig.target.copy(g.target);
       rig.dist = g.dist;
       rig.k = g.k;
+      rig.az = g.az;
+      rig.el = g.el;
+      rig.up.copy(g.up);
     }
   }
   const ro = new ResizeObserver(resize);
@@ -444,8 +539,10 @@ export function createStage(canvas, labelsEl, opts = {}) {
       applyCamera();
       lookTarget.copy(camera.position);
       teacher.setLookTarget(lookTarget);
+      stepChord(now);
       teacher.update(dt, t);
       guitar.update(dt, t);
+      if (aids) aids.update(dt, chord ? teacher.tipFrames() : null);
       placeLabels(size.w, size.h);
     }
     renderer.render(scene, camera);
@@ -484,8 +581,34 @@ export function createStage(canvas, labelsEl, opts = {}) {
       flashString(i);
     },
     setLeftHand(spec) {
+      chord = null;
+      if (aids) aids.setSpec(null);
       leftSpec = spec;
       teacher.setLeftHand(spec);
+    },
+    // אקורד מלא (fingers, open, muted) עם סימונים וטבעות; animate=false: הכול מונח מיד
+    showChord(spec, { animate = true } = {}) {
+      chord = { spec, t0: performance.now() - (animate ? 0 : 1e7), key: null };
+      aids.setSpec(spec);
+      aids.setDown([], true);
+      leftSpec = handSpec(spec, []);
+      teacher.setLeftHand(leftSpec);
+    },
+    replayChord() {
+      if (!chord) return;
+      chord.t0 = performance.now();
+      chord.key = null;
+      aids.setDown([], reduced());
+      leftSpec = handSpec(chord.spec, []);
+      teacher.setLeftHand(leftSpec);
+    },
+    hideChord() {
+      chord = null;
+      if (aids) aids.setSpec(null);
+    },
+    setGhost(on) {
+      ghost = !!on;
+      teacher.setGhost(ghost);
     },
     setRightHand(mode) {
       rightMode = mode;
@@ -507,6 +630,7 @@ export function createStage(canvas, labelsEl, opts = {}) {
     _teacherById: teacherById,
     _presets: PRESETS,
     get teacher() { return teacher; },
+    get aids() { return aids; },
     get guitar() { return guitar; },
     dispose() {
       alive = false;
@@ -515,6 +639,10 @@ export function createStage(canvas, labelsEl, opts = {}) {
       ro.disconnect();
       mo.disconnect();
       clearLabels();
+      if (aids) {
+        scene.remove(aids.rings);
+        aids.dispose();
+      }
       if (teacher) teacher.dispose();
       if (guitar) guitar.dispose();
       shadowTex && shadowTex.dispose();

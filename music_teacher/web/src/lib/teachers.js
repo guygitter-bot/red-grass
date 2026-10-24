@@ -1,5 +1,5 @@
 // רשימת המורים – מקום אחד. מורה חדש = שורה חדשה כאן + קובץ GLB ב-public/teachers/.
-// fit: התאמות לדמות (קנה מידה והזזת הגיטרה, ראו createModelTeacher). comingSoon: true = מוצג בבחירה אבל אי אפשר לבחור (אין עדיין קובץ GLB).
+// fit: התאמות לדמות (קנה מידה והזזת הגיטרה, וגובה/מרחק פרקי האצבעות בקשת: knuckleH / knuckleBack, ראו createModelTeacher). comingSoon: true = מוצג בבחירה אבל אי אפשר לבחור (אין עדיין קובץ GLB).
 export const TEACHERS = [
   {
     id: 'male', label: 'גבר', file: 'teachers/male.glb',
@@ -14,6 +14,7 @@ export const TEACHERS = [
     id: 'female', label: 'אישה', file: 'teachers/female.glb',
     fit: {
       scale: 1.12, shrug: 0.7,
+      knuckleH: 2.0, knuckleBack: 3.4, // קשת האצבעות: זרועות ואצבעות קצרות יותר – פרקים נמוכים וקרובים יותר
       classical: { dx: -0.3, dy: 8, dz: 5.3, tilt: -0.01, yaw: 0 },
       electric: { dx: 0, dy: 5.9, dz: 5.3, tilt: 0.05, yaw: 0 },
     },

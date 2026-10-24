@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { LESSON1, LESSON2, LESSON_LIST, pick, AM_CHORD } from './lessons.js';
+import { LESSON1, LESSON2, LESSON_LIST, pick, AM_CHORD, CHORDS } from './lessons.js';
+import { validateChord } from './chord.js';
 import { PRESETS, PART_NAMES } from './parts.js';
 import { STRINGS, STRING_ORDER, fretFreq } from './notes.js';
 import { createGuitar } from '../three/guitar.js';
@@ -70,5 +71,21 @@ describe('דגמי התלת־ממד (בלי דפדפן)', () => {
     for (let i = 0; i < 20; i++) t.update(0.016, 1 + i * 0.016);
     t.dispose();
     g.dispose();
+  });
+});
+
+describe('אקורדים בשיעורים', () => {
+  it('כל אקורד תקין, וכל שלב עם יד שמאל מצביע על אקורד קיים', () => {
+    Object.entries(CHORDS).forEach(([k, c]) => {
+      expect(c.name, k).toBe(k);
+      expect(validateChord(c), k).toEqual([]);
+    });
+    LESSON2.filter((s) => s.leftHand).forEach((s) => expect(CHORDS[s.leftHand], s.id).toBeTruthy());
+  });
+  it('שלב האצבעות משתמש במצלמת התקריב של האקורד', () => {
+    const s = LESSON2.find((x) => x.tool === 'chord');
+    expect(s.camera).toBe('chord');
+    expect(PRESETS.classical.chord.board).toBe(true);
+    expect(PRESETS.electric.chord.board).toBe(true);
   });
 });
