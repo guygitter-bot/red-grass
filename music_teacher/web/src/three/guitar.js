@@ -3,6 +3,7 @@
 // z לרוחב: מיתר 6 (העבה) בצד חיובי, מיתר 1 (הדק) בצד שלילי. יחידה אחת ~ 16 מ"מ.
 import * as THREE from 'three';
 import { MODEL_CAL, modelFrame, prepareGuitarGeometry } from './guitarModels.js';
+import { pressX } from '../lib/chord.js';
 
 export const S = 40; // אורך המיתר הרוטט
 const HL = new THREE.Color(0xffa11a); // צבע הדגשה
@@ -487,10 +488,8 @@ export function createGuitar(type = 'classical') {
     return V(x, ys(x), zS(i, x));
   }
   // נקודה ממש מאחורי שריג (מצד האום), כך שהאצבע לא עומדת על המתכת
-  function fretPoint(i, fret) {
-    if (fret <= 0) return stringPoint(i, 0.2);
-    const x = fretX(fret) - 0.3 * (fretX(fret) - fretX(fret - 1));
-    return stringPoint(i, x);
+  function fretPoint(i, fret, finger) {
+    return stringPoint(i, pressX(fretX, fret, finger));
   }
 
   let hlParts = [];

@@ -157,6 +157,8 @@ export const AM_CHORD = {
   open: [5, 1],
   strum: [5, 4, 3, 2, 1],
 };
+// כל האקורדים לפי שם. שלב שיעור מצביע על אקורד ב-leftHand (למשל 'Am'); אקורד חדש = רשומה חדשה כאן (נבדק ב-chord.test.js)
+export const CHORDS = { Am: AM_CHORD };
 
 export const LESSON2 = [
   {
@@ -175,10 +177,10 @@ export const LESSON2 = [
   {
     id: 'fingers',
     name: 'איפה שמים את האצבעות',
-    camera: 'leftHand',
+    camera: 'chord',
     parts: T([], []),
     labels: [],
-    leftHand: 'am',
+    leftHand: 'Am',
     title: 'איפה שמים את האצבעות',
     say: T(
       'שלוש אצבעות, כל אחת קרוב לפס המתכת ולא עליו. מורה על מיתר 2 בשריג 1, אמה על מיתר 4 בשריג 2, וקמיצה על מיתר 3 בשריג 2. מיתר 6 לא מנגנים, ומיתרים 5 ו-1 נשארים פתוחים.',
@@ -192,7 +194,7 @@ export const LESSON2 = [
     camera: 'hands',
     parts: T([], []),
     labels: [],
-    leftHand: 'am',
+    leftHand: 'Am',
     title: 'שומעים איך זה נשמע',
     say: T(
       'לחצו על הכפתור, והמורה יפרוט את האקורד מלמעלה למטה, ממיתר 5 עד מיתר 1. מיתר 6 נשאר שקט.',
@@ -206,7 +208,7 @@ export const LESSON2 = [
     camera: 'hands',
     parts: T([], []),
     labels: [],
-    leftHand: 'am',
+    leftHand: 'Am',
     title: 'מקצב: למטה למטה למעלה למטה',
     say: T(
       'עכשיו פורטים ארבע פעמים בשורה: למטה, למטה, למעלה, למטה. מתחילים לאט, ואפשר להאיץ בהדרגה.',
@@ -220,7 +222,7 @@ export const LESSON2 = [
     camera: 'hands',
     parts: T([], []),
     labels: [],
-    leftHand: 'am',
+    leftHand: 'Am',
     title: 'התור שלך',
     say: T(
       'עכשיו אתם. החזיקו את האקורד ופרטו. אני אקשיב למיקרופון ואגיד לכם אם שמעתי נגינה.',

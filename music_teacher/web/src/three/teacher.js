@@ -6,6 +6,7 @@
 //   t.setLeftHand(spec | null)            // spec = { fingers: [{ finger: 1..4, string: 1..6, fret: 0..n }] }
 //   t.pluck(string)                       // פריטה של מיתר בודד; t.onRelease(string, amp) נקרא ברגע השחרור
 //   t.strum('d' | 'u', strings, ms)       // פריטה על כמה מיתרים
+//   t.tipFrames() / t.setGhost(on)       // טבעות על קצות האצבעות ויד שקופה (המורה הדגם בלבד)
 //   t.wave(seconds)                       // נפנוף ידיים לשלום
 //   t.setLookTarget(vec3 | null)          // לאן המורה מסתכל
 //   t.update(dt, time)  /  t.dispose()
@@ -313,7 +314,7 @@ export function createTeacher(guitar) {
     const xs = [];
     const zs = [];
     Object.values(pressed).forEach((f) => {
-      const p = guitar.fretPoint(f.string, f.fret);
+      const p = guitar.fretPoint(f.string, f.fret, f.finger);
       xs.push(p.x);
       zs.push(p.z);
     });
@@ -348,7 +349,7 @@ export function createTeacher(guitar) {
       const f = tg.pressed[i + 1];
       let des;
       if (f) {
-        des = guitar.fretPoint(f.string, f.fret);
+        des = guitar.fretPoint(f.string, f.fret, f.finger);
         des.y += FR * 0.7;
       } else {
         // אצבע רפויה: מרחפת מעל הלוח בקשת
@@ -648,6 +649,9 @@ export function createTeacher(guitar) {
     type,
     group,
     center,
+    // עזרי הוראה (טבעות על האצבעות, יד שקופה) קיימים רק במורה הדגם; לבובה אין
+    tipFrames: () => [],
+    setGhost() {},
     setLeftHand(spec) {
       st.lh.spec = spec || null;
     },

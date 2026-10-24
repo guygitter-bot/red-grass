@@ -41,6 +41,8 @@ export const PRESETS = {
     bridge: { part: 'bridge', dist: 25, az: -10, el: 22 },
     strings: { part: 'strings', dist: 74, az: 3, el: 10 },
     leftHand: { part: 'fretboard', x: 4.5, dist: 30, az: 0, el: 14 },
+    // תקריב אקורד: מבט מלמעלה על פני הלוח (phi = הטיה מהניצב ללוח, psi = הטיה לכיוון האום), שריגים 0 עד frets
+    chord: { board: true, frets: 4, phi: 32, psi: 8 },
     rightHand: { part: 'bridge', dist: 32, az: -26, el: 18 },
     hands: { part: 'strings', dist: 62, az: 0, el: 8 },
   },
@@ -53,6 +55,8 @@ export const PRESETS = {
     bridge: { part: 'bridge', dist: 25, az: -10, el: 22 },
     strings: { part: 'strings', dist: 74, az: 3, el: 10 },
     leftHand: { part: 'fretboard', x: 4.5, dist: 30, az: 0, el: 14 },
+    // תקריב אקורד: מבט מלמעלה על פני הלוח (phi = הטיה מהניצב ללוח, psi = הטיה לכיוון האום), שריגים 0 עד frets
+    chord: { board: true, frets: 4, phi: 32, psi: 8 },
     rightHand: { part: 'bridge', dist: 32, az: -26, el: 18 },
     hands: { part: 'strings', dist: 62, az: 0, el: 8 },
   },
