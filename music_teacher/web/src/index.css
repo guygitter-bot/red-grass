@@ -124,6 +124,20 @@ button {
   touch-action: none;
   cursor: grab;
 }
+.stage-bg {
+  /* רקע הסטודיו בזמן הטעינה (אחרי זה הקנבס מצייר את אותו הדבר): כהה בשני הנושאים */
+  background: radial-gradient(ellipse 90% 80% at 50% 38%, #3d332b 0%, #221c17 45%, #0a0807 100%);
+  color-scheme: dark;
+}
+/* ויניטה עדינה רק בתקריבים (הבמה מסמנת data-look) */
+.stage-vignette {
+  opacity: 0;
+  transition: opacity 0.8s ease;
+  background: radial-gradient(ellipse 85% 80% at 50% 45%, transparent 55%, rgba(0, 0, 0, 0.5) 100%);
+}
+[data-look='close'] > .stage-vignette {
+  opacity: 1;
+}
 .stage-canvas:active {
   cursor: grabbing;
 }
@@ -175,4 +189,54 @@ button {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
+}
+
+/* שכבת אקורד על הבמה (ChordOverlay): שם בזוהר צהוב + לוח אופקי, על רקע כהה שמתחזק כלפי מטה */
+.chord-overlay {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px 14px;
+  padding: 26px 12px 10px;
+  background: linear-gradient(to top, rgba(6, 4, 3, 0.82) 0%, rgba(6, 4, 3, 0.55) 60%, rgba(6, 4, 3, 0) 100%);
+  pointer-events: none;
+  color: #fff4e1;
+}
+.chord-name {
+  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  font-weight: 800;
+  font-size: clamp(34px, 9vw, 54px);
+  line-height: 1;
+  color: #ffd84a;
+  text-shadow: 0 0 10px rgba(255, 210, 60, 0.85), 0 0 28px rgba(255, 170, 0, 0.5);
+  padding-bottom: 6px;
+}
+.chord-board {
+  flex: 0 1 270px;
+  min-width: 0;
+  height: auto;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
+}
+@media (min-width: 1024px) {
+  .chord-board {
+    flex-basis: 340px;
+  }
+  .chord-overlay {
+    padding-bottom: 14px;
+  }
+}
+/* עיגול האצבע קופץ פנימה כשהאצבע יורדת */
+.chord-dot {
+  transform-box: view-box;
+  transform: scale(0);
+  opacity: 0;
+  transition: transform 0.38s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease-out;
+}
+.chord-dot.on {
+  transform: scale(1);
+  opacity: 1;
 }

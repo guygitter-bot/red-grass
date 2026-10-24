@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 
 // במת התלת־ממד. onStage מקבל את ה-API של הבמה (או null ביציאה)
-export default function GuitarStage({ type, teacher, onStage, onPick, hint = false, className = '', children }) {
+export default function GuitarStage({ type, teacher, onStage, onPick, onChordDown, hint = false, className = '', children }) {
   const canvasRef = useRef(null);
   const labelsRef = useRef(null);
   const stageRef = useRef(null);
   const pickRef = useRef(onPick);
   const stageCb = useRef(onStage);
+  const downRef = useRef(onChordDown);
   const typeRef = useRef(type);
   const teacherRef = useRef(teacher);
   const [failed, setFailed] = useState(false);
@@ -14,6 +15,7 @@ export default function GuitarStage({ type, teacher, onStage, onPick, hint = fal
   const [hasLabels, setHasLabels] = useState(false); // כשיש תוויות על הבמה הרמז לא מוצג (שלא יתנגש בהן)
   pickRef.current = onPick;
   stageCb.current = onStage;
+  downRef.current = onChordDown;
   typeRef.current = type;
   teacherRef.current = teacher;
 
@@ -33,6 +35,9 @@ export default function GuitarStage({ type, teacher, onStage, onPick, hint = fal
             },
             onDrag: () => setDragged(true),
             onLabels: (n) => setHasLabels(n > 0),
+            onChordDown: (d) => {
+              if (downRef.current) downRef.current(d);
+            },
           });
         } catch {
           setFailed(true);
@@ -65,8 +70,9 @@ export default function GuitarStage({ type, teacher, onStage, onPick, hint = fal
   }, [teacher]);
 
   return (
-    <div className={`relative overflow-hidden rounded-2xl border border-line bg-scene ${className}`}>
+    <div className={`relative overflow-hidden rounded-2xl border border-line stage-bg ${className}`} data-look="wide">
       <canvas ref={canvasRef} className="stage-canvas" aria-label="גיטרה בתלת־ממד" />
+      <div className="stage-vignette pointer-events-none absolute inset-0" aria-hidden="true" />
       <div ref={labelsRef} className="pointer-events-none absolute inset-0 overflow-hidden" />
       {failed && (
         <div className="absolute inset-0 z-10 grid place-items-center bg-scene p-6 text-center text-ink">
@@ -74,7 +80,7 @@ export default function GuitarStage({ type, teacher, onStage, onPick, hint = fal
         </div>
       )}
       {hint && !dragged && !hasLabels && (
-        <div className="pointer-events-none absolute bottom-2 start-3 end-3 text-center text-xs text-ink/80 [text-shadow:0_1px_2px_var(--color-scene)]">גררו עם האצבע כדי להסתכל מזווית אחרת</div>
+        <div className="pointer-events-none absolute bottom-2 start-3 end-3 text-center text-xs text-white/80 [text-shadow:0_1px_2px_#000]">גררו עם האצבע כדי להסתכל מזווית אחרת</div>
       )}
       {children}
     </div>
