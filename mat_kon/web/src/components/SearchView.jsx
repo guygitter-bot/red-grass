@@ -16,7 +16,7 @@ const urlKey = (url) => {
 
 // diets: אותו סינון כמו בספר (כשר, ללא גלוטן…), נשמר במכשיר
 // חיפוש מתכון: קודם במאגר הקהילה (מיד ובחינם, לפי דירוג ומספר שמירות), ואחר כך – אם צריך – הסוכן מחפש ברשת
-export default function SearchView({ session, initialQuery, onAdd, onBack, onPaywall, savedUrls, onOpenCommunity, diets = [], onDiets }) {
+export default function SearchView({ session, initialQuery, onAdd, onBack, onPaywall, savedUrls, ownKeys = new Set(), onOpenCommunity, diets = [], onDiets }) {
   const [query, setQuery] = useState(initialQuery || '');
   const [asked, setAsked] = useState(initialQuery || '');
   const [community, setCommunity] = useState(null);
@@ -48,8 +48,10 @@ export default function SearchView({ session, initialQuery, onAdd, onBack, onPay
     let alive = true;
     setCommunity(null);
     searchCommunity(session, asked.trim(), { diets })
-      .then((list) => {
+      .then((found) => {
         if (!alive) return;
+        // בלי מה שכבר בספר שלי (מתכון שפרסמתי, ששמרתי מהקהילה, או מאותו קישור) – רק מתכונים של אחרים
+        const list = found.filter((r) => !(r.url ? savedUrls.has(urlKey(r.url)) : ownKeys.has(r.key)));
         setCommunity(list);
         if (!list.length && asked.trim().length >= 2 && !diets.length && webStarted.current !== asked) runWeb(asked);
       })

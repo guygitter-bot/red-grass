@@ -697,6 +697,7 @@ export default function App() {
           session={session}
           initialQuery={nav.q}
           savedUrls={savedUrls}
+          ownKeys={ownCommunityKeys(recipes)}
           onAdd={(url, title) => {
             add(url);
             setToast(`"${title}" נכנס לספר – מסדר מתכון ברקע`);
@@ -1116,6 +1117,17 @@ function Empty({ session, onOpenCommunity }) {
       </div>
     </div>
   );
+}
+
+// מתכונים מהקהילה שכבר שלי: שפרסמתי (published), או עותק ששמרתי מהקהילה (source.key = community:<key>)
+function ownCommunityKeys(recipes) {
+  const keys = new Set();
+  for (const r of recipes) {
+    if (r.published) keys.add(r.published);
+    const k = r.source?.key;
+    if (typeof k === 'string' && k.startsWith('community:')) keys.add(k.slice(10));
+  }
+  return keys;
 }
 
 // הקישורים שכבר בספר (כדי לסמן "נוסף" בתוצאות חיפוש)
