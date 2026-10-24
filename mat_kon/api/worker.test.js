@@ -5,6 +5,7 @@ import { hashPassword } from './accounts.js';
 import { runBackup } from './backup.js';
 import { fakeEnv } from './fake-env.js';
 import { RECIPE_TOOL } from './extract.js';
+import { RecipeBook } from './store.js';
 
 let env;
 let apiCalls;
@@ -1287,6 +1288,21 @@ test('jobs interrupted mid-run fail and refund; a deleted book takes no more rec
   await book.fetch(new Request('https://do/recipes', { method: 'DELETE' }));
   const late = await book.fetch(new Request('https://do/recipes', { method: 'POST', body: JSON.stringify({ title: 'x', source: { url: 'https://a.example' } }) }));
   assert.equal(late.status, 410);
+});
+
+test('a job cut off by a server update goes back to the queue, without an error or a refund', async () => {
+  const { session, user } = await (await register((await invite()).token)).json();
+  const run = RecipeBook.prototype.runJob;
+  RecipeBook.prototype.runJob = async () => { throw new Error('Durable Object reset because its code was updated.'); };
+  const before = (await (await call('GET', '/me', undefined, session)).json()).user.added;
+  const res = await (await call('POST', '/recipes?async=1', { url: 'https://cake.example/reset' }, session)).json();
+  await new Promise((r) => setTimeout(r, 30));
+  RecipeBook.prototype.runJob = run;
+  const book = env.BOOK.objects.get(`user:${user.id}`);
+  const job = book.storage.map.get(`job:${res.job.id}`);
+  assert.equal(job.status, 'pending');
+  assert.ok(job.input);
+  assert.equal((await (await call('GET', '/me', undefined, session)).json()).user.added, before + 1);
 });
 
 test('an uploaded image cannot be pointed at from another recipe; replacing on refresh drops the old file', async () => {

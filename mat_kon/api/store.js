@@ -10,6 +10,8 @@ const SRC = 'src:';
 const CACHE_DAYS = 90; // מתכון במטמון המשותף מתחדש אחרי 3 חודשים
 export const MAX_RECIPES = 2000; // תקרה לספר, כדי שאי אפשר יהיה למלא את האחסון
 const STALE_JOB_MS = 5 * 60 * 1000;
+// המופע אופס באמצע (עדכון שרת וכו'): לא תקלה – העבודה חוזרת לתור ורצה שוב במופע החדש
+export const isReset = (e) => Boolean(e?.durableObjectReset) || /Durable Object reset|code was updated/i.test(String(e?.message || ''));
 // המקור של מתכון: קישור, או מפתח (הודעת ווטסאפ, צילום...)
 const sourceKey = (r) => String(r?.source?.url || r?.source?.key || '').slice(0, 1500);
 
@@ -275,7 +277,15 @@ export class RecipeBook {
     const [key, job] = next;
     await this.storage.put(key, { ...job, status: 'running', startedAt: new Date().toISOString() });
     await this.storage.setAlarm(Date.now() + 1000);
-    const done = await this.runJob(job);
+    let done;
+    try {
+      done = await this.runJob(job);
+    } catch (e) {
+      if (!isReset(e)) throw e;
+      // חוזרת לתור; אם גם זה לא הצליח – היא תיכשל כ"נקטעה" (עם החזר מכסה) באזעקה הבאה
+      await this.storage.put(key, { ...job, status: 'pending' }).catch(() => {});
+      return;
+    }
     await this.finishJob(key, job, done, false);
   }
 
@@ -304,6 +314,7 @@ export class RecipeBook {
       if (!data.counted) await giveBack();
       return { status: 'done', recipeId: data.recipe.id, title: data.recipe.title, category: data.recipe.category, updated: data.updated };
     } catch (e) {
+      if (isReset(e)) throw e; // בלי החזר מכסה ובלי תקלה – העבודה תרוץ שוב
       await giveBack();
       await toAccounts('/errors/add', {
         where: 'job', message: String(e?.message || e).slice(0, 300), status: e?.status || null, user: job.quota?.userId || 'owner',
