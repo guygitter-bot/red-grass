@@ -113,6 +113,10 @@ function mockApi(opts = {}) {
       r.published = true;
       return { recipe: r, review: { decision: 'publish', imageRemoved: false } };
     }
+    if (/^\/recipes\/[\w-]+\/substitute$/.test(p)) {
+      await sleep(1500);
+      return { item: body.item, ...(opts.substitute ?? demo.SUBSTITUTE) };
+    }
     m = p.match(/^\/recipes\/([\w-]+)(\/refresh)?$/);
     if (m) {
       const r = state.recipes.find((x) => x.id === m[1]);

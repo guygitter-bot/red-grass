@@ -37,6 +37,13 @@ await record('recipe', async ({ page, say, tap, type, wait, card, uncard, point,
   await say('תוך כדי הכנה מסמנים כל מצרך שכבר הוספתם', 1000, true);
   await tap(page.getByRole('button', { name: /שמן זית/ }).first(), { after: 500 });
   await tap(page.getByRole('button', { name: /בצל קצוץ/ }).first(), { after: 900 });
+  await say('חסר לכם מצרך? לוחצים <b>חסר לי?</b> לידו', 1200, true);
+  await tap(page.getByRole('button', { name: /תחליף ל.*פפריקה/ }), { after: 600 });
+  await page.getByText('פפריקה חריפה + קורט סוכר').waitFor({ timeout: 10000 });
+  await say('ומקבלים תחליף שמתאים למתכון הזה – כמה לשים, ומה זה ישנה', 3200, true);
+  await say('אפשר לשמור את התחליף בהערות שלכם', 1200, true);
+  await tap(page.getByRole('button', { name: 'שמירה בהערות שלי' }).first(), { after: 1200 });
+  await tap(page.getByRole('button', { name: 'סגירה' }).last(), { after: 600 });
   await hideDot();
 
   await reveal(page.getByText('חסר לך בבית:'), 380);

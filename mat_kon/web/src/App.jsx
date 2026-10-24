@@ -39,7 +39,7 @@ import { CATEGORIES } from './lib/categories';
 import { isNative } from './lib/native';
 import {
   addCategory, setCategoryPrefs, addRecipeAsync, addTextRecipe, getJob, getRecipe, deleteRecipe, removeCategory, getMe, getPlan, getShopping, listRecipes, logout as apiLogout, refreshRecipe,
-  updateRecipe, categorizeRecipe, estimateNutrition, getProfile, setProfile, publishRecipe, unpublishRecipe, safeRecipe, searchCommunity, talkApi, getPantry, shoppingOps, pantryOps, planOps, shareRecipe, recipeShareLink,
+  updateRecipe, categorizeRecipe, estimateNutrition, getProfile, setProfile, publishRecipe, unpublishRecipe, safeRecipe, searchCommunity, substituteIngredient, talkApi, getPantry, shoppingOps, pantryOps, planOps, shareRecipe, recipeShareLink,
 } from './lib/api';
 import { SORTS, categoriesOf, countByCategory, emojiOf, filterRecipes, freeLeft, linkFromShare, orderCategories, parseAuthHash, parseShareLink, sortRecipes } from './lib/recipes';
 import { usePersistentState } from './lib/storage';
@@ -796,6 +796,7 @@ export default function App() {
         onBack={back}
         onShareLink={async () => recipeShareLink(await shareRecipe(session, current.id))}
         onEstimateNutrition={async () => upsert(await estimateNutrition(session, current.id))}
+        onSubstitute={(item) => substituteIngredient(session, current.id, item, Array.isArray(diets) ? diets : [])}
         bis={Boolean(user?.features?.bis)}
         community={{
           talk,
