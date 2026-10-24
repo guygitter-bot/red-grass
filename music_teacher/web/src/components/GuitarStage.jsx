@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 // במת התלת־ממד. onStage מקבל את ה-API של הבמה (או null ביציאה)
-export default function GuitarStage({ type, teacher, onStage, onPick, className = '', children }) {
+export default function GuitarStage({ type, teacher, onStage, onPick, hint = false, className = '', children }) {
   const canvasRef = useRef(null);
   const labelsRef = useRef(null);
   const stageRef = useRef(null);
@@ -10,6 +10,8 @@ export default function GuitarStage({ type, teacher, onStage, onPick, className 
   const typeRef = useRef(type);
   const teacherRef = useRef(teacher);
   const [failed, setFailed] = useState(false);
+  const [dragged, setDragged] = useState(false); // אחרי הגרירה הראשונה הרמז נעלם
+  const [hasLabels, setHasLabels] = useState(false); // כשיש תוויות על הבמה הרמז לא מוצג (שלא יתנגש בהן)
   pickRef.current = onPick;
   stageCb.current = onStage;
   typeRef.current = type;
@@ -29,12 +31,16 @@ export default function GuitarStage({ type, teacher, onStage, onPick, className 
             onPick: (i) => {
               if (pickRef.current) pickRef.current(i);
             },
+            onDrag: () => setDragged(true),
+            onLabels: (n) => setHasLabels(n > 0),
           });
         } catch {
           setFailed(true);
           return;
         }
         stageRef.current = st;
+        // לבדיקות בדפדפן (Playwright): מחשפים את הבמה רק כשהבדיקה ביקשה
+        if (typeof window !== 'undefined' && window.__MT_DEBUG) window.__mtStage = st;
         if (stageCb.current) stageCb.current(st);
       })
       .catch(() => {
@@ -66,6 +72,9 @@ export default function GuitarStage({ type, teacher, onStage, onPick, className 
         <div className="absolute inset-0 z-10 grid place-items-center bg-scene p-6 text-center text-ink">
           לא הצלחנו להציג את התלת־ממד במכשיר הזה. נסו לרענן את הדף או לפתוח בדפדפן אחר.
         </div>
+      )}
+      {hint && !dragged && !hasLabels && (
+        <div className="pointer-events-none absolute bottom-2 start-3 end-3 text-center text-xs text-ink/80 [text-shadow:0_1px_2px_var(--color-scene)]">גררו עם האצבע כדי להסתכל מזווית אחרת</div>
       )}
       {children}
     </div>

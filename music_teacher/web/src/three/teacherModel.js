@@ -11,6 +11,7 @@ import { buildStool, twoBone } from './teacher.js';
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const ease = (t) => t * t * (3 - 2 * t);
+const TUNE = () => (typeof window !== 'undefined' && window.__MT_TUNE) || {};
 
 // ---------- טעינה (עצלה, עם מטמון) ----------
 const cache = new Map();
@@ -21,6 +22,7 @@ export function loadTeacherModel(url) {
     c.promise = import('three/addons/loaders/GLTFLoader.js')
       .then(({ GLTFLoader }) => new GLTFLoader().loadAsync(url))
       .then((g) => {
+        smoothSkinnedNormals(g.scene);
         c.gltf = g;
         return g;
       });
@@ -28,6 +30,57 @@ export function loadTeacherModel(url) {
     cache.set(url, c);
   }
   return c.promise;
+}
+// נורמלים חלקים: ממצעים (לפי שטח המשולש) את כל הקודקודים שיושבים באותה נקודה, גם אם ה-weld השאיר אותם כפולים
+// בתפר (UV) – בלי זה נראה קצה קשה בין "פאות". העצמות והמשקלים לא נוגעים (הנורמל במנוחה, ה-shader מעוות אותו).
+export function smoothSkinnedNormals(root) {
+  root.traverse((o) => {
+    if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
+    const g = o.geometry;
+    if (g.userData.smoothed) return;
+    const p = g.attributes.position;
+    const ix = g.index;
+    const tri = ix ? ix.count / 3 : p.count / 3;
+    const at = (f, j) => (ix ? ix.getX(f * 3 + j) : f * 3 + j);
+    const id = new Int32Array(p.count); // מזהה לכל נקודה ייחודית
+    const seen = new Map();
+    for (let i = 0; i < p.count; i++) {
+      const k = `${Math.round(p.getX(i) * 1e4)},${Math.round(p.getY(i) * 1e4)},${Math.round(p.getZ(i) * 1e4)}`;
+      let u = seen.get(k);
+      if (u === undefined) {
+        u = seen.size;
+        seen.set(k, u);
+      }
+      id[i] = u;
+    }
+    const acc = new Float32Array(seen.size * 3);
+    for (let f = 0; f < tri; f++) {
+      const a = at(f, 0);
+      const b = at(f, 1);
+      const c = at(f, 2);
+      const ux = p.getX(b) - p.getX(a), uy = p.getY(b) - p.getY(a), uz = p.getZ(b) - p.getZ(a);
+      const vx = p.getX(c) - p.getX(a), vy = p.getY(c) - p.getY(a), vz = p.getZ(c) - p.getZ(a);
+      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; // אורך = כפול השטח
+      [a, b, c].forEach((i) => {
+        acc[id[i] * 3] += nx;
+        acc[id[i] * 3 + 1] += ny;
+        acc[id[i] * 3 + 2] += nz;
+      });
+    }
+    const had = !!g.attributes.normal;
+    const n = g.attributes.normal || new THREE.BufferAttribute(new Float32Array(p.count * 3), 3);
+    for (let i = 0; i < p.count; i++) {
+      const x = acc[id[i] * 3], y = acc[id[i] * 3 + 1], z = acc[id[i] * 3 + 2];
+      const l = Math.hypot(x, y, z);
+      if (l < 1e-12) continue;
+      // קצה חד אמיתי (למשל שולי השרוול) נשאר כמו שהוא: מחליפים רק כשהסטייה קטנה
+      if (had && n.getX(i) * x / l + n.getY(i) * y / l + n.getZ(i) * z / l < 0.64) continue;
+      n.setXYZ(i, x / l, y / l, z / l);
+    }
+    n.needsUpdate = true;
+    g.setAttribute('normal', n);
+    g.userData.smoothed = true;
+  });
 }
 // אם הדגם כבר נטען – מחזיר אותו מיד (אחרת null)
 export function loadedTeacherModel(url) {
@@ -81,7 +134,9 @@ function angleAbout(axis, a, b) {
 
 // fit (לכל דמות, מתוך lib/teachers.js): scale = קנה מידה (ברירת מחדל 1, הדגם הגברי ~98 יחידות לעומד),
 // dx/dy/dz = הזזת הגיטרה ביחס לגוף (דמות עם זרועות קצרות – מקרבים את הגיטרה), shrug = כמה הכתף מתקדמת ליעד
-export function createModelTeacher(guitar, gltf, fit = {}) {
+export function createModelTeacher(guitar, gltf, fitAll = {}) {
+  // התאמות לפי סוג הגיטרה (fit.classical / fit.electric) גוברות על ההתאמה הכללית
+  const fit = { ...fitAll, ...(fitAll[guitar.type] || {}) };
   const SC = fit.scale || 1;
   const SHRUG = fit.shrug == null ? 0.35 : fit.shrug;
   const classical = guitar.type === 'classical';
@@ -149,15 +204,18 @@ export function createModelTeacher(guitar, gltf, fit = {}) {
 
   // ---------- גיטרה בידי המורה ----------
   const place = classical
-    ? { x: -1.5, y: hipJointY + 11.5, z: HIP_Z + 13.5, tilt: 0.45 }
-    : { x: -6, y: hipJointY + 12.5, z: HIP_Z + 11, tilt: 0.3 };
+    ? { x: -1.5, y: hipJointY + 11.5, z: HIP_Z + 13.5, tilt: 0.45, yaw: 0 }
+    : { x: -6, y: hipJointY + 12.5, z: HIP_Z + 11, tilt: 0.3, yaw: 0 };
   place.x += fit.dx || 0;
   place.y += fit.dy || 0;
   place.z += fit.dz || 0;
+  place.tilt += fit.tilt || 0;
+  place.yaw += fit.yaw || 0; // סיבוב סביב הציר האנכי: הצוואר פונה קדימה (חיובי = ראש הגיטרה מתקרב למצלמה)
   {
     const Bm = new THREE.Matrix4().makeBasis(V(-1, 0, 0), V(0, 0, 1), V(0, 1, 0));
     const R = new THREE.Matrix4().makeRotationZ(place.tilt);
-    const M = new THREE.Matrix4().multiplyMatrices(R, Bm);
+    const Y = new THREE.Matrix4().makeRotationY(-place.yaw);
+    const M = new THREE.Matrix4().multiplyMatrices(Y, new THREE.Matrix4().multiplyMatrices(R, Bm));
     const off = V(34, 0, 0).applyMatrix4(M);
     M.setPosition(place.x - off.x, place.y - off.y, place.z - off.z);
     guitar.group.matrixAutoUpdate = false;
@@ -368,8 +426,9 @@ export function createModelTeacher(guitar, gltf, fit = {}) {
         des = guitar.fretPoint(f.string, f.fret);
         des.y += FR;
       } else {
-        const x = lh.xc + (i - 1.5) * 0.9 + 0.2;
-        des = V(x, guitar.ys(x) + 1.6, clamp(tg.zc + 0.7 - i * 0.25, -1.4, 1.2));
+        // אצבע שלא לוחצת: מעט מעל המיתרים, קרובה לשאר האצבעות ומקושתת (לא פרושה ולא ישרה)
+        const x = lh.xc + (i - 1.5) * 0.75 + 0.15;
+        des = V(x, guitar.ys(x) + 1.15, clamp(tg.zc + 0.5 - i * 0.2, -1.4, 1.2));
       }
       if (!lh.tips[i]) lh.tips[i] = des.clone();
       moved += lh.tips[i].distanceTo(des);
@@ -484,12 +543,16 @@ export function createModelTeacher(guitar, gltf, fit = {}) {
     return { hz: base.hz, lift, thumbLift, active, tipDx };
   }
 
-  const RIGHT_F = V(-0.3, -0.92, -0.25);
+  // יד ימין: האצבעות מצביעות אל המיתרים מעט לכיוון הטון, האגודל החוצה (לצד הבס)
+  const RIGHT_F = V(-0.25, -0.85, -0.45);
   const RIGHT_T = V(0, 0, 1);
-  const RIGHT_POLE = V(-1, -0.5, 0.35);
+  // המרפק למעלה ולצד, מעל הקצה העליון של הגוף – כך האמה שוכבת על הקצה ולא חוצה את הגיטרה (קואורדינטות עולם)
+  const RIGHT_POLE_W = V(-0.5, 1, -0.2);
+  const RIGHT_THUMB = V(0.2, 1.2, 1.8);
   function rightPlay(r) {
     const hz = r.hz;
-    const rc = V(rx + 1.5, 4.6, hz - 1.7);
+    const K = TUNE();
+    const rc = V(rx + (K.rcx ?? 1.5), K.rcy ?? 5.4, hz + (K.rcz ?? 1.8));
     const tips = [];
     for (let i = 0; i < 4; i++) {
       const x = rx - 0.1 + (r.active === i ? r.tipDx : 0);
@@ -502,10 +565,11 @@ export function createModelTeacher(guitar, gltf, fit = {}) {
     } else {
       thumb = tips[0].clone().add(V(0.55, 0.6, 0.35));
     }
-    const f = RIGHT_F.clone();
-    const t = RIGHT_T.clone();
+    thumb.add(K.th ? V(...K.th) : RIGHT_THUMB);
+    const f = K.rf ? V(...K.rf) : RIGHT_F.clone();
+    const t = K.rt ? V(...K.rt) : RIGHT_T.clone();
     const p = new THREE.Vector3().crossVectors(t, f);
-    return { rc: L2W(rc), f: D2W(f), p: D2W(p), tips: tips.map(L2W), thumb: L2W(thumb), pole: D2W(RIGHT_POLE) };
+    return { rc: L2W(rc), f: D2W(f), p: D2W(p), tips: tips.map(L2W), thumb: L2W(thumb), pole: K.rpoleW ? V(...K.rpoleW) : K.elb ? L2W(V(rx + K.elb[0], K.elb[1], K.elb[2])).sub(worldPos(B.RightArm)) : RIGHT_POLE_W.clone() };
   }
   // יד פתוחה בעולם (נפנוף / מנוחה)
   function openHand(rc, f, p, reach, pole, curl = 0) {
@@ -525,8 +589,13 @@ export function createModelTeacher(guitar, gltf, fit = {}) {
     return openHand(sh.clone().add(V(-5.5 + sw * 2.2, 23, 6)), V(sw * 0.3 - 0.15, 1, 0.1), V(0, 0.1, 1), 0.93, V(-0.5, -1, -0.3));
   }
   function parkCfg() {
-    const sh = worldPos(B.RightArm);
-    return openHand(sh.clone().add(V(-1.5, -17, 15)), V(0.1, -0.5, 0.85), V(0, 1, 0.2), 0.8, V(-1, -0.3, 0), 0.8);
+    // יד ימין נחה על הירך הימנית (קרוב לברך) – מחוץ לקדמת הגיטרה, כך שלא מסתירה את הגשר, הפיקאפים והכפתורים
+    const hip = worldPos(B.RightUpLeg);
+    const kn = worldPos(B.RightLeg);
+    const rc = hip.clone().lerp(kn, 0.8);
+    rc.y = hipJointY + 3.4 + 1.6;
+    rc.x -= 0.5;
+    return openHand(rc, V(0.05, -0.1, 1), V(0, -1, 0.1), 0.8, V(-1, 0.3, -0.2), 0.55);
   }
   function blend(a, b, w) {
     return {
@@ -664,10 +733,106 @@ export function createModelTeacher(guitar, gltf, fit = {}) {
     return out;
   }
 
+  // גבולות הדמות (לתצוגה "רחב"): מכל העצמות, מהרצפה ועד קצה הראש
+  function bounds() {
+    root.updateMatrixWorld(true);
+    const b = new THREE.Box3();
+    all.forEach((o) => b.expandByPoint(worldPos(o)));
+    b.min.y = FLOOR;
+    b.max.y = worldPos(B.Head).y + 11 * SC;
+    b.min.x = Math.min(b.min.x, -10);
+    b.max.x = Math.max(b.max.x, 10);
+    return b.expandByScalar(2);
+  }
+
+  // בדיקת חדירה: כל קודקוד של העור (אחרי השלד) מול גוף הגיטרה, בקרניים לאורך ציר ה-y של הגיטרה (החוצה מהגב).
+  // gap = המרחק הקטן ביותר מהגב אל הגוף שמאחוריו; depth = כמה הכי עמוק קודקוד נכנס לתוך הגיטרה (0 = אין חדירה).
+  // מפרידים בין הפלג העליון (בטן, אגן, ירכיים) לזרועות, כי הזרוע הימנית נחה בכוונה על הקצה העליון של הגוף.
+  function penetration() {
+    const body = guitar.bodyMesh();
+    root.updateMatrixWorld(true);
+    guitar.group.updateMatrixWorld(true);
+    const inv = new THREE.Matrix4().copy(GW).invert();
+    const dirW = V(0, 1, 0).transformDirection(GW);
+    const AX6 = [[V(1, 0, 0), 1], [V(1, 0, 0), -1], [V(0, 1, 0), 1], [V(0, 1, 0), -1], [V(0, 0, 1), 1], [V(0, 0, 1), -1]].map(([a, sg]) => [a.transformDirection(GW), sg]);
+    const binv = new THREE.Matrix4().copy(body.matrixWorld).invert();
+    const rc = new THREE.Raycaster();
+    // הקרניים צריכות לפגוש גם את הפאות האחוריות (כדי לספור כניסות ויציאות)
+    const bms = Array.isArray(body.material) ? body.material : [body.material];
+    const sides = bms.map((m) => m.side);
+    bms.forEach((m) => (m.side = THREE.DoubleSide));
+    let thighTop = -Infinity;
+    const res = { torso: { inside: 0, depth: 0, gap: Infinity }, arms: { inside: 0, depth: 0, gap: Infinity } };
+    root.traverse((o) => {
+      if (!o.isSkinnedMesh) return;
+      o.skeleton.update();
+      const g = o.geometry;
+      const sk = g.attributes.skinIndex;
+      const sw = g.attributes.skinWeight;
+      const v = new THREE.Vector3();
+      const lv = new THREE.Vector3();
+      for (let i = 0; i < g.attributes.position.count; i++) {
+        o.getVertexPosition(i, v);
+        v.applyMatrix4(o.matrixWorld);
+        if (v.x < 2 && v.x > -14 && v.z > 4 && v.z < 18 && v.y < hipJointY + 8) {
+          let b2 = 0, w2 = -1;
+          for (let k = 0; k < 4; k++) if (sw.getComponent(i, k) > w2) { w2 = sw.getComponent(i, k); b2 = sk.getComponent(i, k); }
+          if (o.skeleton.bones[b2].name === 'mixamorigRightUpLeg') thighTop = Math.max(thighTop, v.y);
+        }
+        lv.copy(v).applyMatrix4(inv);
+        // סינון גס: רק מה שבתוך המלבן של גוף הגיטרה
+        if (lv.x < 18 || lv.x > 50 || Math.abs(lv.z) > 12 || lv.y < -14 || lv.y > 3) continue;
+        let bi = 0;
+        let bw = -1;
+        for (let k = 0; k < 4; k++) if (sw.getComponent(i, k) > bw) { bw = sw.getComponent(i, k); bi = sk.getComponent(i, k); }
+        const name = o.skeleton.bones[bi].name;
+        const arm = /Shoulder|Arm|Hand/.test(name);
+        const R = arm ? res.arms : res.torso;
+        // הכיוון "אל הפנים" של הגיטרה: פגיעה ראשונה בפאה שפונה אלינו = אנחנו מחוץ לגוף (מאחוריו);
+        // פגיעה ראשונה בפאה שפונה ממנו = אנחנו בתוך הגוף. (הדגמים הסרוקים לא סגורים, אז ספירת זוגיות לא אמינה.)
+        const first = (dir) => {
+          rc.set(v, dir);
+          const h = rc.intersectObject(body, false)[0];
+          if (!h) return null;
+          const dl = dir.clone().transformDirection(binv);
+          return { d: h.distance, inside: h.face.normal.dot(dl) > 0 };
+        };
+        const f0 = first(dirW);
+        if (!f0) continue;
+        if (f0.inside) {
+          // בפנים: המרחק הקצר ביותר החוצה (שישה כיוונים לאורך צירי הגיטרה)
+          let dmin = f0.d;
+          for (const [ax, sg] of AX6) {
+            const f = first(ax.clone().multiplyScalar(sg));
+            if (f && f.inside) dmin = Math.min(dmin, f.d);
+          }
+          R.inside++;
+          if (dmin > R.depth) {
+            R.depth = dmin;
+            R.worst = { bone: name, local: [lv.x, lv.y, lv.z].map((n) => +n.toFixed(1)) };
+          }
+        } else {
+          // מאחורי הגיטרה: המרחק אל הגב
+          R.gap = Math.min(R.gap, f0.d);
+        }
+      }
+    });
+    bms.forEach((m, i) => (m.side = sides[i]));
+    // יחידה אחת ~ 16 מ"מ
+    const cm = (u) => (u === Infinity ? null : +(u * 1.6).toFixed(2));
+    const bot = new THREE.Box3().setFromObject(body).min.y;
+    return {
+      thighTop: +thighTop.toFixed(2), guitarBottom: +bot.toFixed(2),
+      torso: { inside: res.torso.inside, depthCm: cm(res.torso.depth), gapCm: cm(res.torso.gap), worst: res.torso.worst },
+      arms: { inside: res.arms.inside, depthCm: cm(res.arms.depth), gapCm: cm(res.arms.gap), worst: res.arms.worst },
+    };
+  }
+
   return {
     type: guitar.type,
     group,
     center,
+    bounds,
     setLeftHand(spec) {
       st.lh.spec = spec || null;
       st.lh.dirty = true;
@@ -701,6 +866,6 @@ export function createModelTeacher(guitar, gltf, fit = {}) {
     },
     // לבדיקות/דיבוג
     _state: st,
-    _debug: { fingerErrors, bones: B, fingers, L2W, worldPos, LEN, hipsY, hipJointY },
+    _debug: { fingerErrors, penetration, st, place, bones: B, fingers, L2W, worldPos, LEN, hipsY, hipJointY },
   };
 }

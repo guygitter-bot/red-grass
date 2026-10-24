@@ -108,7 +108,7 @@ export default function Lesson1({ type, teacher }) {
           ))}
         </div>
         <div className="flex items-stretch gap-2">
-          <div className="min-w-0 flex-1 rounded-xl bg-soft px-3 py-2 text-[15px]" aria-live="polite">
+          <div className="min-w-0 flex-1 rounded-xl bg-soft px-3 py-1.5 text-sm lg:py-2 lg:text-[15px]" aria-live="polite">
             {activeStr ? (
               <>
                 <b>{stringLabel(activeStr)}</b>
@@ -118,7 +118,7 @@ export default function Lesson1({ type, teacher }) {
               'בחרו מיתר כדי לשמוע אותו.'
             )}
           </div>
-          <button type="button" className="btn btn-primary flex-none" onClick={playAll}>
+          <button type="button" className="btn btn-primary flex-none !min-h-10 lg:!min-h-11" onClick={playAll}>
             <IconSpeaker /> נגן את כולם
           </button>
         </div>
@@ -152,14 +152,13 @@ export default function Lesson1({ type, teacher }) {
         <GuitarStage
           type={type}
           teacher={teacher}
+          hint
           className="min-h-0 flex-1"
           onStage={setStage}
           onPick={(i) => {
             if (step.tool === 'strings') pluck(i);
           }}
-        >
-          <div className="pointer-events-none absolute bottom-2 start-3 end-3 text-center text-xs text-ink/80 [text-shadow:0_1px_2px_var(--color-scene)]">גררו עם האצבע כדי להסתכל מזווית אחרת</div>
-        </GuitarStage>
+        />
       }
     />
   );
