@@ -2,6 +2,7 @@
 // מערכת צירים של הגיטרה: x לאורך הצוואר (0 = האום, 40 = הגשר), y החוצה מהלוח (למעלה),
 // z לרוחב: מיתר 6 (העבה) בצד חיובי, מיתר 1 (הדק) בצד שלילי. יחידה אחת ~ 16 מ"מ.
 import * as THREE from 'three';
+import { MODEL_CAL, modelFrame, prepareGuitarGeometry } from './guitarModels.js';
 
 export const S = 40; // אורך המיתר הרוטט
 const HL = new THREE.Color(0xffa11a); // צבע הדגשה
@@ -156,6 +157,7 @@ export function createGuitar(type = 'classical') {
   nut.position.set(-0.05, 0.09, 0);
 
   // ---------- גוף ----------
+  const bodyExtras = []; // חלקים של הגוף שאינם רשומים כחלק (לוח הגנה) – מוסתרים כשיש דגם אמיתי
   if (classical) buildClassicalBody();
   else buildElectricBody();
 
@@ -214,6 +216,7 @@ export function createGuitar(type = 'classical') {
     const pg = [[25, 5.5], [27, 6.3], [32, 6.2], [37, 7.4], [41, 7.2], [41.8, 3], [42.4, -3], [41, -8.2], [35, -8.5], [30, -6.8], [26, -5.6], [24.6, -1.5]];
     const pgMesh = extrudeOutline(pg, 0.1, -0.05, 0.03, [std(0xf3efe6, 0.4, 0, { emissive: 0x000000 }), std(0xf3efe6, 0.4, 0, { emissive: 0x000000 })]);
     group.add(pgMesh);
+    bodyExtras.push(pgMesh);
     // פיקאפים
     [30, 34, 37.8].forEach((x, k) => {
       const p = add(group, 'pickups', new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.34, 5.6), std(0xefe6cf, 0.45, 0, { emissive: 0x000000 })));
@@ -302,32 +305,53 @@ export function createGuitar(type = 'classical') {
       });
     });
   } else {
+    // ראש חשמלי: שישה מפתחות בשורה, קו מתאר עקום (בזיר) מעץ מייפל באותו גימור של הצוואר.
+    // כאן x שלילי = הרחק מהאום, z חיובי = צד הבס (שם יושבים המפתחות). Shape מקבל (x, -z) כי הגוף מסתובב סביב x.
     head.position.set(0, -0.15, 0);
-    const pts = [[0, 1.67], [-2.5, 1.85], [-6, 2.2], [-9, 2.7], [-11.4, 3.2], [-12.4, 2.2], [-12.2, 0.8], [-12.3, -1.0], [-12.0, -2.6], [-10, -2.5], [-6, -2.1], [-2.5, -1.85], [0, -1.67]];
-    const curve = new THREE.CatmullRomCurve3(pts.map(([x, z]) => V(x, -z, 0)), true, 'centripetal');
-    const sh = new THREE.Shape(curve.getPoints(160).map((p) => new THREE.Vector2(p.x, p.y)));
-    const hm = add(head, 'head', new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.6, bevelEnabled: true, bevelThickness: 0.06, bevelSize: 0.06, bevelSegments: 2 }), std(0xd8a964, 0.45, 0, { emissive: 0x000000 })));
+    const Pz = (x, z) => [x, -z];
+    const hs = new THREE.Shape();
+    hs.moveTo(...Pz(0, -1.62));
+    hs.bezierCurveTo(...Pz(-1.6, -1.7), ...Pz(-3.2, -2.0), ...Pz(-5.6, -2.05));
+    hs.bezierCurveTo(...Pz(-8.0, -2.1), ...Pz(-10.0, -2.3), ...Pz(-11.1, -1.85));
+    hs.bezierCurveTo(...Pz(-12.0, -1.45), ...Pz(-12.1, -0.1), ...Pz(-11.7, 0.9));
+    hs.bezierCurveTo(...Pz(-11.2, 1.9), ...Pz(-9.4, 2.05), ...Pz(-7.4, 2.1));
+    hs.bezierCurveTo(...Pz(-4.8, 2.15), ...Pz(-2.2, 1.9), ...Pz(0, 1.62));
+    hs.closePath();
+    const HT = -0.1; // גובה פני הראש (במערכת של הראש)
+    const hdepth = 0.62;
+    const hbev = 0.05;
+    const hmat = neckMesh.material.clone();
+    const hm = add(head, 'head', new THREE.Mesh(new THREE.ExtrudeGeometry(hs, { depth: hdepth, bevelEnabled: true, bevelThickness: hbev, bevelSize: hbev, bevelSegments: 2, curveSegments: 24 }), hmat));
     hm.rotation.x = -Math.PI / 2;
-    hm.position.y = -0.6 - 0.06 + 0.0 + 0.02;
+    hm.position.y = HT - hdepth - hbev;
+    const chrome = () => std(0xd2d3d6, 0.28, 0.9, { emissive: 0x000000 });
     for (let i = 1; i <= 6; i++) {
-      const x = -2.2 - (i - 1) * 1.7;
-      const post = add(head, 'pegs', new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.9, 16), std(0xcfd0d2, 0.3, 0.85, { emissive: 0x000000 })));
-      post.position.set(x, 0.1, 0);
-      const shaft = add(head, 'pegs', new THREE.Mesh(rollerGeo(0.1, 2.8), std(0xcfd0d2, 0.3, 0.85, { emissive: 0x000000 })));
-      shaft.position.set(x, -0.2, 1.8);
+      // מיתר 6 הקרוב ביותר לאום, מיתר 1 הרחוק – כך המיתרים לא נחתכים
+      const x = -2.3 - (6 - i) * 1.65;
+      const collar = add(head, 'pegs', new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.32, 0.1, 18), chrome()));
+      collar.position.set(x, HT + 0.05, 0);
+      const post = add(head, 'pegs', new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.17, 0.78, 14), chrome()));
+      post.position.set(x, HT + 0.39, 0);
+      // מפתח קטן בצד: ציר דק, גבשושית ופדל ביצה
+      const shaft = add(head, 'pegs', new THREE.Mesh(rollerGeo(0.07, 1.0), chrome()));
+      shaft.position.set(x, HT - 0.32, 1.95);
       const btn = new THREE.Group();
-      btn.position.set(x, -0.2, 3.4);
-      add(btn, 'pegs', new THREE.Mesh(rollerGeo(0.5, 0.2), std(0xcfd0d2, 0.3, 0.85, { emissive: 0x000000 })));
-      const tab = add(btn, 'pegs', new THREE.Mesh(new THREE.BoxGeometry(0.28, 1.0, 0.18), std(0xcfd0d2, 0.3, 0.85, { emissive: 0x000000 })));
-      tab.position.set(0, 0, 0);
+      btn.position.set(x, HT - 0.32, 2.5);
+      const ferrule = add(btn, 'pegs', new THREE.Mesh(rollerGeo(0.11, 0.26), chrome()));
+      ferrule.position.set(0, 0, -0.05);
+      const pad = add(btn, 'pegs', new THREE.Mesh(rollerGeo(0.36, 0.1), chrome()));
+      pad.scale.set(1.0, 0.72, 1);
+      pad.position.set(0, 0, 0.14);
       head.add(btn);
       pegKnobs.push(btn);
       head.updateMatrix();
-      postPos[i] = V(x, 0.34, 0).applyMatrix4(head.matrix);
+      postPos[i] = V(x, HT + 0.5, 0).applyMatrix4(head.matrix);
     }
-    // מחזיק מיתרים קטן לשני המיתרים הדקים
-    const tree = add(head, 'pegs', new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.45, 10), std(0xcfd0d2, 0.3, 0.85, { emissive: 0x000000 })));
-    tree.position.set(-2.6, 0.1, -0.2);
+    // מחזיק מיתרים (פרפר) לשני המיתרים הדקים
+    const tree = add(head, 'pegs', new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 1.5), chrome()));
+    tree.position.set(-5.9, HT + 0.28, -0.55);
+    const treeScrew = add(head, 'pegs', new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.3, 10), chrome()));
+    treeScrew.position.set(-5.9, HT + 0.14, -0.55);
   }
 
   // ---------- מיתרים ----------
@@ -416,7 +440,7 @@ export function createGuitar(type = 'classical') {
     strings[i] = {
       i, geom: g, base, xs: xsA, mat, glowMat, glow,
       amp: 0, t0: 0, tau: 0.9 + (6 - i) * 0.15, f: 7 + (6 - i) * 2.2, // תדר חזותי (לא הצליל)
-      pull: 0, pullX: 30, hl: 0, hlT: 0, dirty: false, r,
+      pull: 0, pullX: 30, hl: 0, hlT: 0, dirty: false, r, stub,
     };
   }
 
@@ -450,7 +474,7 @@ export function createGuitar(type = 'classical') {
   }
   setAnchor('bridge', V(40.5, 0.5, classical ? 4.9 : 3.0), 'up');
   parts.head.anchor = classical ? V(-5, 1.5, 3) : V(-6, 0.5, 3);
-  parts.pegs.anchor = classical ? V(-4.9, 1.2, 4.6) : V(-6.4, 0.5, 3.4);
+  parts.pegs.anchor = classical ? V(-4.9, 1.2, 4.6) : V(-6.4, 0.5, 2.8);
   parts.pegs.anchor = parts.pegs.anchor.clone().applyMatrix4(head.matrix);
   parts.head.anchor = parts.head.anchor.clone().applyMatrix4(head.matrix);
   if (!classical) parts.head.center = parts.head.center.clone();
@@ -502,6 +526,14 @@ export function createGuitar(type = 'classical') {
       const on = hlParts.includes(k);
       parts[k].hl = (parts[k].hl || 0) + ((on ? 1 : 0) - (parts[k].hl || 0)) * Math.min(1, dt * 10);
       const h = parts[k].hl;
+      if (parts[k].proxies) {
+        // חלק שמוסתר ומוחלף בדגם: מציגים תיבת הדגשה שקופה וזוהרת
+        parts[k].proxies.forEach((m) => {
+          m.visible = h > 0.01;
+          m.material.opacity = h * (0.16 + pulse * 0.5);
+        });
+        return;
+      }
       if (h < 0.01 && !on && !parts[k].lit) return;
       parts[k].lit = h >= 0.01;
       parts[k].mats.forEach(({ m, e0, i0 }) => {
@@ -558,7 +590,132 @@ export function createGuitar(type = 'classical') {
     }
   }
 
+  // ---------- דגם אמיתי (GLB) ----------
+  // הדגם נכנס מתחת למיתרים המחושבים שלנו; הגוף/ראש/צוואר המחושבים מוסתרים, והחלקים להדגשה עוברים לתיבות שקופות על הדגם.
+  let modelObj = null;
+  let modelMesh = null;
+  const cal = MODEL_CAL[type];
+  function attachModel(gltf) {
+    if (modelObj) return;
+    const { M } = modelFrame(cal, S, 0.0085);
+    modelObj = new THREE.Group();
+    modelObj.name = 'real-' + type;
+    modelObj.matrixAutoUpdate = false;
+    modelObj.matrix.copy(M);
+    gltf.scene.traverse((o) => {
+      if (!o.isMesh) return;
+      if (!o.geometry.userData.prepared) {
+        o.geometry = prepareGuitarGeometry(o.geometry, cal);
+        o.geometry.userData.prepared = true;
+      }
+      const m = new THREE.Mesh(o.geometry, o.material);
+      m.matrixAutoUpdate = false;
+      m.matrix.copy(o.matrixWorld);
+      modelObj.add(m);
+      modelMesh = m;
+    });
+    group.add(modelObj);
+    // הסתרת הגיאומטריה המחושבת
+    const hide = (m) => (m.visible = false);
+    const names = cal.hideProcedural === 'all' ? Object.keys(parts).filter((k) => k !== 'strings') : cal.hideProcedural.filter((k) => parts[k]);
+    names.forEach((k) => parts[k].meshes.forEach(hide));
+    if (cal.hideProcedural === 'all') {
+      hide(neckMesh);
+      head.visible = false;
+    } else {
+      bodyExtras.forEach(hide);
+      // הצוואר והראש המחושבים נשארים: מחשיכים אותם כך שיתאימו לדגם (פלדת ורד כהה)
+      const dark = new THREE.Color(0x3b2216);
+      [neckMesh, ...(parts.head ? parts.head.meshes : [])].forEach((m) => {
+        const old = m.material;
+        m.material = old.clone();
+        m.material.map = null;
+        m.material.color.copy(dark);
+        m.material.needsUpdate = true;
+        // ההדגשה (emissive) צריכה לפעול על החומר החדש
+        Object.values(parts).forEach((pt) => pt.mats.forEach((e) => {
+          if (e.m === old) e.m = m.material;
+        }));
+      });
+    }
+    // תיבות הדגשה
+    const glow = () => new THREE.MeshBasicMaterial({ color: 0xffa11a, transparent: true, opacity: 0, depthWrite: false });
+    const addProxy = (name, mesh) => {
+      mesh.visible = false;
+      mesh.renderOrder = 3;
+      (parts[name].proxies ||= []).push(mesh);
+    };
+    cal.proxies.forEach(([name, shape, c, sz, rx]) => {
+      if (!parts[name]) return;
+      let geo;
+      if (shape === 'box') geo = new THREE.BoxGeometry(...sz);
+      else if (shape === 'disc') geo = new THREE.CircleGeometry(sz[0], 40);
+      else geo = new THREE.CylinderGeometry(sz[0], sz[0], 0.012, 24).rotateX(Math.PI / 2);
+      const mesh = new THREE.Mesh(geo, glow());
+      mesh.position.set(...c);
+      if (rx) mesh.rotation.x = rx;
+      modelObj.add(mesh);
+      addProxy(name, mesh);
+    });
+    if (cal.hideProcedural === 'all') {
+      // לוח האצבעות, שריגים, נקודות ואום: משכפלים את הגיאומטריה המחושבת כתיבות הדגשה, מוטות לפי שיפוע הצוואר
+      const fb = new THREE.Group();
+      fb.rotation.z = 0.0085;
+      fb.position.y = 0.04;
+      group.add(fb);
+      ['fretboard', 'frets', 'dots', 'nut'].forEach((name) => {
+        parts[name].meshes.forEach((src) => {
+          const m = new THREE.Mesh(src.geometry, glow());
+          m.position.copy(src.position);
+          m.rotation.copy(src.rotation);
+          m.scale.copy(src.scale);
+          fb.add(m);
+          addProxy(name, m);
+        });
+      });
+    }
+    // המיתרים מהאום אל בורגי הכוונון של הדגם (במקום אל הברגים המחושבים שהוסתרו)
+    if (cal.posts) {
+      for (let i = 1; i <= 6; i++) {
+        const to = new THREE.Vector3(...cal.posts[i]).applyMatrix4(M);
+        postPos[i] = to;
+        const from = V(0, ys(0), zS(i, 0));
+        const d = new THREE.Vector3().subVectors(to, from);
+        const st = strings[i].stub;
+        st.scale.y = d.length();
+        st.position.copy(from).add(to).multiplyScalar(0.5);
+        st.quaternion.setFromUnitVectors(V(0, 1, 0), d.normalize());
+      }
+    }
+    // עוגנים ומרכזים מחדש לפי הדגם
+    modelObj.updateMatrixWorld(true);
+    const toLocal = (v) => new THREE.Vector3(...v).applyMatrix4(M);
+    Object.entries(cal.anchors).forEach(([name, [v, side]]) => {
+      if (parts[name]) setAnchor(name, toLocal(v), side);
+    });
+    Object.entries(cal.centers).forEach(([name, v]) => {
+      if (parts[name]) parts[name].center = toLocal(v);
+    });
+    // החלקים שנשארו מחושבים (צוואר חשמלי): העוגנים שלהם כבר נכונים
+    if (cal.bodyPolygon) {
+      parts.body.proxies = parts.body.proxies || [];
+    }
+  }
+  function bodyMesh() {
+    return modelMesh || parts.body.meshes[0];
+  }
+
   function dispose() {
+    if (modelObj) {
+      // הגיאומטריה והחומר של הדגם משותפים עם המטמון – משחררים רק את תיבות ההדגשה
+      modelObj.children.forEach((c) => {
+        if (c.material && c.material.type === 'MeshBasicMaterial') {
+          c.geometry.dispose();
+          c.material.dispose();
+        }
+      });
+      group.remove(modelObj);
+    }
     group.traverse((o) => {
       if (o.geometry) o.geometry.dispose();
       const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
@@ -575,5 +732,6 @@ export function createGuitar(type = 'classical') {
     pluckX: sp.rx,
     postPos,
     setHighlight, setStringHighlight, pluck, pull, update, dispose,
+    attachModel, bodyMesh, get hasModel() { return !!modelObj; },
   };
 }
