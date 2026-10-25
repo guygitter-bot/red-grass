@@ -113,6 +113,8 @@
 - נתונים מ-`/admin/overview`, `/admin/issues`, `/admin/security`, `/admin/settings` (בדיקה בשרת: רק session של בעלים). תקלות מקובצות לפי סוג עם סטטוס (`issue:` ב-Accounts).
 - התראות לטלפון (Web Push, `api/push.js`, מפתחות ב-`admin-vapid` ב-Accounts): תקלה חדשה/שחזרה, מתכון בקהילה שהוסתר או מחכה לבדיקה.
   לכל היותר התראה אחת בשעה לכל נושא. תקלות מקישורים מקובצות לפי סוג השגיאה והאתר (`errorGroup`), לא לפי הנוסח של ה-AI.
+  "לא נמצא מתכון" (`NoRecipeError`) אינו תקלה: נשמר ברשימה נפרדת (`no-recipe`, לשונית "לא נמצא מתכון") בלי התראה. תקלה פתוחה שחוזרת – שולחת התראה.
+  קריאת התקלות הפתוחות מכאן (בלי סיסמה בצ'אט): להפעיל את `mat-kon-issues.yml` ולקרוא את הלוג (מוסתרים אימיילים וקישורים).
 - "שלח ל-Claude לטיפול" בתקלה: `api/fixes.js` פותח issue עם התווית `matkon-fix` (בלי אימיילים, קישורים רק כשם אתר – המאגר ציבורי),
   `mat-kon-fix.yml` + `mat_kon/fixbot/` מריצים את Claude ופותחים PR מ-`matkon-fix/<n>`; "לאשר ולהעלות" ממזג. טוקן: `MATKON_GITHUB_TOKEN` או `POINTS_GITHUB_TOKEN`.
   צילומי מסך מצורפים נשמרים ב-R2 (`fix-shots/`, 30 יום), ב-issue רק מזהה; ה-fixbot מוריד אותם בכניסת בעלים (`OWNER_PASSWORD`) ל-`.fix/` (לא נכנס ל-commit).

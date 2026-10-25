@@ -45,7 +45,7 @@ export default function App() {
         api(session, 'GET', '/admin/overview'), api(session, 'GET', '/admin/issues'), api(session, 'GET', '/admin/security'), api(session, 'GET', '/admin/reports'),
         api(session, 'GET', '/admin/talk').catch(() => ({ items: [] })),
       ]);
-      setData({ ...overview, issueList: issues.issues, security, reportList: reports.items, talkList: talk.items });
+      setData({ ...overview, issueList: issues.issues, noRecipeList: issues.noRecipe || [], security, reportList: reports.items, talkList: talk.items });
     } catch (e) {
       if (e.status === 401 || e.status === 403) signOut();
       else setError(e.message);
@@ -88,7 +88,7 @@ export default function App() {
             {tab === 'overview' && <Overview d={data} go={setTab} session={session} />}
             {tab === 'users' && <UsersTab d={data} session={session} />}
             {tab === 'money' && <Money d={data} session={session} reload={load} />}
-            {tab === 'issues' && <Issues list={data.issueList} session={session} reload={load} />}
+            {tab === 'issues' && <Issues list={data.issueList} noRecipe={data.noRecipeList} session={session} reload={load} />}
             {tab === 'security' && <Security d={data} />}
             {tab === 'content' && <Content d={data} session={session} reload={load} />}
           </>
@@ -577,19 +577,38 @@ function TalkReport({ t, session, reload }) {
 
 const STATUS_STYLE = { new: 'bg-red-500/10 text-red-700 dark:text-red-300', working: 'bg-amber-500/15 text-amber-800 dark:text-amber-300', fixed: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' };
 
-function Issues({ list, session, reload }) {
+function Issues({ list, noRecipe = [], session, reload }) {
   const [filter, setFilter] = useState('open');
-  const shown = list.filter((i) => (filter === 'open' ? i.status !== 'fixed' : i.status === 'fixed'));
+  const shown = filter === 'none' ? [] : list.filter((i) => (filter === 'open' ? i.status !== 'fixed' : i.status === 'fixed'));
   return (
     <div className="space-y-3">
-      <div className="flex gap-2">
-        {[['open', `פתוחות (${list.filter((i) => i.status !== 'fixed').length})`], ['fixed', `תוקנו (${list.filter((i) => i.status === 'fixed').length})`]].map(([id, label]) => (
+      <div className="flex flex-wrap gap-2">
+        {[['open', `פתוחות (${list.filter((i) => i.status !== 'fixed').length})`], ['fixed', `תוקנו (${list.filter((i) => i.status === 'fixed').length})`], ['none', `לא נמצא מתכון (${noRecipe.length})`]].map(([id, label]) => (
           <button key={id} onClick={() => setFilter(id)} className={`px-3 py-1.5 rounded-full text-sm border ${filter === id ? 'bg-ink text-card border-ink' : 'bg-card border-line'}`}>{label}</button>
         ))}
       </div>
-      {!shown.length && <Card><p className="text-sm text-muted">{filter === 'open' ? 'אין תקלות פתוחות 🎉' : 'עוד לא סומנו תקלות כמתוקנות'}</p></Card>}
+      {filter === 'none' && <NoRecipe list={noRecipe} />}
+      {filter !== 'none' && !shown.length && <Card><p className="text-sm text-muted">{filter === 'open' ? 'אין תקלות פתוחות 🎉' : 'עוד לא סומנו תקלות כמתוקנות'}</p></Card>}
       {shown.map((i) => <Issue key={i.sig} i={i} session={session} reload={reload} />)}
     </div>
+  );
+}
+
+// קישורים שהסוכן קרא ולא מצא בהם מתכון (סרטון עם תגיות בלבד, שיחה ב-Gemini...) – לא תקלה, בלי התראות
+function NoRecipe({ list }) {
+  return (
+    <>
+      <Card><p className="text-sm text-muted">כאן מופיעים קישורים שבהם לא נמצא מתכון. זו לא תקלה, ולכן אין עליהם התראות. המשתמש קיבל הסבר מה לעשות.</p></Card>
+      {list.map((n, k) => (
+        <Card key={k}>
+          <div className="text-sm break-words" dir="auto">{n.message}</div>
+          <div className="text-xs text-muted mt-1">
+            {String(n.group || '').replace(/^NoRecipeError:/, '') || 'טקסט / צילום'} · {ago(n.at)}{n.count > 1 ? ` · ${n.count} פעמים` : ''}
+            {n.user && <> · <span dir="ltr">{n.user}</span></>}
+          </div>
+        </Card>
+      ))}
+    </>
   );
 }
 

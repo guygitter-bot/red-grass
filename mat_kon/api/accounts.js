@@ -85,6 +85,9 @@ export const publicUser = (u, freeLimit) => ({
   ...(u.features && Object.keys(u.features).length ? { features: u.features } : {}),
 });
 
+// "לא נמצא מתכון" – הסוכן קרא את המקור ולא מצא בו מתכון. זו לא תקלה בקוד
+const isNoRecipe = (group) => /^NoRecipeError:/.test(String(group || ''));
+
 export class Accounts {
   constructor(state, env) {
     this.storage = state.storage;
@@ -188,6 +191,13 @@ export class Accounts {
     // התראה לטלפון: תקלה חדשה, תקלה שחזרה אחרי תיקון, וגם תקלה פתוחה שקורית שוב (לכל היותר פעם בשעה לכל תקלה)
     const title = !old ? '🐞 תקלה חדשה ב-mat-kon' : old.status === 'fixed' ? '🔁 תקלה חזרה ב-mat-kon' : `🐞 התקלה קרתה שוב (${next.count} פעמים)`;
     await this.notifyAdmin({ title, body: entry.message, tag: `issue-${sig}`, url: '#issues' });
+  }
+
+  async addNoRecipe(entry) {
+    const list = (await this.storage.get('no-recipe')) || [];
+    list.unshift(entry);
+    list.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    await this.storage.put('no-recipe', list.slice(0, 50));
   }
 
   // גרסת הסוד של בעל האפליקציה: החלפת הסיסמה מנתקת את כל מכשירי הבעלים
@@ -604,10 +614,16 @@ export class Accounts {
       });
     }
     if (path === '/admin/issues' && request.method === 'GET') {
-      const issues = [...(await this.storage.list({ prefix: 'issue:' })).values()];
+      let issues = [...(await this.storage.list({ prefix: 'issue:' })).values()];
+      // "לא נמצא מתכון" שנרשמו בעבר כתקלות – עוברים לרשימה הנפרדת
+      for (const old of issues.filter((i) => isNoRecipe(i.group))) {
+        await this.addNoRecipe({ at: old.lastAt, where: old.where, group: old.group, message: old.message, status: null, user: (old.users || [])[0] || '', count: old.count });
+        await this.storage.delete(`issue:${old.sig}`);
+      }
+      issues = issues.filter((i) => !isNoRecipe(i.group));
       const order = { new: 0, working: 1, fixed: 2 };
       issues.sort((a, b) => order[a.status] - order[b.status] || b.lastAt.localeCompare(a.lastAt));
-      return json({ issues: issues.slice(0, 200) });
+      return json({ issues: issues.slice(0, 200), noRecipe: (await this.storage.get('no-recipe')) || [] });
     }
     if (path === '/admin/issues/update' && request.method === 'POST') {
       const key = `issue:${String(body.sig || '')}`;
@@ -647,6 +663,11 @@ export class Accounts {
       let who = String(body.user || '').slice(0, 120);
       if (/^[0-9a-f-]{36}$/.test(who)) who = (await this.storage.get(`user:${who}`))?.email || who;
       const entry = { at: now, where: String(body.where || '').slice(0, 80), message: String(body.message || '').slice(0, 300), status: body.status ?? null, user: who };
+      // "לא נמצא מתכון" (סרטון בלי מתכון, דף שלא נפתח) – לא תקלה: רשימה נפרדת לעיון, בלי התראה
+      if (isNoRecipe(body.group)) {
+        await this.addNoRecipe({ ...entry, group: String(body.group).slice(0, 100) });
+        return json({ ok: true });
+      }
       list.unshift(entry);
       await this.storage.put(key, list.slice(0, 50));
       await this.issue({ ...entry, group: String(body.group || '').slice(0, 100) }, body.list === 'client' ? 'client' : 'server');
