@@ -1,5 +1,6 @@
 import { WORDS } from './words.js';
-import { saidWord, choicesFor, nextOrder } from './match.js';
+import { SENTENCES } from './sentences.js';
+import { saidWord, choicesFor, sentenceChoicesFor, nextOrder, shuffle, percent, passed, PASS } from './match.js';
 
 const $ = (id) => document.getElementById(id);
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -14,6 +15,10 @@ function save(key, value) {
 
 let learned = load('ew-learned', {});
 let stars = load('ew-stars', 0);
+// שלב 2 נפתח אחרי 80% במילים; התוצאות הכי טובות נשמרות
+let best = load('ew-best', { words: 0, sentences: 0 });
+let mode = 'words';
+let correct = 0;
 let order = [];
 let index = 0;
 let tries = 0;
@@ -27,20 +32,34 @@ function showHome() {
   $('count').textContent = `למדתי ${n} מתוך ${WORDS.length} מילים`;
   $('homeStars').textContent = `⭐ ${stars}`;
   $('homeBar').style.width = `${(n / WORDS.length) * 100}%`;
-  $('start').textContent = n === WORDS.length ? '🎉 למדתי הכול! עוד סיבוב' : '🎤 מתחילים!';
+  $('start').textContent = best.words >= PASS ? '🎤 עוד סיבוב מילים' : '🎤 מתחילים!';
+  $('wordsBest').textContent = best.words ? `התוצאה הכי טובה: ${best.words}%` : `צריך לצדוק ב-${PASS}% מהמילים כדי לעבור לשלב 2`;
+  const open = best.words >= PASS;
+  $('startSent').disabled = !open;
+  $('startSent').className = open ? 'big' : 'big btn-lock';
+  $('startSent').textContent = open ? '📖 למשפטים' : '🔒 נפתח אחרי שלב 1';
+  $('sentNote').textContent = !open
+    ? `קודם עוברים את המילים עם ${PASS}% לפחות`
+    : best.sentences ? `התוצאה הכי טובה: ${best.sentences}%${best.sentences >= PASS ? ' 🏆' : ''}` : `${SENTENCES.length} משפטים קצרים – בוחרים את התרגום הנכון`;
   $('list').innerHTML = WORDS.map((w) =>
     `<div class="item ${learned[w.en] ? 'done' : ''}"><b>${w.en}</b><span>${learned[w.en] ? '✓ ' + w.he : ''}</span></div>`
   ).join('');
-  $('home').classList.remove('hidden');
-  $('play').classList.add('hidden');
+  show('home');
+}
+
+function show(id) {
+  for (const s of ['home', 'play', 'result']) $(s).classList.toggle('hidden', s !== id);
+  window.scrollTo(0, 0);
 }
 
 // ---- מסך התרגול ----
-function startPlay() {
-  order = nextOrder(WORDS, learned);
+// סיבוב חדש תמיד בסדר אחר
+function startPlay(m) {
+  mode = m;
+  order = mode === 'words' ? nextOrder(WORDS, learned) : shuffle(SENTENCES);
   index = 0;
-  $('home').classList.add('hidden');
-  $('play').classList.remove('hidden');
+  correct = 0;
+  show('play');
   showWord();
 }
 
@@ -51,6 +70,8 @@ function showWord() {
   $('pos').textContent = `${index + 1} / ${order.length}`;
   $('stars').textContent = `⭐ ${stars}`;
   $('word').textContent = w.en;
+  $('word').classList.toggle('sentence', mode === 'sentences');
+  $('hearSent').classList.toggle('hidden', mode !== 'sentences');
   $('pic').textContent = '';
   $('sayMsg').textContent = '';
   $('sayMsg').className = 'msg';
@@ -60,6 +81,8 @@ function showWord() {
   $('mic').classList.toggle('hidden', !Recognition);
   $('sayStep').classList.remove('hidden');
   $('chooseStep').classList.add('hidden');
+  // במשפטים אין קריאה בקול – ישר לתשובות
+  if (mode === 'sentences') showChoices();
 }
 
 function speak(text) {
@@ -141,12 +164,14 @@ function showChoices() {
   const w = order[index];
   $('sayStep').classList.add('hidden');
   $('chooseStep').classList.remove('hidden');
+  $('ask').textContent = mode === 'words' ? 'מה פירוש המילה?' : 'מה פירוש המשפט?';
   $('chooseMsg').textContent = '';
   $('chooseMsg').className = 'msg';
   $('next').classList.add('hidden');
   const box = $('choices');
   box.innerHTML = '';
-  for (const he of choicesFor(w, WORDS)) {
+  const options = mode === 'words' ? choicesFor(w, WORDS) : sentenceChoicesFor(w, SENTENCES);
+  for (const he of options) {
     const b = document.createElement('button');
     b.className = 'choice';
     b.textContent = he;
@@ -160,12 +185,13 @@ function choose(button, he) {
   if (!$('next').classList.contains('hidden')) return;
   if (he === w.he) {
     button.classList.add('good');
-    $('pic').textContent = w.pic;
+    $('pic').textContent = w.pic || '';
     $('chooseMsg').textContent = firstGuess ? 'נכון! ⭐ קיבלת כוכב' : 'נכון! 👍';
     $('chooseMsg').className = 'msg good';
     if (firstGuess) {
+      correct += 1;
       stars += 1;
-      learned[w.en] = true;
+      if (mode === 'words') learned[w.en] = true;
       save('ew-stars', stars);
       save('ew-learned', learned);
       $('stars').textContent = `⭐ ${stars}`;
@@ -183,11 +209,42 @@ function choose(button, he) {
 
 function next() {
   index += 1;
-  if (index >= order.length) showHome();
+  if (index >= order.length) showResult();
   else showWord();
 }
 
-$('start').onclick = startPlay;
+// סוף סיבוב: 80% ומעלה – עוברים הלאה; פחות – עוד פעם מההתחלה בסדר חדש
+function showResult() {
+  const total = order.length;
+  const p = percent(correct, total);
+  const ok = passed(correct, total);
+  best[mode] = Math.max(best[mode] || 0, p);
+  save('ew-best', best);
+  $('resScore').textContent = `צדקת ב-${correct} מתוך ${total} (${p}%)`;
+  if (ok && mode === 'words') {
+    $('resPic').textContent = '🎉';
+    $('resMsg').textContent = 'כל הכבוד! עברת לשלב 2 – משפטים';
+    $('resGo').textContent = '📖 לשלב המשפטים';
+    $('resGo').onclick = () => startPlay('sentences');
+  } else if (ok) {
+    $('resPic').textContent = '🏆';
+    $('resMsg').textContent = 'מדהים! סיימת גם את המשפטים';
+    $('resGo').textContent = '📖 עוד סיבוב משפטים';
+    $('resGo').onclick = () => startPlay('sentences');
+  } else {
+    $('resPic').textContent = '💪';
+    $('resMsg').textContent = `צריך ${PASS}% כדי לעבור. עוד פעם מההתחלה – אתה יכול!`;
+    $('resGo').textContent = '🔁 עוד פעם';
+    $('resGo').onclick = () => startPlay(mode);
+  }
+  $('resMsg').className = ok ? 'msg good' : 'msg';
+  show('result');
+}
+
+$('start').onclick = () => startPlay('words');
+$('startSent').onclick = () => startPlay('sentences');
+$('resHome').onclick = showHome;
+$('hearSent').onclick = () => speak(order[index].en);
 $('back').onclick = showHome;
 $('mic').onclick = listen;
 $('hear').onclick = () => speak(order[index].en);
@@ -197,6 +254,8 @@ $('reset').onclick = () => {
   if (!confirm('למחוק את ההתקדמות ולהתחיל מההתחלה?')) return;
   learned = {};
   stars = 0;
+  best = { words: 0, sentences: 0 };
+  save('ew-best', best);
   save('ew-learned', learned);
   save('ew-stars', stars);
   showHome();

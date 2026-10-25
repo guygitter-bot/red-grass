@@ -53,6 +53,9 @@
   .item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-radius: 12px; background: var(--page); font-size: 17px; }
   .item b { direction: ltr; }
   .item.done { background: var(--good-bg); }
+  h2 { margin: 0 0 12px; font-size: 20px; }
+  .word.sentence { font-size: 40px; }
+  .btn-lock { background: var(--line); color: var(--muted); }
   .hidden { display: none !important; }
   .note { font-size: 15px; color: var(--muted); text-align: center; margin: 0; }
   @media (min-width: 1024px) {
@@ -67,15 +70,33 @@
   <!-- מסך הבית -->
   <section id="home">
     <h1>🔤 מילים באנגלית</h1>
-    <p class="sub">קוראים את המילה בקול, ואז בוחרים מה היא אומרת</p>
+    <p class="sub">קוראים בקול ובוחרים את התרגום. צריך 80% כדי לעבור שלב</p>
     <div class="card" style="margin-top:16px">
+      <h2>שלב 1 – מילים</h2>
       <div class="top"><span id="count"></span><span class="stars" id="homeStars"></span></div>
-      <div class="bar" style="margin:12px 0 20px"><i id="homeBar"></i></div>
+      <div class="bar" style="margin:12px 0 8px"><i id="homeBar"></i></div>
+      <p class="note" id="wordsBest" style="margin-bottom:16px"></p>
       <button class="big" id="start">🎤 מתחילים!</button>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h2>שלב 2 – משפטים</h2>
+      <p class="note" id="sentNote" style="margin-bottom:16px"></p>
+      <button class="big" id="startSent">📖 למשפטים</button>
     </div>
     <div class="card" style="margin-top:16px">
       <div class="list" id="list"></div>
       <button class="ghost" id="reset" style="width:100%;margin-top:12px">להתחיל את הרשימה מההתחלה</button>
+    </div>
+  </section>
+
+  <!-- סוף סיבוב -->
+  <section id="result" class="hidden">
+    <div class="card" style="margin-top:24px;text-align:center">
+      <div class="pic" id="resPic"></div>
+      <p class="msg" id="resScore" style="font-size:26px"></p>
+      <p class="msg" id="resMsg"></p>
+      <button class="big" id="resGo" style="margin-top:16px"></button>
+      <button class="ghost" id="resHome" style="width:100%;margin-top:8px">למסך הראשי</button>
     </div>
   </section>
 
@@ -89,6 +110,7 @@
     <div class="card">
       <div class="pic" id="pic"></div>
       <div class="word" id="word"></div>
+      <button class="hear hidden" id="hearSent" style="display:block;margin:0 auto 12px;padding:10px 24px">🔊 להקשיב</button>
 
       <div id="sayStep">
         <div class="row">
@@ -102,7 +124,7 @@
       </div>
 
       <div id="chooseStep" class="hidden">
-        <p class="msg">מה פירוש המילה?</p>
+        <p class="msg" id="ask">מה פירוש המילה?</p>
         <div class="choices" id="choices"></div>
         <p class="msg" id="chooseMsg"></p>
         <button class="big hidden" id="next" style="margin-top:8px">הבאה ←</button>

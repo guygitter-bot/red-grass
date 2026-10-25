@@ -22,6 +22,28 @@ export function choicesFor(word, all, rand = Math.random) {
   return shuffle([word, ...others], rand).map((w) => w.he);
 }
 
+// במשפטים: התשובות השגויות דומות למשפט (אותה חיה, אותו צבע...) כדי שיצטרכו באמת להבין
+const SMALL = new Set(['the', 'a', 'an', 'is', 'my', 'can', 'has']);
+function common(a, b) {
+  const wa = new Set(wordsOf(a).filter((w) => !SMALL.has(w)));
+  return wordsOf(b).filter((w) => wa.has(w)).length;
+}
+export function sentenceChoicesFor(item, all, rand = Math.random) {
+  const others = shuffle(all.filter((s) => s.he !== item.he), rand)
+    .sort((x, y) => common(item.en, y.en) - common(item.en, x.en));
+  const pick = [...others.slice(0, 2), ...shuffle(others.slice(2), rand).slice(0, 1)];
+  return shuffle([item, ...pick], rand).map((s) => s.he);
+}
+
+// סיבוב עובר רק עם 80% תשובות נכונות לפחות
+export const PASS = 80;
+export function percent(correct, total) {
+  return total ? Math.round((correct / total) * 100) : 0;
+}
+export function passed(correct, total) {
+  return total > 0 && correct * 100 >= PASS * total;
+}
+
 export function shuffle(list, rand = Math.random) {
   const a = [...list];
   for (let i = a.length - 1; i > 0; i--) {

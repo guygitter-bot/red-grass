@@ -39,3 +39,32 @@ test('מילים שלא נלמדו באות קודם', () => {
   assert.equal(order.length, 35);
   assert.deepEqual(order.slice(-2).map((w) => w.en).sort(), ['cat', 'dog']);
 });
+
+import { sentenceChoicesFor, passed, percent } from '../public/match.js';
+import { SENTENCES } from '../public/sentences.js';
+
+test('משפטים: 4 תשובות שונות, אחת נכונה, ותשובה דומה ביניהן', () => {
+  assert.equal(new Set(SENTENCES.map((s) => s.he)).size, SENTENCES.length);
+  for (const s of SENTENCES) {
+    const c = sentenceChoicesFor(s, SENTENCES);
+    assert.equal(c.length, 4);
+    assert.equal(new Set(c).size, 4);
+    assert.ok(c.includes(s.he));
+  }
+  const c = sentenceChoicesFor(SENTENCES[0], SENTENCES);
+  assert.ok(c.some((he) => he.startsWith('החתול') && he !== 'החתול קטן') || c.some((he) => he.endsWith('קטן') && he !== 'החתול קטן'));
+});
+
+test('המשפטים בנויים רק ממילים מהרשימה', () => {
+  const known = new Set([...WORDS.map((w) => w.en), 'the', 'a', 'an', 'is', 'my', 'can', 'has']);
+  for (const s of SENTENCES) {
+    for (const w of s.en.toLowerCase().replace(/[^a-z ]/g, '').split(' ')) assert.ok(known.has(w), w);
+  }
+});
+
+test('80% כדי לעבור', () => {
+  assert.ok(passed(28, 35));
+  assert.ok(!passed(27, 35));
+  assert.ok(!passed(0, 0));
+  assert.equal(percent(28, 35), 80);
+});
