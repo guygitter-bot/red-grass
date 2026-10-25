@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/rubik.css">
+<style>
+  :root { --red: #8a1f3c; --orange: #e07b39; --cream: #fbf3e6; --dark: #1b1716; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1920px; overflow: hidden; background: var(--dark); font-family: Rubik, sans-serif; }
+  .scene { position: absolute; inset: 0; overflow: hidden; opacity: 0;
+    animation: show var(--d) linear var(--s) both; }
+  @keyframes show { 0% { opacity: 0 } 6% { opacity: 1 } 94% { opacity: 1 } 100% { opacity: 0 } }
+  .first { animation-name: showFirst; }
+  @keyframes showFirst { 0% { opacity: 1 } 94% { opacity: 1 } 100% { opacity: 0 } }
+  .last { animation-name: showLast; }
+  @keyframes showLast { 0% { opacity: 0 } 6% { opacity: 1 } 100% { opacity: 1 } }
+
+  .bg { position: absolute; inset: -60px; background-size: cover; background-position: center; filter: blur(40px) brightness(.55); }
+  .photo { position: absolute; left: 50%; top: 50%; transform-origin: center;
+    animation: kb var(--d) linear var(--s) both; }
+  @keyframes kb { from { transform: translate(-50%,-50%) scale(var(--z0,1)) } to { transform: translate(-50%,-50%) scale(var(--z1,1.12)) } }
+
+  .pop { animation: pop .55s cubic-bezier(.2,1.6,.4,1) var(--s) both; }
+  @keyframes pop { from { transform: scale(.2) rotate(-8deg); opacity: 0 } to { transform: scale(1) rotate(0); opacity: 1 } }
+  .up { animation: up .6s cubic-bezier(.2,.9,.3,1) var(--s) both; }
+  @keyframes up { from { transform: translateY(120px); opacity: 0 } to { transform: none; opacity: 1 } }
+  .pulse { animation: pulse 1s ease-in-out var(--s) infinite; }
+  @keyframes pulse { 0%,100% { transform: scale(1) } 50% { transform: scale(1.06) } }
+
+  .txt { position: absolute; left: 0; right: 0; text-align: center; color: #fff; font-weight: 900;
+    text-shadow: 0 6px 24px rgba(0,0,0,.55); line-height: 1.05; }
+  .tag { display: inline-block; background: var(--orange); color: #fff; border-radius: 28px; padding: 18px 44px; font-weight: 900; }
+  .tagRed { background: var(--red); }
+  .logoCard { position: absolute; background: #fff; border-radius: 40px; padding: 20px; box-shadow: 0 20px 60px rgba(0,0,0,.4); }
+  .logoCard img { display: block; width: 100%; }
+</style>
+</head>
+<body>
+
+<!-- 1. החנות (0–4.5) -->
+<div class="scene first" style="--s:0s;--d:4.6s">
+  <div class="bg" style="background-image:url(3.png)"></div>
+  <img class="photo" src="3.png" style="width:1080px;height:2000px;object-fit:cover;object-position:50% 20%;--s:0s;--d:4.6s;--z0:1.15;--z1:1.0">
+  <div style="position:absolute;inset:0;background:linear-gradient(transparent 45%, rgba(0,0,0,.75))"></div>
+  <div class="logoCard pop" style="--s:.4s;width:560px;left:260px;top:180px"><img src="logo.png"></div>
+  <div class="txt up" style="--s:1.2s;bottom:340px;font-size:110px">קרית השרון</div>
+  <div class="txt up" style="--s:1.8s;bottom:220px;font-size:64px;font-weight:500">יש לנו חדשות טעימות...</div>
+</div>
+
+<!-- 2. מנת פלאפל (4.3–9.3) -->
+<div class="scene" style="--s:4.3s;--d:5s;background:var(--cream)">
+  <img class="photo" src="5.jpg" style="width:1500px;mix-blend-mode:multiply;object-fit:cover;--s:4.3s;--d:5s;--z0:1.0;--z1:1.15;margin-top:80px;clip-path:inset(0 0 0 22%)">
+  <div class="txt up" style="--s:4.7s;top:200px;font-size:120px;color:var(--red);text-shadow:none">קונים מנת<br>פלאפל</div>
+  <div class="txt up" style="--s:5.4s;bottom:260px;font-size:70px;color:var(--dark);text-shadow:none;font-weight:700">הטעם הכי ישראלי!</div>
+</div>
+
+<!-- 3. צ'יפס עף (9.1–14.3) -->
+<div class="scene" style="--s:9.1s;--d:5.2s">
+  <div class="bg" style="background-image:url(2.jpg)"></div>
+  <img class="photo" src="2.jpg" style="width:1530px;--s:9.1s;--d:5.2s;--z0:1.0;--z1:1.2">
+  <div class="txt pop" style="--s:9.5s;top:200px;font-size:150px">מקבלים</div>
+  <div class="txt" style="bottom:300px"><span class="tag pop" style="--s:10.3s;font-size:150px">צ'יפס</span></div>
+  <div class="txt pop" style="--s:11.1s;bottom:150px;font-size:110px;color:#ffd166">חינם!</div>
+</div>
+
+<!-- 4. ההצעה (14.1–19.6) -->
+<div class="scene" style="--s:14.1s;--d:5.5s;background:radial-gradient(circle at 50% 55%, #fff 0, var(--cream) 55%, #f3d9b8 100%)">
+  <div class="txt pop" style="--s:14.4s;top:170px;font-size:170px;color:var(--orange);text-shadow:none">חינם!</div>
+  <img class="photo" src="1.jpg" style="width:1250px;mix-blend-mode:multiply;--s:14.1s;--d:5.5s;--z0:.9;--z1:1.08">
+  <div class="txt up" style="--s:15.2s;bottom:290px;font-size:84px;color:var(--dark);text-shadow:none">צ'יפס וופל פריך</div>
+  <div class="txt" style="bottom:150px"><span class="tag tagRed up" style="--s:15.8s;font-size:66px">בכל קניית מנת פלאפל</span></div>
+</div>
+
+<!-- 5. מתי (19.4–25.2) -->
+<div class="scene" style="--s:19.4s;--d:5.8s;background:linear-gradient(160deg, var(--red), #4a0f20)">
+  <div class="txt up" style="--s:19.7s;top:300px;font-size:90px;font-weight:700">המבצע בתוקף</div>
+  <div class="txt pop" style="--s:20.3s;top:470px;font-size:150px">ראשון–חמישי</div>
+  <div style="position:absolute;left:0;right:0;top:820px;text-align:center">
+    <div class="pop" style="--s:21.2s;display:inline-block;background:#fff;color:var(--red);border-radius:50px;padding:40px 70px;font-weight:900;font-size:140px;direction:ltr;white-space:nowrap;box-shadow:0 20px 60px rgba(0,0,0,.35)">12:00–15:00</div>
+  </div>
+  <div class="txt up" style="--s:22.2s;top:1230px;font-size:80px;color:#ffd166">ארוחת צהריים מושלמת</div>
+  <div class="txt up" style="--s:22.8s;top:1360px;font-size:150px">🧆 + 🍟</div>
+</div>
+
+<!-- 6. סיום (25–30) -->
+<div class="scene last" style="--s:25s;--d:5s">
+  <div class="bg" style="background-image:url(4.jpg)"></div>
+  <img class="photo" src="4.jpg" style="width:1900px;--s:25s;--d:5s;--z0:1.0;--z1:1.1;margin-top:-60px">
+  <div style="position:absolute;inset:0;background:linear-gradient(rgba(0,0,0,.55), transparent 30%, transparent 55%, rgba(0,0,0,.8))"></div>
+  <div class="logoCard pop" style="--s:25.4s;width:600px;left:240px;top:150px"><img src="logo.png"></div>
+  <div class="txt up" style="--s:26.2s;bottom:420px;font-size:96px">צ'יפס חינם עם כל מנה</div>
+  <div class="txt up" style="--s:26.7s;bottom:300px;font-size:64px;font-weight:500">א׳–ה׳ · <span dir="ltr">12:00–15:00</span></div>
+  <div class="txt" style="bottom:140px"><span class="tag up" style="--s:27.3s;font-size:72px">מחכים לכם בקרית השרון!</span></div>
+</div>
+
+</body>
+</html>
