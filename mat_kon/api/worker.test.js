@@ -1677,15 +1677,24 @@ test('admin push: owner registers a phone, gets a push for a new issue (once an 
   assert.equal((await (await call('POST', '/admin/push/subscribe', { subscription }, owner)).json()).devices, 1);
   assert.equal((await (await call('POST', '/admin/push/test', {}, owner)).json()).sent, 1);
 
-  // שתי תקלות פייסבוק עם נוסח שונה – תקלה אחת והתראה אחת
+  // שתי תקלות פייסבוק עם נוסח שונה – תקלה אחת והתראה אחת (וחזרה תוך שעה – בלי התראה נוספת)
   deps.fetch = async () => new Response('', { status: 400 });
-  reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_recipe', input: { ...recipeInput, found: false, notes: `פייסבוק חסם ${Math.random()}` } }] });
+  reply = () => { throw new Error(`פייסבוק חסם ${Math.random()}`); };
   await call('POST', '/recipes', { url: 'https://www.facebook.com/share/r/aaa/' }, owner);
   await call('POST', '/recipes', { url: 'https://m.facebook.com/share/r/bbb/' }, owner);
   const { issues } = await (await call('GET', '/admin/issues', undefined, owner)).json();
   assert.equal(issues.filter((i) => i.where === 'extract').length, 1, JSON.stringify(issues));
   assert.equal(issues.find((i) => i.where === 'extract').count, 2);
   assert.equal(pushes.length, 2); // בדיקה + תקלה חדשה אחת
+
+  // "לא נמצא מתכון" – לא תקלה: רשימה נפרדת, בלי התראה
+  reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_recipe', input: { ...recipeInput, found: false, notes: 'רק תגיות, בלי מתכון' } }] });
+  assert.equal((await call('POST', '/recipes', { url: 'https://www.instagram.com/reel/xyz/' }, owner)).status, 422);
+  assert.equal((await call('POST', '/recipes/text', { text: 'שלום לכולם, מה שלומכם היום? נתראה מחר בערב' }, owner)).status, 422);
+  const after = await (await call('GET', '/admin/issues', undefined, owner)).json();
+  assert.equal(after.issues.length, 1);
+  assert.deepEqual(after.noRecipe.map((n) => [n.group, n.message]), [['NoRecipeError:', 'רק תגיות, בלי מתכון'], ['NoRecipeError:instagram.com', 'רק תגיות, בלי מתכון']]);
+  assert.equal(pushes.length, 2);
   assert.equal(pushes[1].url, subscription.endpoint);
   assert.equal(pushes[1].init.headers['content-encoding'], 'aes128gcm');
   const ron = (await (await register((await invite('רון', owner)).token)).json()).session;

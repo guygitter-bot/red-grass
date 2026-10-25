@@ -1010,7 +1010,7 @@ export default {
         recipe = await buildRecipe(env, ai(recipeKind({ link, text })), { link, text, hint }, categories);
       } catch (e) {
         await giveBack();
-        await recordError('extract', e, link ? errorGroup(link, e) : '');
+        await recordError('extract', e, link ? errorGroup(link, e) : e instanceof NoRecipeError ? 'NoRecipeError:' : '');
         const f = failure(e, { isPhoto: isAddPhoto, owner: !user });
         return fail(f.status, f.error);
       }
