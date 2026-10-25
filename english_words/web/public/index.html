@@ -56,6 +56,8 @@
   h2 { margin: 0 0 12px; font-size: 20px; }
   .word.sentence { font-size: 40px; }
   .btn-lock { background: var(--line); color: var(--muted); }
+  input { font: inherit; font-size: 20px; padding: 12px 14px; border-radius: 14px; border: 2px solid var(--line); background: var(--page); color: var(--ink); min-width: 0; }
+  #hello button { color: var(--soft); background: none; font-size: 15px; text-decoration: underline; }
   .hidden { display: none !important; }
   .note { font-size: 15px; color: var(--muted); text-align: center; margin: 0; }
   @media (min-width: 1024px) {
@@ -71,6 +73,14 @@
   <section id="home">
     <h1>🔤 מילים באנגלית</h1>
     <p class="sub">קוראים בקול ובוחרים את התרגום. צריך 80% כדי לעבור שלב</p>
+    <div class="card" id="nameCard" style="margin-top:16px">
+      <h2>👋 איך קוראים לך?</h2>
+      <div class="row">
+        <input id="nameInput" maxlength="30" placeholder="השם שלי" autocomplete="off">
+        <button class="big" id="nameSave" style="flex:0 0 100px">שמירה</button>
+      </div>
+    </div>
+    <p class="sub hidden" id="hello" style="margin-top:12px"></p>
     <div class="card" style="margin-top:16px">
       <h2>שלב 1 – מילים</h2>
       <div class="top"><span id="count"></span><span class="stars" id="homeStars"></span></div>

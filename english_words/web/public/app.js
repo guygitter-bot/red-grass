@@ -1,5 +1,6 @@
 import { WORDS } from './words.js';
 import { SENTENCES } from './sentences.js';
+import { report, flush, kidName, setKidName } from './report.js';
 import { saidWord, choicesFor, sentenceChoicesFor, nextOrder, shuffle, percent, passed, PASS } from './match.js';
 
 const $ = (id) => document.getElementById(id);
@@ -19,6 +20,7 @@ let stars = load('ew-stars', 0);
 let best = load('ew-best', { words: 0, sentences: 0 });
 let mode = 'words';
 let correct = 0;
+let wrong = [];
 let order = [];
 let index = 0;
 let tries = 0;
@@ -33,6 +35,18 @@ function showHome() {
   $('homeStars').textContent = `⭐ ${stars}`;
   $('homeBar').style.width = `${(n / WORDS.length) * 100}%`;
   $('start').textContent = best.words >= PASS ? '🎤 עוד סיבוב מילים' : '🎤 מתחילים!';
+  // שם הילד – כדי שבניהול יראו של מי התוצאות
+  const name = kidName();
+  $('nameCard').classList.toggle('hidden', !!name);
+  $('hello').classList.toggle('hidden', !name);
+  $('hello').innerHTML = '';
+  if (name) {
+    $('hello').append(`שלום ${name}! `);
+    const change = document.createElement('button');
+    change.textContent = 'זה לא אני';
+    change.onclick = () => { $('nameInput').value = name; $('nameCard').classList.remove('hidden'); $('hello').classList.add('hidden'); };
+    $('hello').append(change);
+  }
   $('wordsBest').textContent = best.words ? `התוצאה הכי טובה: ${best.words}%` : `צריך לצדוק ב-${PASS}% מהמילים כדי לעבור לשלב 2`;
   const open = best.words >= PASS;
   $('startSent').disabled = !open;
@@ -59,6 +73,7 @@ function startPlay(m) {
   order = mode === 'words' ? nextOrder(WORDS, learned) : shuffle(SENTENCES);
   index = 0;
   correct = 0;
+  wrong = [];
   show('play');
   showWord();
 }
@@ -199,6 +214,7 @@ function choose(button, he) {
     $('next').textContent = index + 1 < order.length ? 'הבאה ←' : 'סיימתי! 🎉';
     $('next').classList.remove('hidden');
   } else {
+    if (firstGuess) wrong.push(w.en);
     firstGuess = false;
     button.classList.add('bad');
     button.disabled = true;
@@ -220,6 +236,7 @@ function showResult() {
   const ok = passed(correct, total);
   best[mode] = Math.max(best[mode] || 0, p);
   save('ew-best', best);
+  report({ mode, correct, total, wrong, at: Date.now() });
   $('resScore').textContent = `צדקת ב-${correct} מתוך ${total} (${p}%)`;
   if (ok && mode === 'words') {
     $('resPic').textContent = '🎉';
@@ -241,6 +258,13 @@ function showResult() {
   show('result');
 }
 
+$('nameSave').onclick = () => {
+  const name = $('nameInput').value.trim();
+  if (!name) { $('nameInput').focus(); return; }
+  setKidName(name);
+  showHome();
+};
+$('nameInput').onkeydown = (e) => { if (e.key === 'Enter') $('nameSave').click(); };
 $('start').onclick = () => startPlay('words');
 $('startSent').onclick = () => startPlay('sentences');
 $('resHome').onclick = showHome;
@@ -262,3 +286,4 @@ $('reset').onclick = () => {
 };
 
 showHome();
+flush();

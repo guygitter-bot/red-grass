@@ -1,0 +1,8 @@
+{
+  "name": "milim-admin",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  }
+}
