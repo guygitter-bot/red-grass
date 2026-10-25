@@ -101,7 +101,8 @@
 
 #### סרטוני הדרכה (`mat_kon/tutorials/`)
 - מוקלטים אוטומטית מהאפליקציה (שרת מדומה, בלי AI): `cd mat_kon/web && npm run build`, ואז `cd ../tutorials && node videos/<שם>.mjs`.
-- **שינוי במסך → להקליט מחדש את הסרטון שלו.** רשימת הסרטונים: `web/src/lib/tutorials.js`.
+- **לא להקליט בלי לשאול:** בכל תיקון או עדכון – לעצור ולשאול את המשתמש אם ליצור/לעדכן סרטון הדרכה (זה צורך מכסה, ולא לכל דבר צריך).
+  רק אחרי אישור – להקליט. רשימת הסרטונים: `web/src/lib/tutorials.js`.
 - קריינות: משפט חדש נכנס ל-`tutorials/voice/lines.json`; דחיפה לענף עבודה מפעילה את `mat-kon-voice.yml` שמחזיר את קובצי ה-MP3
   לענף – ואז `git pull` ולהקליט שוב. הקול: ElevenLabs, הקול "נועה" (`tutorials/voice/eleven.json`, סוד `ELEVENLABS_API_KEY`);
   Google TTS רק כגיבוי. **בלי ניקוד** – ניסינו, ונשמע גרוע יותר.
