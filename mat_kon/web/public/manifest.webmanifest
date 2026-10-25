@@ -32,7 +32,20 @@
             "text/plain",
             ".txt",
             "application/zip",
-            ".zip"
+            ".zip",
+            "application/pdf",
+            ".pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".docx",
+            "application/msword",
+            ".doc",
+            "application/vnd.oasis.opendocument.text",
+            ".odt",
+            "application/rtf",
+            ".rtf",
+            "text/html",
+            ".html",
+            "image/*"
           ]
         }
       ]

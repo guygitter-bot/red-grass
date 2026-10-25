@@ -92,7 +92,10 @@ function mockApi(opts = {}) {
       return { job: { id: m[1], status: 'done', recipeId: job.recipe.id, title: job.recipe.title, category: job.recipe.category } };
     }
     if (p === '/recipes/photo') { await sleep(state.delay); return { recipe: created({ source: { kind: 'photo' } }) }; }
-    if (p === '/recipes/text') { await sleep(state.delay); return { recipe: created({ source: { kind: 'whatsapp', ...(body.url ? { url: body.url } : {}), text: body.text } }) }; }
+    if (p === '/recipes/text') {
+      await sleep(state.delay);
+      return { recipe: created({ source: body.file ? { kind: 'file', key: body.key, chat: body.chat, text: body.text } : { kind: 'whatsapp', ...(body.url ? { url: body.url } : {}), text: body.text } }) };
+    }
     if (p === '/recipes/manual') {
       const r = { id: `r-${Date.now()}`, tags: [], tips: [], ...body, ...(body.recipe || {}), source: { kind: 'manual' }, createdAt: new Date().toISOString() };
       delete r.recipe;
