@@ -190,7 +190,7 @@
 
 ### מילים באנגלית (`english_words/`)
 - תיאור: `english_words/README.md`. תרגול 35 מילים לילדים: קוראים בקול (מיקרופון) ובוחרים תרגום מ-4; 80% כדי לעבור לשלב משפטים.
-- `english_words/web/public` (HTML+JS בלי בנייה) → https://english-words.pages.dev. עלייה: `english-words.yml` אחרי מיזוג ל-main.
+- `english_words/web/public` (HTML+JS בלי בנייה) → https://milim-beanglit.pages.dev. עלייה: `english-words.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd english_words/web && npm test`. טלפון + מחשב + מצב לילה.
 
 ### טוטו (`toto_predictor/`)
