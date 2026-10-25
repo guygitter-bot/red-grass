@@ -1,0 +1,18 @@
+{
+ "lines": {
+  "v1": "פלאפל בריבוע בקרית השרון!",
+  "v2": "קונים מנת פלאפל,",
+  "v3": "ומקבלים צ'יפס – חינם!",
+  "v4": "ראשון עד חמישי, בין שתים עשרה לשלוש.",
+  "v5": "מחכים לכם!"
+ },
+ "sfx": {
+  "whoosh": { "text": "fast punchy whoosh transition swipe, short, clean, no music", "seconds": 0.8 },
+  "pop": { "text": "short bubbly cartoon pop, clean, single hit", "seconds": 0.5 },
+  "stamp": { "text": "heavy rubber stamp slam impact with short low boom, single hit", "seconds": 0.8 },
+  "crunch": { "text": "crispy french fries crunch bite, close up, single bite", "seconds": 0.7 },
+  "tick": { "text": "fast clock ticking that ends with a bright bell ding", "seconds": 1.5 },
+  "sparkle": { "text": "magical sparkle shimmer chime, short, bright", "seconds": 1 },
+  "sizzle": { "text": "deep fryer oil sizzling, short", "seconds": 1.5 }
+ }
+}
