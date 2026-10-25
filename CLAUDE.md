@@ -188,6 +188,11 @@
 - **תמיד למזג לבד** את ה-PR (אחרי שהבדיקות ירוקות) ולעקוב שהעלייה (`music-teacher.yml` על main) הצליחה – ולדווח עם הקישור.
 - המורה מודול נפרד (`src/three/teacher.js`) כדי שאפשר יהיה להחליף בדמות קנויה. זיהוי צליל בטיונר: `src/lib/pitch.js` (פונקציה טהורה + בדיקות).
 
+### מילים באנגלית (`english_words/`)
+- תיאור: `english_words/README.md`. תרגול 35 מילים לילדים: קוראים בקול (מיקרופון) ובוחרים תרגום מ-4.
+- `english_words/web/public` (HTML+JS בלי בנייה) → https://english-words.pages.dev. עלייה: `english-words.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd english_words/web && npm test`. טלפון + מחשב + מצב לילה.
+
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).
 

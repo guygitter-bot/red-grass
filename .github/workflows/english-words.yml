@@ -1,0 +1,60 @@
+name: english-words
+
+# מילים באנגלית (english_words/):
+# english_words/web/public -> Cloudflare Pages "english-words" -> https://english-words.pages.dev
+on:
+  push:
+    branches: [main]
+    paths: ["english_words/**", ".github/workflows/english-words.yml"]
+  pull_request:
+    paths: ["english_words/**", ".github/workflows/english-words.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: english-words-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Tests
+        working-directory: english_words/web
+        run: npm test
+
+  web:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create the Pages project (first run only)
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: english_words/web
+          wranglerVersion: "4.146.0"
+          command: pages project create english-words --production-branch=main
+      - name: Publish
+        id: publish
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: english_words/web
+          wranglerVersion: "4.146.0"
+          command: pages deploy public --project-name=english-words --branch=main --commit-dirty=true
+      - name: Summary
+        env:
+          URL: ${{ steps.publish.outputs.deployment-url }}
+        run: |
+          echo "Published: https://english-words.pages.dev ($URL)" >> "$GITHUB_STEP_SUMMARY"
