@@ -6,8 +6,8 @@
 <style>
   :root { --red: #8a1f3c; --red2: #4a0f20; --orange: #e07b39; --yellow: #ffd166; --cream: #fbf3e6; --dark: #1b1716; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { width: 1080px; height: 1920px; overflow: hidden; background: var(--dark); font-family: Rubik, sans-serif; }
-  #cam { position: absolute; inset: 0; }
+  html, body { width: 1080px; height: 1920px; overflow: clip; background: var(--dark); font-family: Rubik, sans-serif; }
+  #cam { position: absolute; inset: 0; overflow: clip; }
   .scene { position: absolute; inset: 0; overflow: hidden; visibility: hidden; }
   .abs { position: absolute; }
   .center { left: 50%; top: 50%; }
