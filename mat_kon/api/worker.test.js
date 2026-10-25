@@ -1778,6 +1778,23 @@ test('recipe from a link: if the API says the schema is too large, retry once wi
   assert.equal(apiCalls[1].tools.find((t) => t.name === 'submit_recipe').input_schema.properties.diet, undefined);
 });
 
+test('a photo: while the API says the schema is too large, the tool gets simpler (one recipe, then not strict) until it works', async () => {
+  let calls = 0;
+  deps.anthropic = () => ({ beta: { messages: { create: async (p) => {
+    apiCalls.push(p);
+    calls += 1;
+    if (calls <= 2) throw Object.assign(new Error('400 {"type":"error","error":{"type":"invalid_request_error","message":"Request too large: the compiled grammar is too large"}}'), { status: 400 });
+    return { stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_recipe', input: recipeInput }] };
+  } } } });
+  const res = await call('POST', '/recipes/photo', { images: [{ type: 'image/jpeg', data: PIXEL }] });
+  assert.equal(res.status, 200);
+  const tools = apiCalls.map((c) => c.tools.find((t) => t.name === 'submit_recipe'));
+  assert.ok(tools[0].input_schema.properties.more_recipes);
+  assert.equal(tools[1].input_schema.properties.more_recipes, undefined);
+  assert.equal(tools[1].strict, true);
+  assert.equal(tools[2].strict, false);
+});
+
 test('admin app: screenshots for Claude are kept on the server (not in the public issue) and only the owner can download them', async () => {
   env.OWNER_PASSWORD = 'owner-secret-1';
   env.FIX_GITHUB_TOKEN = 'gh-token';
