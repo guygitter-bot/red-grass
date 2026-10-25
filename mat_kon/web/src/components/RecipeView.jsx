@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  ArrowRight, Camera, Check, ChefHat, Clock, ExternalLink, Heart, ImagePlus, Info, Loader2, MessageCircle, Minus, PenLine, Pencil, PlayCircle,
+  ArrowRight, Camera, Check, ChefHat, Clock, ExternalLink, FileText, Heart, ImagePlus, Info, Loader2, MessageCircle, Minus, PenLine, Pencil, PlayCircle,
   CalendarPlus, Plus, Printer, RotateCw, Share2, ShoppingCart, Star, Trash2, Users, X,
 } from 'lucide-react';
 import CookMode from './CookMode';
@@ -31,7 +31,7 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
   const [subFor, setSubFor] = useState(null); // המצרך שמחפשים לו תחליף
   const base = baseServings(recipe.servings);
   const ingredients = scaleSections(recipe.ingredients, factor);
-  const canRefresh = Boolean(recipe.source.url) || recipe.source.kind === 'whatsapp';
+  const canRefresh = Boolean(recipe.source.url) || ['whatsapp', 'file'].includes(recipe.source.kind);
   const [busy, setBusy] = useState('');
   // עדכון קטן (מועדף, דירוג...): השגיאה כבר מוצגת כהודעה
   const quiet = (patch) => Promise.resolve(onUpdate(patch)).catch(() => {});
@@ -59,7 +59,8 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
     }
   };
 
-  const fromChat = recipe.source.kind === 'whatsapp';
+  const fromChat = ['whatsapp', 'file'].includes(recipe.source.kind);
+  const fromFile = recipe.source.kind === 'file';
   const [showMessage, setShowMessage] = useState(false);
 
   // שיתוף בקישור ל-mat-kon: מי שמקבל רואה תצוגה מקדימה, ואת המתכון המלא – באפליקציה (וכך מצטרף)
@@ -115,7 +116,7 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
       </div>
 
       <article className="max-w-2xl mx-auto px-4">
-        {/* המקור בראש הדף: הקישור המקורי, או ההודעה מווטסאפ */}
+        {/* המקור בראש הדף: הקישור המקורי, ההודעה מווטסאפ או הטקסט מהקובץ */}
         {!fromChat && !recipe.source.url ? (
           <div className="mt-4 rounded-2xl bg-stone-100 p-3 flex items-center gap-3 text-sm text-stone-700">
             <span className="w-10 h-10 rounded-xl bg-stone-500 text-white flex items-center justify-center shrink-0">
@@ -128,17 +129,17 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
           <div className="mt-4 rounded-2xl bg-emerald-50 border border-emerald-200 p-3">
             <button onClick={() => setShowMessage((v) => !v)} className="w-full flex items-center gap-3 text-right">
               <span className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0">
-                <MessageCircle size={20} />
+                {fromFile ? <FileText size={20} /> : <MessageCircle size={20} />}
               </span>
               <span className="flex-1 min-w-0">
                 <span className="block text-xs text-emerald-700 font-medium">
-                  מתוך ווטסאפ{recipe.source.chat ? ` · ${recipe.source.chat}` : ''}
+                  {fromFile ? 'מתוך קובץ' : 'מתוך ווטסאפ'}{recipe.source.chat ? ` · ${recipe.source.chat}` : ''}
                 </span>
                 <span className="block text-sm text-stone-800 truncate">
                   {[recipe.source.author, recipe.source.date].filter(Boolean).join(' · ')}
                 </span>
               </span>
-              <span className="text-xs text-emerald-700 shrink-0">{showMessage ? 'הסתרה' : 'ההודעה המקורית'}</span>
+              <span className="text-xs text-emerald-700 shrink-0">{showMessage ? 'הסתרה' : fromFile ? 'הטקסט מהקובץ' : 'ההודעה המקורית'}</span>
             </button>
             {showMessage && (
               <p className="mt-3 text-sm text-stone-700 whitespace-pre-line bg-white rounded-xl p-3" dir="auto">{recipe.source.text}</p>

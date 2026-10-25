@@ -122,6 +122,8 @@
   לוודא שהגיבוי והשחזור (`/backup/export`, `/backup/import`) עדיין מכסים אותו.
 
 #### ייבוא
+- "מתכון מקובץ" (Word, PDF, טקסט, תמונות, epub...) במסך `#/import`: הקריאה בטלפון (`web/src/lib/files.js`, בלי AI), ורק הקטעים שנבחרו נשלחים
+  (`/recipes/text` עם `file: true`; PDF סרוק – כמו צילום). קובץ חדש? להוסיף קורא ב-`readRecipeFile` + בדיקה ב-`files.test.js`.
 - My Recipe Box / RecetteTek (`.rtk`), Paprika (`.paprikarecipes`), Recipe Keeper (ZIP עם `recipes.html`), Cookmate (`.mcb` / XML): `web/src/lib/importers.js` (`readImportFile` מזהה לפי התוכן), דרך הגדרות ← "ייבוא מאפליקציה אחרת". Google Keep (Takeout): `web/src/lib/keep.js` – פתקים נכנסים למסך ייבוא מווטסאפ (`#/import`) ונשלחים ל-AI כמו טקסט. מתכון בלי מצרכים
   אפשר "להשלים מהמקור" (נשלח לסוכן ברקע).
 

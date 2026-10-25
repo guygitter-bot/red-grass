@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Globe, Heart, Loader2, LogOut, MessageCircle, PenLine, Search, Settings, X } from 'lucide-react';
+import { FileUp, Globe, Heart, Loader2, LogOut, PenLine, Search, Settings, X } from 'lucide-react';
 import SearchView from './components/SearchView';
 import DietFilter from './components/DietFilter';
 import SettingsView from './components/SettingsView';
@@ -882,7 +882,7 @@ export default function App() {
               <Globe size={20} /> חיפוש מתכון
             </a>
             <a href="#/import" className="rounded-2xl bg-white/15 hover:bg-white/25 py-2.5 flex flex-col items-center gap-1">
-              <MessageCircle size={20} /> ייבוא מווטסאפ
+              <FileUp size={20} /> מקובץ / ווטסאפ
             </a>
           </div>
           {left !== null && (
@@ -1058,7 +1058,7 @@ function Empty({ session, onOpenCommunity }) {
   const ways = [
     ['#/search', '🔎', 'חיפוש מתכון', 'כותבים שם של מנה'],
     ['#/new', '📷', 'צילום מתכון', 'דף מספר או פתק'],
-    ['#/import', '📥', 'ייבוא', 'מאפליקציה אחרת'],
+    ['#/import', '📄', 'מקובץ', 'Word, PDF, ווטסאפ'],
   ];
   return (
     <div className="mt-6">

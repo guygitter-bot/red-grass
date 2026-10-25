@@ -979,7 +979,7 @@ export default {
         if (source.kind === 'photo' || source.kind === 'manual') return fail(400, 'למתכון הזה אין מקור לקרוא ממנו שוב');
         // מתכון ששוחזר מגיבוי ועוד לא נקרא מהמקור – קריאה ראשונה שלו נספרת כמו הוספה
         restoredStub = Boolean(restored);
-        if (source.kind === 'whatsapp' || source.text) text = textSource(source);
+        if (['whatsapp', 'file'].includes(source.kind) || source.text) text = textSource(source);
         else {
           link = source.url;
           hint = source.hint || '';
@@ -1498,9 +1498,11 @@ function textSource(body) {
   if (text.length < 20) return null;
   const str = (v) => String(v || '').trim().slice(0, 120);
   const url = body.url ? normalizeUrl(body.url) : null;
-  const key = url ? null : /^wa:[\w-]{1,40}$/.test(body.key) ? body.key : `wa:${text.length}:${text.slice(0, 40)}`;
+  // מסמך שהמשתמש העלה (Word, PDF, טקסט) – "מתוך קובץ"; chat הוא שם הקובץ
+  const file = !url && (body.file === true || body.kind === 'file');
+  const key = url ? null : /^(wa|file):[\w-]{1,40}$/.test(body.key) ? body.key : `${file ? 'file' : 'wa'}:${text.length}:${text.slice(0, 40)}`;
   return {
-    fromText: true, kind: url ? sourceKind(url) : 'whatsapp', url, key, text,
+    fromText: true, kind: url ? sourceKind(url) : file ? 'file' : 'whatsapp', url, key, text,
     chat: str(body.chat), author: str(body.author), date: str(body.date),
   };
 }
