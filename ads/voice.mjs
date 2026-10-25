@@ -54,8 +54,13 @@ for (const name of readdirSync(ROOT)) {
   for (const [key, s] of Object.entries(v.sfx || {})) {
     const f = join(out, `${key}.mp3`);
     if (existsSync(f)) continue;
-    writeFileSync(f, await call('/v1/sound-generation', { text: s.text, duration_seconds: s.seconds, prompt_influence: 0.6 }));
-    made++;
+    // למפתח אין תמיד הרשאה לאפקטים – אז נשארים האפקטים המקומיים (sfx.sh)
+    try {
+      writeFileSync(f, await call('/v1/sound-generation', { text: s.text, duration_seconds: s.seconds, prompt_influence: 0.6 }));
+      made++;
+    } catch (e) {
+      console.log(`sfx ${key}: ${e.message.slice(0, 120)}`);
+    }
   }
 }
 console.log(`created ${made} files`);
