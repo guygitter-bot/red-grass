@@ -190,8 +190,9 @@
 
 ### מילים באנגלית (`english_words/`)
 - תיאור: `english_words/README.md`. תרגול 35 מילים לילדים: קוראים בקול (מיקרופון) ובוחרים תרגום מ-4; 80% כדי לעבור לשלב משפטים.
-- `english_words/web/public` (HTML+JS בלי בנייה) → https://milim-beanglit.pages.dev. עלייה: `english-words.yml` אחרי מיזוג ל-main.
-- בדיקה: `cd english_words/web && npm test`. טלפון + מחשב + מצב לילה.
+- `english_words/web/public` (HTML+JS בלי בנייה) → https://milim-beanglit.pages.dev · ניהול להורים `admin/public` → Pages `milim-admin`
+  · שרת `api` → Worker `milim-api` (תוצאות סיבובים, סיסמת ניהול שנקבעת בכניסה הראשונה). עלייה: `english-words.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd english_words/api && npm test` · `cd english_words/web && npm test` · `cd english_words/admin && npm test`. טלפון + מחשב + מצב לילה.
 
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).
