@@ -1,7 +1,7 @@
 name: english-words
 
 # מילים באנגלית (english_words/):
-# english_words/web/public -> Cloudflare Pages "english-words" -> https://english-words.pages.dev
+# english_words/web/public -> Cloudflare Pages "milim-beanglit" -> https://milim-beanglit.pages.dev
 on:
   push:
     branches: [main]
@@ -43,7 +43,7 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: english_words/web
           wranglerVersion: "4.146.0"
-          command: pages project create english-words --production-branch=main
+          command: pages project create milim-beanglit --production-branch=main
       - name: Publish
         id: publish
         uses: cloudflare/wrangler-action@v3
@@ -52,9 +52,9 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: english_words/web
           wranglerVersion: "4.146.0"
-          command: pages deploy public --project-name=english-words --branch=main --commit-dirty=true
+          command: pages deploy public --project-name=milim-beanglit --branch=main --commit-dirty=true
       - name: Summary
         env:
           URL: ${{ steps.publish.outputs.deployment-url }}
         run: |
-          echo "Published: https://english-words.pages.dev ($URL)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Published: https://milim-beanglit.pages.dev ($URL)" >> "$GITHUB_STEP_SUMMARY"
