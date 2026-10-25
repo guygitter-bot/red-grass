@@ -583,18 +583,32 @@ export async function extractRecipe(client, src, { categories = CATEGORIES } = {
       messages,
     });
     let response;
-    try {
-      response = await request();
-    } catch (e) {
-      // הסכמה גדולה מדי ל-API: שוב בלי סימון ה-AI לסינון (הסינון יהיה לפי המצרכים)
-      if (step === 0 && e?.status === 400 && /too large|too complex|grammar/i.test(`${e?.message || ''}`) && RECIPE_TOOL.input_schema.properties.diet) {
-        RECIPE_TOOL = recipeTool(categories, { multi, withDiet: false });
+    // הסכמה גדולה/מורכבת מדי ל-API: מנסים שוב עם כלי פשוט יותר, צעד אחרי צעד, עד שמצליח –
+    // בלי סימון ה-AI לסינון (הסינון לפי המצרכים), אחר כך מתכון אחד בלבד, ובסוף בלי בדיקת סכמה מחמירה
+    const simpler = [
+      () => RECIPE_TOOL.input_schema.properties.diet && recipeTool(categories, { multi, withDiet: false }),
+      () => RECIPE_TOOL.input_schema.properties.more_recipes && recipeTool(categories, { withDiet: false }),
+      () => RECIPE_TOOL.strict && { ...RECIPE_TOOL, strict: false },
+    ];
+    for (;;) {
+      try {
         response = await request();
-      } else if (pinImage && step === 0 && e?.status === 400) {
-        // תמונת הפין לא נטענה אצל המודל – ממשיכים בלעדיה
-        messages[0] = { role: 'user', content: text };
-        response = await request();
-      } else throw e;
+        break;
+      } catch (e) {
+        const message = `${e?.message || ''} ${JSON.stringify(e?.error || {})}`;
+        const schemaTooBig = (e?.status === 400 || e?.status === 413) && /too large|too complex|too many|grammar|schema/i.test(message);
+        const next = schemaTooBig && simpler.map((f) => f()).find(Boolean);
+        if (next) {
+          RECIPE_TOOL = next;
+          continue;
+        }
+        if (pinImage && step === 0 && e?.status === 400 && messages[0].content !== text) {
+          // תמונת הפין לא נטענה אצל המודל – ממשיכים בלעדיה
+          messages[0] = { role: 'user', content: text };
+          continue;
+        }
+        throw e;
+      }
     }
     if (response.stop_reason === 'refusal') throw new Error('הבקשה נדחתה על ידי המודל.');
     const submit = response.content.find((b) => b.type === 'tool_use' && b.name === RECIPE_TOOL.name);
@@ -603,7 +617,7 @@ export async function extractRecipe(client, src, { categories = CATEGORIES } = {
       const known = RECIPE_TOOL.input_schema.properties.category.enum;
       const recipe = toRecipe(submit.input, src, known);
       // שאר המתכונים מאותו מקור: מפתח מקור משלהם (אחרת היו נשמרים זה על זה)
-      const more = multi ? (Array.isArray(submit.input.more_recipes) ? submit.input.more_recipes : []).slice(0, 5) : [];
+      const more = RECIPE_TOOL.input_schema.properties.more_recipes ? (Array.isArray(submit.input.more_recipes) ? submit.input.more_recipes : []).slice(0, 5) : [];
       recipe.more = more
         .map((input) => toRecipe(input, src, known))
         .filter((r) => r.ingredients.length || r.steps.length)
@@ -835,6 +849,6 @@ export function aiMessage(e, { owner = false } = {}) {
     return owner ? 'מפתח ה-API של Anthropic לא תקין או בוטל. צריך לעדכן אותו בסודות של GitHub.' : 'השירות לא זמין כרגע. נסו שוב מאוחר יותר.';
   }
   if (status === 429 || status === 529 || status >= 500 || /overloaded|rate.?limit/.test(text)) return 'יש עומס כרגע. נסו שוב בעוד דקה.';
-  if (status === 413 || /too large|too long/.test(text)) return 'הבקשה גדולה מדי. נסו עם פחות טקסט או תמונות.';
+  if (status === 413 || /too large|too long/.test(text)) return 'לא הצלחנו לקרוא את זה הפעם. נסו שוב, ואם זה חוזר – צלמו קרוב יותר או חלקו לכמה תמונות.';
   return null;
 }

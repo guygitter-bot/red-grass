@@ -185,10 +185,9 @@ export class Accounts {
     // תקלה שסומנה "תוקנה" וחזרה – נפתחת מחדש
     if (old?.status === 'fixed') Object.assign(next, { status: 'new', reopened: true });
     await this.storage.put(key, next);
-    // התראה לטלפון: תקלה חדשה, או תקלה שחזרה אחרי תיקון
-    if (!old || old.status === 'fixed') {
-      await this.notifyAdmin({ title: old ? '🔁 תקלה חזרה ב-mat-kon' : '🐞 תקלה חדשה ב-mat-kon', body: entry.message, tag: `issue-${sig}`, url: '#issues' });
-    }
+    // התראה לטלפון: תקלה חדשה, תקלה שחזרה אחרי תיקון, וגם תקלה פתוחה שקורית שוב (לכל היותר פעם בשעה לכל תקלה)
+    const title = !old ? '🐞 תקלה חדשה ב-mat-kon' : old.status === 'fixed' ? '🔁 תקלה חזרה ב-mat-kon' : `🐞 התקלה קרתה שוב (${next.count} פעמים)`;
+    await this.notifyAdmin({ title, body: entry.message, tag: `issue-${sig}`, url: '#issues' });
   }
 
   // גרסת הסוד של בעל האפליקציה: החלפת הסיסמה מנתקת את כל מכשירי הבעלים
