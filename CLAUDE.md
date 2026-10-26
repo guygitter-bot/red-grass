@@ -189,7 +189,7 @@
 - המורה מודול נפרד (`src/three/teacher.js`) כדי שאפשר יהיה להחליף בדמות קנויה. זיהוי צליל בטיונר: `src/lib/pitch.js` (פונקציה טהורה + בדיקות).
 
 ### מילים באנגלית (`english_words/`)
-- תיאור: `english_words/README.md`. תרגול 35 מילים לילדים: קוראים בקול (מיקרופון) ובוחרים תרגום מ-4; 80% כדי לעבור לשלב משפטים.
+- תיאור: `english_words/README.md`. תרגול 35 מילים לילדים: קוראים בקול (מיקרופון) ובוחרים תרגום מ-4; 80% כדי לעבור לשלב משפטים; כל 7 סעיפי המבחן + מבחן לדוגמה (`web/public/exam.js`). סוג תרגול חדש – להוסיף גם ל-`MODES` ב-`api/stats.js` ול-`STAGES` ב-`admin/public/view.js`.
 - `english_words/web/public` (HTML+JS בלי בנייה) → https://milim-beanglit.pages.dev · ניהול להורים `admin/public` → Pages `milim-admin`
   · שרת `api` → Worker `milim-api` (תוצאות סיבובים, סיסמת ניהול שנקבעת בכניסה הראשונה). עלייה: `english-words.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd english_words/api && npm test` · `cd english_words/web && npm test` · `cd english_words/admin && npm test`. טלפון + מחשב + מצב לילה.

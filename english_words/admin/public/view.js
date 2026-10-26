@@ -1,6 +1,13 @@
 // בניית כרטיס לכל ילד (פונקציות טהורות – נבדקות בלי דפדפן)
 export const PASS = 80;
-const STAGES = [['words', 'שלב 1 – מילים'], ['sentences', 'שלב 2 – משפטים']];
+const STAGES = [
+  ['words', 'שלב 1 – מילים'], ['sentences', 'שלב 2 – משפטים'], ['exam', '🎓 מבחן לדוגמה'],
+  ['listen', '🎧 שומעים ובוחרים'], ['letters', '🔠 אותיות גדולות וקטנות'], ['opening', '🅰️ אות פותחת'],
+  ['picture', '🖼️ תמונה ומילה'], ['bank', '📦 מחסן מילים'], ['picsent', '🧩 משפט ותמונה'],
+];
+// מילים ומשפטים תמיד מוצגים; שאר התרגולים – רק אחרי שהילד שיחק בהם
+const ALWAYS = ['words', 'sentences'];
+const TITLE = Object.fromEntries(STAGES);
 
 // השם מגיע מהאפליקציה של הילד – תמיד לנקות לפני שמציגים
 export function esc(text) {
@@ -36,7 +43,7 @@ function stage(s, title) {
 export function kidHtml(k) {
   const rounds = (k.rounds || []).slice(0, 20).map((r) => `<tr>
       <td>${when(r.at)}</td>
-      <td>${r.mode === 'words' ? 'מילים' : 'משפטים'}</td>
+      <td>${(TITLE[r.mode] || r.mode).replace(/^שלב \d – /, '')}</td>
       <td>${r.correct}/${r.total}</td>
       <td class="${r.percent >= PASS ? 'ok' : 'no'}">${r.percent}%</td>
     </tr>`).join('');
@@ -45,7 +52,7 @@ export function kidHtml(k) {
       <h2>${esc(k.name)}</h2>
       <span class="muted">${k.lastSeen ? 'פעם אחרונה: ' + when(k.lastSeen) : ''}</span>
     </div>
-    <div class="stages">${STAGES.map(([m, t]) => stage(k.summary?.[m], t)).join('')}</div>
+    <div class="stages">${STAGES.filter(([m]) => ALWAYS.includes(m) || k.summary?.[m]?.attempts).map(([m, t]) => stage(k.summary?.[m], t)).join('')}</div>
     ${rounds ? `<details><summary>כל הסיבובים</summary><table><thead><tr><th>מתי</th><th>שלב</th><th>נכון</th><th>אחוז</th></tr></thead><tbody>${rounds}</tbody></table></details>` : ''}
     <button class="link danger" data-delete="${esc(k.id)}" data-name="${esc(k.name)}">מחיקת הילד מהרשימה</button>
   </article>`;

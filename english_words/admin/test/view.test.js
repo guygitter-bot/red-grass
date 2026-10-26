@@ -24,3 +24,12 @@ test('הכרטיס מראה מצב, ניסיונות ומילים קשות', () 
   assert.ok(html.includes('cat'));
   assert.ok(html.includes('30/35'));
 });
+
+test('תרגולי המבחן מוצגים רק אחרי ששיחק בהם', () => {
+  assert.ok(!kidHtml(kid).includes('מבחן לדוגמה'));
+  const played = { ...kid, summary: { ...kid.summary, exam: { attempts: 1, passed: false, attemptsToPass: null, best: 70, average: 70, last: 70, missed: [{ en: 'B→b', times: 1 }] } },
+    rounds: [{ mode: 'exam', correct: 22, total: 32, percent: 69, at: 1 }] };
+  const html = kidHtml(played);
+  assert.ok(html.includes('מבחן לדוגמה'));
+  assert.ok(html.includes('B→b'));
+});

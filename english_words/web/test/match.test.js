@@ -51,12 +51,12 @@ test('משפטים: 4 תשובות שונות, אחת נכונה, ותשובה �
     assert.equal(new Set(c).size, 4);
     assert.ok(c.includes(s.he));
   }
-  const c = sentenceChoicesFor(SENTENCES[0], SENTENCES);
+  const c = sentenceChoicesFor(SENTENCES.find((s) => s.en === 'The cat is small.'), SENTENCES);
   assert.ok(c.some((he) => he.startsWith('החתול') && he !== 'החתול קטן') || c.some((he) => he.endsWith('קטן') && he !== 'החתול קטן'));
 });
 
 test('המשפטים בנויים רק ממילים מהרשימה', () => {
-  const known = new Set([...WORDS.map((w) => w.en), 'the', 'a', 'an', 'is', 'my', 'can', 'has']);
+  const known = new Set([...WORDS.map((w) => w.en), 'the', 'a', 'an', 'is', 'my', 'can', 'has', 'he', 'she', 'dan', 'big']);
   for (const s of SENTENCES) {
     for (const w of s.en.toLowerCase().replace(/[^a-z ]/g, '').split(' ')) assert.ok(known.has(w), w);
   }

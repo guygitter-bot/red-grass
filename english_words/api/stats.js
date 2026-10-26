@@ -1,6 +1,7 @@
 // סיכום התוצאות של ילד אחד לכל שלב (פונקציה טהורה – נבדקת בלי שרת)
 export const PASS = 80;
-export const MODES = ['words', 'sentences'];
+// כל סוגי התרגול באפליקציה (מילים, משפטים, סעיפי המבחן ומבחן לדוגמה)
+export const MODES = ['words', 'sentences', 'listen', 'letters', 'opening', 'picture', 'bank', 'picsent', 'exam'];
 
 export function summarize(rounds) {
   const out = {};

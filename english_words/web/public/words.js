@@ -1,3 +1,7 @@
+// אין אימוג'י טוב לשולחן כתיבה ולמנורה – ציור קטן משלנו
+const DESK = '<svg viewBox="0 0 64 64" width="1em" height="1em"><rect x="4" y="22" width="56" height="7" rx="2" fill="#b45309"/><rect x="8" y="29" width="6" height="27" fill="#92400e"/><rect x="40" y="29" width="18" height="27" fill="#b45309"/><rect x="46" y="35" width="6" height="3" rx="1" fill="#fde68a"/><rect x="46" y="45" width="6" height="3" rx="1" fill="#fde68a"/><rect x="18" y="12" width="14" height="10" rx="1" fill="#60a5fa"/></svg>';
+const LAMP = '<svg viewBox="0 0 64 64" width="1em" height="1em"><rect x="10" y="55" width="26" height="5" rx="2" fill="#64748b"/><path d="M23 55 L16 34 L34 20" stroke="#64748b" stroke-width="4" fill="none" stroke-linecap="round"/><path d="M28 14 L48 4 L56 24 Z" fill="#f59e0b"/><circle cx="49" cy="22" r="5" fill="#fde047"/></svg>';
+
 // רשימת המילים מהדף של בית הספר: מילה, תרגום, ציור קטן, ומה הזיהוי הקולי עלול לשמוע במקומה
 export const WORDS = [
   { en: 'cat', he: 'חתול', pic: '🐱' },
@@ -11,11 +15,11 @@ export const WORDS = [
   { en: 'grandma', he: 'סבתא', pic: '👵', alt: ['grandmother', 'grand ma', 'granma'] },
   { en: 'king', he: 'מלך', pic: '🤴' },
   { en: 'bed', he: 'מיטה', pic: '🛏️', alt: ['bad', 'bet'] },
-  { en: 'desk', he: 'שולחן כתיבה', pic: '🪑', alt: ['disk'] },
+  { en: 'desk', he: 'שולחן כתיבה', pic: DESK, alt: ['disk'] },
   { en: 'bag', he: 'תיק', pic: '🎒', alt: ['back', 'beg'] },
   { en: 'pen', he: 'עט', pic: '🖊️', alt: ['pan', 'penn'] },
   { en: 'hat', he: 'כובע', pic: '🎩', alt: ['hot', 'hut'] },
-  { en: 'lamp', he: 'מנורה', pic: '💡' },
+  { en: 'lamp', he: 'מנורה', pic: LAMP },
   { en: 'umbrella', he: 'מטרייה', pic: '☂️' },
   { en: 'apple', he: 'תפוח', pic: '🍎' },
   { en: 'lemon', he: 'לימון', pic: '🍋' },

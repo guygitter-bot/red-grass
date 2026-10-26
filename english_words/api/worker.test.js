@@ -101,4 +101,6 @@ test('סיכום: עד שעבר 80%', () => {
   assert.equal(s.words.average, 66);
   assert.equal(s.words.last, 60);
   assert.equal(cleanRound({ mode: 'words', correct: 28, total: 35 }, 5).percent, 80);
+  assert.equal(cleanRound({ mode: 'exam', correct: 30, total: 32 }, 5).mode, 'exam');
+  assert.equal(cleanRound({ mode: 'hack', correct: 1, total: 2 }, 5), null);
 });
