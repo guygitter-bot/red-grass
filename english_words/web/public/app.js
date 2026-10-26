@@ -29,6 +29,26 @@ let tries = 0;
 let firstGuess = true;
 let listening = null;
 
+// סיבוב שלא הסתיים נשמר בטלפון (לכל סוג תרגול בנפרד) – גם אם יוצאים, עוברים לתרגול אחר או סוגרים את האפליקציה
+let progress = load('ew-progress', {});
+function saveProgress() {
+  progress[mode] = { order, index, correct, wrong, bySection, firstGuess };
+  save('ew-progress', progress);
+}
+function clearProgress(m) {
+  delete progress[m];
+  save('ew-progress', progress);
+}
+function savedRound(m) {
+  const p = progress[m];
+  return p && Array.isArray(p.order) && p.order.length && Number.isInteger(p.index) ? p : null;
+}
+// "12/35" לכפתור "ממשיכים"
+function resumeText(m) {
+  const p = savedRound(m);
+  return p ? `${Math.min(p.index, p.order.length)}/${p.order.length}` : '';
+}
+
 // תמונה: אימוג'י, או ציור קטן משלנו (svg קבוע מתוך הקוד)
 function setPic(el, pic) {
   if (String(pic || '').startsWith('<svg')) el.innerHTML = pic;
@@ -42,7 +62,7 @@ function showHome() {
   $('count').textContent = `למדתי ${n} מתוך ${WORDS.length} מילים`;
   $('homeStars').textContent = `⭐ ${stars}`;
   $('homeBar').style.width = `${(n / WORDS.length) * 100}%`;
-  $('start').textContent = best.words >= PASS ? '🎤 עוד סיבוב מילים' : '🎤 מתחילים!';
+  $('start').textContent = resumeText('words') ? `▶ ממשיכים מאיפה שעצרנו (${resumeText('words')})` : best.words >= PASS ? '🎤 עוד סיבוב מילים' : '🎤 מתחילים!';
   // שם הילד – כדי שבניהול יראו של מי התוצאות
   const name = kidName();
   $('nameCard').classList.toggle('hidden', !!name);
@@ -59,7 +79,7 @@ function showHome() {
   const open = best.words >= PASS;
   $('startSent').disabled = !open;
   $('startSent').className = open ? 'big' : 'big btn-lock';
-  $('startSent').textContent = open ? '📖 למשפטים' : '🔒 נפתח אחרי שלב 1';
+  $('startSent').textContent = !open ? '🔒 נפתח אחרי שלב 1' : resumeText('sentences') ? `▶ ממשיכים (${resumeText('sentences')})` : '📖 למשפטים';
   $('sentNote').textContent = !open
     ? `קודם עוברים את המילים עם ${PASS}% לפחות`
     : best.sentences ? `התוצאה הכי טובה: ${best.sentences}%${best.sentences >= PASS ? ' 🏆' : ''}` : `${SENTENCES.length} משפטים קצרים – בוחרים את התרגום הנכון`;
@@ -69,10 +89,12 @@ function showHome() {
     const b = document.createElement('button');
     b.className = 'section';
     const score = best[s.mode] ? `<em class="${best[s.mode] >= PASS ? 'ok' : ''}">${best[s.mode]}%${best[s.mode] >= PASS ? ' ✓' : ''}</em>` : '';
-    b.innerHTML = `<span class="icon">${s.icon}</span><b>${s.title}</b><small>${s.note}</small>${score}`;
+    const going = resumeText(s.mode) ? `<em class="going">▶ באמצע: ${resumeText(s.mode)}</em>` : '';
+    b.innerHTML = `<span class="icon">${s.icon}</span><b>${s.title}</b><small>${s.note}</small>${going}${score}`;
     b.onclick = () => startPlay(s.mode);
     $('sections').appendChild(b);
   }
+  $('startExam').textContent = resumeText('exam') ? `▶ ממשיכים במבחן (${resumeText('exam')})` : '🎓 למבחן לדוגמה';
   $('examBest').textContent = best.exam ? `התוצאה הכי טובה: ${best.exam}%${best.exam >= PASS ? ' 🎓' : ''}` : 'שאלות מכל הסעיפים, כמו במבחן האמיתי';
   $('list').innerHTML = WORDS.map((w) =>
     `<div class="item ${learned[w.en] ? 'done' : ''}"><b class="en">${w.en}</b><span>${learned[w.en] ? '✓ ' + w.he : ''}</span></div>`
@@ -86,22 +108,32 @@ function show(id) {
 }
 
 // ---- מסך התרגול ----
-// סיבוב חדש תמיד בסדר אחר
-function startPlay(m) {
+// אם יש סיבוב שלא הסתיים – ממשיכים ממנו; אחרת סיבוב חדש, תמיד בסדר אחר
+function startPlay(m, fresh = false) {
   mode = m;
-  order = build(mode, { learned });
-  index = 0;
-  correct = 0;
-  wrong = [];
-  bySection = {};
+  const saved = fresh ? null : savedRound(m);
+  if (saved) {
+    ({ order, index, correct } = saved);
+    wrong = saved.wrong || [];
+    bySection = saved.bySection || {};
+  } else {
+    order = build(mode, { learned });
+    index = 0;
+    correct = 0;
+    wrong = [];
+    bySection = {};
+    saveProgress();
+  }
+  if (index >= order.length) { showResult(); return; }
   show('play');
-  showQuestion();
+  showQuestion(saved ? saved.firstGuess !== false : true);
 }
 
-function showQuestion() {
+// keepGuess=false: חוזרים לשאלה שכבר טעו בה – היא כבר לא נחשבת "נכון בפעם הראשונה"
+function showQuestion(keepGuess = true) {
   const q = order[index];
   tries = 0;
-  firstGuess = true;
+  firstGuess = keepGuess;
   $('pos').textContent = `${index + 1} / ${order.length}`;
   $('section').textContent = q.section ? MODE_TITLES[q.section] : '';
   $('stars').textContent = `⭐ ${stars}`;
@@ -242,6 +274,11 @@ function choose(button, option) {
       $('stars').textContent = `⭐ ${stars}`;
     }
     bySection[sec].total += 1;
+    // התשובה נשמרת מיד – גם אם יוצאים לפני "הבאה", ממשיכים מהשאלה הבאה
+    index += 1;
+    firstGuess = true;
+    saveProgress();
+    index -= 1;
     $('next').textContent = index + 1 < order.length ? 'הבאה ←' : 'סיימתי! 🎉';
     $('next').classList.remove('hidden');
   } else {
@@ -249,6 +286,7 @@ function choose(button, option) {
     firstGuess = false;
     button.classList.add('bad');
     button.disabled = true;
+    saveProgress();
     $('chooseMsg').textContent = 'לא נכון, נסה שוב';
     $('chooseMsg').className = 'msg bad';
   }
@@ -267,18 +305,19 @@ function showResult() {
   const ok = passed(correct, total);
   best[mode] = Math.max(best[mode] || 0, p);
   save('ew-best', best);
+  clearProgress(mode);
   report({ mode, correct, total, wrong, at: Date.now() });
   $('resScore').textContent = `צדקת ב-${correct} מתוך ${total} (${p}%)`;
   // במבחן לדוגמה: איך הלך בכל סעיף
   $('resList').innerHTML = mode !== 'exam' ? '' : Object.entries(bySection).map(([m, s]) =>
     `<div class="item ${passed(s.correct, s.total) ? 'done' : 'weak'}"><span>${MODE_TITLES[m]}</span><b>${s.correct}/${s.total}</b></div>`
   ).join('');
-  $('resGo').onclick = () => startPlay(mode);
+  $('resGo').onclick = () => startPlay(mode, true);
   if (ok && mode === 'words') {
     $('resPic').textContent = '🎉';
     $('resMsg').textContent = 'כל הכבוד! עברת לשלב 2 – משפטים';
     $('resGo').textContent = '📖 לשלב המשפטים';
-    $('resGo').onclick = () => startPlay('sentences');
+    $('resGo').onclick = () => startPlay('sentences', true);
   } else if (ok && mode === 'exam') {
     $('resPic').textContent = '🎓';
     $('resMsg').textContent = 'מעולה! אתה מוכן למבחן';
@@ -318,6 +357,8 @@ $('reset').onclick = () => {
   learned = {};
   stars = 0;
   best = {};
+  progress = {};
+  save('ew-progress', progress);
   save('ew-best', best);
   save('ew-learned', learned);
   save('ew-stars', stars);
