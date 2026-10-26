@@ -1,5 +1,11 @@
 // שלב 2: משפטים קצרים שבנויים רק מהמילים של הרשימה
 export const SENTENCES = [
+  // הדוגמאות מדף המבחן
+  { en: 'Dan is a boy.', he: 'דן הוא ילד' },
+  { en: 'The cat is big.', he: 'החתול גדול' },
+  { en: 'She has an umbrella.', he: 'לה יש מטרייה' },
+  { en: 'He is happy.', he: 'הוא שמח' },
+  { en: 'She is sad.', he: 'היא עצובה' },
   { en: 'The cat is small.', he: 'החתול קטן' },
   { en: 'The cat is white.', he: 'החתול לבן' },
   { en: 'The dog is small.', he: 'הכלב קטן' },
@@ -36,4 +42,26 @@ export const SENTENCES = [
   { en: 'Grandma has a bag.', he: 'לסבתא יש תיק' },
   { en: 'Mom has an umbrella.', he: 'לאמא יש מטרייה' },
   { en: 'The boy has a ball.', he: 'לילד יש כדור' },
+];
+
+// סעיף 6 במבחן: קוראים משפט ובוחרים את התמונה המתאימה (התמונה = כמה אימוג'ים)
+export const PIC_SENTENCES = [
+  { en: 'She has an umbrella.', pic: ['👧', '☂️'] },
+  { en: 'She has a bag.', pic: ['👧', '🎒'] },
+  { en: 'She has a ball.', pic: ['👧', '⚽'] },
+  { en: 'He has a ball.', pic: ['👦', '⚽'] },
+  { en: 'He has a hat.', pic: ['👦', '🎩'] },
+  { en: 'He has an apple.', pic: ['👦', '🍎'] },
+  { en: 'The king has a hat.', pic: ['🤴', '🎩'] },
+  { en: 'Grandma has an umbrella.', pic: ['👵', '☂️'] },
+  { en: 'Mom has a lemon.', pic: ['👩', '🍋'] },
+  { en: 'The hen has an egg.', pic: ['🐔', '🥚'] },
+  { en: 'The cat is happy.', pic: ['🐱', '😀'] },
+  { en: 'The cat is sad.', pic: ['🐱', '😢'] },
+  { en: 'The dog is happy.', pic: ['🐶', '😀'] },
+  { en: 'The dog is sad.', pic: ['🐶', '😢'] },
+  { en: 'The duck can swim.', pic: ['🦆', '🌊'] },
+  { en: 'The boy can run.', pic: ['🏃‍♂️'] },
+  { en: 'The girl can swim.', pic: ['🏊‍♀️'] },
+  { en: 'A red apple.', pic: ['🍎'] },
 ];

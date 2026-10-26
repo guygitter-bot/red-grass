@@ -1,7 +1,8 @@
 import { WORDS } from './words.js';
 import { SENTENCES } from './sentences.js';
 import { report, flush, kidName, setKidName } from './report.js';
-import { saidWord, choicesFor, sentenceChoicesFor, nextOrder, shuffle, percent, passed, PASS } from './match.js';
+import { saidWord, percent, passed, PASS } from './match.js';
+import { build, SECTIONS, MODE_TITLES } from './exam.js';
 
 const $ = (id) => document.getElementById(id);
 const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -16,16 +17,23 @@ function save(key, value) {
 
 let learned = load('ew-learned', {});
 let stars = load('ew-stars', 0);
-// שלב 2 נפתח אחרי 80% במילים; התוצאות הכי טובות נשמרות
-let best = load('ew-best', { words: 0, sentences: 0 });
+// שלב 2 נפתח אחרי 80% במילים; התוצאה הכי טובה נשמרת לכל סוג תרגול
+let best = load('ew-best', {});
 let mode = 'words';
 let correct = 0;
 let wrong = [];
+let bySection = {};
 let order = [];
 let index = 0;
 let tries = 0;
 let firstGuess = true;
 let listening = null;
+
+// תמונה: אימוג'י, או ציור קטן משלנו (svg קבוע מתוך הקוד)
+function setPic(el, pic) {
+  if (String(pic || '').startsWith('<svg')) el.innerHTML = pic;
+  else el.textContent = pic || '';
+}
 
 // ---- מסך הבית ----
 function showHome() {
@@ -55,8 +63,19 @@ function showHome() {
   $('sentNote').textContent = !open
     ? `קודם עוברים את המילים עם ${PASS}% לפחות`
     : best.sentences ? `התוצאה הכי טובה: ${best.sentences}%${best.sentences >= PASS ? ' 🏆' : ''}` : `${SENTENCES.length} משפטים קצרים – בוחרים את התרגום הנכון`;
+  // תרגול לפי סעיפי המבחן
+  $('sections').innerHTML = '';
+  for (const s of SECTIONS) {
+    const b = document.createElement('button');
+    b.className = 'section';
+    const score = best[s.mode] ? `<em class="${best[s.mode] >= PASS ? 'ok' : ''}">${best[s.mode]}%${best[s.mode] >= PASS ? ' ✓' : ''}</em>` : '';
+    b.innerHTML = `<span class="icon">${s.icon}</span><b>${s.title}</b><small>${s.note}</small>${score}`;
+    b.onclick = () => startPlay(s.mode);
+    $('sections').appendChild(b);
+  }
+  $('examBest').textContent = best.exam ? `התוצאה הכי טובה: ${best.exam}%${best.exam >= PASS ? ' 🎓' : ''}` : 'שאלות מכל הסעיפים, כמו במבחן האמיתי';
   $('list').innerHTML = WORDS.map((w) =>
-    `<div class="item ${learned[w.en] ? 'done' : ''}"><b>${w.en}</b><span>${learned[w.en] ? '✓ ' + w.he : ''}</span></div>`
+    `<div class="item ${learned[w.en] ? 'done' : ''}"><b class="en">${w.en}</b><span>${learned[w.en] ? '✓ ' + w.he : ''}</span></div>`
   ).join('');
   show('home');
 }
@@ -70,34 +89,41 @@ function show(id) {
 // סיבוב חדש תמיד בסדר אחר
 function startPlay(m) {
   mode = m;
-  order = mode === 'words' ? nextOrder(WORDS, learned) : shuffle(SENTENCES);
+  order = build(mode, { learned });
   index = 0;
   correct = 0;
   wrong = [];
+  bySection = {};
   show('play');
-  showWord();
+  showQuestion();
 }
 
-function showWord() {
-  const w = order[index];
+function showQuestion() {
+  const q = order[index];
   tries = 0;
   firstGuess = true;
   $('pos').textContent = `${index + 1} / ${order.length}`;
+  $('section').textContent = q.section ? MODE_TITLES[q.section] : '';
   $('stars').textContent = `⭐ ${stars}`;
-  $('word').textContent = w.en;
-  $('word').classList.toggle('sentence', mode === 'sentences');
-  $('hearSent').classList.toggle('hidden', mode !== 'sentences');
-  $('pic').textContent = '';
+  $('word').textContent = q.text || '';
+  $('word').className = `word en ${q.textClass || ''}`;
+  setPic($('pic'), q.pic);
+  $('hearSent').classList.toggle('hidden', !q.hear || !!q.mic);
+  $('hearSent').textContent = q.speak ? '🔊 לשמוע שוב' : '🔊 להקשיב';
   $('sayMsg').textContent = '';
   $('sayMsg').className = 'msg';
   $('heard').textContent = '';
   $('skipSay').classList.toggle('hidden', !!Recognition);
   $('noMic').classList.toggle('hidden', !!Recognition);
   $('mic').classList.toggle('hidden', !Recognition);
-  $('sayStep').classList.remove('hidden');
-  $('chooseStep').classList.add('hidden');
-  // במשפטים אין קריאה בקול – ישר לתשובות
-  if (mode === 'sentences') showChoices();
+  // רק בקריאת מילים אומרים את המילה בקול; בשאר – ישר לתשובות
+  if (q.mic) {
+    $('sayStep').classList.remove('hidden');
+    $('chooseStep').classList.add('hidden');
+  } else {
+    showChoices();
+  }
+  if (q.speak) setTimeout(() => speak(q.speak), 300);
 }
 
 function speak(text) {
@@ -118,7 +144,7 @@ function stopListening() {
 
 function listen() {
   if (listening) { stopListening(); return; }
-  const w = order[index];
+  const w = order[index].mic;
   const rec = new Recognition();
   rec.lang = 'en-US';
   rec.maxAlternatives = 5;
@@ -176,45 +202,50 @@ function sayWrong() {
 
 function showChoices() {
   stopListening();
-  const w = order[index];
+  const q = order[index];
   $('sayStep').classList.add('hidden');
   $('chooseStep').classList.remove('hidden');
-  $('ask').textContent = mode === 'words' ? 'מה פירוש המילה?' : 'מה פירוש המשפט?';
+  $('ask').textContent = q.ask;
   $('chooseMsg').textContent = '';
   $('chooseMsg').className = 'msg';
   $('next').classList.add('hidden');
   const box = $('choices');
   box.innerHTML = '';
-  const options = mode === 'words' ? choicesFor(w, WORDS) : sentenceChoicesFor(w, SENTENCES);
-  for (const he of options) {
+  box.className = `choices ${q.style}`;
+  for (const option of q.options) {
     const b = document.createElement('button');
-    b.className = 'choice';
-    b.textContent = he;
-    b.onclick = () => choose(b, he);
+    b.className = `choice ${q.style}`;
+    b.textContent = option;
+    b.onclick = () => choose(b, option);
     box.appendChild(b);
   }
 }
 
-function choose(button, he) {
-  const w = order[index];
+function choose(button, option) {
+  const q = order[index];
   if (!$('next').classList.contains('hidden')) return;
-  if (he === w.he) {
+  const sec = q.section || mode;
+  bySection[sec] = bySection[sec] || { correct: 0, total: 0 };
+  if (option === q.answer) {
     button.classList.add('good');
-    $('pic').textContent = w.pic || '';
+    if (q.reward) setPic($('pic'), q.reward);
+    if (q.reveal) $('word').textContent = q.reveal;
     $('chooseMsg').textContent = firstGuess ? 'נכון! ⭐ קיבלת כוכב' : 'נכון! 👍';
     $('chooseMsg').className = 'msg good';
     if (firstGuess) {
       correct += 1;
+      bySection[sec].correct += 1;
       stars += 1;
-      if (mode === 'words') learned[w.en] = true;
+      if (q.mic) learned[q.key] = true;
       save('ew-stars', stars);
       save('ew-learned', learned);
       $('stars').textContent = `⭐ ${stars}`;
     }
+    bySection[sec].total += 1;
     $('next').textContent = index + 1 < order.length ? 'הבאה ←' : 'סיימתי! 🎉';
     $('next').classList.remove('hidden');
   } else {
-    if (firstGuess) wrong.push(w.en);
+    if (firstGuess) wrong.push(q.key);
     firstGuess = false;
     button.classList.add('bad');
     button.disabled = true;
@@ -226,10 +257,10 @@ function choose(button, he) {
 function next() {
   index += 1;
   if (index >= order.length) showResult();
-  else showWord();
+  else showQuestion();
 }
 
-// סוף סיבוב: 80% ומעלה – עוברים הלאה; פחות – עוד פעם מההתחלה בסדר חדש
+// סוף סיבוב: 80% ומעלה – עוברים; פחות – עוד פעם מההתחלה בסדר חדש
 function showResult() {
   const total = order.length;
   const p = percent(correct, total);
@@ -238,21 +269,28 @@ function showResult() {
   save('ew-best', best);
   report({ mode, correct, total, wrong, at: Date.now() });
   $('resScore').textContent = `צדקת ב-${correct} מתוך ${total} (${p}%)`;
+  // במבחן לדוגמה: איך הלך בכל סעיף
+  $('resList').innerHTML = mode !== 'exam' ? '' : Object.entries(bySection).map(([m, s]) =>
+    `<div class="item ${passed(s.correct, s.total) ? 'done' : 'weak'}"><span>${MODE_TITLES[m]}</span><b>${s.correct}/${s.total}</b></div>`
+  ).join('');
+  $('resGo').onclick = () => startPlay(mode);
   if (ok && mode === 'words') {
     $('resPic').textContent = '🎉';
     $('resMsg').textContent = 'כל הכבוד! עברת לשלב 2 – משפטים';
     $('resGo').textContent = '📖 לשלב המשפטים';
     $('resGo').onclick = () => startPlay('sentences');
+  } else if (ok && mode === 'exam') {
+    $('resPic').textContent = '🎓';
+    $('resMsg').textContent = 'מעולה! אתה מוכן למבחן';
+    $('resGo').textContent = '🔁 עוד מבחן לדוגמה';
   } else if (ok) {
     $('resPic').textContent = '🏆';
-    $('resMsg').textContent = 'מדהים! סיימת גם את המשפטים';
-    $('resGo').textContent = '📖 עוד סיבוב משפטים';
-    $('resGo').onclick = () => startPlay('sentences');
+    $('resMsg').textContent = `כל הכבוד! עברת את "${MODE_TITLES[mode]}"`;
+    $('resGo').textContent = '🔁 עוד סיבוב';
   } else {
     $('resPic').textContent = '💪';
     $('resMsg').textContent = `צריך ${PASS}% כדי לעבור. עוד פעם מההתחלה – אתה יכול!`;
     $('resGo').textContent = '🔁 עוד פעם';
-    $('resGo').onclick = () => startPlay(mode);
   }
   $('resMsg').className = ok ? 'msg good' : 'msg';
   show('result');
@@ -267,18 +305,19 @@ $('nameSave').onclick = () => {
 $('nameInput').onkeydown = (e) => { if (e.key === 'Enter') $('nameSave').click(); };
 $('start').onclick = () => startPlay('words');
 $('startSent').onclick = () => startPlay('sentences');
+$('startExam').onclick = () => startPlay('exam');
 $('resHome').onclick = showHome;
-$('hearSent').onclick = () => speak(order[index].en);
+$('hearSent').onclick = () => speak(order[index].hear);
 $('back').onclick = showHome;
 $('mic').onclick = listen;
-$('hear').onclick = () => speak(order[index].en);
+$('hear').onclick = () => speak(order[index].text);
 $('skipSay').onclick = showChoices;
 $('next').onclick = next;
 $('reset').onclick = () => {
   if (!confirm('למחוק את ההתקדמות ולהתחיל מההתחלה?')) return;
   learned = {};
   stars = 0;
-  best = { words: 0, sentences: 0 };
+  best = {};
   save('ew-best', best);
   save('ew-learned', learned);
   save('ew-stars', stars);

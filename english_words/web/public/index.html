@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#4f46e5">
 <title>מילים באנגלית</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&display=swap">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔤</text></svg>">
 <style>
   :root {
@@ -58,11 +60,28 @@
   .btn-lock { background: var(--line); color: var(--muted); }
   input { font: inherit; font-size: 20px; padding: 12px 14px; border-radius: 14px; border: 2px solid var(--line); background: var(--page); color: var(--ink); min-width: 0; }
   #hello button { color: var(--soft); background: none; font-size: 15px; text-decoration: underline; }
+  .en, .word { font-family: Andika, system-ui, sans-serif; }
+  .word.letter { font-size: 110px; line-height: 1.1; }
+  .choice.en { direction: ltr; font-family: Andika, system-ui, sans-serif; font-size: 26px; }
+  .choice.letter { font-family: Andika, system-ui, sans-serif; font-size: 44px; padding: 12px 8px; }
+  .choice.pic { font-size: 44px; padding: 14px 8px; }
+  .choice:last-child:nth-child(odd) { grid-column: span 2; }
+  .pic svg { display: inline-block; vertical-align: middle; }
+  .sections { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .section { background: var(--page); color: var(--ink); padding: 12px; text-align: right; display: flex; flex-direction: column; gap: 2px; border: 2px solid var(--line); }
+  .section .icon { font-size: 28px; }
+  .section b { font-size: 17px; }
+  .section small { color: var(--muted); font-size: 13px; }
+  .section em { font-style: normal; font-weight: 700; color: var(--muted); }
+  .section em.ok { color: var(--good); }
+  .list.one { grid-template-columns: 1fr; }
+  .item.weak { background: var(--bad-bg); }
   .hidden { display: none !important; }
   .note { font-size: 15px; color: var(--muted); text-align: center; margin: 0; }
   @media (min-width: 1024px) {
     main { max-width: 760px; padding-top: 40px; }
     .list { grid-template-columns: 1fr 1fr 1fr; }
+    .sections { grid-template-columns: 1fr 1fr 1fr; }
     .word { font-size: 80px; }
   }
 </style>
@@ -72,7 +91,7 @@
   <!-- מסך הבית -->
   <section id="home">
     <h1>🔤 מילים באנגלית</h1>
-    <p class="sub">קוראים בקול ובוחרים את התרגום. צריך 80% כדי לעבור שלב</p>
+    <p class="sub">מתכוננים למבחן באנגלית. צריך 80% כדי לעבור כל תרגול</p>
     <div class="card" id="nameCard" style="margin-top:16px">
       <h2>👋 איך קוראים לך?</h2>
       <div class="row">
@@ -94,6 +113,14 @@
       <button class="big" id="startSent">📖 למשפטים</button>
     </div>
     <div class="card" style="margin-top:16px">
+      <h2>📝 תרגול לפי המבחן</h2>
+      <div class="sections" id="sections"></div>
+      <h2 style="margin-top:20px">🎓 מבחן לדוגמה</h2>
+      <p class="note" id="examBest" style="margin-bottom:16px"></p>
+      <button class="big" id="startExam">🎓 למבחן לדוגמה</button>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h2>אוצר המילים</h2>
       <div class="list" id="list"></div>
       <button class="ghost" id="reset" style="width:100%;margin-top:12px">להתחיל את הרשימה מההתחלה</button>
     </div>
@@ -105,6 +132,7 @@
       <div class="pic" id="resPic"></div>
       <p class="msg" id="resScore" style="font-size:26px"></p>
       <p class="msg" id="resMsg"></p>
+      <div class="list one" id="resList" style="margin-top:12px"></div>
       <button class="big" id="resGo" style="margin-top:16px"></button>
       <button class="ghost" id="resHome" style="width:100%;margin-top:8px">למסך הראשי</button>
     </div>
@@ -114,7 +142,7 @@
   <section id="play" class="hidden">
     <div class="top">
       <button class="ghost" id="back">→ חזרה</button>
-      <span id="pos" class="note"></span>
+      <span class="note"><span id="pos"></span> <span id="section"></span></span>
       <span class="stars" id="stars"></span>
     </div>
     <div class="card">
