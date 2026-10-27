@@ -1,0 +1,11 @@
+{
+  "name": "ניהול – מילים באנגלית",
+  "short_name": "ניהול מילים",
+  "start_url": "./",
+  "display": "standalone",
+  "dir": "rtl",
+  "lang": "he",
+  "background_color": "#f0fdfa",
+  "theme_color": "#0f766e",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

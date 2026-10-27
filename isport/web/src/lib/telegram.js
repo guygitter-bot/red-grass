@@ -24,35 +24,71 @@ function flatten(text) {
   return { text: out, links };
 }
 
+// נתיב שהייצוא מחזיר כשהקובץ לא הורד: "(File not included. Change data exporting settings to download.)" – זו לא תמונה
+const realPath = (v) => typeof v === 'string' && v.trim() && !/^\(.*\)$/s.test(v.trim()) && !/^\(?File (not included|exceeds)/i.test(v.trim());
+
 const photoOf = (m) => {
-  if (typeof m.photo === 'string') return m.photo;
-  if (typeof m.file === 'string' && (String(m.mime_type || '').startsWith('image/') || IMAGE_FILE.test(m.file))) return m.file;
+  if (realPath(m.photo)) return m.photo;
+  if (realPath(m.file) && (String(m.mime_type || '').startsWith('image/') || IMAGE_FILE.test(m.file))) return m.file;
   return '';
 };
 
 const unix = (m) => Number(m.date_unixtime) || Math.floor(new Date(m.date).getTime() / 1000) || 0;
 
-// הודעות -> פוסטים. אלבום (כמה תמונות עם טקסט אחד) מגיע כמה הודעות רצופות באותה שנייה בערך
+// הודעות -> פוסטים. בייצוא של Telegram Desktop אלבום = כמה הודעות רצופות באותה שנייה (או הפרש של שנייה),
+// והטקסט (הכיתוב) באחת מהן – בדרך כלל בראשונה, לפעמים באחרונה.
+// כלל הקיבוץ: רצף הודעות עם הפרש של עד 2 שניות בין כל שתיים הוא "גל". בתוך גל:
+//   - טקסט שמגיע אחרי תמונות בלי טקסט -> הכיתוב של האלבום שלפניו (כיתוב בסוף);
+//   - טקסט בלי תמונות ממתינות, עם תמונה משלו -> פותח אלבום, ותמונות בלי טקסט אחריו שייכות לו (כיתוב בהתחלה);
+//   - כל טקסט חדש סוגר את הקודם, כך ששני אלבומים רצופים עם כיתוב לכל אחד נשארים שני מוצרים נפרדים;
+//   - תמונות בלי טקסט בסוף הגל (בלי כיתוב) לא נדבקות לפוסט אחר.
+// אם בייצוא יש מזהה אלבום (grouped_id) – הוא קובע לבדו.
 export function readExport(json) {
   const msgs = (Array.isArray(json?.messages) ? json.messages : []).filter((m) => m?.type === 'message');
-  const posts = [];
-  let cur = null;
-  for (const m of msgs) {
+  const items = msgs.map((m) => {
     const { text, links } = flatten(m.text);
-    const photo = photoOf(m);
-    const t = unix(m);
-    const group = m.grouped_id || m.media_group_id || null;
-    const sameAlbum =
-      cur &&
-      (group ? cur.group === group : !cur.group && Math.abs(t - cur.t) <= 2) &&
-      !(cur.text.trim() && text.trim());
-    if (!sameAlbum) {
-      cur = { id: m.id, t, date: m.date, group, text: '', links: [], photos: [] };
-      posts.push(cur);
+    return {
+      id: m.id, date: m.date, t: unix(m), text, links: [...links, ...(text.match(URL_RE) || [])],
+      photo: photoOf(m), group: m.grouped_id || m.media_group_id || null,
+    };
+  });
+  const waves = [];
+  for (const it of items) {
+    const last = waves.at(-1);
+    const prev = last?.at(-1);
+    const same = prev && (it.group || prev.group ? it.group === prev.group : Math.abs(it.t - prev.t) <= 2);
+    if (same) last.push(it);
+    else waves.push([it]);
+  }
+  const posts = [];
+  const open = (m, photos = []) => ({ id: m.id, t: m.t, date: m.date, text: m.text, links: [...m.links], photos: [...photos] });
+  for (const wave of waves) {
+    if (wave[0].group) {
+      const withText = wave.find((m) => m.text.trim()) || wave[0];
+      const post = open(wave[0]);
+      post.text = withText.text;
+      post.links = wave.flatMap((m) => m.links);
+      for (const m of wave) {
+        if (m.photo) post.photos.push(m.photo);
+      }
+      posts.push(post);
+      continue;
     }
-    if (text.trim()) cur.text = text;
-    cur.links.push(...links, ...(text.match(URL_RE) || []));
-    if (photo) cur.photos.push(photo);
+    let pending = [];
+    let cur = null;
+    for (const m of wave) {
+      if (m.text.trim()) {
+        const post = open(pending[0] || m, pending.map((p) => p.photo));
+        post.text = m.text;
+        post.links = [...m.links];
+        if (m.photo) post.photos.push(m.photo);
+        posts.push(post);
+        cur = !pending.length && m.photo ? post : null;
+        pending = [];
+      } else if (cur) {
+        if (m.photo) cur.photos.push(m.photo);
+      } else if (m.photo) pending.push(m);
+    }
   }
   return posts
     .filter((p) => p.text.trim())
@@ -76,6 +112,16 @@ export function parseCode(code) {
   return { team, type, year };
 }
 
+// קישור FlyLinking = שם המארח flylinking.com או תת-דומיין שלו (לא סתם טקסט שמכיל את השם)
+function isFlyLink(l) {
+  try {
+    const h = new URL(l).hostname.toLowerCase();
+    return h === 'flylinking.com' || h.endsWith('.flylinking.com');
+  } catch {
+    return false;
+  }
+}
+
 const cleanLine = (s) => s.replace(/[\p{Extended_Pictographic}️‍]/gu, '').replace(/\s+/g, ' ').trim();
 
 // מוצרים מפוסט אחד
@@ -87,7 +133,8 @@ export function postProducts(post) {
     for (const raw of line.match(CODE_RE) || []) {
       const long = /-LongSleeve$/i.test(raw);
       const code = raw.replace(/-LongSleeve$/i, '');
-      if (!/\d/.test(code) && code.split('-').length < 3) continue;
+      // בלי ספרה (שנה) זה לא קוד מוצר – למשל שם כמו Paris-Saint-Germain
+      if (!/\d/.test(code)) continue;
       const item = found.get(code) || { code, longSleeve: false, colorHe: '', typeHint: '' };
       if (long) item.longSleeve = true;
       else {
@@ -101,7 +148,7 @@ export function postProducts(post) {
       found.set(code, item);
     }
   }
-  const flyLink = post.links.find((l) => /flylinking\.com/i.test(l)) || '';
+  const flyLink = post.links.find(isFlyLink) || '';
   const otherLink = flyLink ? '' : post.links.find((l) => /^https?:/.test(l)) || '';
   const title = cleanLine(lines.find((l) => cleanLine(l)) || '').replace(/[-–:]+$/, '').trim();
   const sleeveText = /שרוול(ים)? ארוכ/.test(post.text);

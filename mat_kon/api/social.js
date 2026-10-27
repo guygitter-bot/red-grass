@@ -350,9 +350,11 @@ export function readFacebookPage(html) {
   const meta = (name) =>
     decode((html.match(new RegExp(`<meta[^>]+(?:property|name)="${name}"[^>]+content="([^"]*)"`)) || [])[1] || '').trim();
   const title = meta('og:title').replace(/\s*\|\s*Facebook\s*$/i, '');
-  // "שם הקבוצה | תחילת הפוסט.." או "שם | פוסט"
+  // "שם הקבוצה | תחילת הפוסט.." או "שם | פוסט". בסרטון: "94K צפיות · 476 רגשות | Reel by <יוצר>"
   const parts = title.split(' | ');
-  const group = parts.length > 1 ? parts[0] : '';
+  const reelBy = title.match(/(?:Reel by|סרטון של|Reels? של)\s+(.+?)\s*$/i);
+  const stats = /^[\s\u200e\u200f\d.,KMkm]+\s*(צפיות|views|reactions|רגשות)/i.test(parts[0] || '');
+  const group = reelBy ? reelBy[1] : parts.length > 1 && !stats ? parts[0] : '';
   const start = parts.length > 1 ? parts.slice(1).join(' | ') : title;
   const texts = [meta('og:description'), meta('description'), start.replace(/\.\.+$/, '')];
   // טקסט הפוסט בתוך ה-HTML או ה-JSON של הדף
@@ -367,7 +369,20 @@ export function readFacebookPage(html) {
   return { caption, group, image: meta('og:image') || null, title: start };
 }
 
+// פייסבוק מחזיר דפים שונים לפי מי ששואל (ולפעמים שגיאה לשרתים מסוימים): מנסים כמה זהויות, ושומרים את הכיתוב הארוך
+const FACEBOOK_UAS = [FACEBOOK_BOT, GOOGLEBOT, 'WhatsApp/2.24.20.80 A'];
 export async function facebook(fetchFn, url) {
-  const html = await request(fetchFn, url, { ua: FACEBOOK_BOT });
-  return readFacebookPage(html);
+  let best = null;
+  let lastError = null;
+  for (const ua of FACEBOOK_UAS) {
+    try {
+      const page = readFacebookPage(await request(fetchFn, url, { ua }));
+      if (!best || page.caption.length > best.caption.length) best = { ...page, image: page.image || best?.image || null, group: page.group || best?.group || '' };
+      if (best.caption.length >= 200) break; // כבר יש כיתוב מלא
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  if (!best) throw lastError || new Error('facebook');
+  return best;
 }

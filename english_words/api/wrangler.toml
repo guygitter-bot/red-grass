@@ -1,0 +1,17 @@
+name = "milim-api"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[vars]
+# האתרים שמותר להם לפנות לשרת (* = כל תת-כתובת, למקרה ש-Cloudflare Pages מוסיף סיומת לשם)
+ALLOWED_ORIGINS = "https://milim-beanglit.pages.dev,https://*.milim-beanglit.pages.dev,https://milim-admin.pages.dev,https://*.milim-admin.pages.dev,https://milim-admin-*.pages.dev,http://localhost:8765,http://localhost:8766"
+
+# אובייקט אחד ששומר את כל התוצאות ואת סיסמת הניהול
+[[durable_objects.bindings]]
+name = "TRACKER"
+class_name = "Tracker"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Tracker"]

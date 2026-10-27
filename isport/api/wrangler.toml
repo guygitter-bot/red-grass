@@ -4,8 +4,9 @@ compatibility_date = "2026-09-01"
 workers_dev = true
 
 [vars]
-# האתרים שמותר להם לפנות לשרת (* = כל תת-כתובת, למקרה ש-Cloudflare Pages מוסיף סיומת לשם)
-ALLOWED_ORIGINS = "https://isport-shop.pages.dev,https://*.isport-shop.pages.dev,https://isport-shop-*.pages.dev,http://localhost:5173,http://localhost:4173"
+# האתרים שמותר להם לפנות לשרת (*.isport-shop.pages.dev = גרסאות תצוגה של אותו פרויקט, רק שלנו).
+# בלי "isport-shop-*" – כל אחד יכול לפתוח פרויקט בשם כזה
+ALLOWED_ORIGINS = "https://isport-shop.pages.dev,https://*.isport-shop.pages.dev"
 
 # כל הנתונים (חולצות, הגדרות, כניסות) – אובייקט אחד ("main")
 [[durable_objects.bindings]]
@@ -16,11 +17,15 @@ class_name = "Shop"
 tag = "v1"
 new_sqlite_classes = ["Shop"]
 
-# תמונות החולצות (הדלי נוצר אוטומטית ב-.github/workflows/isport.yml)
+# גיבוי לילי (בערך 3:30 בלילה בישראל)
+[triggers]
+crons = ["30 0 * * *"]
+
+# תמונות החולצות + הגיבויים (backups/) – הדלי נוצר אוטומטית ב-.github/workflows/isport.yml
 [[r2_buckets]]
 binding = "IMAGES"
 bucket_name = "isport-images"
 
 # סודות, לא כאן (נקבעים אוטומטית מ-GitHub, ראו .github/workflows/isport.yml):
 #   ANTHROPIC_API_KEY – המפתח של Claude (השלמה אוטומטית וחיפוש תמונות)
-#   ADMIN_PASSWORD    – הסיסמה למסך הניהול
+#   ADMIN_PASSWORD    – הסיסמה של מי שבנה את האתר (מפתח). את הסיסמה של בעל החנות המפתח קובע במסך ההגדרות

@@ -162,6 +162,12 @@ export const PANTRY = [
   ['אורז', '1 קילו', 'pantry'], ['פסטה', '2 חבילות', 'pantry'], ['עדשים כתומות', '', 'pantry'], ['קמח', '', 'pantry'], ['שמן זית', '', 'pantry'],
 ].map(([name, qty, place], i) => ({ id: `p${i}`, name, qty, place }));
 
+// מאגר הקהילה (מה שמשתמשים אחרים שמרו), עם דירוג ומספר שמירות
+export const COMMUNITY = [
+  { key: 'c-spinach-quiche-1', title: 'פשטידת תרד וגבינות קלה', url: 'https://www.example-food.co.il/spinach-quiche', credit: 'אוכל ביתי', image: null, rating: 4.7, ratingCount: 18, saves: 64, minutes: 45, calories: 260, kosher: 'dairy' },
+  { key: 'c-spinach-pie-2', title: 'פשטידת תרד בלי קמח', url: 'https://www.example-chef.co.il/spinach-pie', credit: 'השף בבית', image: null, rating: 4.4, ratingCount: 7, saves: 21, minutes: 40, calories: 210, kosher: 'dairy' },
+];
+
 export const SEARCH_RESULTS = [
   { title: 'פשטידת תרד וגבינות קלה', url: 'https://www.example-food.co.il/spinach-quiche', site: 'אוכל ביתי', description: 'פשטידה רכה בקערה אחת, עם פטה וגבינה צהובה.' },
   { title: 'פשטידת תרד בלי קמח', url: 'https://www.example-chef.co.il/spinach-pie', site: 'השף בבית', description: 'גרסה קלילה ללא קמח, מתאימה גם ללא גלוטן.' },
@@ -196,4 +202,22 @@ export const STORES = {
       { chain: 'shufersal', chainName: 'שופרסל', total: 44.2, missing: 0, items: [{ item: 'חלב 3%', product: 'חלב 3% תנובה 1 ליטר', price: 7.2 }, { item: 'לחם מחמצת', product: 'לחם מחמצת 750 גרם', price: 19.9 }, { item: 'עגבניות', product: 'עגבניות 1 ק"ג', price: 7.9 }, { item: 'ביצים', product: 'ביצים L 12', price: 9.2 }] },
     ],
   },
+};
+
+// שיחה על מתכון בקהילה (סרטון "הקהילה")
+const hoursAgo = (h) => new Date(Date.now() - h * 3600000).toISOString();
+export const TALK = [
+  { id: 'a100000000000000', kind: 'made', text: 'יצאה מושלמת! הגשתי עם סלט ירוק והילדים חיסלו הכול', rating: 5, image: null, parent: null, author: 'מיכל אופה', at: hoursAgo(5), likes: 7, liked: false, mine: false },
+  { id: 'a200000000000000', kind: 'tip', text: 'טיפ: לסחוט היטב את התרד אחרי ההפשרה – אחרת הפשטידה יוצאת מימית', rating: 0, image: null, parent: null, author: 'יוסי בישל', at: hoursAgo(30), likes: 12, liked: false, mine: false },
+  { id: 'a300000000000000', kind: 'reply', text: 'תודה! זה בדיוק מה שקרה לי בפעם הקודמת', rating: 0, image: null, parent: 'a200000000000000', author: 'רונית', at: hoursAgo(20), likes: 2, liked: false, mine: false },
+  { id: 'a400000000000000', kind: 'tip', text: 'אפשר להכין בלי קמח? למישהו יש ניסיון?', rating: 0, image: null, parent: null, author: 'שירה', at: hoursAgo(50), likes: 1, liked: false, mine: false },
+];
+
+// תחליף למצרך (סרטון "דף המתכון")
+export const SUBSTITUTE = {
+  options: [
+    { name: 'פפריקה חריפה + קורט סוכר', amount: '1 כפית במקום הפפריקה המתוקה', how: 'מוסיפים יחד עם שאר התבלינים', effect: 'יוצא קצת יותר חריף' },
+    { name: 'רסק עגבניות נוסף', amount: '1 כף נוספת', how: 'מבשלים דקה יותר', effect: 'צבע אדום פחות עז, טעם עדין' },
+  ],
+  note: 'אפשר גם פשוט לוותר – השקשוקה תצא טעימה.',
 };

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Globe, Heart, LogOut, MessageCircle, PenLine, Search, Settings, X } from 'lucide-react';
+import { FileUp, Globe, Heart, Loader2, LogOut, PenLine, Search, Settings, X } from 'lucide-react';
 import SearchView from './components/SearchView';
+import DietFilter from './components/DietFilter';
 import SettingsView from './components/SettingsView';
 import { shoppingName } from './lib/shopping';
 import Auth from './components/Auth';
@@ -23,6 +24,9 @@ import useIdbState from './hooks/useIdbState';
 const cleanRecipes = (list) => (Array.isArray(list) ? list.filter((r) => r && typeof r === 'object' && r.id).map(safeRecipe) : []);
 import InvitesView from './components/InvitesView';
 import ShareView from './components/ShareView';
+import SharedRecipe from './components/SharedRecipe';
+import UpdateBanner from './components/UpdateBanner';
+import AppInvite from './components/AppInvite';
 import PrivacyView from './components/PrivacyView';
 import AdminView from './components/AdminView';
 import HelpView from './components/HelpView';
@@ -35,9 +39,9 @@ import { CATEGORIES } from './lib/categories';
 import { isNative } from './lib/native';
 import {
   addCategory, setCategoryPrefs, addRecipeAsync, addTextRecipe, getJob, getRecipe, deleteRecipe, removeCategory, getMe, getPlan, getShopping, listRecipes, logout as apiLogout, refreshRecipe,
-  updateRecipe, categorizeRecipe, safeRecipe, getPantry, shoppingOps, pantryOps, planOps,
+  updateRecipe, categorizeRecipe, estimateNutrition, getProfile, setProfile, publishRecipe, unpublishRecipe, safeRecipe, searchCommunity, substituteIngredient, talkApi, getPantry, shoppingOps, pantryOps, planOps, shareRecipe, recipeShareLink,
 } from './lib/api';
-import { SORTS, categoriesOf, countByCategory, emojiOf, filterRecipes, freeLeft, linkFromShare, orderCategories, parseAuthHash, sortRecipes } from './lib/recipes';
+import { SORTS, categoriesOf, countByCategory, emojiOf, filterRecipes, freeLeft, linkFromShare, orderCategories, parseAuthHash, parseShareLink, sortRecipes } from './lib/recipes';
 import { usePersistentState } from './lib/storage';
 
 // קישור הזמנה (#invite=...) או כניסה (#login). נלקח מהכתובת ונמחק ממנה מיד.
@@ -70,6 +74,14 @@ async function takeShared() {
 }
 
 const AUTH_LINK = takeAuthLink();
+
+// מתכון ששותף בקישור (#recipe=...). נלקח מהכתובת ונמחק ממנה מיד
+function takeShareLink() {
+  const token = parseShareLink(window.location.hash);
+  if (token) window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  return token;
+}
+const SHARE_LINK = takeShareLink();
 
 const route = () => {
   const h = window.location.hash;
@@ -121,6 +133,10 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState(null);
   const [favorites, setFavorites] = useState(false);
+  // שיחה על מתכונים בקהילה (טיפים, "הכנתי!") – אותו אובייקט כל עוד ה-session לא השתנה
+  const talk = useMemo(() => talkApi(session), [session]);
+  // סינון לפי כשרות / רגישויות / תזונה – נשמר במכשיר (מי שצליאקי רוצה אותו תמיד)
+  const [diets, setDiets] = usePersistentState('matkon_diets', []);
   // תמונות שצולמו מהמסך הראשי ("צילום מתכון"), עוברות למסך בניית המתכון
   const [photoFiles, setPhotoFiles] = useState(null);
   const takePhotos = (files) => {
@@ -133,6 +149,39 @@ export default function App() {
   // סדר הקטגוריות ומועדפות (נשמר בשרת לכל הספר)
   const [categoryPrefs, setCategoryPrefsState] = usePersistentState('matkon_category_prefs', { order: [], favorites: [] });
   const [loadError, setLoadError] = useState('');
+  // מתכון מהקהילה שנפתח מתוך החיפוש
+  const [communityOpen, setCommunityOpen] = useState(null);
+  // מתכון ששלחו לי בקישור: נשמר במכשיר עד שמחליטים, כדי שיחכה גם אחרי הרשמה (login: המשתמש ביקש להיכנס)
+  const [incoming, setIncoming] = usePersistentState('matkon_incoming_share', SHARE_LINK ? { token: SHARE_LINK } : null);
+  useEffect(() => {
+    if (SHARE_LINK) setIncoming({ token: SHARE_LINK });
+  }, [setIncoming]);
+  // באפליקציה לאנדרואיד: קישור matkon://recipe/... (הכפתור "פתיחה באפליקציה" באתר)
+  useEffect(() => {
+    if (!isNative()) return undefined;
+    let alive = true;
+    let handle;
+    // קישור שהאפליקציה נפתחה ממנו נשאר גם כשהיא נפתחת מחדש – מתכון שכבר טופל לא מוצג שוב
+    const take = (link, launch) => {
+      const token = parseShareLink(link);
+      if (token && alive && !(launch && token === loadJson('matkon_share_done', ''))) setIncoming({ token });
+    };
+    import('@capacitor/core')
+      .then(({ registerPlugin }) => {
+        const app = registerPlugin('App');
+        app.getLaunchUrl().then((r) => take(r?.url, true)).catch(() => {});
+        return app.addListener('appUrlOpen', (e) => take(e.url));
+      })
+      .then((h) => {
+        if (alive) handle = h;
+        else h.remove();
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+      handle?.remove();
+    };
+  }, [setIncoming]);
   const [toast, setToast] = useState('');
 
   const isOwner = !session || ownerDevice;
@@ -187,6 +236,7 @@ export default function App() {
     const onHash = () => {
       navigatedInApp.current = true;
       setNav(route());
+      setCommunityOpen(null);
     };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
@@ -349,10 +399,11 @@ export default function App() {
   const addSharedText = useCallback(async (text) => {
     setToast('מסדר מתכון מהטקסט ששותף…');
     try {
-      const { recipe, user: updatedUser } = await addTextRecipe(session, { text });
+      const { recipe, user: updatedUser, more = [] } = await addTextRecipe(session, { text });
+      for (const r of more) upsert(safeRecipe(r));
       upsert(safeRecipe(recipe));
       if (updatedUser) setUser(updatedUser);
-      setToast(`"${recipe.title}" נוסף ל${recipe.category}`);
+      setToast(more.length ? `נוספו ${more.length + 1} מתכונים: ${[recipe, ...more].map((r) => r.title).join(', ')}` : `"${recipe.title}" נוסף ל${recipe.category}`);
     } catch (e) {
       if (e.status === 402) setPaywall({ paymentUrl: e.data.paymentUrl || '' });
       else setToast(e.message);
@@ -403,8 +454,8 @@ export default function App() {
 
   const counts = useMemo(() => countByCategory(recipes), [recipes]);
   const visible = useMemo(
-    () => sortRecipes(filterRecipes(recipes, { query, category, favorites }), sort),
-    [recipes, query, category, favorites, sort],
+    () => sortRecipes(filterRecipes(recipes, { query, category, favorites, diets: Array.isArray(diets) ? diets : [] }), sort),
+    [recipes, query, category, favorites, diets, sort],
   );
   // כל הקטגוריות: הקבועות, אחריהן שלי, ו"אחר" בסוף
   const allCategories = [...CATEGORIES.filter((c) => c !== 'אחר'), ...custom, 'אחר'];
@@ -422,6 +473,36 @@ export default function App() {
   };
   const current = nav.view === 'recipe' && recipes.find((r) => r.id === nav.id);
   const left = freeLeft(user);
+
+  // מתכון ששלחו לי: קודם הוא (גם לפני מסך הכניסה – תצוגה מקדימה), אלא אם ביקשו להיכנס כדי לראות אותו
+  if (incoming && !(auth && incoming.login) && auth?.mode !== 'switch') {
+    return (
+      <>
+        {paywall && <Paywall user={user} paymentUrl={paywall.paymentUrl} onClose={() => setPaywall(null)} />}
+        <SharedRecipe
+          token={incoming.token}
+          session={session}
+          onLogin={() => {
+            setIncoming({ ...incoming, login: true });
+            setAuth((a) => a || { mode: 'login' });
+          }}
+          onClose={() => {
+            saveJson('matkon_share_done', incoming.token);
+            setIncoming(null);
+          }}
+          onSaved={(data) => {
+            if (data.user && session && !ownerDevice) setUser(data.user);
+            upsert(safeRecipe(data.recipe));
+            saveJson('matkon_share_done', incoming.token);
+            setIncoming(null);
+            setToast(data.updated ? 'המתכון כבר היה בספר שלך' : 'המתכון נשמר בספר שלך');
+            open(data.recipe.id);
+          }}
+          onPaywall={(url) => setPaywall({ paymentUrl: url || paymentUrl })}
+        />
+      </>
+    );
+  }
 
   if (auth?.mode === 'switch') {
     return (
@@ -582,16 +663,41 @@ export default function App() {
     );
   }
 
+  // מתכון מהקהילה (מהחיפוש, או מהמתכונים הפופולריים בספר ריק)
+  if ((nav.view === 'search' || nav.view === 'home') && communityOpen) {
+    return (
+      <>
+        {paywall && <Paywall user={user} paymentUrl={paywall.paymentUrl} onClose={() => setPaywall(null)} />}
+        <SharedRecipe
+          communityKey={communityOpen.key}
+          session={session}
+          onClose={() => setCommunityOpen(null)}
+          onSaved={(data) => {
+            if (data.user && session && !ownerDevice) setUser(data.user);
+            upsert(safeRecipe(data.recipe));
+            setCommunityOpen(null);
+            setToast(data.updated ? 'המתכון כבר היה בספר שלך' : 'המתכון נשמר בספר שלך');
+            open(data.recipe.id);
+          }}
+          onPaywall={(url) => setPaywall({ paymentUrl: url || paymentUrl })}
+        />
+      </>
+    );
+  }
   if (nav.view === 'search') {
     const savedUrls = savedUrlSet(recipes);
     return (
       <>
         {paywall && <Paywall user={user} paymentUrl={paywall.paymentUrl} onClose={() => setPaywall(null)} />}
         <SearchView
+          onOpenCommunity={setCommunityOpen}
+          diets={Array.isArray(diets) ? diets : []}
+          onDiets={setDiets}
           key={nav.q}
           session={session}
           initialQuery={nav.q}
           savedUrls={savedUrls}
+          ownKeys={ownCommunityKeys(recipes)}
           onAdd={(url, title) => {
             add(url);
             setToast(`"${title}" נכנס לספר – מסדר מתכון ברקע`);
@@ -646,9 +752,12 @@ export default function App() {
           session={session}
           categories={allCategories}
           onBack={() => open(null)}
-          onSaved={(recipe, updatedUser) => {
+          onSaved={(recipe, updatedUser, more = []) => {
+            // כמה מתכונים באותו צילום – כולם נוספו, ופותחים את הראשון
+            for (const r of more) upsert(safeRecipe(r));
             upsert(recipe);
             if (updatedUser) setUser(updatedUser);
+            if (more.length) setToast(`מהצילום נוצרו ${more.length + 1} מתכונים: ${[recipe, ...more].map((r) => r.title).join(', ')}`);
             window.location.replace(`#/r/${recipe.id}`);
           }}
           onPaywall={(url) => setPaywall({ paymentUrl: url || paymentUrl })}
@@ -686,10 +795,29 @@ export default function App() {
         pantryNames={pantry.map((i) => i.name)}
         categories={allCategories}
         onBack={back}
+        onShareLink={async () => recipeShareLink(await shareRecipe(session, current.id))}
+        onEstimateNutrition={async () => upsert(await estimateNutrition(session, current.id))}
+        onSubstitute={(item) => substituteIngredient(session, current.id, item, Array.isArray(diets) ? diets : [])}
+        bis={Boolean(user?.features?.bis)}
+        community={{
+          talk,
+          getProfile: () => getProfile(session),
+          setProfile: (name, terms) => setProfile(session, name, terms),
+          publish: async (id) => {
+            const res = await publishRecipe(session, id);
+            upsert(safeRecipe(res.recipe));
+            return res;
+          },
+          unpublish: async (id) => upsert(safeRecipe((await unpublishRecipe(session, id)).recipe)),
+        }}
         onUpdate={async (patch) => {
           upsert({ ...current, ...patch });
           try {
             upsert(await updateRecipe(session, current.id, patch));
+            // המצרכים השתנו: ההערכה התזונתית נמחקה בשרת – מחשבים מחדש ברקע (רק אם הייתה כזו)
+            if (('ingredients' in patch || 'servings' in patch) && current.nutrition) {
+              estimateNutrition(session, current.id).then(upsert).catch(() => {});
+            }
           } catch (e) {
             setToast(e.message);
             reload();
@@ -725,6 +853,7 @@ export default function App() {
       {paywall && <Paywall user={user} paymentUrl={paywall.paymentUrl} onClose={() => setPaywall(null)} />}
       <header className="bg-gradient-to-bl from-orange-500 to-amber-500 text-white px-4 pt-[max(1rem,env(safe-area-inset-top))] pb-5 rounded-b-3xl shadow-sm">
         <div className="max-w-3xl mx-auto">
+          <UpdateBanner />
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-3xl font-black tracking-tight" dir="ltr">mat-kon</h1>
@@ -750,10 +879,10 @@ export default function App() {
               <PenLine size={20} /> כתיבה ידנית
             </a>
             <a href="#/search" className="rounded-2xl bg-white/15 hover:bg-white/25 py-2.5 flex flex-col items-center gap-1">
-              <Globe size={20} /> חיפוש ברשת
+              <Globe size={20} /> חיפוש מתכון
             </a>
             <a href="#/import" className="rounded-2xl bg-white/15 hover:bg-white/25 py-2.5 flex flex-col items-center gap-1">
-              <MessageCircle size={20} /> ייבוא מווטסאפ
+              <FileUp size={20} /> מקובץ / ווטסאפ
             </a>
           </div>
           {left !== null && (
@@ -771,6 +900,7 @@ export default function App() {
       </header>
 
       <main className="max-w-3xl mx-auto px-4">
+        <AppInvite user={ownerDevice ? null : user} />
         {sharedOffer && (
           <div className="mt-4 rounded-2xl bg-white shadow-sm p-3 border border-orange-200">
             <div className="font-bold">להוסיף לספר את מה ששותף?</div>
@@ -858,6 +988,7 @@ export default function App() {
                   {emojiOf(c)} {c}
                 </Chip>
               ))}
+              <DietFilter value={Array.isArray(diets) ? diets : []} onChange={setDiets} />
             </div>
 
             <div className="mt-2 flex items-center justify-end gap-1 text-sm text-stone-500">
@@ -869,10 +1000,13 @@ export default function App() {
           </>
         )}
 
-        {recipes.length === 0 && !pending.length && !loadError && <Empty />}
+        {recipes.length === 0 && !pending.length && !loadError && <Empty session={session} onOpenCommunity={setCommunityOpen} />}
 
         {recipes.length > 0 && visible.length === 0 && (
-          <p className="text-center text-stone-500 mt-10">לא נמצאו מתכונים</p>
+          <p className="text-center text-stone-500 mt-10">
+            לא נמצאו מתכונים
+            {Array.isArray(diets) && diets.length > 0 && <button onClick={() => setDiets([])} className="block mx-auto mt-2 text-orange-700 underline">ביטול הסינון (כשר, ללא גלוטן…)</button>}
+          </p>
         )}
 
         <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -909,24 +1043,91 @@ function Chip({ active, onClick, children }) {
   );
 }
 
-function Empty() {
+// ספר ריק (משתמש חדש): מתכונים פופולריים מהקהילה לשמירה בלחיצה, ודרכים ברורות להוסיף מתכון
+function Empty({ session, onOpenCommunity }) {
+  const [popular, setPopular] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    searchCommunity(session, '', {})
+      .then((list) => alive && setPopular(list.slice(0, 6)))
+      .catch(() => alive && setPopular([]));
+    return () => {
+      alive = false;
+    };
+  }, [session]);
+  const ways = [
+    ['#/search', '🔎', 'חיפוש מתכון', 'כותבים שם של מנה'],
+    ['#/new', '📷', 'צילום מתכון', 'דף מספר או פתק'],
+    ['#/import', '📄', 'מקובץ', 'Word, PDF, ווטסאפ'],
+  ];
   return (
-    <div className="text-center mt-12 px-6 text-stone-600">
-      <div className="text-6xl mb-4">🍳</div>
-      <h2 className="text-xl font-bold text-stone-800 mb-2">ספר המתכונים ריק</h2>
-      <p className="leading-relaxed">
-        הדביקו למעלה קישור למתכון מכל אתר, או לסרטון ב-YouTube, TikTok או Instagram.
-        <br />
-        המתכון יסודר עם מצרכים ואופן הכנה וייכנס לקטגוריה המתאימה.
-      </p>
-      <p className="text-sm mt-4 text-stone-500">
-        בטלפון: אחרי "הוסף למסך הבית" אפשר גם לשתף קישור ישירות ל-mat-kon.
-      </p>
-      <a href="#/help" className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-orange-100 text-orange-800 font-bold px-5 py-3">
-        🎬 סרטוני הדרכה
-      </a>
+    <div className="mt-6">
+      <div className="text-center px-4 text-stone-600">
+        <div className="text-5xl mb-2">🍳</div>
+        <h2 className="text-xl font-bold text-stone-800">בואו נמלא את הספר שלכם</h2>
+        <p className="mt-1 leading-relaxed">מדביקים למעלה קישור מכל אתר, יוטיוב, טיקטוק או אינסטגרם – או בוחרים דרך אחרת:</p>
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        {ways.map(([href, emoji, title, sub]) => (
+          <a key={href} href={href} className="rounded-2xl bg-white shadow-sm p-3 text-center hover:shadow">
+            <div className="text-2xl">{emoji}</div>
+            <div className="font-bold text-stone-800 text-sm mt-1">{title}</div>
+            <div className="text-xs text-stone-500">{sub}</div>
+          </a>
+        ))}
+      </div>
+
+      {(popular === null || popular.length > 0) && (
+        <>
+          <h3 className="mt-7 mb-1 font-black text-stone-900 flex items-center gap-2">⭐ פופולרי בקהילה</h3>
+          <p className="text-sm text-stone-500 mb-3">מתכונים שמשתמשים אחרים שמרו ואהבו. לוחצים – ושומרים בספר שלכם.</p>
+          {popular === null ? (
+            <div className="py-6 flex justify-center text-stone-400"><Loader2 className="animate-spin" size={22} /></div>
+          ) : (
+            <ul className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {popular.map((r) => (
+                <li key={r.key}>
+                  <button onClick={() => onOpenCommunity(r)} className="w-full text-right rounded-2xl bg-white shadow-sm overflow-hidden hover:shadow">
+                    {r.image ? (
+                      <img src={r.image} alt="" loading="lazy" className="w-full aspect-[4/3] object-cover bg-stone-100" />
+                    ) : (
+                      <div className="w-full aspect-[4/3] bg-orange-50 flex items-center justify-center text-3xl">🍽️</div>
+                    )}
+                    <div className="p-2">
+                      <div className="font-bold text-sm text-stone-900 leading-snug line-clamp-2">{r.title}</div>
+                      <div className="mt-1 text-xs text-stone-500 flex flex-wrap gap-x-2">
+                        {r.rating ? <span>⭐ {r.rating}</span> : null}
+                        <span>נשמר ב-{r.saves} {r.saves === 1 ? 'ספר' : 'ספרים'}</span>
+                        {r.madeCount > 0 && <span>📸 {r.madeCount}</span>}
+                      </div>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <a href="#/search" className="mt-3 block text-center text-orange-700 font-medium">עוד מתכונים מהקהילה ←</a>
+        </>
+      )}
+
+      <div className="text-center mt-6">
+        <a href="#/help" className="inline-flex items-center gap-2 rounded-2xl bg-orange-100 text-orange-800 font-bold px-5 py-3">
+          🎬 סרטוני הדרכה
+        </a>
+      </div>
     </div>
   );
+}
+
+// מתכונים מהקהילה שכבר שלי: שפרסמתי (published), או עותק ששמרתי מהקהילה (source.key = community:<key>)
+function ownCommunityKeys(recipes) {
+  const keys = new Set();
+  for (const r of recipes) {
+    if (r.published) keys.add(r.published);
+    const k = r.source?.key;
+    if (typeof k === 'string' && k.startsWith('community:')) keys.add(k.slice(10));
+  }
+  return keys;
 }
 
 // הקישורים שכבר בספר (כדי לסמן "נוסף" בתוצאות חיפוש)

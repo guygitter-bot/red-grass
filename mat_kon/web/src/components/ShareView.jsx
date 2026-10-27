@@ -45,8 +45,17 @@ export default function ShareView({ session, user, onBack }) {
         // המשתמש סגר את חלון השיתוף – נעתיק במקום
       }
     }
-    await navigator.clipboard?.writeText(link);
-    setCopied(true);
+    await copy();
+  };
+
+  // העתקה ללוח. אחרי חלון שיתוף שנסגר (או בדפדפן שחוסם) הכתיבה ללוח נדחית – אז מציגים את הקישור להעתקה ידנית
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+    } catch {
+      window.prompt('העתיקו את הקישור:', link);
+    }
   };
 
   const people = data ? (data.holder ? 1 : 0) + data.members.length : 0;
@@ -87,7 +96,7 @@ export default function ShareView({ session, user, onBack }) {
                 <Share2 size={16} /> שליחה
               </button>
               <button
-                onClick={() => navigator.clipboard?.writeText(link).then(() => setCopied(true))}
+                onClick={copy}
                 className="rounded-xl bg-stone-100 px-4 font-medium flex items-center gap-1.5"
               >
                 {copied ? <><Check size={16} /> הועתק</> : <><Copy size={16} /> העתקה</>}

@@ -82,6 +82,10 @@ export const refreshRecipe = (s, id) => api(s, 'POST', `/recipes/${id}/refresh`)
 export const updateRecipe = (s, id, patch) => api(s, 'PUT', `/recipes/${id}`, patch).then((d) => d.recipe);
 // הסוכן משבץ מתכון קיים בכל הקטגוריות שמתאימות לו
 export const categorizeRecipe = (s, id) => api(s, 'POST', `/recipes/${id}/categorize`).then((d) => d.recipe);
+// הערכה תזונתית למנה (מתכון ישן, או אחרי עריכת המצרכים)
+// חסר מצרך: תחליפים שמתאימים למתכון (לפי הסינון שבחרתי – למשל טבעוני)
+export const substituteIngredient = (s, id, item, diets = []) => api(s, 'POST', `/recipes/${id}/substitute`, { item, diets });
+export const estimateNutrition = (s, id) => api(s, 'POST', `/recipes/${id}/nutrition`).then((d) => safeRecipe(d.recipe));
 export const deleteRecipe = (s, id) => api(s, 'DELETE', `/recipes/${id}`);
 
 // הזמנות (בעל האפליקציה). כשהספר נעול, המכשיר של הבעלים שולח את ה-session שלו
@@ -114,6 +118,46 @@ export const logout = (s) => api(s, 'POST', '/logout', {}).catch(() => {});
 const appUrl = () => (isNative() ? siteAsset('') : `${window.location.origin}${window.location.pathname}`);
 export const inviteLink = (token) => `${appUrl()}#invite=${token}`;
 export const loginLink = () => `${appUrl()}#login`;
+
+// שיתוף מתכון בקישור: מי שמקבל רואה תצוגה מקדימה, ואת המתכון המלא – באפליקציה, אחרי כניסה
+export const shareRecipe = (s, id, from) => api(s, 'POST', `/recipes/${id}/share`, from ? { from } : {}).then((d) => d.token);
+export const recipeShareLink = (token) => `${appUrl()}#recipe=${token}`;
+export const getSharePreview = (token) => api('', 'GET', `/shares/${encodeURIComponent(token)}`).then((d) => d.preview);
+export const getSharedRecipe = (s, token) => api(s, 'GET', `/shares/${encodeURIComponent(token)}/full`).then((d) => ({ by: d.by, recipe: safeRecipe(d.recipe) }));
+export const saveSharedRecipe = (s, token) => api(s, 'POST', `/shares/${encodeURIComponent(token)}/save`, {});
+// מאגר הקהילה: מתכונים מקישורים שמשתמשים שמרו, עם דירוג ומספר שמירות
+export const searchCommunity = (s, q, filters = {}) => {
+  const p = new URLSearchParams({ q: q || '' });
+  if (filters.minutes) p.set('minutes', '30');
+  if (filters.calories) p.set('calories', '400');
+  if (filters.kosher) p.set('kosher', filters.kosher);
+  if (filters.vegan) p.set('vegan', '1');
+  if (filters.gf) p.set('gf', '1');
+  if (filters.diets?.length) p.set('diets', filters.diets.join(','));
+  return api(s, 'GET', `/community?${p}`).then((d) => d.results || []);
+};
+export const getCommunityRecipe = (s, key) => api(s, 'GET', `/community/${encodeURIComponent(key)}`).then((d) => ({ by: '', recipe: safeRecipe(d.recipe), summary: d.summary }));
+export const saveCommunityRecipe = (s, key) => api(s, 'POST', `/community/${encodeURIComponent(key)}/save`, {});
+// פרסום מתכון אישי לקהילה (שם תצוגה + תנאי שימוש), ודיווח על מתכון
+export const getProfile = (s) => api(s, 'GET', '/profile');
+export const setProfile = (s, displayName, acceptTerms) => api(s, 'PUT', '/profile', { displayName, acceptTerms });
+export const publishRecipe = (s, id) => api(s, 'POST', `/recipes/${id}/publish`, {});
+export const unpublishRecipe = (s, id) => api(s, 'DELETE', `/recipes/${id}/publish`);
+export const reportCommunity = (s, key, reason) => api(s, 'POST', `/community/${encodeURIComponent(key)}/report`, { reason });
+// שיחה על מתכון בקהילה: טיפים, שאלות, תשובות ו"הכנתי!" (כל הפעולות עם אותו session)
+export const talkApi = (s) => {
+  const base = (key) => `/community/${encodeURIComponent(key)}/talk`;
+  return {
+    keyOf: (recipeId) => api(s, 'GET', `/recipes/${recipeId}/community`),
+    list: (key) => api(s, 'GET', base(key)).then((d) => d.items || []),
+    post: (key, item) => api(s, 'POST', base(key), item),
+    like: (key, id) => api(s, 'POST', `${base(key)}/${id}/like`, {}).then((d) => d.item),
+    remove: (key, id) => api(s, 'DELETE', `${base(key)}/${id}`),
+    report: (key, id, reason) => api(s, 'POST', `${base(key)}/${id}/report`, { reason }),
+    getProfile: () => getProfile(s),
+    setProfile: (name, terms) => setProfile(s, name, terms),
+  };
+};
 export const addTextRecipe = (s, item) => api(s, 'POST', '/recipes/text', item);
 
 // מתכון מתמונות / שנכתב ידנית
@@ -203,3 +247,9 @@ export const getAdminErrors = () => api(own(), 'GET', '/admin/errors');
 export const getBackups = () => api(own(), 'GET', '/admin/backups');
 export const linkGoogle = (s, credential) => api(s, 'POST', '/google', { credential, link: true }).then((d) => d.user);
 export const reportClientError = (where, message) => api(loadJson('matkon_session', ''), 'POST', '/client-error', { where, message }).catch(() => {});
+// שגיאה שהיא באג אצלנו (לא תשובה מהשרת): נרשמת גם במסך התקלות של בעל האפליקציה, ולמשתמש – הודעה בעברית
+export function bugMessage(where, e) {
+  if (e instanceof ApiError) return e.message;
+  reportClientError(where, String(e?.message || e).slice(0, 300));
+  return 'משהו השתבש. נסו שוב, ואם זה חוזר – ספרו לנו.';
+}

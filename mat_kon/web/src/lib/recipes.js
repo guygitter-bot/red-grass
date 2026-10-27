@@ -1,4 +1,5 @@
 // עזרים לספר המתכונים: קישורים משותפים, חיפוש, עריכה כטקסט.
+import { matchesDiets, recipeDiet } from './diet';
 
 // קישור שהגיע משיתוף (share target) או מהדבקה: ?url=... או טקסט שמכיל קישור
 export function linkFromShare(search) {
@@ -36,13 +37,14 @@ const haystack = (r) =>
   ].join(' '));
 
 // חיפוש לפי שם, מצרך, תגית או ערוץ. כל המילים צריכות להופיע.
-export function filterRecipes(recipes, { query = '', category = null, favorites = false, tag = null } = {}) {
+export function filterRecipes(recipes, { query = '', category = null, favorites = false, tag = null, diets = [] } = {}) {
   const words = normalize(query).split(' ').filter(Boolean);
   return recipes.filter(
     (r) =>
       (!category || categoriesOf(r).includes(category)) &&
       (!favorites || r.favorite) &&
       (!tag || (r.tags || []).includes(tag)) &&
+      (!diets.length || matchesDiets(recipeDiet(r), diets)) &&
       (!words.length || words.every((w) => haystack(r).includes(w))),
   );
 }
@@ -100,6 +102,10 @@ export const VIDEO_LABEL = {
 
 export const isVideo = (r) => Boolean(VIDEO_LABEL[r?.source?.kind]);
 
+// קישור לסרטון/פוסט ברשת חברתית (לפי הכתובת) – שם לפעמים אין מתכון כתוב בכלל
+export const isVideoLink = (url) =>
+  /(^|\.)(youtube\.com|youtu\.be|tiktok\.com|instagram\.com|facebook\.com|fb\.watch|vimeo\.com)$/.test(hostOf(url));
+
 export const CATEGORY_EMOJI = {
   'עוגות': '🎂',
   'עוגיות ומאפים מתוקים': '🍪',
@@ -127,6 +133,12 @@ export function parseAuthHash(hash) {
   if (join) return { mode: 'join', token: join[1] };
   if (/^#login\b/.test(String(hash || ''))) return { mode: 'login' };
   return null;
+}
+
+// מתכון ששותף בקישור: #recipe=<token> באתר, או matkon://recipe/<token> כשהקישור נפתח באפליקציה לאנדרואיד
+export function parseShareLink(link) {
+  const m = String(link || '').match(/(?:[#&]recipe=|^matkon:\/\/recipe\/)([\w-]{20,64})/);
+  return m ? m[1] : null;
 }
 
 // כמה מתכונים חינמיים נשארו למשתמש שהוזמן (null = בלי הגבלה)

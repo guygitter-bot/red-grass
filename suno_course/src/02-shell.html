@@ -1,0 +1,36 @@
+
+<div class="app">
+  <aside class="side" id="side" aria-label="פרקי הקורס">
+    <div class="brand">
+      <div class="vu" id="vu" aria-hidden="true"></div>
+      <h1>ערוץ מוזיקה מסונו</h1>
+    </div>
+    <div class="brand-sub">קורס מעשי: מסונו ליוטיוב, עד הכנסה ושכפול לערוצים נוספים</div>
+    <div class="progress-line"><span>ההתקדמות שלי</span><span class="tnum" id="pct">0%</span></div>
+    <div class="bar"><span id="pbar" style="width:0%"></span></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="side-tools">
+      <button class="btn sm" id="themeBtn" type="button">מצב לילה / יום</button>
+    </div>
+  </aside>
+  <div class="main">
+    <div class="topbar">
+      <button class="btn sm" id="menuBtn" type="button" aria-controls="side" aria-expanded="false">☰ פרקים</button>
+      <span class="t" id="topTitle">ערוץ מוזיקה מסונו</span>
+      <span class="tnum note" id="topPct">0%</span>
+    </div>
+    <div class="wrap" id="view"></div>
+  </div>
+</div>
+
+<button class="btn pri fab" id="fab" type="button">שאלו את המדריך</button>
+<div class="drawer" id="drawer" hidden>
+  <header><b>המדריך האישי (AI)</b><div class="row"><button class="btn sm" id="tutorNew" type="button">שיחה חדשה</button><button class="btn sm" id="drawerClose" type="button">סגירה</button></div></header>
+  <div class="chat" id="tutorChat"></div>
+  <form id="tutorForm">
+    <div class="pends" id="tutorPend" hidden></div>
+    <div class="row"><button class="btn sm" id="tutorNext" type="button">מה הצעד הבא?</button><label class="btn sm" for="tutorImg" style="cursor:pointer">📷 צילום מסך</label><input id="tutorImg" type="file" accept="image/*" multiple hidden></div>
+    <div class="row" style="flex-wrap:nowrap;align-items:flex-end"><textarea id="tutorIn" placeholder="כתבו שאלה, או שלחו צילום מסך…"></textarea>
+    <button class="btn pri" type="submit" id="tutorSend">שליחה</button></div>
+  </form>
+</div>

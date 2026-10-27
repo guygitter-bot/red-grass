@@ -1,31 +1,37 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  ArrowRight, Camera, Check, ChefHat, Clock, ExternalLink, Heart, ImagePlus, Info, Loader2, MessageCircle, Minus, PenLine, Pencil, PlayCircle,
+  ArrowRight, Camera, Check, ChefHat, Clock, ExternalLink, FileText, Heart, ImagePlus, Info, Loader2, MessageCircle, Minus, PenLine, Pencil, PlayCircle,
   CalendarPlus, Plus, Printer, RotateCw, Share2, ShoppingCart, Star, Trash2, Users, X,
 } from 'lucide-react';
 import CookMode from './CookMode';
-import { isNative } from '../lib/native';
+import PublishPanel from './PublishPanel';
+import Talk from './Talk';
+import SubstituteSheet from './SubstituteSheet';
+import { isNative, shareText } from '../lib/native';
 import { STAPLES, missingLines } from '../lib/fridge';
 import { shoppingName } from '../lib/shopping';
 import { baseServings, formatAmount, scaleSections } from '../lib/scale';
 import { thumbnail } from '../lib/image';
 import { DAY_NAMES, MEALS, dateKey, shortDate } from '../lib/plan';
-import { categoriesOf, emojiOf, VIDEO_LABEL, isVideo, recipeAsText, sectionsToText, shortUrl, textToSections } from '../lib/recipes';
+import { categoriesOf, emojiOf, VIDEO_LABEL, isVideo, sectionsToText, shortUrl, textToSections } from '../lib/recipes';
 import { usePersistentState } from '../lib/storage';
+import { dietBadges, recipeDiet } from '../lib/diet';
+import { bisPoints, formatBis } from '../lib/bis';
 
 // רק נגני סרטונים מהאתרים המוכרים
 const SAFE_EMBED = /^https:\/\/(www\.youtube-nocookie\.com\/embed\/|www\.tiktok\.com\/embed\/|www\.instagram\.com\/(p|reel|tv)\/|player\.vimeo\.com\/video\/)/;
 
-export default function RecipeView({ recipe, pantryNames = [], categories, onBack, onUpdate, onRefresh, onDelete, onAddToShopping, onAddToPlan }) {
+export default function RecipeView({ recipe, pantryNames = [], categories, onBack, onUpdate, onRefresh, onDelete, onAddToShopping, onAddToPlan, onShareLink, onEstimateNutrition, onSubstitute, community, bis = false }) {
   const [editing, setEditing] = useState(false);
   const [planning, setPlanning] = useState(false);
   const [cooking, setCooking] = useState(false);
   const [shopPick, setShopPick] = useState(null); // בחירת מצרכים לרשימת הקניות: { preselect }
   // מספר מנות: מכפיל לכמויות, נשמר לכל מתכון במכשיר
   const [factor, setFactor] = usePersistentState(`matkon_factor_${recipe.id}`, 1);
+  const [subFor, setSubFor] = useState(null); // המצרך שמחפשים לו תחליף
   const base = baseServings(recipe.servings);
   const ingredients = scaleSections(recipe.ingredients, factor);
-  const canRefresh = Boolean(recipe.source.url) || recipe.source.kind === 'whatsapp';
+  const canRefresh = Boolean(recipe.source.url) || ['whatsapp', 'file'].includes(recipe.source.kind);
   const [busy, setBusy] = useState('');
   // עדכון קטן (מועדף, דירוג...): השגיאה כבר מוצגת כהודעה
   const quiet = (patch) => Promise.resolve(onUpdate(patch)).catch(() => {});
@@ -53,22 +59,23 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
     }
   };
 
-  const fromChat = recipe.source.kind === 'whatsapp';
+  const fromChat = ['whatsapp', 'file'].includes(recipe.source.kind);
+  const fromFile = recipe.source.kind === 'file';
   const [showMessage, setShowMessage] = useState(false);
 
-  const share = async () => {
-    // מתכון מווטסאפ אין לו קישור: משתפים את המתכון עצמו
-    const text = fromChat ? recipeAsText(recipe) : `${recipe.title}\n${recipe.source.url}`;
+  // שיתוף בקישור ל-mat-kon: מי שמקבל רואה תצוגה מקדימה, ואת המתכון המלא – באפליקציה (וכך מצטרף)
+  const share = () => run('share', async () => {
+    const link = await onShareLink();
+    const text = `${recipe.title} 🍲\nשלחתי לך מתכון מהספר שלי ב-mat-kon:\n${link}`;
     try {
-      if (navigator.share) await navigator.share(fromChat ? { title: recipe.title, text } : { title: recipe.title, text, url: recipe.source.url });
-      else {
-        await navigator.clipboard.writeText(fromChat ? text : recipe.source.url);
-        setError(fromChat ? 'המתכון הועתק' : 'הקישור המקורי הועתק');
+      if (!(await shareText({ title: recipe.title, text }))) {
+        await navigator.clipboard.writeText(text);
+        setError('הקישור הועתק – אפשר להדביק אותו בהודעה');
       }
     } catch {
       // המשתמש ביטל
     }
-  };
+  });
 
   const video = isVideo(recipe);
   const times = [
@@ -102,36 +109,37 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
           <button onClick={() => quiet({ favorite: !recipe.favorite })} className="p-2 rounded-full hover:bg-stone-100" aria-label="מועדף" title="מועדף">
             <Heart size={21} className={recipe.favorite ? 'text-rose-500' : ''} fill={recipe.favorite ? 'currentColor' : 'none'} />
           </button>
-          <button onClick={share} className="p-2 rounded-full hover:bg-stone-100" aria-label="שיתוף" title="שיתוף">
-            <Share2 size={20} />
+          <button onClick={share} disabled={busy === 'share'} className="p-2 rounded-full hover:bg-stone-100" aria-label="שליחת המתכון" title="שליחת המתכון">
+            {busy === 'share' ? <Loader2 size={20} className="animate-spin" /> : <Share2 size={20} />}
           </button>
         </div>
       </div>
 
       <article className="max-w-2xl mx-auto px-4">
-        {/* המקור בראש הדף: הקישור המקורי, או ההודעה מווטסאפ */}
+        {/* המקור בראש הדף: הקישור המקורי, ההודעה מווטסאפ או הטקסט מהקובץ */}
         {!fromChat && !recipe.source.url ? (
           <div className="mt-4 rounded-2xl bg-stone-100 p-3 flex items-center gap-3 text-sm text-stone-700">
             <span className="w-10 h-10 rounded-xl bg-stone-500 text-white flex items-center justify-center shrink-0">
-              {recipe.source.kind === 'photo' ? <Camera size={20} /> : <PenLine size={20} />}
+              {recipe.source.kind === 'photo' ? <Camera size={20} /> : recipe.source.kind === 'community' ? <Users size={20} /> : <PenLine size={20} />}
             </span>
-            {recipe.source.kind === 'photo' ? 'מתכון שנבנה מתמונה' : 'מתכון שכתבתם בעצמכם'}
+            {recipe.source.kind === 'photo' ? 'מתכון שנבנה מתמונה'
+              : recipe.source.kind === 'community' ? `מתכון מהקהילה${recipe.source.author ? ` – של ${recipe.source.author}` : ''}` : 'מתכון שכתבתם בעצמכם'}
           </div>
         ) : fromChat ? (
           <div className="mt-4 rounded-2xl bg-emerald-50 border border-emerald-200 p-3">
             <button onClick={() => setShowMessage((v) => !v)} className="w-full flex items-center gap-3 text-right">
               <span className="w-10 h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0">
-                <MessageCircle size={20} />
+                {fromFile ? <FileText size={20} /> : <MessageCircle size={20} />}
               </span>
               <span className="flex-1 min-w-0">
                 <span className="block text-xs text-emerald-700 font-medium">
-                  מתוך ווטסאפ{recipe.source.chat ? ` · ${recipe.source.chat}` : ''}
+                  {fromFile ? 'מתוך קובץ' : 'מתוך ווטסאפ'}{recipe.source.chat ? ` · ${recipe.source.chat}` : ''}
                 </span>
                 <span className="block text-sm text-stone-800 truncate">
                   {[recipe.source.author, recipe.source.date].filter(Boolean).join(' · ')}
                 </span>
               </span>
-              <span className="text-xs text-emerald-700 shrink-0">{showMessage ? 'הסתרה' : 'ההודעה המקורית'}</span>
+              <span className="text-xs text-emerald-700 shrink-0">{showMessage ? 'הסתרה' : fromFile ? 'הטקסט מהקובץ' : 'ההודעה המקורית'}</span>
             </button>
             {showMessage && (
               <p className="mt-3 text-sm text-stone-700 whitespace-pre-line bg-white rounded-xl p-3" dir="auto">{recipe.source.text}</p>
@@ -245,6 +253,24 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
           </div>
         )}
 
+        {/* מה המתכון: כשרות, גלוטן, טבעוני, זמן וציוד (לפי המצרכים) */}
+        {recipe.ingredients.length > 0 && dietBadges(recipeDiet(recipe)).length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
+            {dietBadges(recipeDiet(recipe)).map((b) => (
+              <span key={b} className={`rounded-full px-2.5 py-1 border ${b === 'לא כשר' ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800'}`}>{b}</span>
+            ))}
+            <span className="text-stone-400">לפי המצרכים</span>
+          </div>
+        )}
+
+        {/* במקור אין מתכון כתוב (למשל סרטון בלבד) – המתכון שוחזר מהתמונה */}
+        {recipe.basis === 'guessed' && (
+          <div className="mt-4 rounded-2xl p-3 text-sm flex gap-2 bg-amber-100 text-amber-900 border border-amber-200">
+            <Info size={18} className="shrink-0 mt-0.5" />
+            <span><b>מתכון משוער:</b> במקור יש רק תמונה או סרטון, בלי מתכון כתוב. המצרכים והכמויות הם הערכה.</span>
+          </div>
+        )}
+
         {recipe.notes && (
           <div className={`mt-4 rounded-2xl p-3 text-sm flex gap-2 ${recipe.confidence === 'low' ? 'bg-amber-50 text-amber-900' : 'bg-stone-100 text-stone-600'}`}>
             <Info size={18} className="shrink-0 mt-0.5" />
@@ -275,13 +301,19 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
                     {s.items.map((item, i) => {
                       const key = `i${si}.${i}`;
                       return (
-                        <li key={key}>
-                          <button onClick={() => toggle(key)} className="w-full text-right flex items-start gap-3 py-1.5">
+                        <li key={key} className="flex items-start gap-1">
+                          <button onClick={() => toggle(key)} className="flex-1 text-right flex items-start gap-3 py-1.5">
                             <span className={`mt-0.5 w-5 h-5 rounded-md border-2 shrink-0 flex items-center justify-center ${checked[key] ? 'bg-orange-500 border-orange-500 text-white' : 'border-stone-300'}`}>
                               {checked[key] && <Check size={14} strokeWidth={3} />}
                             </span>
                             <span className={checked[key] ? 'line-through text-stone-400' : 'text-stone-800'}>{item}</span>
                           </button>
+                          {/* חסר לי: תחליף מתאים למתכון (לפי המצרך כמו שהוא כתוב במתכון המקורי) */}
+                          {onSubstitute && recipe.ingredients[si]?.items[i] && (
+                            <button onClick={() => setSubFor(recipe.ingredients[si].items[i])} className="shrink-0 mt-1 rounded-full px-2 py-0.5 text-xs text-orange-700 hover:bg-orange-50 print:hidden" aria-label={`תחליף ל${recipe.ingredients[si].items[i]}`}>
+                              חסר לי?
+                            </button>
+                          )}
                         </li>
                       );
                     })}
@@ -293,6 +325,14 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
                 pantryNames={pantryNames}
                 onShop={(lines) => setShopPick({ preselect: lines })}
               />
+              {subFor && (
+                <SubstituteSheet
+                  item={subFor}
+                  load={() => onSubstitute(subFor)}
+                  onClose={() => setSubFor(null)}
+                  onSaveNote={(line) => quiet({ myNotes: [recipe.myNotes, line].filter(Boolean).join('\n') })}
+                />
+              )}
               {shopPick && (
                 <ShoppingPicker
                   lines={ingredients.flatMap((s) => s.items)}
@@ -341,6 +381,14 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
                 </ul>
               </Section>
             )}
+
+            <Nutrition value={recipe.nutrition} busy={busy === 'nutrition'} onEstimate={() => run('nutrition', onEstimateNutrition)} bis={bis} title={recipe.title} />
+
+            {/* מתכון אישי (לא מקישור ולא של מישהו אחר מהקהילה) אפשר לפרסם לקהילה */}
+            {community && !recipe.source.url && recipe.source.kind !== 'community' && <PublishPanel recipe={recipe} community={community} />}
+
+            {/* מתכון שנמצא גם בקהילה (מקישור, מהקהילה, או שפרסמתי): השיחה עליו – טיפים, שאלות ו"הכנתי!" */}
+            {community?.talk && <RecipeTalk recipe={recipe} api={community.talk} />}
 
             <div className="print:hidden"><MyNotes value={recipe.myNotes || ''} onSave={(myNotes) => quiet({ myNotes })} /></div>
             {recipe.myNotes && <p className="hidden print:block mt-6 text-sm"><b>ההערות שלי:</b> {recipe.myNotes}</p>}
@@ -422,6 +470,93 @@ function Servings({ base, factor, onChange }) {
       ))}
     </div>
   );
+}
+
+// הערכה תזונתית למנה: נוצרת עם המתכון, או בלחיצה (מתכון ישן / אחרי עריכת המצרכים)
+const NUTRIENTS = [
+  ['protein', 'חלבון', 'גרם'], ['carbs', 'פחמימות', 'גרם'], ['sugar', 'מתוכן סוכרים', 'גרם'], ['fat', 'שומן', 'גרם'],
+  ['saturated_fat', 'מתוכו רווי', 'גרם'], ['fiber', 'סיבים תזונתיים', 'גרם'], ['sodium', 'נתרן', 'מ"ג'],
+];
+function Nutrition({ value, busy, onEstimate, bis, title }) {
+  const valid = value && typeof value === 'object' && Number(value.calories) > 0;
+  const num = (v) => formatAmount(Math.round(Number(v) || 0));
+  return (
+    <Section title="ערכים תזונתיים">
+      {valid ? (
+        <>
+          <div className="rounded-2xl bg-orange-50 border border-orange-100 px-4 py-3 flex items-baseline justify-between gap-3">
+            <span className="text-sm text-stone-600">{value.per || 'למנה'}</span>
+            <span><span className="text-2xl font-black text-orange-600">{num(value.calories)}</span> <span className="text-sm text-stone-600">קלוריות</span></span>
+          </div>
+          <div className="mt-2 grid grid-cols-2 lg:grid-cols-4 gap-2">
+            {NUTRIENTS.map(([k, label, unit]) => (
+              <div key={k} className="rounded-xl bg-white border border-stone-200 px-3 py-2">
+                <div className="text-xs text-stone-500">{label}</div>
+                <div className="font-bold text-stone-800">{num(value[k])} <span className="text-xs font-normal text-stone-500">{unit}</span></div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-stone-500">הערכה בלבד, לפי המצרכים והכמויות שבמתכון.</p>
+          {bis && <BisScore value={value} title={title} />}
+        </>
+      ) : (
+        <button onClick={onEstimate} disabled={busy} className="w-full rounded-2xl border border-dashed border-orange-300 bg-orange-50/50 text-orange-700 font-medium py-3 flex items-center justify-center gap-2 disabled:opacity-60 print:hidden">
+          {busy ? <Loader2 size={18} className="animate-spin" /> : <Info size={18} />}
+          חישוב ערכים תזונתיים (קלוריות, חלבון, פחמימות, שומן)
+        </button>
+      )}
+    </Section>
+  );
+}
+
+// ניקוד ביס למנה (רק למי שזה נפתח לו), עם כמה אכלתי והעתקה להזנה באפליקציית ביס
+const PORTIONS = [[0.5, '½'], [1, '1'], [1.5, '1.5'], [2, '2']];
+function BisScore({ value, title }) {
+  const [portion, setPortion] = useState(1);
+  const [copied, setCopied] = useState(false);
+  const points = formatBis(bisPoints(value) * portion);
+  const copy = async () => {
+    const amount = portion === 1 ? 'מנה' : `${PORTIONS.find(([p]) => p === portion)[1]} מנות`;
+    try {
+      await navigator.clipboard.writeText(`${title} (${amount}) – ${points} נקודות`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
+  return (
+    <div className="mt-3 rounded-2xl bg-sky-50 border border-sky-100 px-4 py-3 print:hidden">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-sm font-bold text-sky-900">ניקוד ביס</span>
+        <span><span className="text-2xl font-black text-sky-700">{points}</span> <span className="text-sm text-stone-600">נקודות</span></span>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-sm">
+        <span className="text-stone-600 ml-1">כמה מנות:</span>
+        {PORTIONS.map(([p, label]) => (
+          <button key={p} onClick={() => setPortion(p)} className={`rounded-full px-3 py-1 border ${portion === p ? 'bg-sky-600 border-sky-600 text-white' : 'bg-white border-stone-200 text-stone-700'}`}>{label}</button>
+        ))}
+        <button onClick={copy} className="mr-auto rounded-full px-3 py-1 border border-sky-200 bg-white text-sky-800 inline-flex items-center gap-1">
+          {copied ? <><Check size={14} /> הועתק</> : 'העתקה לביס'}
+        </button>
+      </div>
+      <p className="mt-1.5 text-xs text-stone-500">לפי הערכים התזונתיים המשוערים של מנה אחת.</p>
+    </div>
+  );
+}
+
+function RecipeTalk({ recipe, api }) {
+  const [key, setKey] = useState(null);
+  const inCommunity = Boolean(recipe.source?.url || recipe.published || recipe.source?.kind === 'community');
+  useEffect(() => {
+    if (!inCommunity) return undefined;
+    let alive = true;
+    api.keyOf(recipe.id).then((d) => alive && setKey(d.key)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [api, recipe.id, recipe.published, inCommunity]);
+  return key ? <Talk api={api} communityKey={key} /> : null;
 }
 
 function ActionButton({ onClick, icon, children, className = '', disabled }) {

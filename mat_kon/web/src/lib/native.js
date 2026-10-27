@@ -4,3 +4,16 @@ export const isNative = () => Boolean(typeof window !== 'undefined' && window.Ca
 
 const SITE = 'https://mat-kon.pages.dev/';
 export const siteAsset = (path) => (isNative() ? SITE + path : path);
+
+// חלון השיתוף של המערכת. באפליקציה לאנדרואיד דרך התוסף Share (ב-WebView אין navigator.share).
+// מחזיר false כשאין שיתוף (ואז מעתיקים); ביטול של המשתמש נזרק כשגיאה
+export async function shareText({ title, text }) {
+  if (isNative()) {
+    const { registerPlugin } = await import('@capacitor/core');
+    await registerPlugin('Share').share({ title, text, dialogTitle: title });
+    return true;
+  }
+  if (!navigator.share) return false;
+  await navigator.share({ title, text });
+  return true;
+}

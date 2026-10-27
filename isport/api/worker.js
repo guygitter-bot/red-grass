@@ -5,6 +5,8 @@
 //   מנהל (סיסמה -> /login -> authorization: Bearer <token>):
 //     /admin/state, /admin/shirt, /admin/shirt-delete, /admin/publish, /admin/settings, /admin/categories,
 //     /admin/enrich, /admin/find-images (הסוכן), /admin/image-import, /admin/image-upload, /logout
+//     /admin/backups, /admin/backup-now, /admin/restore (רק המפתח), /admin/client-password (רק המפתח)
+//   כל לילה (cron ב-wrangler.toml): גיבוי ל-R2, מחיקת גיבויים ישנים ותמונות מהפח
 import { Shop } from './shop.js';
 import { isImageKey } from './model.js';
 
@@ -17,6 +19,7 @@ const ROUTES = [
   '/catalog', '/login', '/logout',
   '/admin/state', '/admin/shirt', '/admin/shirt-delete', '/admin/publish', '/admin/settings', '/admin/categories',
   '/admin/enrich', '/admin/find-images', '/admin/image-import', '/admin/image-upload',
+  '/admin/backups', '/admin/backup-now', '/admin/restore', '/admin/client-password',
 ];
 
 // "https://isport-shop-*.pages.dev" = כל כתובת שמתחילה כך (Cloudflare Pages מוסיף סיומת כשהשם תפוס)
@@ -61,6 +64,16 @@ async function image(key, env) {
 }
 
 export default {
+  // הגיבוי הלילי
+  async scheduled(event, env, ctx) {
+    const stub = env.SHOP.get(env.SHOP.idFromName('main'));
+    ctx.waitUntil(
+      stub
+        .fetch(new Request('https://shop/internal/nightly', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }))
+        .then(async (res) => console.log('nightly', res.status, await res.text())),
+    );
+  },
+
   async fetch(request, env) {
     const cors = corsHeaders(request, env);
     const reply = (status, data) =>
@@ -75,14 +88,28 @@ export default {
     // רק מהאתר עצמו
     if (!cors['access-control-allow-origin']) return reply(403, { error: 'אסור' });
 
+    // ניהול בלי כניסה – לא קוראים בכלל את הגוף; העלאה גדולה רק למי שמחובר
+    const authed = /^Bearer\s+\S{20,}/i.test(request.headers.get('authorization') || '');
+    if (pathname.startsWith('/admin/') && !authed) return reply(401, { error: 'צריך להתחבר מחדש' });
+    const max = pathname === '/admin/image-upload' ? MAX_UPLOAD_BYTES : MAX_BODY_BYTES;
+    if (Number(request.headers.get('content-length') || 0) > max) return reply(413, { error: 'גדול מדי' });
     const text = await request.text();
-    if (text.length > (pathname === '/admin/image-upload' ? MAX_UPLOAD_BYTES : MAX_BODY_BYTES)) return reply(413, { error: 'גדול מדי' });
+    if (text.length > max) return reply(413, { error: 'גדול מדי' });
     const stub = env.SHOP.get(env.SHOP.idFromName('main'));
     const res = await stub.fetch(new Request(`https://shop${pathname}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: request.headers.get('authorization') || '' },
+      headers: {
+        'content-type': 'application/json',
+        authorization: request.headers.get('authorization') || '',
+        // הכתובת של המבקר (Cloudflare קובע אותה – אי אפשר לזייף) – לנעילה אחרי ניסיונות כניסה שגויים
+        'x-client-ip': request.headers.get('cf-connecting-ip') || '',
+      },
       body: text,
     }));
-    return reply(res.status, await res.json());
+    try {
+      return reply(res.status, await res.json());
+    } catch {
+      return reply(500, { error: 'שגיאה בשרת. נסו שוב' });
+    }
   },
 };

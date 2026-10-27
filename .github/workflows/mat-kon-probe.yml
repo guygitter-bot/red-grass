@@ -20,8 +20,19 @@ jobs:
         env:
           LINK: ${{ inputs.url }}
           API: ${{ vars.MATKON_API_URL || 'https://mat-kon-api.guygitter.workers.dev' }}
+          OWNER_PASSWORD: ${{ secrets.OWNER_PASSWORD }}
         run: |
-          curl -sS --max-time 120 -G "$API/debug/source" --data-urlencode "url=$LINK" | tee result.json | jq . || cat result.json
+          # הספר של הבעלים נעול: נכנסים עם סיסמת הבעלים (מהסוד) כדי לראות מה השרת עצמו (Cloudflare) מצליח לקרוא
+          AUTH=()
+          if [ -n "$OWNER_PASSWORD" ]; then
+            SESSION=$(jq -n --arg p "$OWNER_PASSWORD" '{password: $p}' | curl -sS --max-time 30 -X POST "$API/owner-login" -H 'content-type: application/json' -H 'origin: https://mat-kon.pages.dev' --data @- | jq -r '.session // empty')
+            if [ -n "$SESSION" ]; then
+              echo "::add-mask::$SESSION"
+              AUTH=(-H "authorization: Bearer $SESSION")
+            fi
+          fi
+          curl -sS --max-time 120 -G "${AUTH[@]}" "$API/debug/source" --data-urlencode "url=$LINK" | tee result.json | jq . || cat result.json
+          [ -n "${SESSION:-}" ] && curl -sS --max-time 30 -X POST "$API/logout" -H 'content-type: application/json' -H "authorization: Bearer $SESSION" -d '{}' > /dev/null || true
           {
             echo '```json'
             jq . result.json 2>/dev/null || cat result.json

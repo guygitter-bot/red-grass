@@ -1,0 +1,29 @@
+name: mat-kon issues
+
+# קריאת רשימת התקלות של mat-kon (כמו במסך התקלות באפליקציית הניהול) – לקריאה בלבד, בכניסת בעלים.
+# המאגר ציבורי: בלי אימיילים ובלי קישורים מלאים (רק שם האתר), ובלי שמות משתמשים – רק כמה משתמשים נפגעו.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read open issues
+        env:
+          API: ${{ vars.MATKON_API_URL || 'https://mat-kon-api.guygitter.workers.dev' }}
+          OWNER_PASSWORD: ${{ secrets.OWNER_PASSWORD }}
+        run: |
+          SESSION=$(jq -n --arg p "$OWNER_PASSWORD" '{password: $p}' | curl -sS --max-time 30 -X POST "$API/owner-login" -H 'content-type: application/json' -H 'origin: https://mat-kon.pages.dev' --data @- | jq -r '.session // empty')
+          [ -n "$SESSION" ] || { echo "owner login failed"; exit 1; }
+          echo "::add-mask::$SESSION"
+          curl -sS --max-time 30 "$API/admin/issues" -H "authorization: Bearer $SESSION" > raw.json
+          curl -sS --max-time 30 -X POST "$API/logout" -H 'content-type: application/json' -H "authorization: Bearer $SESSION" -d '{}' > /dev/null || true
+          jq '[.issues[] | select(.status != "fixed") | {where, group, status, count, firstAt, lastAt, reopened, users: (.users | length), note, message}]
+              | walk(if type == "string" then gsub("https?://(?<h>[^/\\s\"]+)[^\\s\"]*"; "[\(.h)]") | gsub("[\\w.+-]+@[\\w-]+(\\.[\\w-]+)+"; "[email]") else . end)' raw.json > open.json
+          rm raw.json
+          jq . open.json
+          { echo '```json'; jq . open.json; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

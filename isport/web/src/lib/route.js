@@ -1,7 +1,15 @@
 // ניווט לפי הכתובת אחרי # (עובד גם כשהאפליקציה מותקנת במסך הבית)
 import { useEffect, useState } from 'react';
 
-const read = () => window.location.hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
+// קישור שבור (למשל %E0) לא מפיל את האפליקציה – במקרה כזה נשאר הערך הגולמי
+const decode = (s) => {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+};
+const read = () => window.location.hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decode);
 
 export function useRoute() {
   const [parts, setParts] = useState(read);

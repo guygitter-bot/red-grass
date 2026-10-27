@@ -3,7 +3,7 @@ import { ArrowRight, BarChart3, Download, KeyRound, Loader2, LogOut, PlayCircle,
 import { changePassword, deleteAccount, getAuthConfig, linkGoogle, logoutAll, restoreBackup } from '../lib/api';
 import GoogleButton from './GoogleButton';
 import { backupFile } from '../lib/recipes';
-import { needsSource, readRecetteTek } from '../lib/importers';
+import { needsSource, readImportFile } from '../lib/importers';
 import { thumbnail } from '../lib/image';
 
 // הגדרות: גיבוי ושחזור, הזמנות
@@ -78,7 +78,7 @@ export default function SettingsView({ session, isOwner, user, recipes, custom, 
 
   const readImport = (file) =>
     run('import', async () => {
-      setImported({ file: readRecetteTek(new Uint8Array(await file.arrayBuffer())) });
+      setImported({ file: readImportFile(new Uint8Array(await file.arrayBuffer())) });
     });
 
   const runImport = () =>
@@ -170,8 +170,10 @@ export default function SettingsView({ session, isOwner, user, recipes, custom, 
         <section className="rounded-2xl bg-white shadow-sm p-4">
           <h2 className="font-bold text-lg">ייבוא מאפליקציה אחרת</h2>
           <p className="text-sm text-stone-500 mt-1">
-            עוברים מ-My Recipe Box (RecetteTek)? מייצאים שם גיבוי (קובץ ‎.rtk) ובוחרים אותו כאן. המתכונים נכנסים עם התמונות,
-            הקטגוריות, המועדפים והדירוגים – בלי AI ובלי לספור במכסה.
+            עוברים מאפליקציה אחרת? מייצאים שם גיבוי ובוחרים את הקובץ כאן. המתכונים נכנסים עם התמונות, הקטגוריות, המועדפים
+            והדירוגים – בלי AI ובלי לספור במכסה. אפשר מ: <b>My Recipe Box</b> (‎.rtk), <b>Paprika</b> (‎.paprikarecipes),
+            <b>Recipe Keeper</b> (קובץ ZIP), <b>Cookmate / My Cookbook</b> (‎.mcb).
+            {' '}מתכונים בפתקים של <b>Google Keep</b>? <a href="#/import" className="text-orange-700 underline">ייבוא מ-Keep</a>.
           </p>
           {!imported && (
             <button onClick={() => importRef.current?.click()} disabled={busy === 'import'} className="mt-3 rounded-xl bg-stone-100 px-4 py-2.5 font-medium flex items-center gap-1.5 disabled:opacity-40">
@@ -182,7 +184,7 @@ export default function SettingsView({ session, isOwner, user, recipes, custom, 
           <input ref={importRef} type="file" className="hidden" onChange={(e) => { if (e.target.files[0]) readImport(e.target.files[0]); e.target.value = ''; }} />
           {imported && !imported.done && (
             <div className="mt-3 rounded-xl bg-orange-50 p-3 text-sm">
-              <div className="font-bold">נמצאו {imported.file.recipes.length} מתכונים</div>
+              <div className="font-bold">נמצאו {imported.file.recipes.length} מתכונים{imported.file.app ? ` מ-${imported.file.app}` : ''}</div>
               <div className="text-stone-600 mt-0.5">
                 {Object.keys(imported.file.images).length} עם תמונה
                 {imported.file.categories.length > 0 && ` · קטגוריות: ${imported.file.categories.join(', ')}`}

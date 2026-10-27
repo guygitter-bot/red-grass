@@ -13,14 +13,18 @@ export function trackedClient(env, onUsage) {
   const wrapped = Object.create(client);
   wrapped.beta = Object.create(client.beta);
   wrapped.beta.messages = Object.create(client.beta.messages);
+  let first = true; // הקריאה הראשונה של הלקוח = פעולה אחת (פעולה עם חיפוש ברשת עושה כמה קריאות)
   wrapped.beta.messages.create = async (params, ...rest) => {
     const res = await create(params, ...rest);
+    const op = first;
+    first = false;
     const u = res?.usage || {};
     const searches = u.server_tool_use?.web_search_requests || 0;
     await onUsage?.({
       input: (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0),
       output: u.output_tokens || 0,
       searches,
+      first: op,
     });
     return res;
   };

@@ -45,7 +45,7 @@
 - תיאור: `points_tracker/README.md`. האפליקציה ב-`points_tracker/web`, השרת ב-`points_tracker/proxy`.
 - עלייה: `bis-deploy.yml` – **staging** (ענף `staging` → https://staging.bis-app.pages.dev) לפני **production**
   (main → https://bis-app.pages.dev). בקשות תיקון מתוך האפליקציה: `bis-fix.yml` (ענפים `bis-fix/*`).
-- סוכן המאכלים: `points-agent.yml`. הנוסחה זהה ב-`web/src/lib/points.js` וב-`points.py` – לשנות בשניהם.
+- סוכן המאכלים: `points-agent.yml`. הנוסחה זהה ב-`web/src/lib/points.js`, ב-`points.py` וב-`mat_kon/web/src/lib/bis.js` – לשנות בכולם.
 
 ### ביסים – הגרסה המסחרית (`bisim/`)
 - תיאור: `bisim/README.md`. אפליקציה נפרדת לגמרי מ"ביס" (קוד, שרת `bisim-api`, מאגר ומכשירים משלה) → https://bisim.pages.dev.
@@ -61,6 +61,8 @@
 - עלייה: `mat-kon.yml` אחרי מיזוג ל-main (בודק ובונה גם ב-PR).
 
 #### עבודה מול המשתמש
+- **רעיונות ושדרוגים שלא בוצעו:** `mat_kon/IDEAS.md`. כל הצעה שלא מבצעים מיד – נכנסת לשם; מה שבוצע – יוצא משם.
+  כשהמשתמש שואל "מה יש לנו ברעיונות" – לקרוא משם ולסכם.
 - לענות **רק בעברית**, פשוט וקצר.
 - "תבנה ותמזג": לבנות, לבדוק, לפתוח PR, **למזג בעצמך**, ואחר כך לבדוק שהעלייה (`mat-kon.yml` על main) הצליחה ולדווח –
   כולל "לסגור ולפתוח את האפליקציה מחדש". כשמבקשים רק דעה ("מה דעתך?") – להציע ולחכות לאישור.
@@ -80,8 +82,13 @@
 - נתונים ישנים חייבים להמשיך לעבוד: מתכונים עוברים `safeRecipe`, שדה חדש צריך ברירת מחדל.
 - רשימות משותפות (קניות, מלאי, תכנון) מסתנכרנות בפעולות לפריט (`/<list>/ops`) – לא לשלוח רשימה שלמה.
 - הוספה מקישור רצה ברקע (`/recipes?async=1` + `/jobs/:id`); שחזור/ייבוא (`/recipes/restore`) – בלי AI ובלי מכסה.
+- **אותו קישור = אותו מתכון אצל כל המשתמשים**: מטמון משותף (`api/jobs.js`, מופע `recipe-cache`, 90 יום) לפי הקישור ולפי זהות המקור (`sourceIdentity`). לא לעקוף אותו.
 - הודעות שגיאה של AI למשתמש – בעברית. המודל: `claude-opus-5-5` (beta עם fallback), עלויות נרשמות במסך "עלויות ותקלות".
 - תגיות (האשטגים) **לא מוצגות** בממשק (נשמרות רק לחיפוש). קטגוריות במסך משלהן (`#/categories`); סדר ומועדפות נשמרים בשרת לכל ספר.
+- סינון (כשר, פסח, צליאק, רגישויות, תזונה, ציוד): `diet.js` זהה ב-`api/` וב-`web/src/lib/` (בדיקה מוודאת) – לשנות בשניהם. ה-AI מסמן `diet` בבניית מתכון (עם טביעת אצבע של המצרכים); אחרת לפי מילים.
+- ניקוד ביס בדף המתכון – רק למשתמשים שבעל האפליקציה הפעיל להם (אפליקציית הניהול ← משתמשים, `user.features.bis`), לא לכולם (שיטה של שומרי משקל). הנוסחה ב-`web/src/lib/bis.js` זהה ל-`points_tracker` (בדיקה מוודאת).
+- שיחה על מתכון בקהילה (טיפים, תשובות, "הכנתי!" עם תמונה): `talk:<key>` במופע community, תמונות ב-`/img/community/<id>`; כל טקסט/תמונה עוברים `moderateTalk`, דיווח ×3 מסתיר, ניהול ב-`/admin/talk`. בלי authorId ללקוח (`publicTalk`).
+- "חסר לי?" ליד כל מצרך: `POST /recipes/:id/substitute` (`suggestSubstitutes`, רק מצרך שבמתכון, לפי הסינון שבחר המשתמש), התשובה נשמרת ב-`sub:<id>:<hash>` בספר.
 - ה-service worker לא שומר קובצי `.mp4` (סרטוני ההדרכה עוברים ישר לרשת).
 
 #### בדיקה לפני שליחה
@@ -94,18 +101,33 @@
 
 #### סרטוני הדרכה (`mat_kon/tutorials/`)
 - מוקלטים אוטומטית מהאפליקציה (שרת מדומה, בלי AI): `cd mat_kon/web && npm run build`, ואז `cd ../tutorials && node videos/<שם>.mjs`.
-- **שינוי במסך → להקליט מחדש את הסרטון שלו.** רשימת הסרטונים: `web/src/lib/tutorials.js`.
+- **לא להקליט בלי לשאול:** בכל תיקון או עדכון – לעצור ולשאול את המשתמש אם ליצור/לעדכן סרטון הדרכה (זה צורך מכסה, ולא לכל דבר צריך).
+  רק אחרי אישור – להקליט. רשימת הסרטונים: `web/src/lib/tutorials.js`.
 - קריינות: משפט חדש נכנס ל-`tutorials/voice/lines.json`; דחיפה לענף עבודה מפעילה את `mat-kon-voice.yml` שמחזיר את קובצי ה-MP3
   לענף – ואז `git pull` ולהקליט שוב. הקול: ElevenLabs, הקול "נועה" (`tutorials/voice/eleven.json`, סוד `ELEVENLABS_API_KEY`);
   Google TTS רק כגיבוי. **בלי ניקוד** – ניסינו, ונשמע גרוע יותר.
 - מוזיקה: `tutorials/music.m4a` – "Stylish Modern" של Beat and Shine מ-ElevenLabs (רישיון מסחרי במנוי), מחוברת לעצמה ללופ.
+
+#### אפליקציית הניהול (`mat_kon/admin`)
+- → https://mat-kon-admin.pages.dev, רק לבעלים (סיסמת הבעלים), מותקנת מהדפדפן (לא דרך Google Play). עולה ב-`mat-kon.yml` (job `admin`).
+- נתונים מ-`/admin/overview`, `/admin/issues`, `/admin/security`, `/admin/settings` (בדיקה בשרת: רק session של בעלים). תקלות מקובצות לפי סוג עם סטטוס (`issue:` ב-Accounts).
+- התראות לטלפון (Web Push, `api/push.js`, מפתחות ב-`admin-vapid` ב-Accounts): תקלה חדשה/שחזרה, מתכון בקהילה שהוסתר או מחכה לבדיקה.
+  לכל היותר התראה אחת בשעה לכל נושא. תקלות מקישורים מקובצות לפי סוג השגיאה והאתר (`errorGroup`), לא לפי הנוסח של ה-AI.
+  "לא נמצא מתכון" (`NoRecipeError`) אינו תקלה: נשמר ברשימה נפרדת (`no-recipe`, לשונית "לא נמצא מתכון") בלי התראה. תקלה פתוחה שחוזרת – שולחת התראה.
+  קריאת התקלות הפתוחות מכאן (בלי סיסמה בצ'אט): להפעיל את `mat-kon-issues.yml` ולקרוא את הלוג (מוסתרים אימיילים וקישורים).
+- "שלח ל-Claude לטיפול" בתקלה: `api/fixes.js` פותח issue עם התווית `matkon-fix` (בלי אימיילים, קישורים רק כשם אתר – המאגר ציבורי),
+  `mat-kon-fix.yml` + `mat_kon/fixbot/` מריצים את Claude ופותחים PR מ-`matkon-fix/<n>`; "לאשר ולהעלות" ממזג. טוקן: `MATKON_GITHUB_TOKEN` או `POINTS_GITHUB_TOKEN`.
+  צילומי מסך מצורפים נשמרים ב-R2 (`fix-shots/`, 30 יום), ב-issue רק מזהה; ה-fixbot מוריד אותם בכניסת בעלים (`OWNER_PASSWORD`) ל-`.fix/` (לא נכנס ל-commit).
+- בדיקה: `cd mat_kon/admin && npm test && npm run build`. טלפון + מחשב + מצב לילה (`bg-card` / `bg-page`).
 
 #### גיבוי
 - גיבוי לילי ל-R2 (`api/backup.js`, דלי `mat-kon-backups`, 30 ימים); שחזור ספר: `mat-kon-restore.yml`. שינוי במבנה הנתונים של ספר –
   לוודא שהגיבוי והשחזור (`/backup/export`, `/backup/import`) עדיין מכסים אותו.
 
 #### ייבוא
-- My Recipe Box / RecetteTek (`.rtk`): `web/src/lib/importers.js`, דרך הגדרות ← "ייבוא מאפליקציה אחרת". מתכון בלי מצרכים
+- "מתכון מקובץ" (Word, PDF, טקסט, תמונות, epub...) במסך `#/import`: הקריאה בטלפון (`web/src/lib/files.js`, בלי AI), ורק הקטעים שנבחרו נשלחים
+  (`/recipes/text` עם `file: true`; PDF סרוק – כמו צילום). קובץ חדש? להוסיף קורא ב-`readRecipeFile` + בדיקה ב-`files.test.js`.
+- My Recipe Box / RecetteTek (`.rtk`), Paprika (`.paprikarecipes`), Recipe Keeper (ZIP עם `recipes.html`), Cookmate (`.mcb` / XML): `web/src/lib/importers.js` (`readImportFile` מזהה לפי התוכן), דרך הגדרות ← "ייבוא מאפליקציה אחרת". Google Keep (Takeout): `web/src/lib/keep.js` – פתקים נכנסים למסך ייבוא מווטסאפ (`#/import`) ונשלחים ל-AI כמו טקסט. מתכון בלי מצרכים
   אפשר "להשלים מהמקור" (נשלח לסוכן ברקע).
 
 ### מאגר AI (`ai_maagar/`)
@@ -149,8 +171,28 @@
 - תיאור: `isport/README.md`. קטלוג חולצות בלי סליקה/עגלה: התאמה אישית -> הערה למוכר (מועתקת) -> קישור FlyLinking.
 - `isport/web` → https://isport-shop.pages.dev (`#/admin` ניהול) · `isport/api` → Worker `isport-api` (Durable Object `Shop`, תמונות ב-R2 `isport-images`). עלייה: `isport.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd isport/api && npm test` · `cd isport/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
-- קוד המוצר, הפאצ'ים והקטגוריות (סוגים: football / basketball / plain) כפולים ב-`api/model.js` וב-`web/src/lib/shirt.js` – לשנות בשניהם. סיסמה: סוד `ISPORT_ADMIN_PASSWORD`.
+- קוד המוצר, הפאצ'ים והקטגוריות (סוגים: football / basketball / plain) כפולים ב-`api/model.js` וב-`web/src/lib/shirt.js` – לשנות בשניהם.
+- סיסמאות: `ISPORT_ADMIN_PASSWORD` = המשתמש (מי שבנה); לבעל החנות סיסמה נפרדת שנקבעת בהגדרות. גיבוי לילי ל-R2 (30 יום) ושחזור בהגדרות. מפתח Claude נפרד: `ISPORT_ANTHROPIC_API_KEY`.
 - סרטוני הדרכה ב-`isport/tutorials` (אותו נוהל כמו mat-kon: נועה + מוזיקה, `isport-voice.yml`). **לא להקליט מחדש בלי לשאול**: אחרי שינוי במסך – לשאול את המשתמש אם לעדכן את הסרטונים.
+
+### קורס ערוץ מוזיקה מסונו (`suno_course/`)
+- תיאור: `suno_course/README.md`. תוכן אחד ב-`src/` ושתי גרסאות: Artifact ב-claude.ai (`build.sh`, לפרסם מחדש לאותה כתובת) ואפליקציה
+  `web` → https://suno-course.pages.dev + `api` → Worker `suno-course-api` (AI עם סיסמה). עלייה: `suno-course.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd suno_course/api && npm test` · `cd suno_course/web && npm test`. אותם כללים: טלפון + מחשב + מצב לילה.
+- כל נתון "קשה" (מחיר, סף, מכסה) עם מקור ותאריך; איורי מסכים מסומנים כאיור ולא כצילום.
+
+### מורה לנגינה – סימולטור (`music_teacher/`)
+- תיאור: `music_teacher/README.md`; תוכנית ועלויות: `music_teacher/IDEAS.md`. אפליקציה מסחרית ללימוד גיטרה לבד (קלאסית / חשמלית), מורה וידיים בתלת־ממד (Three.js).
+- `music_teacher/web` → Pages `music-teacher` (בלי שרת). עלייה: `music-teacher.yml` אחרי מיזוג ל-main. הסקיצה הישנה: `sketch/lesson1.html` (Artifact).
+- בדיקה: `cd music_teacher/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- **תמיד למזג לבד** את ה-PR (אחרי שהבדיקות ירוקות) ולעקוב שהעלייה (`music-teacher.yml` על main) הצליחה – ולדווח עם הקישור.
+- המורה מודול נפרד (`src/three/teacher.js`) כדי שאפשר יהיה להחליף בדמות קנויה. זיהוי צליל בטיונר: `src/lib/pitch.js` (פונקציה טהורה + בדיקות).
+
+### מילים באנגלית (`english_words/`)
+- תיאור: `english_words/README.md`. תרגול 35 מילים לילדים: קוראים בקול (מיקרופון) ובוחרים תרגום מ-4; 80% כדי לעבור לשלב משפטים; כל 7 סעיפי המבחן + מבחן לדוגמה (`web/public/exam.js`). סוג תרגול חדש – להוסיף גם ל-`MODES` ב-`api/stats.js` ול-`STAGES` ב-`admin/public/view.js`.
+- `english_words/web/public` (HTML+JS בלי בנייה) → https://milim-beanglit.pages.dev · ניהול להורים `admin/public` → Pages `milim-admin`
+  · שרת `api` → Worker `milim-api` (תוצאות סיבובים, סיסמת ניהול שנקבעת בכניסה הראשונה). עלייה: `english-words.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd english_words/api && npm test` · `cd english_words/web && npm test` · `cd english_words/admin && npm test`. טלפון + מחשב + מצב לילה.
 
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).

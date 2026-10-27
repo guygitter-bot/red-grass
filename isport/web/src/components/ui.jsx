@@ -51,7 +51,13 @@ export function Header({ favCount, categories }) {
   );
 }
 
-export const whatsappLink = (number, text = '') => `https://wa.me/${number}${text ? `?text=${encodeURIComponent(text)}` : ''}`;
+// מספר מקומי שנשמר פעם (050…) -> 972… כדי שהקישור יעבוד
+export const waNumber = (number) => {
+  const d = String(number || '').replace(/\D/g, '');
+  if (d.startsWith('00')) return d.slice(2);
+  return d.startsWith('0') ? `972${d.slice(1)}` : d;
+};
+export const whatsappLink = (number, text = '') => `https://wa.me/${waNumber(number)}${text ? `?text=${encodeURIComponent(text)}` : ''}`;
 
 export function Footer({ settings }) {
   return (

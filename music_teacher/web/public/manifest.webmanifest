@@ -1,0 +1,15 @@
+{
+  "name": "מורה לגיטרה",
+  "short_name": "מורה לגיטרה",
+  "description": "מורה לגיטרה בעברית – מורה בתלת־ממד, כוונון בטלפון ושיעורים צעד אחר צעד",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f1ea",
+  "theme_color": "#b45309",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

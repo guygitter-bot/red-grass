@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CATEGORIES } from './categories';
 import { CATEGORIES as API_CATEGORIES } from '../../../api/categories.js';
-import { countByCategory, filterRecipes, linkFromShare, linkFromText, sectionsToText, textToSections } from './recipes';
+import { countByCategory, filterRecipes, isVideoLink, linkFromShare, linkFromText, sectionsToText, textToSections } from './recipes';
 
 describe('categories', () => {
   it('match the server list', () => {
@@ -37,6 +37,8 @@ describe('search', () => {
     expect(filterRecipes(recipes, { query: 'הלבן' }).map((r) => r.id)).toEqual([2]);
     expect(filterRecipes(recipes, { category: 'עוגות' }).map((r) => r.id)).toEqual([1]);
     expect(filterRecipes(recipes, { favorites: true }).map((r) => r.id)).toEqual([2]);
+    expect(filterRecipes(recipes, { diets: ['parve', 'celiac'] }).map((r) => r.id)).toEqual([1, 2]);
+    expect(filterRecipes(recipes, { diets: ['vegan'] }).map((r) => r.id)).toEqual([]);
     expect(countByCategory(recipes)).toEqual({ 'עוגות': 1, 'ארוחת בוקר': 1 });
   });
 
@@ -57,7 +59,7 @@ describe('editing as text', () => {
   });
 });
 
-import { freeLeft, parseAuthHash } from './recipes';
+import { freeLeft, parseAuthHash, parseShareLink } from './recipes';
 
 describe('invites', () => {
   it('reads invite and login links', () => {
@@ -65,6 +67,14 @@ describe('invites', () => {
     expect(parseAuthHash('#login')).toEqual({ mode: 'login' });
     expect(parseAuthHash('#/r/123')).toBe(null);
     expect(parseAuthHash('')).toBe(null);
+  });
+
+  it('reads shared recipe links, on the site and in the Android app', () => {
+    const t = 'AbCdEf0123456789_-xyzAbCdEf012345';
+    expect(parseShareLink(`#recipe=${t}`)).toBe(t);
+    expect(parseShareLink(`matkon://recipe/${t}`)).toBe(t);
+    expect(parseShareLink('#recipe=short')).toBe(null);
+    expect(parseShareLink('#/r/123')).toBe(null);
   });
 
   it('counts the free recipes left', () => {
@@ -163,5 +173,19 @@ describe('orderCategories', () => {
     expect(orderCategories(list, {})).toEqual(list);
     expect(orderCategories(list, { order: ['מרקים', 'עוגות'], favorites: ['שלי'] })).toEqual(['שלי', 'מרקים', 'עוגות', 'סלטים', 'אחר']);
     expect(orderCategories(list, { order: ['גון'], favorites: ['לא קיים'] })).toEqual(list);
+  });
+});
+
+describe('isVideoLink', () => {
+  it('מזהה קישורים לסרטונים ולפוסטים ברשתות', () => {
+    expect(isVideoLink('https://www.instagram.com/reel/abc/')).toBe(true);
+    expect(isVideoLink('https://vm.tiktok.com/xyz')).toBe(true);
+    expect(isVideoLink('https://youtu.be/123')).toBe(true);
+    expect(isVideoLink('https://m.facebook.com/watch?v=1')).toBe(true);
+  });
+  it('אתר מתכונים רגיל או טקסט לא נחשבים סרטון', () => {
+    expect(isVideoLink('https://www.10dakot.co.il/recipe/x')).toBe(false);
+    expect(isVideoLink('https://notinstagram.com/x')).toBe(false);
+    expect(isVideoLink('לא קישור')).toBe(false);
   });
 });

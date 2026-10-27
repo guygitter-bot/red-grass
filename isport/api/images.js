@@ -40,13 +40,25 @@ export function sniff(bytes) {
 
 export const contentType = (ext) => TYPES[ext] || 'application/octet-stream';
 
+// הזמן המרבי חל גם על קריאת הגוף (אתר שעונה מהר ואז שולח לאט לא מעכב את הבקשה)
+// מחזיר { res, read(max), done() } – read קורא את הגוף עד גבול; done משחרר כשלא קוראים
 async function get(fetcher, url, accept) {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      ctrl.abort();
+      reject(fail(504, 'האתר לא ענה בזמן'));
+    }, TIMEOUT_MS);
+  });
+  deadline.catch(() => {});
+  const done = () => clearTimeout(timer);
   try {
-    return await fetcher(url, { headers: { 'user-agent': UA, accept }, redirect: 'follow', signal: ctrl.signal });
-  } finally {
-    clearTimeout(timer);
+    const res = await Promise.race([fetcher(url, { headers: { 'user-agent': UA, accept }, redirect: 'follow', signal: ctrl.signal }), deadline]);
+    return { res, done, read: (max) => Promise.race([readLimited(res, max), deadline]).finally(done) };
+  } catch (e) {
+    done();
+    throw e;
   }
 }
 
@@ -122,9 +134,12 @@ export async function pageImages(fetcher, pageUrl) {
   const url = publicUrl(pageUrl);
   if (!url) return [];
   try {
-    const res = await get(fetcher, url, 'text/html,application/xhtml+xml');
-    if (!res.ok || !/html/i.test(res.headers.get('content-type') || '')) return [];
-    const html = new TextDecoder().decode(await readLimited(res, MAX_PAGE_BYTES));
+    const { res, read, done } = await get(fetcher, url, 'text/html,application/xhtml+xml');
+    if (!res.ok || !/html/i.test(res.headers.get('content-type') || '')) {
+      done();
+      return [];
+    }
+    const html = new TextDecoder().decode(await read(MAX_PAGE_BYTES));
     return imagesFromHtml(html, res.url || url);
   } catch {
     return [];
@@ -134,14 +149,18 @@ export async function pageImages(fetcher, pageUrl) {
 export async function download(fetcher, imageUrl) {
   const url = publicUrl(imageUrl);
   if (!url) throw fail(400, 'כתובת התמונה לא תקינה');
-  let res;
+  let got;
   try {
-    res = await get(fetcher, url, 'image/avif,image/webp,image/png,image/jpeg');
+    got = await get(fetcher, url, 'image/avif,image/webp,image/png,image/jpeg');
   } catch {
     throw fail(502, 'לא הצלחנו להוריד את התמונה');
   }
-  if (!res.ok || (res.url && !publicUrl(res.url))) throw fail(502, 'לא הצלחנו להוריד את התמונה');
-  const bytes = await readLimited(res, MAX_IMAGE_BYTES);
+  const { res, read, done } = got;
+  if (!res.ok || (res.url && !publicUrl(res.url))) {
+    done();
+    throw fail(502, 'לא הצלחנו להוריד את התמונה');
+  }
+  const bytes = await read(MAX_IMAGE_BYTES);
   const ext = sniff(bytes);
   if (!ext) throw fail(415, 'זו לא תמונה (JPG / PNG / WEBP)');
   return { bytes, ext };

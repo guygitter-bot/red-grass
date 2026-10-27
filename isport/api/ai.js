@@ -100,28 +100,47 @@ function describe(b) {
     .join('\n');
 }
 
+// סוכם את השימוש של כל הקריאות (כולל חיפושים ברשת), כדי לדעת כמה זה עלה
+function addUp(total, u) {
+  if (!u) return total;
+  return {
+    input_tokens: total.input_tokens + (u.input_tokens || 0),
+    output_tokens: total.output_tokens + (u.output_tokens || 0),
+    cache_read_input_tokens: total.cache_read_input_tokens + (u.cache_read_input_tokens || 0),
+    cache_creation_input_tokens: total.cache_creation_input_tokens + (u.cache_creation_input_tokens || 0),
+    web_search_requests: total.web_search_requests + (u.server_tool_use?.web_search_requests || 0),
+  };
+}
+
 // מריץ את הסוכן עד שהוא קורא לכלי הסיום (החיפוש ברשת יכול לעצור באמצע – pause_turn)
 async function run(client, { system, tool, text, effort }) {
   const messages = [{ role: 'user', content: text }];
-  let usage = null;
+  let usage = { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, web_search_requests: 0 };
+  // שגיאה אחרי קריאות ששולמו – יוצאת עם השימוש עד אז (כדי שיירשם בעלויות)
+  const failed = (e) => Object.assign(e instanceof Error ? e : new Error(String(e)), { usage });
   for (let step = 0; step < 4; step++) {
-    const response = await client.beta.messages.create({
-      ...BASE,
-      max_tokens: 6000,
-      output_config: { effort },
-      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
-      tools: [WEB_SEARCH, tool],
-      messages,
-    });
-    usage = response.usage || usage;
-    if (response.stop_reason === 'refusal') throw Object.assign(new Error('לא הצלחנו להשלים את הפרטים לחולצה הזאת'), { status: 400 });
+    let response;
+    try {
+      response = await client.beta.messages.create({
+        ...BASE,
+        max_tokens: 6000,
+        output_config: { effort },
+        system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+        tools: [WEB_SEARCH, tool],
+        messages,
+      });
+    } catch (e) {
+      throw step ? failed(e) : e;
+    }
+    usage = addUp(usage, response.usage);
+    if (response.stop_reason === 'refusal') throw failed(Object.assign(new Error('לא הצלחנו להשלים את הפרטים לחולצה הזאת'), { status: 400 }));
     const call = response.content.find((b) => b.type === 'tool_use' && b.name === tool.name);
     if (call) return { input: call.input || {}, usage };
     messages.push({ role: 'assistant', content: response.content });
     if (response.stop_reason === 'pause_turn') continue;
     messages.push({ role: 'user', content: `Call ${tool.name} now.` });
   }
-  throw new Error('no answer from the agent');
+  throw failed(new Error('no answer from the agent'));
 }
 
 export async function enrich(client, basics) {

@@ -3,9 +3,10 @@
 //   #/admin/edit/<id>    עריכה (או new למוצר חדש): קטגוריה ופרטים בסיסיים -> "מלא אוטומטית" -> מאשרים תמונות -> שומרים
 //   #/admin/settings     קטגוריות, וואטסאפ, אינסטגרם, הודעה בראש האתר
 //   #/admin/import       ייבוא מערוץ טלגרם (ImportTelegram.jsx)
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowDown, ArrowRight, ArrowUp, Check, Eye, EyeOff, ImagePlus, Link2, LogOut, Plus, Search, Send, Settings, Sparkles, Star, Trash2, X } from 'lucide-react';
 import { api, imageUrl, load, shrinkImage, store } from '../lib/api';
+import { USD_ILS, money, monthCost, monthName } from '../lib/cost';
 import { go } from '../lib/route';
 import { DEFAULT_CATEGORIES, KIND_LABEL, TEMPLATES, autoCode, searchShirts, withCategories } from '../lib/shirt';
 import { Chip, Field, ShirtImage, ThemeButton, TutorialVideo, inputClass } from './ui';
@@ -14,6 +15,26 @@ import ImportTelegram from './ImportTelegram';
 
 const TOKEN = 'isport_admin';
 const MAX_IMAGES = 4;
+// טיוטת עורך שנשמרת כשהחיבור פג באמצע עבודה (sessionStorage) וחוזרת אחרי כניסה מחדש
+const DRAFT = 'isport_draft';
+const DRAFT_MS = 24 * 60 * 60 * 1000;
+const EXPIRED = 'החיבור פג – התחברו שוב';
+const readDraft = (id) => {
+  try {
+    const d = JSON.parse(sessionStorage.getItem(DRAFT) || 'null');
+    return d && d.id === id && Date.now() - d.at < DRAFT_MS ? d : null;
+  } catch {
+    return null;
+  }
+};
+const writeDraft = (d) => {
+  try {
+    if (d) sessionStorage.setItem(DRAFT, JSON.stringify({ ...d, at: Date.now() }));
+    else sessionStorage.removeItem(DRAFT);
+  } catch {
+    // לא נשמר
+  }
+};
 // הודעה שעוברת לעורך אחרי שמוצר חדש נשמר (העורך נפתח מחדש עם המזהה שלה)
 let flash = null;
 
@@ -21,40 +42,68 @@ export default function Admin({ route }) {
   const [token, setToken] = useState(() => load(TOKEN, ''));
   const [state, setState] = useState(null);
   const [error, setError] = useState('');
+  // הודעה במסך הכניסה (למשל: החיבור פג) + מה שנשמר בעורך כשהחיבור נפל
+  const [notice, setNotice] = useState('');
+  const draftRef = useRef(null);
+  const tokenRef = useRef(token);
+  tokenRef.current = token;
 
   const call = async (path, body) => {
+    const used = token;
     try {
-      return await api(path, body, token);
+      return await api(path, body, used);
     } catch (e) {
-      if (e.status === 401) {
+      // החיבור פג: שומרים את הטיוטה הפתוחה, מנקים הכול וחוזרים למסך הכניסה
+      if (e.status === 401 && tokenRef.current === used && used) {
+        if (draftRef.current) writeDraft(draftRef.current());
         store(TOKEN, null);
+        tokenRef.current = '';
+        setState(null);
+        setNotice(EXPIRED);
         setToken('');
       }
       throw e;
     }
   };
 
-  const refresh = () =>
-    call('/admin/state')
+  const refresh = () => {
+    const used = token;
+    return call('/admin/state')
       .then((s) => {
+        // תשובה שהגיעה אחרי יציאה / החלפת משתמש – לא מציגים
+        if (tokenRef.current !== used) return;
         setState(s);
         setError('');
       })
       .catch((e) => setError(e.message));
+  };
 
   useEffect(() => {
     if (token) refresh();
   }, [token]);
 
+  // בכניסה להגדרות – נתונים עדכניים (העלויות משתנות אחרי כל השלמה אוטומטית)
   useEffect(() => {
+    if (token && route[0] === 'settings') refresh();
+  }, [route[0]]);
+
+  useEffect(() => {
+    const prev = document.title;
     document.title = 'ניהול – Isport';
+    return () => {
+      document.title = prev;
+    };
   }, []);
 
   if (!token) {
     return (
       <Login
+        notice={notice}
         onLogin={(t) => {
           store(TOKEN, t);
+          tokenRef.current = t;
+          setState(null);
+          setNotice('');
           setToken(t);
         }}
       />
@@ -63,7 +112,11 @@ export default function Admin({ route }) {
 
   const logout = async () => {
     await call('/logout').catch(() => {});
+    writeDraft(null);
     store(TOKEN, null);
+    tokenRef.current = '';
+    setState(null);
+    setNotice('');
     setToken('');
   };
 
@@ -73,17 +126,26 @@ export default function Admin({ route }) {
 
   const categories = state?.categories || DEFAULT_CATEGORIES;
   let page;
-  if (!state) page = <div className="p-10 text-center text-muted">{error || 'טוען…'}</div>;
+  if (!state) page = (
+      <div className="p-10 text-center text-muted">
+        {error || 'טוען…'}
+        {error && (
+          <div className="mt-4">
+            <button onClick={refresh} className="rounded-full bg-ink px-5 py-2.5 font-bold text-white dark:bg-lime dark:text-ink">נסו שוב</button>
+          </div>
+        )}
+      </div>
+    );
   else if (route[0] === 'edit') {
     const shirt = route[1] === 'new' ? null : state.shirts.find((s) => s.id === route[1]);
     page =
       route[1] !== 'new' && !shirt ? (
         <div className="p-10 text-center text-muted">המוצר לא נמצא</div>
       ) : (
-        <Editor key={route[1]} shirt={shirt} categories={categories} call={call} imagesReady={state.images} onSaved={putShirt} onDeleted={refresh} />
+        <Editor key={route[1]} shirt={shirt} categories={categories} call={call} imagesReady={state.images} draftRef={draftRef} onSaved={putShirt} onDeleted={refresh} />
       );
-  } else if (route[0] === 'import') page = <ImportTelegram state={state} categories={categories} call={call} onSaved={putShirt} />;
-  else if (route[0] === 'settings') page = <SettingsPage state={state} call={call} onSaved={(patch) => setState((s) => ({ ...s, ...patch }))} />;
+  } else if (route[0] === 'import') page = <ImportTelegram state={state} categories={categories} call={call} onSaved={putShirt} onLost={(text) => setNotice((n) => `${n ? `${n}\n` : ''}${text}`)} />;
+  else if (route[0] === 'settings') page = <SettingsPage state={state} call={call} onSaved={(patch) => setState((s) => (s ? { ...s, ...patch } : s))} />;
   else page = <List state={state} categories={categories} call={call} onChange={putShirt} />;
 
   return (
@@ -110,7 +172,7 @@ export default function Admin({ route }) {
   );
 }
 
-function Login({ onLogin }) {
+function Login({ onLogin, notice }) {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -132,6 +194,7 @@ function Login({ onLogin }) {
       <Logo className="h-36" />
       <form onSubmit={submit} className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-xl">
         <h1 className="mb-4 text-center text-lg font-bold">כניסה לניהול</h1>
+        {notice && <p className="mb-3 whitespace-pre-line rounded-xl bg-amber-400/20 p-3 text-sm text-amber-800 dark:text-amber-200">{notice}</p>}
         <input
           type="password"
           value={password}
@@ -226,7 +289,7 @@ function List({ state, categories, call, onChange }) {
             <a href={`#/admin/edit/${s.id}`} className="flex min-w-0 flex-1 items-center gap-3">
               <ShirtImage shirt={s} className="h-14 w-14 shrink-0 rounded-xl" />
               <div className="min-w-0">
-                <div className="truncate font-bold">
+                <div className="line-clamp-2 break-words font-bold">
                   {s.featured && <Star size={14} className="me-1 inline fill-amber-400 text-amber-400" />}
                   {s.teamHe || s.team} · {s.type} {s.year}
                 </div>
@@ -251,7 +314,8 @@ function List({ state, categories, call, onChange }) {
         {!list.length && <div className="p-8 text-center text-muted">{state.shirts.length ? 'לא נמצאו מוצרים' : 'עוד אין מוצרים. לחצו "מוצר חדש".'}</div>}
       </div>
       <p className="mt-6 text-center text-xs text-muted">
-        השלמה אוטומטית החודש: {state.usage.calls} פעמים
+        השלמה אוטומטית החודש: {state.usage.calls} פעמים · בערך {money(monthCost(state.usage).ils)} ·{' '}
+        <a href="#/admin/settings" className="underline">פירוט</a>
       </p>
     </div>
   );
@@ -285,27 +349,37 @@ const EMPTY = {
   code: '', codeManual: false, flyLink: '', images: [], longSleeve: false, published: false, featured: false,
 };
 
-function Editor({ shirt, categories, call, imagesReady, onSaved, onDeleted }) {
+function Editor({ shirt, categories, call, imagesReady, draftRef, onSaved, onDeleted }) {
   // מוצר חדש מתוך קטגוריה (#/admin/edit/new/<קטגוריה>)
   const startCategory = window.location.hash.split('/')[4];
+  // טיוטה שנשמרה כשהחיבור פג (אותו מוצר) – חוזרת כמו שהייתה
+  const [draft] = useState(() => {
+    const d = readDraft(shirt?.id || 'new');
+    writeDraft(null);
+    return d;
+  });
+  // מתי המוצר נשמר לאחרונה כשהעורך נפתח – נשלח כ-base כדי לא לדרוס שינוי ממכשיר אחר
+  const [baseAt, setBaseAt] = useState(() => (draft ? draft.baseAt : shirt?.updatedAt));
   const [form, setForm] = useState(() => {
+    if (draft) return { ...EMPTY, ...draft.form };
     const start = categories.find((c) => c.id === startCategory);
     const fresh = start ? { category: start.id, type: FIELDS[start.template].types[0] || '' } : {};
     return { ...EMPTY, ...fresh, ...(shirt || {}) };
   });
-  const [tagsText, setTagsText] = useState(() => (shirt?.tags || []).join(', '));
+  const [tagsText, setTagsText] = useState(() => (draft ? draft.tagsText : (shirt?.tags || []).join(', ')));
   const [suggestions, setSuggestions] = useState([]);
   const [auto, setAuto] = useState({ details: false, images: false });
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState(() => {
     const f = flash;
     flash = null;
-    return f;
+    return draft ? { text: 'החיבור פג בזמן העבודה – הטיוטה שלכם שוחזרה. בדקו ושמרו.' } : f;
   });
   const [imageLink, setImageLink] = useState('');
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }));
-  const code = form.codeManual ? form.code : autoCode(form);
+  // בלי קבוצה עוד אין קוד (אחרת היה מוצג רק "Home")
+  const code = form.codeManual ? form.code : form.team.trim() ? autoCode(form) : '';
   const full = form.images.length >= MAX_IMAGES;
   const template = categories.find((c) => c.id === form.category)?.template || 'football';
   const F = FIELDS[template];
@@ -320,19 +394,36 @@ function Editor({ shirt, categories, call, imagesReady, onSaved, onDeleted }) {
 
   const fail = (e) => setMsg({ error: true, text: e.message });
 
+  // אם החיבור יפול באמצע – מסך הניהול ישמור את מה שבעורך (ראו call ב-Admin)
+  useEffect(() => {
+    draftRef.current = () => ({ id: shirt?.id || 'new', form, tagsText, baseAt });
+    return () => {
+      draftRef.current = null;
+    };
+  });
+
   // "מלא אוטומטית": פרטים + הצעות תמונות במקביל
   const autoFill = async () => {
-    if (!form.team.trim()) return setMsg({ error: true, text: 'כתבו קודם את שם הקבוצה / הנבחרת' });
+    if (!form.team.trim()) return setMsg({ error: true, text: plain ? 'כתבו קודם את שם המותג' : 'כתבו קודם את שם הקבוצה / הנבחרת' });
     setMsg(null);
     setAuto({ details: true, images: true });
+    // התשובה יכולה לקחת עד דקה: משלימים רק שדה שלא השתנה מאז הלחיצה
+    const snap = form;
+    const snapTags = tagsText;
     const basics = { category: form.category, team: form.team, type: form.type, year: form.year, color: form.color };
     const details = call('/admin/enrich', basics)
       .then(({ details: d }) => {
         setForm((f) => ({
           ...f,
-          ...Object.fromEntries(Object.entries(d).filter(([k, v]) => k !== 'tags' && v)),
+          ...Object.fromEntries(
+            Object.entries(d).filter(([k, v]) => {
+              if (k === 'tags' || !v || f[k] !== snap[k]) return false;
+              // סוג ושנה שהמשתמש כתב – נשארים (הסוכן מתבקש לשמור אותם)
+              return !((k === 'type' || k === 'year') && String(snap[k] || '').trim());
+            }),
+          ),
         }));
-        setTagsText(d.tags.join(', '));
+        setTagsText((cur) => (cur === snapTags ? (d.tags || []).join(', ') : cur));
       })
       .catch(fail)
       .finally(() => setAuto((a) => ({ ...a, details: false })));
@@ -397,7 +488,9 @@ function Editor({ shirt, categories, call, imagesReady, onSaved, onDeleted }) {
       tags: tagsText.split(/[,،\n]/).map((t) => t.trim()).filter(Boolean),
     };
     try {
-      const res = await call('/admin/shirt', body);
+      const res = await call('/admin/shirt', shirt ? { ...body, base: baseAt } : body);
+      writeDraft(null);
+      setBaseAt(res.shirt.updatedAt);
       onSaved(res.shirt);
       setForm({ ...EMPTY, ...res.shirt });
       const done = { text: res.shirt.published ? 'נשמר ✓ המוצר מופיע באתר' : 'נשמר ✓ (מוסתר מהאתר)' };
@@ -504,7 +597,11 @@ function Editor({ shirt, categories, call, imagesReady, onSaved, onDeleted }) {
                     <ImagePlus size={22} />
                     {busy === 'upload' ? 'מעלה…' : 'מהמכשיר'}
                   </span>
-                  <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => upload(e.target.files)} />
+                  <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => {
+                      upload(e.target.files);
+                      e.target.value = '';
+                    }}
+                  />
                 </label>
               )}
             </div>
@@ -699,17 +796,32 @@ function Toggle({ label, checked, onChange }) {
 
 function SettingsPage({ state, call, onSaved }) {
   const [form, setForm] = useState(state.settings);
+  // מאיפה הטופס נטען (settingsAt) – נשלח כ-base; ואם לא נגעו בו, רענון מהשרת מחליף אותו
+  const [baseAt, setBaseAt] = useState(state.settingsAt);
+  const [dirty, setDirty] = useState(false);
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
-  const usage = useMemo(() => state.usage, [state.usage]);
+  const change = (patch) => {
+    setDirty(true);
+    setForm((f) => ({ ...f, ...patch }));
+  };
+
+  useEffect(() => {
+    if (!dirty) {
+      setForm(state.settings);
+      setBaseAt(state.settingsAt);
+    }
+  }, [state.settings, state.settingsAt]);
 
   const save = async () => {
     setBusy(true);
     setMsg(null);
     try {
-      const { settings } = await call('/admin/settings', form);
+      const { settings, settingsAt } = await call('/admin/settings', { ...form, base: baseAt });
       setForm(settings);
-      onSaved({ settings });
+      setBaseAt(settingsAt);
+      setDirty(false);
+      onSaved({ settings, settingsAt });
       setMsg({ text: 'נשמר ✓' });
     } catch (e) {
       setMsg({ error: true, text: e.message });
@@ -724,17 +836,18 @@ function SettingsPage({ state, call, onSaved }) {
         <ArrowRight size={16} /> לכל המוצרים
       </a>
       <h1 className="mb-4 text-2xl font-black">הגדרות האתר</h1>
-      <Categories state={state} call={call} onSaved={(categories) => onSaved({ categories })} />
+      <Categories state={state} call={call} onSaved={(categories, categoriesAt) => onSaved({ categories, categoriesAt })} />
+      {state.role !== 'client' && <ClientPassword state={state} call={call} onSaved={(clientPassSet) => onSaved({ clientPassSet })} />}
       <Box title="פרטי קשר והודעה">
         <div className="space-y-3">
           <Field label="מספר וואטסאפ לשאלות" hint="עם קידומת מדינה, למשל 972501234567. ריק = בלי כפתור וואטסאפ">
-            <input value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} dir="ltr" inputMode="tel" className={inputClass} />
+            <input value={form.whatsapp} onChange={(e) => change({ whatsapp: e.target.value })} dir="ltr" inputMode="tel" className={inputClass} />
           </Field>
           <Field label="אינסטגרם" hint="שם המשתמש בלבד">
-            <input value={form.instagram} onChange={(e) => setForm({ ...form, instagram: e.target.value })} dir="ltr" placeholder="isport" className={inputClass} />
+            <input value={form.instagram} onChange={(e) => change({ instagram: e.target.value })} dir="ltr" placeholder="isport" className={inputClass} />
           </Field>
           <Field label="הודעה בראש האתר" hint="למשל: משלוח חינם בקנייה של 2 חולצות. ריק = בלי הודעה">
-            <input value={form.announcement} onChange={(e) => setForm({ ...form, announcement: e.target.value })} maxLength={120} className={inputClass} />
+            <input value={form.announcement} onChange={(e) => change({ announcement: e.target.value })} maxLength={120} className={inputClass} />
           </Field>
         </div>
         {msg && <p className={`mt-3 rounded-xl p-3 text-sm ${msg.error ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-lime/20'}`}>{msg.text}</p>}
@@ -742,9 +855,8 @@ function SettingsPage({ state, call, onSaved }) {
           {busy ? 'שומר…' : 'שמירה'}
         </button>
       </Box>
-      <p className="mt-4 text-sm text-muted">
-        השלמה אוטומטית החודש: {usage.calls} פעמים ({Math.round((usage.input + usage.output) / 1000)} אלף טוקנים)
-      </p>
+<Costs months={state.usageMonths || []} />
+      <Backups dev={state.role !== 'client'} call={call} />
     </div>
   );
 }
@@ -752,26 +864,41 @@ function SettingsPage({ state, call, onSaved }) {
 // ניהול הקטגוריות: שם, סוג (מה הלקוח יכול להתאים), סדר, הסתרה. קטגוריה עם מוצרים לא נמחקת – מסתירים אותה
 function Categories({ state, call, onSaved }) {
   const [list, setList] = useState(() => state.categories || DEFAULT_CATEGORIES);
+  const [baseAt, setBaseAt] = useState(state.categoriesAt);
+  const [dirty, setDirty] = useState(false);
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!dirty) {
+      setList(state.categories || DEFAULT_CATEGORIES);
+      setBaseAt(state.categoriesAt);
+    }
+  }, [state.categories, state.categoriesAt]);
   const count = (id) => state.shirts.filter((s) => (s.category || 'football') === id).length;
 
-  const edit = (i, patch) => setList((l) => l.map((c, j) => (j === i ? { ...c, ...patch } : c)));
+  // כל שינוי של המשתמש מסמן שהטופס נערך (רענון מהשרת לא ידרוס אותו)
+  const upd = (fn) => {
+    setDirty(true);
+    setList(fn);
+  };
+  const edit = (i, patch) => upd((l) => l.map((c, j) => (j === i ? { ...c, ...patch } : c)));
   const move = (i, d) =>
-    setList((l) => {
+    upd((l) => {
       const out = [...l];
       [out[i], out[i + d]] = [out[i + d], out[i]];
       return out;
     });
-  const add = () => setList((l) => [...l, { id: `cat-${Math.random().toString(36).slice(2, 8)}`, name: '', template: 'plain', active: true }]);
+  const add = () => upd((l) => [...l, { id: `cat-${Math.random().toString(36).slice(2, 8)}`, name: '', template: 'plain', active: true }]);
 
   const save = async () => {
     setBusy(true);
     setMsg(null);
     try {
-      const { categories } = await call('/admin/categories', { categories: list });
+      const { categories, categoriesAt } = await call('/admin/categories', { categories: list, base: baseAt });
       setList(categories);
-      onSaved(categories);
+      setBaseAt(categoriesAt);
+      setDirty(false);
+      onSaved(categories, categoriesAt);
       setMsg({ text: 'הקטגוריות נשמרו ✓' });
     } catch (e) {
       setMsg({ error: true, text: e.message });
@@ -796,7 +923,7 @@ function Categories({ state, call, onSaved }) {
                 </button>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <select value={c.template} onChange={(e) => edit(i, { template: e.target.value })} className="min-w-0 flex-1 rounded-lg border border-line bg-page px-2 py-1.5 text-sm" aria-label="סוג">
+                <select value={c.template} onChange={(e) => edit(i, { template: e.target.value })} className="w-full min-w-0 rounded-lg sm:w-auto sm:flex-1 border border-line bg-page px-2 py-1.5 text-sm" aria-label="סוג">
                   {Object.entries(TEMPLATES).map(([id, t]) => (
                     <option key={id} value={id}>{t.label}</option>
                   ))}
@@ -811,7 +938,7 @@ function Categories({ state, call, onSaved }) {
                 {count(c.id) ? (
                   <span className="text-xs text-muted">{count(c.id)} מוצרים</span>
                 ) : (
-                  <button onClick={() => setList((l) => l.filter((_, j) => j !== i))} className="rounded-full p-1.5 text-red-600 hover:bg-soft dark:text-red-400" aria-label="מחיקה">
+                  <button onClick={() => upd((l) => l.filter((_, j) => j !== i))} className="rounded-full p-1.5 text-red-600 hover:bg-soft dark:text-red-400" aria-label="מחיקה">
                     <Trash2 size={15} />
                   </button>
                 )}
@@ -828,5 +955,203 @@ function Categories({ state, call, onSaved }) {
         </button>
       </Box>
     </div>
+  );
+}
+
+// עלויות ההשלמה האוטומטית לפי חודש – הערכה לפי המחירון (לגבייה מהלקוח: החשבון המדויק ב-Anthropic Console)
+function Costs({ months }) {
+  const total = months.reduce((sum, m) => sum + monthCost(m).ils, 0);
+  return (
+    <section className="mt-5 rounded-2xl bg-card p-4 ring-1 ring-line">
+      <h2 className="font-extrabold">עלות ההשלמה האוטומטית</h2>
+      <p className="mb-3 mt-0.5 text-sm text-muted">הערכה לפי המחירון של Claude (דולר ≈ {USD_ILS} ₪). התצוגה בלבד – לא נגבה כאן כסף.</p>
+      {months.length ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-right text-muted">
+              <tr className="border-b border-line">
+                <th className="py-2 font-medium">חודש</th>
+                <th className="py-2 font-medium">מוצרים שמולאו</th>
+                <th className="py-2 font-medium">חיפושי תמונות</th>
+                <th className="py-2 font-medium">חיפושים ברשת</th>
+                <th className="py-2 text-left font-medium">עלות</th>
+              </tr>
+            </thead>
+            <tbody>
+              {months.map((m) => {
+                const c = monthCost(m);
+                return (
+                  <tr key={m.month} className="border-b border-line last:border-0">
+                    <td className="py-2">{monthName(m.month)}</td>
+                    <td className="py-2 tabular-nums">{m.enrich ?? m.calls}</td>
+                    <td className="py-2 tabular-nums">{m.images ?? '–'}</td>
+                    <td className="py-2 tabular-nums">{m.searches ?? '–'}</td>
+                    <td className="py-2 text-left font-bold tabular-nums">
+                      {money(c.ils)} <span className="font-normal text-muted">({money(c.usd, '$')})</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            {months.length > 1 && (
+              <tfoot>
+                <tr className="border-t-2 border-line">
+                  <td className="py-2 font-bold" colSpan={4}>סה"כ</td>
+                  <td className="py-2 text-left font-bold tabular-nums">{money(total)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      ) : (
+        <p className="text-sm text-muted">עוד לא השתמשו בהשלמה האוטומטית.</p>
+      )}
+    </section>
+  );
+}
+
+// הסיסמה של בעל החנות – רק מי שבנה את האתר קובע אותה (הסיסמה שלו עצמו נשארת ב-GitHub)
+function ClientPassword({ state, call, onSaved }) {
+  const [password, setPassword] = useState('');
+  const [msg, setMsg] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const save = async (value) => {
+    if (value === '' && !window.confirm('לבטל את הגישה של בעל החנות למסך הניהול?')) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await call('/admin/client-password', { password: value });
+      onSaved(res.clientPassSet);
+      setPassword('');
+      setMsg({ text: value ? 'נשמר ✓ הסיסמה הקודמת כבר לא עובדת' : 'הגישה בוטלה ✓' });
+    } catch (e) {
+      setMsg({ error: true, text: e.message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mb-5">
+      <Box title="סיסמה לבעל החנות" sub="סיסמה נפרדת משלך. אפשר להחליף או לבטל בכל רגע – ובעל החנות מתנתק מיד. רק אתה רואה את החלק הזה.">
+        <p className="mb-3 text-sm">
+          מצב: {state.clientPassSet ? <b className="text-lime-ink">יש סיסמה לבעל החנות</b> : <b>עוד לא נקבעה</b>}
+        </p>
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!busy && password.length >= 8) save(password);
+          }}
+        >
+          <input
+            type="text"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="סיסמה חדשה (8 תווים לפחות)"
+            autoComplete="new-password"
+            dir="ltr"
+            className={inputClass}
+          />
+          <button type="submit" disabled={busy || password.length < 8} className="shrink-0 rounded-xl bg-ink px-4 font-bold text-white disabled:opacity-50 dark:bg-lime dark:text-ink">
+            שמירה
+          </button>
+        </form>
+        <p className="mt-2 text-xs text-muted">שולחים לבעל החנות את הסיסמה בהודעה פרטית. הסיסמה לא נשמרת באתר אלא בצורה מוצפנת, ואי אפשר לראות אותה שוב.</p>
+        {state.clientPassSet && (
+          <button onClick={() => save('')} disabled={busy} className="mt-3 text-sm text-red-600 hover:underline dark:text-red-400">
+            ביטול הגישה של בעל החנות
+          </button>
+        )}
+        {msg && <p className={`mt-3 rounded-xl p-3 text-sm ${msg.error ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-lime/20'}`}>{msg.text}</p>}
+      </Box>
+    </div>
+  );
+}
+
+// תאריך בפורמט קבוע: 18.10.2026 20:09 (בלי פסיק של ה-locale שמתהפך ב-RTL)
+const fmtWhen = (at) => {
+  const d = new Date(at);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+
+const BACKUP_KIND = (key) => (key.endsWith('-restore.json') ? 'לפני שחזור' : key.includes('T') ? 'ידני' : 'לילי');
+
+// גיבויים: כל לילה אוטומטית (30 יום אחורה) + "גיבוי עכשיו". שחזור – רק למי שבנה את האתר
+function Backups({ dev, call }) {
+  const [list, setList] = useState(null);
+  const [busy, setBusy] = useState('');
+  const [msg, setMsg] = useState(null);
+
+  const refresh = () =>
+    call('/admin/backups')
+      .then((r) => setList(r.backups))
+      .catch((e) => setMsg({ error: true, text: e.message }));
+  useEffect(() => {
+    refresh();
+  }, []);
+
+  const backupNow = async () => {
+    setBusy('now');
+    setMsg(null);
+    try {
+      const r = await call('/admin/backup-now');
+      setMsg({ text: `גובה ✓ (${r.shirts} מוצרים)` });
+      await refresh();
+    } catch (e) {
+      setMsg({ error: true, text: e.message });
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const restore = async (b) => {
+    const when = fmtWhen(b.at);
+    if (!window.confirm(`לשחזר את האתר למצב של ${when}?\nהמוצרים, הקטגוריות וההגדרות יוחלפו. המצב הנוכחי יגובה קודם, כך שאפשר לחזור אליו.`)) return;
+    setBusy(b.key);
+    setMsg(null);
+    try {
+      const r = await call('/admin/restore', { key: b.key });
+      setMsg({ text: `שוחזר ✓ (${r.shirts} מוצרים). טוען מחדש…` });
+      setTimeout(() => window.location.reload(), 1200);
+    } catch (e) {
+      setMsg({ error: true, text: e.message });
+      setBusy('');
+    }
+  };
+
+  return (
+    <section className="mt-5 rounded-2xl bg-card p-4 ring-1 ring-line">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-extrabold">גיבויים</h2>
+          <p className="mt-0.5 text-sm text-muted">כל לילה נשמר גיבוי של המוצרים, הקטגוריות וההגדרות, ל-30 יום. גם תמונות שנמחקו נשמרות 31 יום.</p>
+        </div>
+        <button onClick={backupNow} disabled={Boolean(busy)} className="shrink-0 rounded-full px-4 py-2 text-sm font-bold ring-1 ring-line hover:bg-soft disabled:opacity-50">
+          {busy === 'now' ? 'מגבה…' : 'גיבוי עכשיו'}
+        </button>
+      </div>
+      {msg && <p className={`mt-3 rounded-xl p-3 text-sm ${msg.error ? 'bg-red-500/10 text-red-700 dark:text-red-300' : 'bg-lime/20'}`}>{msg.text}</p>}
+      <div className="mt-3 max-h-80 divide-y divide-line overflow-y-auto">
+        {list === null && <p className="py-3 text-sm text-muted">טוען…</p>}
+        {list?.length === 0 && <p className="py-3 text-sm text-muted">עוד אין גיבויים. הראשון ייווצר הלילה (או לחצו "גיבוי עכשיו").</p>}
+        {list?.map((b) => (
+          <div key={b.key} className="flex items-center justify-between gap-3 py-2 text-sm">
+            <div>
+              <span dir="ltr" className="inline-block tabular-nums">{fmtWhen(b.at)}</span>
+              <span className="ms-2 rounded-full bg-soft px-2 py-0.5 text-xs">{BACKUP_KIND(b.key)}</span>
+              <span className="ms-2 text-xs text-muted">{Math.max(1, Math.round(b.size / 1024))}KB</span>
+            </div>
+            {dev && (
+              <button onClick={() => restore(b)} disabled={Boolean(busy)} className="shrink-0 text-xs font-bold text-lime-ink hover:underline disabled:opacity-50">
+                {busy === b.key ? 'משחזר…' : 'שחזור'}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }

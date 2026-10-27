@@ -20,7 +20,7 @@ await record('recipe', async ({ page, say, tap, type, wait, card, uncard, point,
   await say('ב<b>לב</b> למעלה מסמנים אותו כמועדף', 1100);
   await tap(page.getByRole('button', { name: 'מועדף' }), { after: 1000 });
   await say('וב<b>שיתוף</b> שולחים אותו לחברים', 600);
-  await point(page.getByRole('button', { name: 'שיתוף' }), 1500);
+  await point(page.getByRole('button', { name: 'שליחת המתכון' }), 1500);
 
   await say('מתכון יכול להיות בכמה קטגוריות. ב<b>+ קטגוריה</b> מוסיפים עוד אחת', 1400);
   const cat = page.getByRole('combobox', { name: 'הוספה לקטגוריה' });
@@ -37,12 +37,20 @@ await record('recipe', async ({ page, say, tap, type, wait, card, uncard, point,
   await say('תוך כדי הכנה מסמנים כל מצרך שכבר הוספתם', 1000, true);
   await tap(page.getByRole('button', { name: /שמן זית/ }).first(), { after: 500 });
   await tap(page.getByRole('button', { name: /בצל קצוץ/ }).first(), { after: 900 });
+  await say('חסר לכם מצרך? לוחצים <b>חסר לי?</b> לידו', 1200, true);
+  await tap(page.getByRole('button', { name: /תחליף ל.*פפריקה/ }), { after: 600 });
+  await page.getByText('פפריקה חריפה + קורט סוכר').waitFor({ timeout: 10000 });
+  await say('ומקבלים תחליף שמתאים למתכון הזה – כמה לשים, ומה זה ישנה', 3200, true);
+  await say('אפשר לשמור את התחליף בהערות שלכם', 1200, true);
+  await tap(page.getByRole('button', { name: 'שמירה בהערות שלי' }).first(), { after: 1200 });
+  await tap(page.getByRole('button', { name: 'סגירה' }).last(), { after: 600 });
   await hideDot();
 
   await reveal(page.getByText('חסר לך בבית:'), 380);
   await say('כאן רואים מה <b>חסר לכם בבית</b>, לפי מה שיש במקרר ובמזווה', 2800, true);
   await say('ובלחיצה – רק החסרים נכנסים לרשימת הקניות', 1200, true);
-  await tap(page.getByRole('button', { name: 'רק החסרים לרשימת הקניות' }), { after: 1800 });
+  await tap(page.getByRole('button', { name: 'רק החסרים לרשימת הקניות' }), { after: 1200 });
+  await tap(page.getByRole('button', { name: /^הוספה לרשימה/ }), { after: 1500 });
   await hideDot();
 
   await reveal(page.getByRole('heading', { name: 'אופן ההכנה' }), 80, 700);

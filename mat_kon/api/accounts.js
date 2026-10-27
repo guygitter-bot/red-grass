@@ -21,7 +21,10 @@ const OPEN_DAILY_MAX = 200; // הרשמות בלי קישור הזמנה ביו�
 // הזמנה שלא נוצלה תוך 30 יום פגה (הזמנות ישנות בלי תאריך – בלי תפוגה)
 const inviteExpired = (invite) => !invite.userId && invite.expiresAt && Date.parse(invite.expiresAt) < Date.now();
 const JOIN_DAYS = 7;
+const SHARE_DAYS = 365; // קישור לשיתוף מתכון תקף שנה
 export const OWNER_BOOK = 'owner';
+
+import { createVapidKeys, sendPush, validSubscription } from './push.js';
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
 const err = (status, error) => json({ error }, status);
@@ -65,6 +68,8 @@ export const normalizeEmail = (e) => String(e || '').trim().toLowerCase();
 const validEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) && e.length <= 200;
 
 // מה שהאפליקציה רואה על המשתמש (בלי הסיסמה)
+export const USER_FEATURES = ['bis'];
+
 export const publicUser = (u, freeLimit) => ({
   id: u.id,
   name: u.name,
@@ -76,7 +81,12 @@ export const publicUser = (u, freeLimit) => ({
   ...(u.bookId ? { bookId: u.bookId } : {}),
   google: Boolean(u.google),
   password: Boolean(u.hash),
+  // תכונות שבעל האפליקציה פתח למשתמש מסוים (למשל ניקוד ביס)
+  ...(u.features && Object.keys(u.features).length ? { features: u.features } : {}),
 });
+
+// "לא נמצא מתכון" – הסוכן קרא את המקור ולא מצא בו מתכון. זו לא תקלה בקוד
+const isNoRecipe = (group) => /^NoRecipeError:/.test(String(group || ''));
 
 export class Accounts {
   constructor(state, env) {
@@ -97,6 +107,9 @@ export class Accounts {
     for (const [k, v] of await this.storage.list({ prefix: 'device:' })) if (now - v.at > SESSION_DAYS * 86400000) drop.push(k);
     const today = new Date(now).toISOString().slice(0, 10);
     for (const k of (await this.storage.list({ prefix: 'open-day:' })).keys()) if (k.slice(9) < today) drop.push(k);
+    for (const [k, v] of await this.storage.list({ prefix: 'share:' })) if (now - Date.parse(v.createdAt) > SHARE_DAYS * 86400000) drop.push(k);
+    const oldDay = new Date(now - 90 * 86400000).toISOString().slice(0, 10);
+    for (const k of (await this.storage.list({ prefix: 'sec:' })).keys()) if (k.slice(4) < oldDay) drop.push(k);
     for (let i = 0; i < drop.length; i += 128) await this.storage.delete(drop.slice(i, i + 128));
     await this.storage.setAlarm?.(now + 86400000);
   }
@@ -112,6 +125,79 @@ export class Accounts {
       await this.storage.put('migrated-invite-paid', true);
     }
     if (this.storage.getAlarm && !(await this.storage.getAlarm())) await this.storage.setAlarm(Date.now() + 3600000);
+  }
+
+  // ---- אבטחה (לאפליקציית הניהול): מונים לכל יום, ו-100 האירועים האחרונים ----
+  async security(type, detail = '') {
+    const day = new Date().toISOString().slice(0, 10);
+    const counts = (await this.storage.get(`sec:${day}`)) || {};
+    counts[type] = (counts[type] || 0) + 1;
+    await this.storage.put(`sec:${day}`, counts);
+    if (['ownerLogin', 'ownerFail', 'rateLimited', 'loginFail'].includes(type)) {
+      const events = (await this.storage.get('sec-events')) || [];
+      events.unshift({ at: new Date().toISOString(), type, detail: String(detail).slice(0, 80) });
+      await this.storage.put('sec-events', events.slice(0, 100));
+    }
+  }
+
+  // ---- התראות לטלפון של בעל האפליקציה (אפליקציית הניהול) ----
+  async vapid() {
+    let vapid = await this.storage.get('admin-vapid');
+    if (!vapid) {
+      vapid = await createVapidKeys();
+      await this.storage.put('admin-vapid', vapid);
+    }
+    return vapid;
+  }
+
+  // throttle: אותו נושא (tag) לכל היותר פעם בשעה, כדי שתקלה שחוזרת לא תציף
+  async notifyAdmin({ title, body, tag = 'mat-kon', url = '' }, { force = false } = {}) {
+    const devices = (await this.storage.get('admin-push')) || [];
+    if (!devices.length) return 0;
+    const sentKey = `push-sent:${tag}`;
+    if (!force && Date.now() - ((await this.storage.get(sentKey)) || 0) < 3600000) return 0;
+    await this.storage.put(sentKey, Date.now());
+    const vapid = await this.vapid();
+    const app = (this.env.ADMIN_URL || 'https://mat-kon-admin.pages.dev/').replace(/\/?$/, '/');
+    let sent = 0;
+    const keep = [];
+    for (const d of devices) {
+      try {
+        const result = await sendPush(d.sub, { title, body: String(body).slice(0, 180), tag, url: `${app}${url}` }, vapid, app, this.pushFetch || fetch);
+        if (result === 'ok') sent++;
+        if (result !== 'gone') keep.push(d);
+      } catch (e) {
+        console.log('push failed', e?.message || e);
+        keep.push(d);
+      }
+    }
+    if (keep.length !== devices.length) await this.storage.put('admin-push', keep);
+    return sent;
+  }
+
+  // תקלה חוזרת מקובצת לפי סוג (בלי מספרים וקישורים), עם סטטוס שבעל האפליקציה מסמן: new / working / fixed
+  async issue(entry, list) {
+    const shape = entry.group ? `${list}|${entry.where}|${entry.group}` : `${list}|${entry.where}|${entry.message.replace(/https?:\/\/\S+/g, 'URL').replace(/\d+/g, '#').slice(0, 140)}`;
+    const sig = (await sha256(shape)).replace(/[^\w]/g, '').slice(0, 16);
+    const key = `issue:${sig}`;
+    const old = await this.storage.get(key);
+    const now = entry.at;
+    const next = old
+      ? { ...old, count: old.count + 1, lastAt: now, message: entry.message, users: [...new Set([entry.user, ...(old.users || [])])].filter(Boolean).slice(0, 5) }
+      : { sig, list, where: entry.where, ...(entry.group ? { group: entry.group } : {}), message: entry.message, count: 1, firstAt: now, lastAt: now, status: 'new', note: '', users: entry.user ? [entry.user] : [] };
+    // תקלה שסומנה "תוקנה" וחזרה – נפתחת מחדש
+    if (old?.status === 'fixed') Object.assign(next, { status: 'new', reopened: true });
+    await this.storage.put(key, next);
+    // התראה לטלפון: תקלה חדשה, תקלה שחזרה אחרי תיקון, וגם תקלה פתוחה שקורית שוב (לכל היותר פעם בשעה לכל תקלה)
+    const title = !old ? '🐞 תקלה חדשה ב-mat-kon' : old.status === 'fixed' ? '🔁 תקלה חזרה ב-mat-kon' : `🐞 התקלה קרתה שוב (${next.count} פעמים)`;
+    await this.notifyAdmin({ title, body: entry.message, tag: `issue-${sig}`, url: '#issues' });
+  }
+
+  async addNoRecipe(entry) {
+    const list = (await this.storage.get('no-recipe')) || [];
+    list.unshift(entry);
+    list.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    await this.storage.put('no-recipe', list.slice(0, 50));
   }
 
   // גרסת הסוד של בעל האפליקציה: החלפת הסיסמה מנתקת את כל מכשירי הבעלים
@@ -204,6 +290,23 @@ export class Accounts {
       await this.storage.delete(`invite:${body.token}`);
       return json({ ok: true, deletedUserId: invite.userId });
     }
+    // תכונה למשתמש לפי אימייל (ניקוד ביס): רק תכונות מהרשימה
+    if (path === '/users/feature' && request.method === 'POST') {
+      if (!USER_FEATURES.includes(body.feature)) return err(400, 'תכונה לא מוכרת');
+      const id = await this.storage.get(`email:${normalizeEmail(body.email)}`);
+      const user = id && (await this.storage.get(`user:${id}`));
+      if (!user || user.removed) return err(404, 'אין משתמש עם האימייל הזה');
+      const features = { ...(user.features || {}) };
+      if (body.on) features[body.feature] = true;
+      else delete features[body.feature];
+      user.features = features;
+      await this.storage.put(`user:${user.id}`, user);
+      return json({ user: publicUser(user, this.freeLimit) });
+    }
+    if (path === '/users/features' && request.method === 'GET') {
+      const users = [...(await this.storage.list({ prefix: 'user:' })).values()].filter((u) => !u.removed && u.features && Object.keys(u.features).length);
+      return json({ users: users.map((u) => ({ name: u.name, email: u.email, features: u.features })) });
+    }
     if (path === '/users/plan' && request.method === 'POST') {
       const user = await this.storage.get(`user:${body.userId}`);
       if (!user) return err(404, 'המשתמש לא נמצא');
@@ -247,6 +350,7 @@ export class Accounts {
       const user = id && (await this.storage.get(`user:${id}`));
       // אותה הודעה לכל כישלון (גם לחשבון גוגל), כדי שאי אפשר לבדוק אילו אימיילים רשומים
       const ok = user?.hash ? await passwordMatches(user, String(body.password || '')) : await hashPassword(String(body.password || ''), 'none').then(() => false);
+      if (!ok) await this.security('loginFail', body.country || '');
       if (!ok) return err(401, 'האימייל או הסיסמה שגויים. נרשמתם עם גוגל? היכנסו עם הכפתור "המשך עם Google".');
       if ((user.iter || OLD_ITERATIONS) < PBKDF2_ITERATIONS) {
         Object.assign(user, await newPassword(String(body.password)));
@@ -359,6 +463,7 @@ export class Accounts {
     // ---- בעל האפליקציה: מכשיר שנכנס, והגבלת ניסיונות סיסמה (10 ברבע שעה) ----
     if (path === '/owner-session' && request.method === 'POST') {
       await this.rememberDevice('owner', body.device);
+      await this.security('ownerLogin', body.country || '');
       const token = randomToken(32);
       await this.storage.put(`session:${await sha256(token)}`, { owner: true, v: await this.ownerVersion(), createdAt: now });
       return json({ session: token, user: null, owner: true });
@@ -371,6 +476,7 @@ export class Accounts {
       for (const c of Array.isArray(body.checks) ? body.checks : []) {
         if (c.global && trusted) continue;
         if (!(await this.allow(String(c.key).slice(0, 200), Number(c.limit) || 10, Number(c.window) || 900))) {
+          await this.security('rateLimited', String(c.key).split(':')[0]);
           return err(429, body.message || 'יותר מדי ניסיונות. נסו שוב מאוחר יותר.');
         }
       }
@@ -410,13 +516,161 @@ export class Accounts {
       return json({ ok: true, deletedBook: !user.bookId });
     }
 
+    // ---- מתכון ששותף בקישור: עותק של המתכון (לא גישה לספר), עם שם מי ששיתף ----
+    if (path === '/shares/put' && request.method === 'POST') {
+      const token = randomToken(24);
+      await this.storage.put(`share:${token}`, {
+        recipe: body.recipe, by: String(body.by || '').slice(0, 60), userId: String(body.userId || ''), createdAt: now, saves: 0,
+      });
+      return json({ token });
+    }
+    if (path === '/shares/get' && request.method === 'POST') {
+      const key = `share:${String(body.token || '')}`;
+      const share = await this.storage.get(key);
+      if (!share || Date.now() - Date.parse(share.createdAt) > SHARE_DAYS * 86400000) return err(404, 'הקישור לא נמצא או שפג תוקפו');
+      // נשמר בספר של מישהו: נספר (כדי לדעת כמה שיתופים הביאו מתכונים)
+      if (body.saved) await this.storage.put(key, { ...share, saves: (share.saves || 0) + 1 });
+      return json({ share });
+    }
+
+    // ---- פרופיל לקהילה: שם תצוגה ואישור תנאי השימוש (לבעל האפליקציה – owner-profile) ----
+    if (path === '/profile/get' || path === '/profile/set') {
+      const key = body.userId ? `user:${body.userId}` : 'owner-profile';
+      const rec = (await this.storage.get(key)) || {};
+      if (body.userId && !rec.id) return err(404, 'המשתמש לא נמצא');
+      if (path === '/profile/set') {
+        const name = String(body.displayName || '').trim().replace(/\s+/g, ' ');
+        if (name.length < 2 || name.length > 30) return err(400, 'שם התצוגה צריך להיות בין 2 ל-30 תווים');
+        if (/[@<>/\\]|\d{5,}|https?:|www\./i.test(name)) return err(400, 'בשם התצוגה אי אפשר לכתוב אימייל, טלפון או קישור');
+        if (/^(mat-?kon|admin|מנהל|מת-?כון)$/i.test(name)) return err(400, 'השם הזה שמור. בחרו שם אחר');
+        if (!body.acceptTerms && !rec.termsAt) return err(400, 'צריך לאשר את תנאי השימוש');
+        Object.assign(rec, { displayName: name, termsAt: rec.termsAt || now });
+        await this.storage.put(key, rec);
+      }
+      return json({ displayName: rec.displayName || '', terms: Boolean(rec.termsAt), blocked: Boolean(rec.blocked) });
+    }
+    // חסימה מהקהילה (אחרי דיווחים): המשתמש ממשיך להשתמש בספר שלו, רק לא יכול לפרסם
+    if (path === '/admin/block' && request.method === 'POST') {
+      const user = await this.storage.get(`user:${body.userId}`);
+      if (!user) return err(404, 'המשתמש לא נמצא');
+      await this.storage.put(`user:${user.id}`, { ...user, blocked: true, blockedAt: now });
+      return json({ ok: true });
+    }
+
+    // ---- התראות לטלפון: מפתח, רישום מכשיר, בדיקה, והתראה מהשרת ----
+    if (path === '/admin/push/key') return json({ publicKey: (await this.vapid()).publicKey });
+    if (path === '/admin/push/subscribe' && request.method === 'POST') {
+      if (!validSubscription(body.subscription)) return err(400, 'המכשיר לא תומך בהתראות');
+      const sub = { endpoint: body.subscription.endpoint, keys: { p256dh: body.subscription.keys.p256dh, auth: body.subscription.keys.auth } };
+      const devices = ((await this.storage.get('admin-push')) || []).filter((d) => d.sub.endpoint !== sub.endpoint);
+      await this.storage.put('admin-push', [{ sub, at: now }, ...devices].slice(0, 5));
+      return json({ ok: true, devices: Math.min(devices.length + 1, 5) });
+    }
+    if (path === '/admin/push/status') {
+      const devices = (await this.storage.get('admin-push')) || [];
+      return json({ devices: devices.length, endpoints: devices.map((d) => d.sub.endpoint.slice(-24)) });
+    }
+    if (path === '/admin/push/test' && request.method === 'POST') {
+      const sent = await this.notifyAdmin({ title: '🔔 בדיקת התראה', body: 'ההתראות מ-mat-kon ניהול עובדות!', tag: 'test' }, { force: true });
+      return json({ sent });
+    }
+    if (path === '/admin/notify' && request.method === 'POST') {
+      return json({ sent: await this.notifyAdmin({ title: String(body.title || '').slice(0, 80), body: String(body.body || ''), tag: String(body.tag || 'mat-kon').slice(0, 60), url: String(body.url || '') }) });
+    }
+
+    // ---- אפליקציית הניהול ----
+    if (path === '/admin/stats' && request.method === 'GET') {
+      const users = [...(await this.storage.list({ prefix: 'user:' })).values()].filter((u) => !u.removed);
+      const invites = new Map([...(await this.storage.list({ prefix: 'invite:' })).values()].map((i) => [i.token, i]));
+      const shares = [...(await this.storage.list({ prefix: 'share:' })).values()];
+      const day = (d) => String(d || '').slice(0, 10);
+      const ago = (days) => new Date(Date.now() - days * 86400000).toISOString();
+      const source = (u) => (u.bookId ? 'family' : !u.invite ? 'other' : invites.get(u.invite)?.open ? 'app' : 'invite');
+      const holders = users.filter((u) => !u.bookId);
+      const count = (list, fn) => list.reduce((o, u) => ({ ...o, [fn(u)]: (o[fn(u)] || 0) + 1 }), {});
+      const signupsByDay = {};
+      for (const u of users) if (u.createdAt >= ago(30)) signupsByDay[day(u.createdAt)] = (signupsByDay[day(u.createdAt)] || 0) + 1;
+      return json({
+        users: users.length,
+        today: users.filter((u) => day(u.createdAt) === day(now)).length,
+        week: users.filter((u) => u.createdAt >= ago(7)).length,
+        month: users.filter((u) => u.createdAt >= ago(30)).length,
+        active7: users.filter((u) => u.lastSeen >= ago(7)).length,
+        active30: users.filter((u) => u.lastSeen >= ago(30)).length,
+        sources: count(users, source),
+        plans: {
+          paying: holders.filter((u) => u.plan === 'paid' && u.paidVia).length, // תשלום אמיתי – כשיחובר
+          gifted: holders.filter((u) => u.plan === 'paid' && !u.paidVia).length,
+          free: holders.filter((u) => u.plan !== 'paid').length,
+          atLimit: holders.filter((u) => u.plan !== 'paid' && u.added >= this.freeLimit).length,
+        },
+        freeLimit: this.freeLimit,
+        books: holders.length,
+        google: users.filter((u) => u.google).length,
+        signupsByDay,
+        shares: { links: shares.length, saves: shares.reduce((n, s) => n + (s.saves || 0), 0) },
+        recent: users.sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 20)
+          .map((u) => ({ name: u.name, email: u.email, createdAt: u.createdAt, lastSeen: u.lastSeen || null, plan: u.plan, added: u.added, source: source(u) })),
+      });
+    }
+    if (path === '/admin/issues' && request.method === 'GET') {
+      let issues = [...(await this.storage.list({ prefix: 'issue:' })).values()];
+      // "לא נמצא מתכון" שנרשמו בעבר כתקלות – עוברים לרשימה הנפרדת
+      for (const old of issues.filter((i) => isNoRecipe(i.group))) {
+        await this.addNoRecipe({ at: old.lastAt, where: old.where, group: old.group, message: old.message, status: null, user: (old.users || [])[0] || '', count: old.count });
+        await this.storage.delete(`issue:${old.sig}`);
+      }
+      issues = issues.filter((i) => !isNoRecipe(i.group));
+      const order = { new: 0, working: 1, fixed: 2 };
+      issues.sort((a, b) => order[a.status] - order[b.status] || b.lastAt.localeCompare(a.lastAt));
+      return json({ issues: issues.slice(0, 200), noRecipe: (await this.storage.get('no-recipe')) || [] });
+    }
+    if (path === '/admin/issues/update' && request.method === 'POST') {
+      const key = `issue:${String(body.sig || '')}`;
+      const issue = await this.storage.get(key);
+      if (!issue) return err(404, 'התקלה לא נמצאה');
+      if (['new', 'working', 'fixed'].includes(body.status)) issue.status = body.status;
+      if (typeof body.note === 'string') issue.note = body.note.slice(0, 500);
+      // "שלח ל-Claude לטיפול": מספר הבקשה ב-GitHub (null = הבקשה נדחתה)
+      if (body.fix === null) delete issue.fix;
+      else if (Number.isInteger(body.fix) && body.fix > 0) issue.fix = body.fix;
+      if (issue.status === 'fixed') Object.assign(issue, { fixedAt: now, reopened: false });
+      await this.storage.put(key, issue);
+      return json({ issue });
+    }
+    if (path === '/admin/security' && request.method === 'GET') {
+      const days = [...(await this.storage.list({ prefix: 'sec:' }))].map(([k, v]) => ({ day: k.slice(4), ...v })).sort((a, b) => b.day.localeCompare(a.day)).slice(0, 30);
+      return json({ days, events: (await this.storage.get('sec-events')) || [] });
+    }
+    if (path === '/admin/security/event' && request.method === 'POST') {
+      if (['ownerFail'].includes(body.type)) await this.security(body.type, body.detail || '');
+      return json({ ok: true });
+    }
+    if (path === '/admin/settings') {
+      if (request.method === 'POST') {
+        const spendAlert = Number(body.spendAlert);
+        await this.storage.put('admin-settings', { spendAlert: Number.isFinite(spendAlert) && spendAlert > 0 ? Math.min(spendAlert, 100000) : 0 });
+      }
+      return json({ settings: (await this.storage.get('admin-settings')) || { spendAlert: 0 } });
+    }
+
     // ---- תקלות אחרונות (למסך הניהול) ----
     // תקלות שרת ותקלות מהאפליקציה נשמרות ברשימות נפרדות (כך שדיווחים מבחוץ לא דוחקים תקלות שרת)
     if (path === '/errors/add' && request.method === 'POST') {
       const key = body.list === 'client' ? 'client-errors' : 'errors';
       const list = (await this.storage.get(key)) || [];
-      list.unshift({ at: now, where: String(body.where || '').slice(0, 80), message: String(body.message || '').slice(0, 300), status: body.status ?? null, user: String(body.user || '').slice(0, 120) });
+      // עבודה ברקע מדווחת מזהה משתמש – מציגים את האימייל שלו
+      let who = String(body.user || '').slice(0, 120);
+      if (/^[0-9a-f-]{36}$/.test(who)) who = (await this.storage.get(`user:${who}`))?.email || who;
+      const entry = { at: now, where: String(body.where || '').slice(0, 80), message: String(body.message || '').slice(0, 300), status: body.status ?? null, user: who };
+      // "לא נמצא מתכון" (סרטון בלי מתכון, דף שלא נפתח) – לא תקלה: רשימה נפרדת לעיון, בלי התראה
+      if (isNoRecipe(body.group)) {
+        await this.addNoRecipe({ ...entry, group: String(body.group).slice(0, 100) });
+        return json({ ok: true });
+      }
+      list.unshift(entry);
       await this.storage.put(key, list.slice(0, 50));
+      await this.issue({ ...entry, group: String(body.group || '').slice(0, 100) }, body.list === 'client' ? 'client' : 'server');
       return json({ ok: true });
     }
     if (path === '/errors' && request.method === 'GET') {
@@ -447,6 +701,8 @@ export class Accounts {
       const stored = session && (await this.storage.get(`user:${session.userId}`));
       const user = stored && (await this.effectiveUser(stored));
       if (!user) return err(401, 'צריך להיכנס מחדש');
+      // פעילות אחרונה (לספירת משתמשים פעילים) – נשמרת לכל היותר פעם בשעה
+      if (!stored.lastSeen || Date.now() - Date.parse(stored.lastSeen) > 3600000) await this.storage.put(`user:${stored.id}`, { ...stored, lastSeen: now });
       return json({ user });
     }
     // מכסת המתכונים החינמיים נלקחת לפני העבודה (כדי ששתי בקשות במקביל לא יעברו את המכסה),
@@ -535,6 +791,7 @@ export class Accounts {
     if (invite) puts[`invite:${invite.token}`] = { ...invite, userId: user.id };
     if (join) puts[`join:${join.token}`] = { ...join, usedBy: user.id };
     await this.storage.put(puts);
+    await this.security('signup');
     return this.signedIn(user);
   }
 
@@ -563,8 +820,11 @@ export class Accounts {
     const ids = new Set([userId, ...members.map((m) => m.id)]);
     const sessions = await this.storage.list({ prefix: 'session:' });
     const joins = await this.storage.list({ prefix: 'join:' });
+    const shares = await this.storage.list({ prefix: 'share:' });
     const keys = [
       ...[...sessions].filter(([, s]) => ids.has(s.userId)).map(([k]) => k),
+      // מתכונים ששיתפו בקישור נמחקים יחד עם החשבון
+      ...[...shares].filter(([, s]) => ids.has(s.userId)).map(([k]) => k),
       ...(user.bookId ? [] : [...joins].filter(([, j]) => j.bookId === userId).map(([k]) => k)),
       ...[user, ...members].flatMap((u) => [`user:${u.id}`, `email:${u.email}`]),
     ];

@@ -1,5 +1,6 @@
 // הסוכן: מקבל את החומר שנאסף מהקישור ומחזיר מתכון מסודר בעברית עם קטגוריה.
 // כשהחומר חסר (סרטון בלי מתכון בתיאור, אתר שחוסם) הוא קורא את הקישור בעצמו ומחפש ברשת.
+import { AI_DIETS, cleanDiet } from './diet.js';
 import { CATEGORIES, DEFAULT_CATEGORY } from './categories.js';
 import { isVideoKind, looksComplete } from './source.js';
 
@@ -19,6 +20,65 @@ const sectionList = (what) => ({
     additionalProperties: false,
   },
 });
+
+// הערכה תזונתית למנה (הערכה בלבד – לפי המצרכים והכמויות)
+export const NUTRIENTS = ['calories', 'protein', 'carbs', 'sugar', 'fat', 'saturated_fat', 'fiber', 'sodium'];
+// סימון לסינון (כשר, ללא גלוטן, צליאק…) – לפי המצרכים כפי שנכתבו במתכון
+const DIET_HINTS = {
+  kosher: 'kosher by ingredients: no pork, shellfish or other forbidden foods, no meat with dairy, no meat with fish',
+  parve: 'neither meat nor dairy (fish and eggs are parve)',
+  dairy: 'contains dairy and no meat',
+  meat: 'contains meat or poultry and no dairy',
+  pesach: 'kosher for Passover: no chametz (wheat, barley, oats, rye, spelt, regular flour, bread, pasta, yeast dough, beer; matzah and matzah meal are fine)',
+  kitniyot: 'kosher for Passover AND no kitniyot (rice, corn, legumes, soy, peanuts, sesame, mustard, buckwheat)',
+  gf: 'no gluten-containing ingredients',
+  celiac: 'safe for celiac: no gluten, no regular oats, and no ingredients that usually hide gluten (soup powder, stock cubes, soy sauce, malt, many sauces) unless marked gluten free',
+  lactose: 'no lactose (no dairy unless marked lactose free)',
+  eggs: 'contains no eggs',
+  nuts: 'contains no tree nuts or peanuts',
+  nosugar: 'no added sugar, honey, syrup or sweetened products',
+  lowsodium: 'low salt: no salty products (soy sauce, stock cubes, pickles, olives, cured meat, salty cheese) and at most a little salt',
+  baby: 'suitable for babies/toddlers: no honey, alcohol, hot spices, caffeine, cured meat, added sugar, much salt or whole nuts',
+  vegan: 'no animal products at all',
+  vegetarian: 'no meat, poultry or fish',
+};
+const DIET_SCHEMA = {
+  type: 'object',
+  description: 'True/false for each diet, judged from the ingredients you wrote (the user filters the recipe book by these)',
+  properties: Object.fromEntries(AI_DIETS.map((k) => [k, { type: 'boolean', description: DIET_HINTS[k] }])),
+  required: AI_DIETS,
+  additionalProperties: false,
+};
+
+const NUTRITION_SCHEMA = {
+  type: 'object',
+  description: 'Estimated nutrition for ONE serving, calculated from the ingredients and their amounts (standard food composition values). Grams, except calories (kcal) and sodium (mg).',
+  properties: {
+    per: { type: 'string', description: 'Hebrew: what one serving is, e.g. "למנה (מתוך 6)", "לעוגייה (מתוך 20)", "לפרוסה (מתוך 12)". When the yield is not written, assume a reasonable one and say so, e.g. "למנה (בהנחה של 4 מנות)"' },
+    calories: { type: 'number' },
+    protein: { type: 'number' },
+    carbs: { type: 'number' },
+    sugar: { type: 'number' },
+    fat: { type: 'number' },
+    saturated_fat: { type: 'number' },
+    fiber: { type: 'number' },
+    sodium: { type: 'number' },
+  },
+  required: ['per', ...NUTRIENTS],
+  additionalProperties: false,
+};
+
+// ערכים תזונתיים שנשמרים במתכון: מספרים סבירים בלבד (או null אם אין)
+export function cleanNutrition(n) {
+  if (!n || typeof n !== 'object') return null;
+  const out = { per: String(n.per || '').trim().slice(0, 80) };
+  for (const k of NUTRIENTS) {
+    const v = Number(n[k]);
+    if (!Number.isFinite(v) || v < 0 || v > 100000) return null;
+    out[k] = Math.round(v * 10) / 10;
+  }
+  return out.calories > 0 ? out : null;
+}
 
 export const RECIPE_TOOL = {
   name: 'submit_recipe',
@@ -44,6 +104,12 @@ export const RECIPE_TOOL = {
       ingredients: sectionList('Ingredients, each with its amount, e.g. "2 כוסות קמח"'),
       steps: sectionList('Preparation steps in order, one action per item, without numbering'),
       tips: { type: 'array', items: { type: 'string' }, description: 'Hebrew tips, storage, substitutions from the source' },
+      nutrition: NUTRITION_SCHEMA,
+      diet: DIET_SCHEMA,
+      basis: {
+        type: 'string', enum: ['source', 'completed', 'guessed'],
+        description: '"source": the recipe is written in the source (or the creator\'s own recipe was found). "completed": mostly from the source, with gaps filled in. "guessed": the source only shows the dish (e.g. a video or photo with no written recipe and the original could not be found) and the recipe was reconstructed.',
+      },
       confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
       notes: {
         type: 'string',
@@ -52,7 +118,7 @@ export const RECIPE_TOOL = {
     },
     required: [
       'found', 'title', 'original_title', 'description', 'category', 'more_categories', 'tags', 'servings', 'prep_time',
-      'cook_time', 'total_time', 'ingredients', 'steps', 'tips', 'confidence', 'notes',
+      'cook_time', 'total_time', 'ingredients', 'steps', 'tips', 'nutrition', 'diet', 'basis', 'confidence', 'notes',
     ],
     additionalProperties: false,
   },
@@ -81,8 +147,20 @@ and web_search for the creator's written recipe (dish + creator name, in Hebrew 
 the most faithful recipe you can from what the caption, comments, hint and video title say, filling the gaps \
 from a reliable recipe for the same dish that you found with web_search. Set confidence to "low" and explain in \
 notes exactly what came from the creator and what was completed from elsewhere.
+- A Pinterest pin: the recipe is usually on the site the pin links to ("Linked page" below) – build it from there. \
+If that page could not be read, web_fetch it. If the pin has no link (often a re-posted video), the pin's image is \
+attached: read any creator handle or watermark on it (e.g. "@doctorbowl") and any text, then web_search for that \
+creator's original recipe (Instagram / TikTok / YouTube / blog) and use it. Only if the original cannot be found, \
+reconstruct the dish from what is visible and set basis to "guessed".
 - A website: if the page text below is missing or blocked, web_fetch the link.
-- A WhatsApp message or text the user pasted: use only that text. If it is chatter and not a recipe, set found=false.
+- A WhatsApp message or text the user pasted: build the recipe from that text. If it is chatter and not a recipe, set found=false.
+- Photos and messages: if one source has several different dishes, give each its own recipe (more_recipes) – never \
+merge two dishes into one recipe or one title.
+- Photos and messages: a handwritten note or short message often leaves out what is needed to actually cook the dish \
+(e.g. kreplach with the dough written but not the meat filling, or no cooking time). Keep everything that is written \
+exactly as written, and complete only what is missing from the standard version of that dish: put the completed \
+ingredients and steps in their own section titled "השלמה (לא מהמקור)", set confidence to "medium", and say in notes \
+what was completed. Do not change amounts that are written.
 - Choose the single best category, and in more_categories every other category that also clearly fits \
 (a recipe can be in several, e.g. chicken that is a main dish: "עוף" and the user's "מנה עיקרית"). Don't add \
 categories that only loosely fit. Desserts that are cakes → "עוגות"; cookies, rugelach, pastries → \
@@ -90,6 +168,8 @@ categories that only loosely fit. Desserts that are cakes → "עוגות"; cook
 a vegetarian main dish → "צמחוני וטבעוני" unless it is clearly a salad/soup/pasta.
 - Set found=false ONLY when the link is clearly not about food or cooking, or nothing at all identifies a \
 dish (not even the title or caption). Explain why in notes.
+- nutrition: estimate it for one serving from the final ingredient list and amounts (standard food composition \
+values), counting only what is eaten (e.g. not all the frying oil). If the yield is not written, assume a reasonable one.
 - When done, call submit_recipe. Do not write anything else.`;
 
 function material(src) {
@@ -97,7 +177,8 @@ function material(src) {
     return [
       'Source: photos of a recipe (a cookbook page, a handwritten note, a screenshot or a printed page). Read all of them \
 - they may be several pages of the same recipe - and build the recipe from what is written. Keep the original \
-amounts. If a word is hard to read, use the most likely reading and mention it in notes.',
+amounts. If a word is hard to read, use the most likely reading and mention it in notes. A page can hold several \
+different recipes (each usually with its own heading) – return each one separately.',
       src.hint ? `The user wrote: ${src.hint}` : '',
     ].filter(Boolean).join('\n\n');
   }
@@ -105,10 +186,12 @@ amounts. If a word is hard to read, use the most likely reading and mention it i
     return [
       src.url
         ? `Source: text the user copied from the post at ${src.url} (the link itself could not be read). Build the recipe from this text only.`
-        : 'Source: a message from a WhatsApp chat (no link). Build the recipe from this text only.',
-      src.chat ? `Chat: ${src.chat}` : '',
+        : src.kind === 'file'
+          ? 'Source: text read from a document the user uploaded (Word / PDF / text file; layout may be messy, and Hebrew from a PDF may have odd line order). It may hold one recipe or a section of a cookbook with several – give each recipe its own entry (more_recipes), and ignore tables of contents, page numbers and headers. Build the recipes from this text only.'
+          : 'Source: a message from a WhatsApp chat (no link). Build the recipe from this text only.',
+      src.chat ? `${src.kind === 'file' ? 'File' : 'Chat'}: ${src.chat}` : '',
       src.author ? `Sent by: ${src.author}` : '',
-      `${src.url ? 'Copied text' : 'Message'}:\n${src.text}`,
+      `${src.url ? 'Copied text' : src.kind === 'file' ? 'Document text' : 'Message'}:\n${src.text}`,
     ].filter(Boolean).join('\n\n');
   }
   const video = isVideoKind(src.kind);
@@ -144,6 +227,8 @@ const cleanSections = (a) =>
 
 // מאחד את תשובת הסוכן עם מה שנאסף מהדף לרשומת מתכון
 export function toRecipe(input, src, categories = CATEGORIES) {
+  const ingredients = cleanSections(input.ingredients);
+  const diet = cleanDiet(input.diet, ingredients.flatMap((g) => g.items));
   return {
     title: clean(input.title) || clean(src.title) || 'מתכון',
     originalTitle: clean(input.original_title) || clean(src.title),
@@ -154,9 +239,12 @@ export function toRecipe(input, src, categories = CATEGORIES) {
     prepTime: clean(input.prep_time),
     cookTime: clean(input.cook_time),
     totalTime: clean(input.total_time),
-    ingredients: cleanSections(input.ingredients),
+    ingredients,
     steps: cleanSections(input.steps),
     tips: cleanList(input.tips),
+    nutrition: cleanNutrition(input.nutrition),
+    ...(diet ? { diet } : {}),
+    basis: ['source', 'completed', 'guessed'].includes(input.basis) ? input.basis : 'source',
     confidence: ['high', 'medium', 'low'].includes(input.confidence) ? input.confidence : 'medium',
     notes: clean(input.notes),
     source: src.images ? { url: null, key: src.key, kind: 'photo' } : src.fromText ? {
@@ -264,6 +352,171 @@ export async function suggestCategories(client, recipe, categories = CATEGORIES)
   return categoryFields(submit.input.categories, names);
 }
 
+// הערכה תזונתית למתכון קיים (מתכונים ישנים, או אחרי עריכת המצרכים): AI קצר, בלי רשת
+export async function estimateNutrition(client, recipe) {
+  const tool = {
+    name: 'submit_nutrition',
+    description: 'Submit the estimated nutrition for one serving.',
+    strict: true,
+    input_schema: { type: 'object', properties: { nutrition: NUTRITION_SCHEMA }, required: ['nutrition'], additionalProperties: false },
+  };
+  const list = (sections) => (sections || []).flatMap((g) => [g.title ? `[${g.title}]` : null, ...(g.items || [])]).filter(Boolean).slice(0, 80);
+  const response = await client.beta.messages.create({
+    model: MODEL,
+    max_tokens: 2000,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: { effort: 'low' },
+    system: 'You estimate nutrition for home recipes. Use the ingredients and their amounts with standard food composition values, account for what is actually eaten (e.g. frying oil that stays in the pan, optional garnish), and divide by the yield. Call submit_nutrition.',
+    tools: [tool],
+    messages: [{
+      role: 'user',
+      content: `Recipe: ${recipe.title || ''}\nYield: ${recipe.servings || 'not written'}\nIngredients:\n${list(recipe.ingredients).map((i) => `- ${i}`).join('\n')}\nSteps:\n${list(recipe.steps).slice(0, 30).join('\n')}`,
+    }],
+  });
+  const submit = response.content.find((b) => b.type === 'tool_use' && b.name === tool.name);
+  const nutrition = submit && cleanNutrition(submit.input.nutrition);
+  if (!nutrition) throw new Error('לא הצלחתי להעריך את הערכים התזונתיים. נסו שוב.');
+  return nutrition;
+}
+
+// בדיקה לפני פרסום מתכון אישי לקהילה: שזה מתכון, בלי תוכן פוגעני, בלי פרטים אישיים, ושהתמונה מתאימה.
+// decision: publish (בסדר) / review (לא בטוח – מתפרסם ובעל האפליקציה מקבל התראה) / reject (לא מתפרסם, עם סיבה בעברית)
+export async function moderateRecipe(client, recipe, imageUrl = null) {
+  const tool = {
+    name: 'submit_review',
+    description: 'Submit the review of a recipe a user wants to publish to a public recipe community.',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: {
+        decision: { type: 'string', enum: ['publish', 'review', 'reject'] },
+        image_ok: { type: 'boolean', description: 'false if the image is not a food/cooking photo, or shows people, documents, personal details or anything inappropriate' },
+        reason: { type: 'string', description: 'Short Hebrew reason for the user when the decision is reject or review (or why the image was removed); empty otherwise' },
+      },
+      required: ['decision', 'image_ok', 'reason'],
+      additionalProperties: false,
+    },
+  };
+  const list = (sections) => (sections || []).flatMap((g) => g.items || []).slice(0, 80).join('\n');
+  const text = `Title: ${recipe.title}\nDescription: ${recipe.description || ''}\nIngredients:\n${list(recipe.ingredients)}\nSteps:\n${list(recipe.steps)}\nTips: ${(recipe.tips || []).join(' | ')}\nNotes: ${recipe.notes || ''}`;
+  const response = await client.beta.messages.create({
+    model: MODEL,
+    max_tokens: 1000,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: { effort: 'low' },
+    system: `You review recipes that users of a Hebrew family recipe app want to publish to the app's public community.
+publish: a real recipe (food or drink) with nothing problematic.
+reject: not a recipe at all (spam, ads, random text), hateful/sexual/violent or otherwise offensive content, or personal details of real people (phone numbers, addresses, emails, ID numbers, full names of private people beyond a first name like "סבתא רחל").
+review: you are not sure (e.g. a borderline joke, possibly copied commercial text, a dangerous food practice).
+Also judge the attached image (if any): image_ok=false if it is not food/cooking or shows faces, documents or personal details.
+The reason is in simple Hebrew, addressed to the user. Call submit_review.`,
+    tools: [tool],
+    messages: [{ role: 'user', content: imageUrl ? [{ type: 'image', source: { type: 'url', url: imageUrl } }, { type: 'text', text }] : text }],
+  });
+  const submit = response.content.find((b) => b.type === 'tool_use' && b.name === tool.name);
+  if (!submit) throw new Error('הבדיקה לפני הפרסום לא הצליחה. נסו שוב.');
+  const { decision, image_ok: imageOk, reason } = submit.input;
+  return { decision: ['publish', 'review', 'reject'].includes(decision) ? decision : 'review', imageOk: imageOk !== false, reason: clean(reason) };
+}
+
+// תחליף למצרך שחסר: מה אפשר לשים במקומו במתכון הזה, בכמה, ומה זה משנה בתוצאה
+export async function suggestSubstitutes(client, recipe, item, { diets = [] } = {}) {
+  const tool = {
+    name: 'submit_substitutes',
+    description: 'Submit substitutes for one missing ingredient in this recipe.',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: {
+        options: {
+          type: 'array',
+          description: '1-3 substitutes, best first. Common Israeli home-kitchen products.',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Hebrew: what to use, e.g. "רסק תפוחים"' },
+              amount: { type: 'string', description: 'Hebrew: how much instead of the original amount in this recipe, e.g. "1/4 כוס לכל ביצה"' },
+              how: { type: 'string', description: 'Hebrew: one short sentence on how to use it (or empty)' },
+              effect: { type: 'string', description: 'Hebrew: one short sentence on how the result changes (taste / texture), or empty' },
+            },
+            required: ['name', 'amount', 'how', 'effect'],
+            additionalProperties: false,
+          },
+        },
+        note: { type: 'string', description: 'Hebrew: short note, e.g. that the ingredient can simply be left out, or that there is no good substitute. Empty otherwise.' },
+      },
+      required: ['options', 'note'],
+      additionalProperties: false,
+    },
+  };
+  const list = (sections) => (sections || []).flatMap((g) => g.items || []).slice(0, 60);
+  const response = await client.beta.messages.create({
+    model: MODEL,
+    max_tokens: 1500,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: { effort: 'low' },
+    system: `You help a home cook in Israel who is missing an ingredient. Suggest substitutes that work in THIS recipe (its role: binding, rising, fat, acid, sweetness, flavor...), with the amount adjusted to the recipe. Prefer things most homes have. If the ingredient can be left out, say so in note. Keep the kosher type of the dish (don't add meat to dairy or dairy to meat).${diets.length ? ` The cook keeps: ${diets.join(', ')} – every substitute must fit.` : ''} Everything in simple Hebrew. Call submit_substitutes.`,
+    tools: [tool],
+    messages: [{
+      role: 'user',
+      content: `Recipe: ${recipe.title || ''}\nServings: ${recipe.servings || ''}\nIngredients:\n${list(recipe.ingredients).map((i) => `- ${i}`).join('\n')}\nSteps:\n${list(recipe.steps).slice(0, 20).join('\n')}\n\nMissing ingredient: ${item}`,
+    }],
+  });
+  const submit = response.content.find((b) => b.type === 'tool_use' && b.name === tool.name);
+  if (!submit) throw new Error('לא הצלחתי למצוא תחליף. נסו שוב.');
+  const options = (Array.isArray(submit.input.options) ? submit.input.options : []).slice(0, 3)
+    .map((o) => ({ name: clean(o?.name), amount: clean(o?.amount), how: clean(o?.how), effect: clean(o?.effect) }))
+    .filter((o) => o.name);
+  return { options, note: clean(submit.input.note) };
+}
+
+// בדיקה לפני שתגובה / "הכנתי!" מופיעה בקהילה: טקסט קצר ותמונה אופציונלית (base64 JPEG)
+export async function moderateTalk(client, { text = '', image = null, recipeTitle = '' }) {
+  const tool = {
+    name: 'submit_review',
+    description: 'Submit the review of a comment or photo a user wants to post under a recipe in a public recipe community.',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: {
+        decision: { type: 'string', enum: ['publish', 'review', 'reject'] },
+        image_ok: { type: 'boolean', description: 'false if the image is not a photo of food / cooking, or shows faces, documents, screens with personal details or anything inappropriate' },
+        reason: { type: 'string', description: 'Short Hebrew reason for the user when the decision is reject or review (or why the image was removed); empty otherwise' },
+      },
+      required: ['decision', 'image_ok', 'reason'],
+      additionalProperties: false,
+    },
+  };
+  const response = await client.beta.messages.create({
+    model: MODEL,
+    max_tokens: 600,
+    betas: ['server-side-fallback-2026-07-01'],
+    fallbacks: 'default',
+    output_config: { effort: 'low' },
+    system: `You review comments and photos that users of a Hebrew family recipe app post under a recipe in the app's public community (tips, questions, answers, "I made it!").
+publish: a friendly comment, tip, question or answer about cooking (it may be short, critical or negative about the recipe – that is fine).
+reject: spam, ads or links to sell something, hateful/sexual/violent or insulting content toward people, or personal details (phone numbers, addresses, emails, ID numbers, full names of private people).
+review: you are not sure.
+image_ok=false if the image is not food/cooking or shows faces, documents or personal details.
+The reason is in simple Hebrew, addressed to the user. Call submit_review.`,
+    tools: [tool],
+    messages: [{
+      role: 'user',
+      content: [
+        ...(image ? [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: image } }] : []),
+        { type: 'text', text: `Recipe: ${recipeTitle}\nComment: ${text || '(no text)'}` },
+      ],
+    }],
+  });
+  const submit = response.content.find((b) => b.type === 'tool_use' && b.name === tool.name);
+  if (!submit) throw new Error('הבדיקה לפני הפרסום לא הצליחה. נסו שוב.');
+  const { decision, image_ok: imageOk, reason } = submit.input;
+  return { decision: ['publish', 'review', 'reject'].includes(decision) ? decision : 'review', imageOk: imageOk !== false, reason: clean(reason) };
+}
+
 // קטגוריות של מתכון: category = הראשית (גם בשביל מתכונים ונתונים ישנים), categories = כולן, הראשית ראשונה
 export const MAX_RECIPE_CATEGORIES = 4;
 export function categoryFields(list, categories = CATEGORIES) {
@@ -275,11 +528,30 @@ export function categoryFields(list, categories = CATEGORIES) {
 
 export class NoRecipeError extends Error {}
 
-// הכלי עם רשימת הקטגוריות של הספר (הקבועות + אלה שהמשתמש הוסיף)
-export function recipeTool(categories = CATEGORIES) {
+// הכלי עם רשימת הקטגוריות של הספר (הקבועות + אלה שהמשתמש הוסיף).
+// multi: צילום / הודעה בלי קישור יכולים להכיל כמה מתכונים שונים (למשל פתק עם קניידלך וכיסוני בשר) – כל אחד נשמר בנפרד
+export function recipeTool(categories = CATEGORIES, { multi = false, withDiet = true } = {}) {
   const tool = structuredClone(RECIPE_TOOL);
   tool.input_schema.properties.category.enum = [...new Set([...CATEGORIES, ...categories])];
   tool.input_schema.properties.more_categories.items.enum = tool.input_schema.properties.category.enum;
+  // כמה מתכונים: בלי סימון ה-AI לסינון – אחרת הסכמה (כפולה, לכל מתכון) גדולה מדי ל-API ("too large").
+  // המתכונים האלה מסוננים לפי המצרכים
+  if (multi || !withDiet) {
+    delete tool.input_schema.properties.diet;
+    tool.input_schema.required = tool.input_schema.required.filter((k) => k !== 'diet');
+  }
+  if (multi) {
+    const { found, ...one } = tool.input_schema.properties;
+    void found;
+    tool.input_schema.properties.more_recipes = {
+      type: 'array',
+      description: 'ONLY when the source has two or more DIFFERENT dishes (e.g. a note with kneidlach and kreplach): the first dish goes in the main fields, and every other dish here, each as a full separate recipe with its own title, ingredients and steps. Parts of ONE dish (a cake and its frosting, a dough and its filling) stay ONE recipe. Empty for a single dish.',
+      items: {
+        type: 'object', properties: one, required: Object.keys(one), additionalProperties: false,
+      },
+    };
+    tool.input_schema.required = [...tool.input_schema.required, 'more_recipes'];
+  }
   return tool;
 }
 
@@ -290,13 +562,17 @@ export async function extractRecipe(client, src, { categories = CATEGORIES } = {
   const text = material(src) + (custom.length
     ? `\n\nThe user added their own categories: ${custom.join(', ')}. Prefer one of them when it fits the dish better than the general ones.`
     : '');
-  const RECIPE_TOOL = recipeTool(categories);
+  // כמה מתכונים ממקור אחד: רק בצילום / הודעה בלי קישור (מתכון מקישור מזוהה לפי הקישור, ואי אפשר לשמור שניים לאותו קישור)
+  const multi = Boolean(src.images || (src.fromText && !src.url));
+  let RECIPE_TOOL = recipeTool(categories, { multi });
+  // פין בלי קישור לאתר: גם התמונה שלו נשלחת, כדי שהסוכן יקרא סימן מים / שם יוצר ויחפש את המתכון המקורי
+  const pinImage = src.kind === 'pinterest' && !src.linked?.length && /^https:\/\//.test(src.image || '') ? src.image : null;
   const content = src.images
     ? [...src.images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.type, data: i.data } })), { type: 'text', text }]
-    : text;
+    : pinImage ? [{ type: 'image', source: { type: 'url', url: pinImage } }, { type: 'text', text }] : text;
   const messages = [{ role: 'user', content }];
   for (let step = 0; step < MAX_STEPS; step++) {
-    const response = await client.beta.messages.create({
+    const request = () => client.beta.messages.create({
       model: MODEL,
       max_tokens: 16000,
       betas: ['server-side-fallback-2026-07-01'],
@@ -306,11 +582,47 @@ export async function extractRecipe(client, src, { categories = CATEGORIES } = {
       tools: complete ? [RECIPE_TOOL] : [...WEB_TOOLS, RECIPE_TOOL],
       messages,
     });
+    let response;
+    // הסכמה גדולה/מורכבת מדי ל-API: מנסים שוב עם כלי פשוט יותר, צעד אחרי צעד, עד שמצליח –
+    // בלי סימון ה-AI לסינון (הסינון לפי המצרכים), אחר כך מתכון אחד בלבד, ובסוף בלי בדיקת סכמה מחמירה
+    const simpler = [
+      () => RECIPE_TOOL.input_schema.properties.diet && recipeTool(categories, { multi, withDiet: false }),
+      () => RECIPE_TOOL.input_schema.properties.more_recipes && recipeTool(categories, { withDiet: false }),
+      () => RECIPE_TOOL.strict && { ...RECIPE_TOOL, strict: false },
+    ];
+    for (;;) {
+      try {
+        response = await request();
+        break;
+      } catch (e) {
+        const message = `${e?.message || ''} ${JSON.stringify(e?.error || {})}`;
+        const schemaTooBig = (e?.status === 400 || e?.status === 413) && /too large|too complex|too many|grammar|schema/i.test(message);
+        const next = schemaTooBig && simpler.map((f) => f()).find(Boolean);
+        if (next) {
+          RECIPE_TOOL = next;
+          continue;
+        }
+        if (pinImage && step === 0 && e?.status === 400 && messages[0].content !== text) {
+          // תמונת הפין לא נטענה אצל המודל – ממשיכים בלעדיה
+          messages[0] = { role: 'user', content: text };
+          continue;
+        }
+        throw e;
+      }
+    }
     if (response.stop_reason === 'refusal') throw new Error('הבקשה נדחתה על ידי המודל.');
     const submit = response.content.find((b) => b.type === 'tool_use' && b.name === RECIPE_TOOL.name);
     if (submit) {
       if (!submit.input.found) throw new NoRecipeError(clean(submit.input.notes) || 'לא נמצא מתכון בקישור הזה.');
-      return toRecipe(submit.input, src, recipeTool(categories).input_schema.properties.category.enum);
+      const known = RECIPE_TOOL.input_schema.properties.category.enum;
+      const recipe = toRecipe(submit.input, src, known);
+      // שאר המתכונים מאותו מקור: מפתח מקור משלהם (אחרת היו נשמרים זה על זה)
+      const more = RECIPE_TOOL.input_schema.properties.more_recipes ? (Array.isArray(submit.input.more_recipes) ? submit.input.more_recipes : []).slice(0, 5) : [];
+      recipe.more = more
+        .map((input) => toRecipe(input, src, known))
+        .filter((r) => r.ingredients.length || r.steps.length)
+        .map((r, i) => ({ ...r, source: { ...r.source, key: `${r.source.key}:${i + 2}` } }));
+      return recipe;
     }
     messages.push({ role: 'assistant', content: response.content });
     if (response.stop_reason === 'pause_turn') continue; // חיפוש ברשת עדיין רץ - ממשיכים
@@ -362,6 +674,7 @@ export async function searchRecipes(client, query) {
   let searchOk = false;
   let searches = 0;
   let retried = false;
+  let forceSearch = false;
   for (let step = 0; step < 6; step++) {
     const response = await client.beta.messages.create({
       model: MODEL,
@@ -370,7 +683,8 @@ export async function searchRecipes(client, query) {
       fallbacks: 'default',
       output_config: { effort: 'medium' },
       system: SEARCH_SYSTEM,
-      tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 4 }, SEARCH_TOOL],
+      // אחרי שהמודל ויתר בלי לחפש בכלל – מציעים לו רק חיפוש ברשת עד שיחפש
+      tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 4 }, ...(forceSearch && !searches ? [] : [SEARCH_TOOL])],
       messages,
     });
     if (response.stop_reason === 'refusal') throw new Error('הבקשה נדחתה על ידי המודל.');
@@ -393,6 +707,12 @@ export async function searchRecipes(client, query) {
       // רשימה ריקה: פעם אחת מבקשים לחפש שוב בניסוח אחר (המודל לפעמים מוותר מהר מדי)
       if (!results.length && !retried) {
         retried = true;
+        if (!searches) {
+          // רשימה ריקה בלי אף חיפוש: מתחילים מחדש, והפעם בלי כלי ההגשה – רק חיפוש ברשת
+          forceSearch = true;
+          messages.splice(0, messages.length, { role: 'user', content: `Find recipes for: ${query}\n\nSearch the web now (Hebrew "מתכון ..." and English "... recipe").` });
+          continue;
+        }
         messages.push({ role: 'assistant', content: response.content });
         messages.push({ role: 'user', content: [{
           type: 'tool_result', tool_use_id: submit.id, is_error: true,
@@ -405,7 +725,7 @@ export async function searchRecipes(client, query) {
     }
     messages.push({ role: 'assistant', content: response.content });
     if (response.stop_reason === 'pause_turn') continue;
-    messages.push({ role: 'user', content: `Call ${SEARCH_TOOL.name} now with what you found.` });
+    messages.push({ role: 'user', content: searches ? `Call ${SEARCH_TOOL.name} now with what you found.` : 'Search the web for this dish now.' });
   }
   throw new Error('החיפוש לא החזיר תוצאות. נסו שוב.');
 }
@@ -529,6 +849,6 @@ export function aiMessage(e, { owner = false } = {}) {
     return owner ? 'מפתח ה-API של Anthropic לא תקין או בוטל. צריך לעדכן אותו בסודות של GitHub.' : 'השירות לא זמין כרגע. נסו שוב מאוחר יותר.';
   }
   if (status === 429 || status === 529 || status >= 500 || /overloaded|rate.?limit/.test(text)) return 'יש עומס כרגע. נסו שוב בעוד דקה.';
-  if (status === 413 || /too large|too long/.test(text)) return 'הבקשה גדולה מדי. נסו עם פחות טקסט או תמונות.';
+  if (status === 413 || /too large|too long/.test(text)) return 'לא הצלחנו לקרוא את זה הפעם. נסו שוב, ואם זה חוזר – צלמו קרוב יותר או חלקו לכמה תמונות.';
   return null;
 }

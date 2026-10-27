@@ -11,7 +11,8 @@ function serviceWorkerVersion() {
     apply: 'build',
     closeBundle() {
       const dist = join(process.cwd(), 'dist');
-      const assets = readdirSync(join(dist, 'assets')).map((f) => `./assets/${f}`);
+      // קורא ה-PDF (גדול) נטען רק כשבוחרים קובץ PDF – לא נשמר מראש
+      const assets = readdirSync(join(dist, 'assets')).filter((f) => !/^pdf/.test(f)).map((f) => `./assets/${f}`);
       const files = ['./', './manifest.webmanifest', './icon.svg', ...assets].filter((f) => f === './' || f.startsWith('./assets/') || safeExists(join(dist, f)));
       const sw = join(dist, 'sw.js');
       writeFileSync(sw, readFileSync(sw, 'utf8')
@@ -34,4 +35,10 @@ export default defineConfig({
   base: './',
   plugins: [react(), tailwindcss(), serviceWorkerVersion()],
   server: { fs: { allow: ['..'] } },
+  // קובץ העבודה של קורא ה-PDF נשמר כ-.js: באפליקציה לאנדרואיד ‎.mjs לא מזוהה כסקריפט
+  build: {
+    rollupOptions: {
+      output: { assetFileNames: (info) => (/\.mjs$/.test(info.names?.[0] || info.name || '') ? 'assets/[name]-[hash].js' : 'assets/[name]-[hash][extname]') },
+    },
+  },
 });

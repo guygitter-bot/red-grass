@@ -48,13 +48,16 @@ jobs:
         env:
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          API_KEY: ${{ secrets.ISPORT_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
+          OWN_KEY: ${{ secrets.ISPORT_ANTHROPIC_API_KEY }}
           ADMIN_PW: ${{ secrets.ISPORT_ADMIN_PASSWORD }}
         run: |
           missing=""
           [ -n "$CF_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
           [ -n "$CF_ACCOUNT" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
-          [ -n "$API_KEY" ] || missing="$missing ANTHROPIC_API_KEY"
+          [ -n "$API_KEY" ] || missing="$missing ISPORT_ANTHROPIC_API_KEY"
+          # מפתח Claude נפרד לאתר (כדי לראות את העלות שלו לבד ב-Anthropic Console); בלעדיו – המפתח המשותף
+          if [ -n "$OWN_KEY" ]; then echo "Claude key: ISPORT_ANTHROPIC_API_KEY" >> "$GITHUB_STEP_SUMMARY"; else echo "::warning::ISPORT_ANTHROPIC_API_KEY is not set - using the shared ANTHROPIC_API_KEY"; fi
           [ -n "$ADMIN_PW" ] || echo "::warning::ISPORT_ADMIN_PASSWORD is not set - the admin screen will stay locked (see isport/README.md)"
           if [ -n "$missing" ]; then
             echo "::error::Missing repository secrets:$missing (see isport/README.md)"
@@ -80,7 +83,7 @@ jobs:
         id: deploy
         uses: cloudflare/wrangler-action@v3
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ISPORT_ANTHROPIC_API_KEY || secrets.ANTHROPIC_API_KEY }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -106,7 +109,8 @@ jobs:
           echo "Worker: $URL" >> "$GITHUB_STEP_SUMMARY"
 
   web:
-    needs: test
+    # האתר עולה רק אחרי שהשרת שהוא צריך כבר באוויר
+    needs: [test, api]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:

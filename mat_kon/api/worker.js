@@ -7,14 +7,17 @@
 //   - משתמש שהוזמן (Authorization: Bearer <session>): נרשם מקישור הזמנה, מקבל ספר ריק משלו
 //     (user:<id>), ו-FREE_RECIPES מתכונים בחינם. אחר כך צריך מנוי (plan=paid).
 import { deps, trackedClient } from './deps.js';
-import { buildRecipe, failure } from './jobs.js';
+import { buildRecipe, errorGroup, failure, recipeKind } from './jobs.js';
 import { RecipeBook } from './store.js';
-import { Accounts, canAdd } from './accounts.js';
+import { Accounts, canAdd, sha256 } from './accounts.js';
 import { gatherSource, normalizeUrl, sourceKind } from './source.js';
-import { NoRecipeError, aiMessage, categoryFields, extractRecipe, ideasFromPantry, organizeShopping, scanPantry, searchRecipes, suggestCategories } from './extract.js';
+import { NoRecipeError, aiMessage, moderateTalk, suggestSubstitutes, categoryFields, cleanNutrition, estimateNutrition, extractRecipe, moderateRecipe, ideasFromPantry, organizeShopping, scanPantry, searchRecipes, suggestCategories } from './extract.js';
 import { findStores } from './stores.js';
 import { CATEGORIES } from './categories.js';
 import { backupStatus, restoreBook, runBackup } from './backup.js';
+import { communityIdentity, communityKey, publicCopy, publicSummary } from './community.js';
+import { DIETS, DIET_IDS } from './diet.js';
+import { cleanShots, fixAction, fixConfigured, fixStatus, getShot, pruneShots, saveShots, sendFix } from './fixes.js';
 
 export { RecipeBook, Accounts };
 
@@ -38,7 +41,8 @@ function corsHeaders(request, env) {
     'access-control-max-age': '86400',
     vary: 'origin',
   };
-  if (allowed.includes(origin)) headers['access-control-allow-origin'] = origin;
+  // אפליקציית הניהול (mat_kon/admin) – Cloudflare Pages נפרד; כל הנתונים בה מוגנים בכניסת בעלים
+  if (allowed.includes(origin) || /^https:\/\/mat-kon-admin(-[a-z0-9]+)?\.pages\.dev$/.test(origin)) headers['access-control-allow-origin'] = origin;
   return headers;
 }
 
@@ -60,6 +64,7 @@ const internal = (stub, method, path, body) =>
 export default {
   // גיבוי לילי ל-R2 (ראו backup.js ו-[triggers] ב-wrangler.toml). תקלה נרשמת במסך "עלויות ותקלות"
   async scheduled(event, env, ctx) {
+    ctx.waitUntil(pruneShots(env).catch((e) => console.error('fix shots', e)));
     ctx.waitUntil(runBackup(env).catch((e) => {
       console.error('backup', e);
       return internal(env.ACCOUNTS.get(env.ACCOUNTS.idFromName('accounts')), 'POST', '/errors/add', { where: 'backup', message: String(e?.message || e).slice(0, 300), user: 'owner' }).catch(() => {});
@@ -100,6 +105,7 @@ export default {
     // ---- הרשמה וכניסה (בלי זיהוי) ----
     // הגבלת קצב לפי כתובת (ולפי אימייל בכניסה), נבדקת ונספרת באותו צעד
     const ip = request.headers.get('cf-connecting-ip') || 'local';
+    const country = request.headers.get('cf-ipcountry') || '';
     const rate = async (checks, message, trust) => {
       const res = await internal(accounts, 'POST', '/rate', { checks, message, trust });
       return res.ok ? null : pass(res);
@@ -111,6 +117,7 @@ export default {
       if (parts[0] === 'logout' || parts[0] === 'logout-all') body.session = bearer(request);
       if (parts[0] === 'login') {
         const email = String(body.email || '').trim().toLowerCase();
+        body.country = country;
         const limited = await rate([
           { key: `login-ip:${ip}`, limit: 30, window: 900 },
           { key: `login:${email}:${ip}`, limit: 10, window: 900 },
@@ -146,8 +153,10 @@ export default {
 
     // ---- תמונות מתכונים: קישור עם מזהה אקראי שאי אפשר לנחש (תגית img לא שולחת כניסה) ----
     if (parts[0] === 'img' && parts.length === 3 && request.method === 'GET') {
-      if (!/^(book|[0-9a-f-]{36})$/.test(parts[1]) || !/^[0-9a-f-]{36}$/.test(parts[2])) return fail(404, 'Not found');
-      const res = await internal(bookOf(parts[1] === 'book' ? null : parts[1]), 'GET', `/img/${parts[2]}`);
+      if (!/^(book|community|[0-9a-f-]{36})$/.test(parts[1]) || !/^[0-9a-f-]{36}$/.test(parts[2])) return fail(404, 'Not found');
+      // community: תמונות "הכנתי!" שמשתמשים העלו לשיחה על מתכון בקהילה
+      const owner = parts[1] === 'community' ? env.BOOK.get(env.BOOK.idFromName('community')) : bookOf(parts[1] === 'book' ? null : parts[1]);
+      const res = await internal(owner, 'GET', `/img/${parts[2]}`);
       if (!res.ok) return fail(404, 'Not found');
       return new Response(res.body, {
         headers: {
@@ -155,6 +164,21 @@ export default {
           'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*', // כדי שהגיבוי יוכל לשמור את התמונה עצמה
         },
       });
+    }
+
+    // ---- מתכון ששותף בקישור: תצוגה מקדימה (שם, תמונה, מי שיתף) לכל מי שיש לו את הקישור, בלי כניסה.
+    // המתכון המלא ושמירה בספר – רק אחרי כניסה לאפליקציה (ככה מי שקיבל קישור מצטרף) ----
+    const getShare = async (token, saved = false) => {
+      if (!/^[\w-]{20,64}$/.test(token)) return null;
+      const res = await internal(accounts, 'POST', '/shares/get', { token, saved });
+      return res.ok ? (await res.json()).share : null;
+    };
+    if (parts[0] === 'shares' && parts.length === 2 && request.method === 'GET') {
+      const limited = await rate([{ key: `share-view:${ip}`, limit: 120, window: 3600 }]);
+      if (limited) return limited;
+      const share = await getShare(parts[1]);
+      if (!share) return fail(404, 'הקישור לא נמצא או שפג תוקפו');
+      return reply(200, { preview: sharePreview(share) });
     }
 
     // ---- הספר של בעל האפליקציה: פתוח, או נעול (רק במכשירים שנכנסו עם סיסמת הבעלים / חשבון הגוגל שלו) ----
@@ -180,8 +204,11 @@ export default {
         { key: 'owner-all', limit: 300, window: 900, global: true },
       ], 'יותר מדי ניסיונות. נסו שוב בעוד רבע שעה.', { scope: 'owner', device: body.device });
       if (limited) return limited;
-      if (!(await sameSecret(String(body.password || ''), ownerPassword))) return fail(401, 'הסיסמה שגויה');
-      return pass(await internal(accounts, 'POST', '/owner-session', { device: body.device }));
+      if (!(await sameSecret(String(body.password || ''), ownerPassword))) {
+        await internal(accounts, 'POST', '/admin/security/event', { type: 'ownerFail', detail: country });
+        return fail(401, 'הסיסמה שגויה');
+      }
+      return pass(await internal(accounts, 'POST', '/owner-session', { device: body.device, country }));
     }
 
     // ---- כניסה והרשמה עם חשבון גוגל ----
@@ -200,7 +227,7 @@ export default {
         if (!me) return fail(401, 'צריך להיכנס מחדש');
         return pass(await internal(accounts, 'POST', '/google/link', { userId: me.id, ...profile }));
       }
-      if (ownerEmail && profile.email.toLowerCase() === ownerEmail) return pass(await internal(accounts, 'POST', '/owner-session', {}));
+      if (ownerEmail && profile.email.toLowerCase() === ownerEmail) return pass(await internal(accounts, 'POST', '/owner-session', { country }));
       // הרשמה בלי קישור הזמנה עם גוגל (רק כשמותר; משתמש קיים פשוט נכנס)
       const open = body.open === true && !body.token && !body.join && openSignupAllowed(request, env);
       return pass(await internal(accounts, 'POST', '/google', { ...profile, token: body.token || '', join: body.join || '', open }));
@@ -227,12 +254,14 @@ export default {
 
     // לקוח AI שסופר טוקנים לספר (מעקב עלויות לבעל האפליקציה)
     const month = () => new Date().toISOString().slice(0, 7);
-    const ai = () => trackedClient(env, (u) => internal(bookFor(user), 'POST', '/costs/add', { month: month(), ...u }).catch(() => {}));
+    // kind: סוג הפעולה – לפירוט העלויות באפליקציית הניהול
+    const ai = (kind = 'other') => trackedClient(env, (u) => internal(bookFor(user), 'POST', '/costs/add', { month: month(), kind, ...u }).catch(() => {}));
     // תקלות נשמרות (50 אחרונות) כדי שבעל האפליקציה יראה אותן במסך הניהול
-    const recordError = (where, e) => {
+    const recordError = (where, e, group = '') => {
       console.error(where, e);
       return internal(accounts, 'POST', '/errors/add', {
         where, message: String(e?.message || e).slice(0, 300), status: e?.status || null, user: user?.email || (user ? user.id : 'owner'),
+        ...(group ? { group } : {}),
       }).catch(() => {});
     };
 
@@ -316,10 +345,169 @@ export default {
       const limited = await aiBudget();
       if (limited) return limited;
       try {
-        return reply(200, { results: await searchRecipes(ai(), q) });
+        return reply(200, { results: await searchRecipes(ai('search'), q) });
       } catch (e) {
         return aiFail(e, (!e.status && e.message) || 'החיפוש נכשל');
       }
+    }
+
+    // עותק של מתכון (שנשלח בקישור / מהקהילה) נשמר בספר שלי: נספר כמו מתכון חדש, והתמונה מועתקת לספר
+    const saveCopy = async (raw) => {
+      const recipe = restoredRecipe(raw, await allCategories());
+      if (!recipe) return { res: { ok: false, status: 400 }, data: { error: 'המתכון לא תקין' } };
+      const counts = Boolean(user);
+      if (counts) {
+        const taken = await internal(accounts, 'POST', '/quota/take', { userId: user.id });
+        if (!taken.ok) return { res: { ok: false, status: 402 }, data: { error: `נגמרו ${user.freeLimit} המתכונים החינמיים`, paywall: true, paymentUrl: env.PAYMENT_URL || '' } };
+      }
+      recipe.image = await copyImage(recipe.image, {
+        origin: url.origin, bookKey: bookKeyOf(user), source: (k) => bookOf(k === 'book' ? null : k), target: bookStub(),
+      });
+      const res = await internal(bookStub(), 'POST', '/recipes', recipe);
+      const data = await res.json();
+      if (counts) {
+        if (!res.ok || !data.counted) await internal(accounts, 'POST', '/quota/give', { userId: user.id });
+        const fresh = await internal(accounts, 'POST', '/auth', { session });
+        data.user = fresh.ok ? (await fresh.json()).user : undefined;
+      }
+      delete data.counted;
+      return { res, data };
+    };
+
+    // ---- פרופיל לקהילה: שם תצוגה (בלי אימייל) ואישור תנאי השימוש ----
+    if (url.pathname === '/profile') {
+      if (request.method === 'GET') return pass(await internal(accounts, 'POST', '/profile/get', { userId: user?.id || null }));
+      if (request.method === 'PUT') {
+        const { body, error } = await readJson();
+        if (error) return error;
+        return pass(await internal(accounts, 'POST', '/profile/set', { userId: user?.id || null, displayName: body.displayName, acceptTerms: body.acceptTerms === true }));
+      }
+      return fail(405, 'Method not allowed');
+    }
+
+    // ---- מאגר הקהילה: חיפוש במתכונים מקישורים שמשתמשים שמרו (עם דירוג ומספר שמירות, בלי שמות) ----
+    if (parts[0] === 'community') {
+      const stub = env.BOOK.get(env.BOOK.idFromName('community'));
+      if (parts.length === 1 && request.method === 'GET') {
+        const limited = await rate([{ key: `community:${bookKeyOf(user)}`, limit: 300, window: 3600 }]);
+        if (limited) return limited;
+        const p = url.searchParams;
+        const num = (k) => (Number(p.get(k)) > 0 ? Math.min(Number(p.get(k)), 100000) : 0);
+        const filters = {
+          maxMinutes: num('minutes'), maxCalories: num('calories'),
+          kosher: ['meat', 'dairy', 'parve'].includes(p.get('kosher')) ? p.get('kosher') : '',
+          vegan: p.get('vegan') === '1', glutenFree: p.get('gf') === '1',
+          diets: String(p.get('diets') || '').split(',').filter((d) => DIET_IDS.includes(d)),
+        };
+        return pass(await internal(stub, 'POST', '/community/search', { q: String(p.get('q') || '').slice(0, 100), filters }));
+      }
+      if (!/^[\w-]{10,40}$/.test(parts[1] || '')) return fail(404, 'Not found');
+      const res = await internal(stub, 'POST', '/community/get', { key: parts[1] });
+      if (!res.ok) return fail(404, 'המתכון כבר לא במאגר');
+      const { recipe, summary } = await res.json();
+      if (parts.length === 2 && request.method === 'GET') return reply(200, { recipe, summary: publicSummary(summary) });
+      // ---- שיחה על המתכון: טיפים, שאלות, תשובות ו"הכנתי!" (עם שם תצוגה, אחרי בדיקת AI) ----
+      if (parts[2] === 'talk') {
+        const viewer = user?.id || 'owner';
+        if (parts.length === 3 && request.method === 'GET') return pass(await internal(stub, 'POST', '/community/talk/list', { key: parts[1], viewer }));
+        if (parts.length === 3 && request.method === 'POST') {
+          const profile = await (await internal(accounts, 'POST', '/profile/get', { userId: user?.id || null })).json();
+          if (profile.blocked) return fail(403, 'החשבון לא יכול לכתוב בקהילה');
+          if (!profile.displayName || !profile.terms) return fail(409, 'צריך לבחור שם תצוגה ולאשר את תנאי השימוש', { needProfile: true });
+          const { body, error } = await readJson(MAX_PHOTO_BYTES);
+          if (error) return error;
+          const kind = body.parent ? 'reply' : body.kind === 'made' ? 'made' : 'tip';
+          const text = String(body.text || '').replace(/\s+\n/g, '\n').trim().slice(0, 1000);
+          const rating = kind === 'made' && Number.isInteger(body.rating) && body.rating >= 1 && body.rating <= 5 ? body.rating : 0;
+          const photo = kind === 'made' && typeof body.image === 'string' ? body.image.match(/^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/)?.[1] : null;
+          if (photo && photo.length > 540000) return fail(413, 'התמונה גדולה מדי');
+          if (kind !== 'made' && text.length < 2) return fail(400, 'כתבו כמה מילים');
+          if (kind === 'made' && !text && !rating && !photo) return fail(400, 'הוסיפו תמונה, דירוג או כמה מילים');
+          const limited = await rate([{ key: `talk:${viewer}`, limit: 40, window: 86400 }], 'הגעתם למגבלה היומית של תגובות. נסו שוב מחר.')
+            || (photo && (await rate([{ key: `talk-img:${viewer}`, limit: 10, window: 86400 }], 'הגעתם למגבלה היומית של תמונות. נסו שוב מחר.')));
+          if (limited) return limited;
+          const budget = await aiBudget();
+          if (budget) return budget;
+          let review = { decision: 'publish', imageOk: true, reason: '' };
+          if (text || photo) {
+            try {
+              review = await moderateTalk(ai('moderation'), { text, image: photo, recipeTitle: recipe.title });
+            } catch (e) {
+              return aiFail(e, (!e.status && e.message) || 'הבדיקה לפני הפרסום לא הצליחה');
+            }
+          }
+          if (review.decision === 'reject') return fail(422, review.reason || 'התגובה לא מתאימה לקהילה');
+          let image = null;
+          if (photo && review.imageOk) {
+            const saved = await internal(stub, 'POST', '/img', { type: 'image/jpeg', data: photo });
+            if (saved.ok) image = `${url.origin}/img/community/${(await saved.json()).id}`;
+          }
+          const item = {
+            id: crypto.randomUUID().replace(/-/g, '').slice(0, 16), kind, text, rating, image, parent: kind === 'reply' ? String(body.parent).slice(0, 40) : null,
+            authorId: viewer, author: profile.displayName, at: new Date().toISOString(), likes: [],
+            flagged: review.decision === 'review', flagReason: review.decision === 'review' ? review.reason : '',
+          };
+          const added = await internal(stub, 'POST', '/community/talk/add', { key: parts[1], item });
+          if (added.ok && item.flagged) await internal(accounts, 'POST', '/admin/notify', { title: '👀 תגובה בקהילה מחכה לבדיקה', body: `${recipe.title}: ${text.slice(0, 80)}`, tag: `talk-${item.id}`, url: '#content' });
+          const data = await added.json();
+          return reply(added.status, { ...data, imageRemoved: Boolean(photo && !image) });
+        }
+        if (!/^[a-f0-9]{16}$/.test(parts[3] || '')) return fail(404, 'Not found');
+        if (parts.length === 4 && request.method === 'DELETE') return pass(await internal(stub, 'POST', '/community/talk/remove', { key: parts[1], id: parts[3], by: viewer }));
+        if (parts.length === 5 && parts[4] === 'like' && request.method === 'POST') {
+          const limited = await rate([{ key: `talk-like:${viewer}`, limit: 300, window: 3600 }]);
+          if (limited) return limited;
+          return pass(await internal(stub, 'POST', '/community/talk/like', { key: parts[1], id: parts[3], liker: viewer }));
+        }
+        if (parts.length === 5 && parts[4] === 'report' && request.method === 'POST') {
+          const limited = await rate([{ key: `report:${bookKeyOf(user)}`, limit: 30, window: 86400 }], 'הגעתם למגבלת הדיווחים היומית.');
+          if (limited) return limited;
+          const { body, error } = await readJson();
+          if (error) return error;
+          const reason = ['offensive', 'personal', 'spam', 'other'].includes(body.reason) ? body.reason : 'other';
+          const reported = await (await internal(stub, 'POST', '/community/talk/report', { key: parts[1], id: parts[3], rater: viewer, reason })).json();
+          if (reported.justHidden) await internal(accounts, 'POST', '/admin/notify', { title: '🚩 תגובה הוסתרה אחרי דיווחים', body: String(reported.text || '').slice(0, 80), tag: `talk-${parts[3]}`, url: '#content' });
+          return reply(200, { ok: true });
+        }
+        return fail(405, 'Method not allowed');
+      }
+      // דיווח על מתכון (פעם אחת לכל ספר)
+      if (parts.length === 3 && parts[2] === 'report' && request.method === 'POST') {
+        const limited = await rate([{ key: `report:${bookKeyOf(user)}`, limit: 30, window: 86400 }], 'הגעתם למגבלת הדיווחים היומית.');
+        if (limited) return limited;
+        const { body, error } = await readJson();
+        if (error) return error;
+        const reason = ['not-recipe', 'offensive', 'personal', 'copied', 'other'].includes(body.reason) ? body.reason : 'other';
+        const reported = await (await internal(stub, 'POST', '/community/report', { key: parts[1], rater: bookKeyOf(user), reason })).json();
+        if (reported.justHidden) await internal(accounts, 'POST', '/admin/notify', { title: '🚩 מתכון הוסתר אחרי דיווחים', body: reported.title, tag: `report-${parts[1]}`, url: '#content' });
+        return reply(200, { ok: true });
+      }
+      if (parts.length === 3 && parts[2] === 'save' && request.method === 'POST') {
+        const limited = await rate([{ key: `share-save:${bookKeyOf(user)}`, limit: 200, window: 86400 }], 'הגעתם למגבלה היומית. נסו שוב מחר.');
+        if (limited) return limited;
+        const { res: saved, data } = await saveCopy(recipe);
+        return reply(saved.status, data);
+      }
+      return fail(405, 'Method not allowed');
+    }
+
+    // ---- מתכון ששותף בקישור: המתכון המלא, ושמירה שלו בספר שלי (נספר כמו מתכון חדש) ----
+    if (parts[0] === 'shares' && parts.length === 3 && ['full', 'save'].includes(parts[2])) {
+      if (parts[2] === 'full' && request.method === 'GET') {
+        const share = await getShare(parts[1]);
+        if (!share) return fail(404, 'הקישור לא נמצא או שפג תוקפו');
+        return reply(200, { by: share.by, recipe: share.recipe });
+      }
+      if (parts[2] === 'save' && request.method === 'POST') {
+        const limited = await rate([{ key: `share-save:${bookKeyOf(user)}`, limit: 200, window: 86400 }], 'הגעתם למגבלה היומית. נסו שוב מחר.');
+        if (limited) return limited;
+        const share = await getShare(parts[1]);
+        if (!share) return fail(404, 'הקישור לא נמצא או שפג תוקפו');
+        const { res, data } = await saveCopy(share.recipe);
+        if (res.ok && !data.updated) await getShare(parts[1], true);
+        return reply(res.status, data);
+      }
+      return fail(405, 'Method not allowed');
     }
 
     // ---- שיתוף הספר: בעל הספר (בעל האפליקציה או מי שנרשם מהזמנה) מצרף בני משפחה ----
@@ -350,6 +538,7 @@ export default {
       if (!user) return fail(400, 'לבעל האפליקציה אין חשבון למחוק');
       const res = await internal(accounts, 'POST', '/account/delete', { userId: user.id });
       const data = await res.json();
+      if (res.ok) await internal(env.BOOK.get(env.BOOK.idFromName('community')), 'POST', '/community/remove-author', { authorId: user.id });
       if (res.ok && data.deletedBook) await internal(bookOf(user.id), 'DELETE', '/recipes');
       return reply(res.status, data);
     }
@@ -438,7 +627,7 @@ export default {
         const limited = await aiBudget(photos.images.length > 1 ? 2 : 1);
         if (limited) return limited;
         try {
-          const items = await scanPantry(ai(), photos.images, {
+          const items = await scanPantry(ai('pantry-scan'), photos.images, {
             mode: body.mode === 'single' ? 'single' : 'many',
             place: body.place === 'pantry' ? 'pantry' : 'fridge',
           });
@@ -459,7 +648,7 @@ export default {
         const limited = await aiBudget();
         if (limited) return limited;
         try {
-          return reply(200, { results: await ideasFromPantry(ai(), items, { wish: String(body.wish || '').trim().slice(0, 200) }) });
+          return reply(200, { results: await ideasFromPantry(ai('ideas'), items, { wish: String(body.wish || '').trim().slice(0, 200) }) });
         } catch (e) {
           return aiFail(e, (!e.status && e.message) || 'החיפוש נכשל');
         }
@@ -478,7 +667,7 @@ export default {
       const limited = await aiBudget(items.length ? 2 : 1);
       if (limited) return limited;
       try {
-        return reply(200, await findStores({ lat, lon, items }, { fetch: deps.fetch, client: ai(), cheapersalKey: env.CHEAPERSAL_API_KEY }));
+        return reply(200, await findStores({ lat, lon, items }, { fetch: deps.fetch, client: ai('stores'), cheapersalKey: env.CHEAPERSAL_API_KEY }));
       } catch (e) {
         return aiFail(e, (!e.status && e.message) || 'לא הצלחתי למצוא חנויות');
       }
@@ -504,7 +693,7 @@ export default {
         const limited = await aiBudget();
         if (limited) return limited;
         try {
-          return reply(200, { groups: await organizeShopping(ai(), items) });
+          return reply(200, { groups: await organizeShopping(ai('shopping'), items) });
         } catch (e) {
           return aiFail(e, (!e.status && e.message) || 'לא הצלחתי לסדר את הרשימה');
         }
@@ -520,20 +709,177 @@ export default {
     // ---- ניהול: עלויות ותקלות (רק בעל האפליקציה) ----
     if (parts[0] === 'admin') {
       if (user) return fail(403, 'רק לבעל האפליקציה');
-      if (url.pathname === '/admin/usage' && request.method === 'GET') {
-        const m = /^\d{4}-\d{2}$/.test(url.searchParams.get('month') || '') ? url.searchParams.get('month') : month();
+      // עלויות AI לחודש, לכל ספר
+      const price = { in: Number(env.AI_PRICE_IN || 5), out: Number(env.AI_PRICE_OUT || 25), search: Number(env.AI_PRICE_SEARCH || 0.01) };
+      const usage = async (m) => {
         const { books, ownerMembers } = await (await internal(accounts, 'GET', '/books')).json();
-        const price = { in: Number(env.AI_PRICE_IN || 5), out: Number(env.AI_PRICE_OUT || 25), search: Number(env.AI_PRICE_SEARCH || 0.01) };
         const withCost = async (row, stub) => {
           const c = await (await internal(stub, 'GET', `/costs/${m}`)).json();
           const usd = (c.input * price.in + c.output * price.out) / 1e6 + c.searches * price.search;
           return { ...row, ...c, usd: Math.round(usd * 100) / 100 };
         };
-        const rows = await Promise.all([
+        return Promise.all([
           withCost({ id: 'owner', name: 'הספר שלי', plan: 'owner', members: ownerMembers }, bookOf(null)),
           ...books.map((b) => withCost({ id: b.id, name: b.name, email: b.email, plan: b.plan, added: b.added, members: b.members }, bookOf(b.id))),
         ]);
-        return reply(200, { month: m, price, rows });
+      };
+      if (url.pathname === '/admin/usage' && request.method === 'GET') {
+        const m = /^\d{4}-\d{2}$/.test(url.searchParams.get('month') || '') ? url.searchParams.get('month') : month();
+        return reply(200, { month: m, price, rows: await usage(m) });
+      }
+      // ---- אפליקציית הניהול: סקירה אחת של הכול ----
+      if (url.pathname === '/admin/overview' && request.method === 'GET') {
+        const now = new Date();
+        const months = [0, 1, 2].map((i) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1)).toISOString().slice(0, 7));
+        const [stats, costs, community, backups, issues, settings, reports, talk] = await Promise.all([
+          internal(accounts, 'GET', '/admin/stats').then((r) => r.json()),
+          Promise.all(months.map(async (m) => {
+            const rows = await usage(m);
+            const usd = Math.round(rows.reduce((n, r) => n + r.usd, 0) * 100) / 100;
+            // לפי סוג פעולה, מכל הספרים: כמה פעמים, כמה עלה בסך הכול, ובממוצע לפעולה
+            const kinds = {};
+            for (const r of rows) {
+              for (const [k, v] of Object.entries(r.byKind || {})) {
+                const t = kinds[k] || (kinds[k] = { kind: k, ops: 0, usd: 0, searches: 0 });
+                t.ops += v.ops;
+                t.searches += v.searches;
+                t.usd += (v.input * price.in + v.output * price.out) / 1e6 + v.searches * price.search;
+              }
+            }
+            const byKind = Object.values(kinds).map((t) => ({ ...t, usd: Math.round(t.usd * 100) / 100, avg: t.ops ? Math.round((t.usd / t.ops) * 1000) / 1000 : null })).sort((a, b) => b.usd - a.usd);
+            return { month: m, usd, byKind, top: rows.filter((r) => r.usd > 0).sort((a, b) => b.usd - a.usd).slice(0, 5).map((r) => ({ name: r.name, email: r.email, usd: r.usd })) };
+          })),
+          internal(env.BOOK.get(env.BOOK.idFromName('community')), 'POST', '/community/stats', {}).then((r) => r.json()),
+          backupStatus(env).catch(() => null),
+          internal(accounts, 'GET', '/admin/issues').then((r) => r.json()),
+          internal(accounts, 'GET', '/admin/settings').then((r) => r.json()),
+          internal(env.BOOK.get(env.BOOK.idFromName('community')), 'POST', '/community/reports', {}).then((r) => r.json()),
+          internal(env.BOOK.get(env.BOOK.idFromName('community')), 'POST', '/community/talk/flagged', {}).then((r) => r.json()),
+        ]);
+        const open = issues.issues.filter((i) => i.status !== 'fixed');
+        const alerts = [];
+        const spend = settings.settings.spendAlert;
+        if (spend && costs[0].usd >= spend) alerts.push({ level: 'serious', text: `ההוצאה על AI החודש ($${costs[0].usd}) עברה את הסף שקבעת ($${spend})` });
+        if (open.some((i) => i.status === 'new')) alerts.push({ level: 'warning', text: `${open.filter((i) => i.status === 'new').length} תקלות חדשות שעוד לא טופלו` });
+        const hidden = reports.items.filter((r) => r.hidden).length;
+        if (talk.items.length) alerts.push({ level: talk.items.some((t) => t.hidden) ? 'serious' : 'warning', text: `${talk.items.length} תגובות בקהילה מחכות לבדיקה שלך` });
+        if (reports.items.length) alerts.push({ level: hidden ? 'serious' : 'warning', text: `${reports.items.length} מתכונים בקהילה מחכים לבדיקה שלך${hidden ? ` (${hidden} מוסתרים אחרי דיווחים)` : ''}` });
+                if (stats.today >= 50) alerts.push({ level: 'warning', text: `${stats.today} הרשמות היום – הרבה יותר מהרגיל` });
+        const lastBackup = backups?.days?.at(-1);
+        if (backups?.enabled && (!lastBackup || Date.now() - Date.parse(`${lastBackup}T00:00:00Z`) > 2 * 86400000)) alerts.push({ level: 'serious', text: 'הגיבוי הלילי לא רץ ביומיים האחרונים' });
+        return reply(200, {
+          stats, costs, community, backups: backups?.enabled ? { last: lastBackup || null, count: backups.days.length, ok: Boolean(backups.last) } : null,
+          issues: { open: open.length, new: open.filter((i) => i.status === 'new').length, fixed: issues.issues.length - open.length },
+          settings: settings.settings, alerts, reports: { pending: reports.items.length + talk.items.length, hidden },
+        });
+      }
+      if (url.pathname === '/admin/issues' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/admin/issues'));
+      if (parts[1] === 'issues' && parts.length === 3 && request.method === 'POST') {
+        const { body, error } = await readJson();
+        if (error) return error;
+        return pass(await internal(accounts, 'POST', '/admin/issues/update', { sig: parts[2], status: body.status, note: body.note }));
+      }
+      // "שלח ל-Claude לטיפול": התקלה נפתחת ב-GitHub (בלי פרטי משתמשים) ו-Claude מכין תיקון לאישור
+      if (parts[1] === 'issues' && parts.length === 4 && parts[3] === 'fix' && request.method === 'POST') {
+        if (!fixConfigured(env)) return fail(503, 'השליחה ל-Claude לא מוגדרת בשרת');
+        const { body, error } = await readJson(MAX_PHOTO_BYTES);
+        if (error) return error;
+        const shots = cleanShots(body.images);
+        if (shots.length && !env.BACKUPS) return fail(503, 'שמירת צילומי מסך לא מוגדרת בשרת');
+        const { issues } = await (await internal(accounts, 'GET', '/admin/issues')).json();
+        const issue = issues.find((i) => i.sig === parts[2]);
+        if (!issue) return fail(404, 'התקלה לא נמצאה');
+        if (issue.fix) {
+          const current = await fixStatus(env, issue.fix).catch(() => null);
+          if (current && !['done', 'rejected', 'closed'].includes(current.status)) return fail(409, 'Claude כבר מטפל בתקלה הזו');
+        }
+        let number;
+        try {
+          number = await sendFix(env, issue, typeof body.note === 'string' ? body.note : '', await saveShots(env, shots));
+        } catch (e) {
+          return fail(502, `לא הצלחתי לשלוח ל-Claude (${e.message})`);
+        }
+        return pass(await internal(accounts, 'POST', '/admin/issues/update', { sig: issue.sig, status: 'working', fix: number }));
+      }
+      // צילום מסך שצורף לבקשה ל-Claude (רק לבעלים – התהליך ב-GitHub נכנס עם סיסמת הבעלים)
+      if (parts[1] === 'fix-shot' && parts.length === 3 && request.method === 'GET') {
+        const obj = await getShot(env, parts[2]);
+        if (!obj) return fail(404, 'הצילום לא נמצא');
+        return new Response(await obj.arrayBuffer(), { headers: { ...cors, 'content-type': 'image/jpeg', 'cache-control': 'private, no-store' } });
+      }
+      if (parts[1] === 'fix' && /^\d+$/.test(parts[2] || '') && fixConfigured(env)) {
+        const number = Number(parts[2]);
+        // רק בקשות ששלחנו מתקלה (לא כל issue במאגר)
+        const { issues } = await (await internal(accounts, 'GET', '/admin/issues')).json();
+        const issue = issues.find((i) => i.fix === number);
+        if (!issue) return fail(404, 'הבקשה לא נמצאה');
+        try {
+          if (parts.length === 3 && request.method === 'GET') return reply(200, await fixStatus(env, number));
+          const action = parts.length === 4 && request.method === 'POST' && ['approve', 'reject', 'retry', 'reply'].includes(parts[3]) ? parts[3] : '';
+          if (!action) return fail(404, 'Not found');
+          const { body, error } = await readJson(action === 'reply' ? MAX_PHOTO_BYTES : MAX_SMALL_BYTES);
+          if (error) return error;
+          const shots = action === 'reply' ? cleanShots(body.images) : [];
+          if (shots.length && !env.BACKUPS) return fail(503, 'שמירת צילומי מסך לא מוגדרת בשרת');
+          const out = await fixAction(env, number, action, body.text, await saveShots(env, shots));
+          if (out.status === 200 && action === 'approve') await internal(accounts, 'POST', '/admin/issues/update', { sig: issue.sig, status: 'fixed' });
+          if (out.status === 200 && action === 'reject') await internal(accounts, 'POST', '/admin/issues/update', { sig: issue.sig, status: 'new', fix: null });
+          return reply(out.status, out.data);
+        } catch (e) {
+          return fail(502, `שגיאה מול GitHub (${e.message})`);
+        }
+      }
+      if (url.pathname === '/admin/security' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/admin/security'));
+      // תכונות למשתמש מסוים (ניקוד ביס בדף המתכון)
+      if (url.pathname === '/admin/features' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/users/features'));
+      if (url.pathname === '/admin/features' && request.method === 'POST') {
+        const { body, error } = await readJson();
+        if (error) return error;
+        return pass(await internal(accounts, 'POST', '/users/feature', { email: String(body.email || '').slice(0, 200), feature: body.feature, on: Boolean(body.on) }));
+      }
+      // התראות לטלפון של בעל האפליקציה
+      if (parts[1] === 'push' && parts.length === 3) {
+        if (parts[2] === 'key' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/admin/push/key'));
+        if (parts[2] === 'status' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/admin/push/status'));
+        if (parts[2] === 'test' && request.method === 'POST') return pass(await internal(accounts, 'POST', '/admin/push/test', {}));
+        if (parts[2] === 'subscribe' && request.method === 'POST') {
+          const { body, error } = await readJson();
+          if (error) return error;
+          return pass(await internal(accounts, 'POST', '/admin/push/subscribe', { subscription: body.subscription }));
+        }
+      }
+      // דיווחים ומתכונים שבדיקת ה-AI לא הייתה בטוחה לגביהם: אישור / הסרה / חסימת המפרסם
+      const community = env.BOOK.get(env.BOOK.idFromName('community'));
+      if (url.pathname === '/admin/reports' && request.method === 'GET') return pass(await internal(community, 'POST', '/community/reports', {}));
+      if (parts[1] === 'reports' && parts.length === 3 && request.method === 'POST') {
+        const { body, error } = await readJson();
+        if (error) return error;
+        if (body.action === 'view') return pass(await internal(community, 'POST', '/community/get', { key: parts[2], admin: true }));
+        const res = await internal(community, 'POST', '/community/moderate', { key: parts[2], action: body.action === 'approve' ? 'approve' : 'remove' });
+        const data = await res.json();
+        if (res.ok && body.action === 'block' && data.authorId && data.authorId !== 'owner') {
+          await internal(accounts, 'POST', '/admin/block', { userId: data.authorId });
+          await internal(community, 'POST', '/community/remove-author', { authorId: data.authorId });
+        }
+        return reply(res.status, data);
+      }
+      // תגובות בקהילה שדווחו / שה-AI לא היה בטוח לגביהן
+      if (url.pathname === '/admin/talk' && request.method === 'GET') return pass(await internal(community, 'POST', '/community/talk/flagged', {}));
+      if (parts[1] === 'talk' && parts.length === 4 && request.method === 'POST') {
+        const { body, error } = await readJson();
+        if (error) return error;
+        const res = await internal(community, 'POST', '/community/talk/moderate', { key: parts[2], id: parts[3], action: body.action === 'approve' ? 'approve' : 'remove' });
+        const data = await res.json();
+        if (res.ok && body.action === 'block' && data.authorId && data.authorId !== 'owner') {
+          await internal(accounts, 'POST', '/admin/block', { userId: data.authorId });
+          await internal(community, 'POST', '/community/remove-author', { authorId: data.authorId });
+        }
+        return reply(res.status, data);
+      }
+      if (url.pathname === '/admin/settings' && request.method === 'PUT') {
+        const { body, error } = await readJson();
+        if (error) return error;
+        return pass(await internal(accounts, 'POST', '/admin/settings', { spendAlert: body.spendAlert }));
       }
       if (url.pathname === '/admin/errors' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/errors'));
       return fail(404, 'Not found');
@@ -633,7 +979,7 @@ export default {
         if (source.kind === 'photo' || source.kind === 'manual') return fail(400, 'למתכון הזה אין מקור לקרוא ממנו שוב');
         // מתכון ששוחזר מגיבוי ועוד לא נקרא מהמקור – קריאה ראשונה שלו נספרת כמו הוספה
         restoredStub = Boolean(restored);
-        if (source.kind === 'whatsapp' || source.text) text = textSource(source);
+        if (['whatsapp', 'file'].includes(source.kind) || source.text) text = textSource(source);
         else {
           link = source.url;
           hint = source.hint || '';
@@ -661,16 +1007,31 @@ export default {
       }
       let recipe;
       try {
-        recipe = await buildRecipe(env, ai(), { link, text, hint }, categories);
+        recipe = await buildRecipe(env, ai(recipeKind({ link, text })), { link, text, hint }, categories);
       } catch (e) {
         await giveBack();
-        await recordError('extract', e);
+        await recordError('extract', e, link ? errorGroup(link, e) : e instanceof NoRecipeError ? 'NoRecipeError:' : '');
         const f = failure(e, { isPhoto: isAddPhoto, owner: !user });
         return fail(f.status, f.error);
       }
-      recipe.image = await storeImage(recipe.image);
+      const more = (isAdd && recipe.more) || []; // ברענון – רק המתכון עצמו
+      delete recipe.more;
+      const thumb = recipe.image;
+      recipe.image = await storeImage(thumb);
       const res = await internal(book, 'POST', '/recipes', recipe);
       const data = await res.json();
+      // כמה מתכונים שונים באותו צילום/הודעה: כל אחד נשמר בנפרד (עם עותק משלו של התמונה) ונספר כמתכון
+      if (res.ok && more.length) {
+        data.more = [];
+        for (const extra of more) {
+          if (counts && !(await internal(accounts, 'POST', '/quota/take', { userId: user.id })).ok) break;
+          extra.image = await storeImage(thumb);
+          const r = await internal(book, 'POST', '/recipes', extra);
+          const d = await r.json();
+          if (r.ok) data.more.push(d.recipe);
+          if (counts && (!r.ok || !d.counted)) await giveBack();
+        }
+      }
       // מתכון שכבר היה בספר (אותו קישור) לא נספר – המכסה חוזרת
       if (counts) {
         const result = !res.ok || !data.counted ? await giveBack() : null;
@@ -682,6 +1043,72 @@ export default {
       return reply(res.status, data);
     }
 
+    // המתכון הזה במאגר הקהילה (מקישור, עותק ממישהו, או שפרסמתי): המפתח, בשביל השיחה עליו בדף המתכון
+    if (parts.length === 3 && parts[2] === 'community' && request.method === 'GET') {
+      const res = await internal(book, 'GET', `/recipes/${id}`);
+      if (!res.ok) return fail(404, 'המתכון לא נמצא');
+      const { recipe } = await res.json();
+      const identity = communityIdentity(recipe);
+      const key = recipe.published || (identity ? await communityKey(identity) : null);
+      if (!key) return reply(200, { key: null });
+      const found = await internal(env.BOOK.get(env.BOOK.idFromName('community')), 'POST', '/community/get', { key });
+      if (!found.ok) return reply(200, { key: null });
+      return reply(200, { key, summary: publicSummary((await found.json()).summary) });
+    }
+
+    // פרסום מתכון אישי לקהילה (עם שם תצוגה), אחרי בדיקת AI. ביטול פרסום – בכל רגע
+    if (parts.length === 3 && parts[2] === 'publish' && ['POST', 'DELETE'].includes(request.method)) {
+      const res = await internal(book, 'GET', `/recipes/${id}`);
+      if (!res.ok) return fail(404, 'המתכון לא נמצא');
+      const { recipe } = await res.json();
+      const comm = env.BOOK.get(env.BOOK.idFromName('community'));
+      if (request.method === 'DELETE') {
+        if (recipe.published) await internal(comm, 'POST', '/community/unpublish', { key: recipe.published });
+        return pass(await internal(book, 'PUT', `/recipes/${id}`, { published: null }));
+      }
+      if (recipe.source?.url) return fail(400, 'מתכון מקישור כבר נמצא בקהילה, עם קרדיט למקור');
+      if (recipe.source?.kind === 'community') return fail(400, 'זה מתכון שמישהו אחר פרסם בקהילה');
+      const profile = await (await internal(accounts, 'POST', '/profile/get', { userId: user?.id || null })).json();
+      if (profile.blocked) return fail(403, 'החשבון לא יכול לפרסם בקהילה');
+      if (!profile.displayName || !profile.terms) return fail(409, 'צריך לבחור שם תצוגה ולאשר את תנאי השימוש', { needProfile: true });
+      const limited = await rate([{ key: `publish:${bookKeyOf(user)}`, limit: 20, window: 86400 }], 'הגעתם למגבלת הפרסומים היומית. נסו שוב מחר.');
+      if (limited) return limited;
+      const budget = await aiBudget();
+      if (budget) return budget;
+      const image = typeof recipe.image === 'string' && /^https:\/\//.test(recipe.image) ? recipe.image : null;
+      let review;
+      try {
+        review = await moderateRecipe(ai('moderation'), recipe, image);
+      } catch (e) {
+        return aiFail(e, (!e.status && e.message) || 'הבדיקה לפני הפרסום לא הצליחה');
+      }
+      if (review.decision === 'reject') return fail(422, review.reason || 'המתכון לא מתאים לפרסום בקהילה');
+      const identity = `pub:${bookKeyOf(user)}:${id}`;
+      const key = recipe.published || (await communityKey(identity));
+      const copy = publicCopy({ ...recipe, image: review.imageOk ? image : null }, { keepImage: true });
+      copy.source = { url: null, key: `community:${key}`, kind: 'community', identity, author: profile.displayName };
+      await internal(comm, 'POST', '/community/publish', {
+        key, recipe: copy, author: { id: user?.id || 'owner', name: profile.displayName }, flagged: review.decision === 'review', reason: review.reason,
+      });
+      if (review.decision === 'review') await internal(accounts, 'POST', '/admin/notify', { title: '👀 מתכון חדש בקהילה מחכה לבדיקה', body: `${copy.title} – ${review.reason || ''}`, tag: `review-${key}`, url: '#content' });
+      const saved = await (await internal(book, 'PUT', `/recipes/${id}`, { published: key })).json();
+      return reply(200, { ...saved, review: { decision: review.decision, imageRemoved: Boolean(image && !review.imageOk), reason: review.reason } });
+    }
+
+    // שיתוף מתכון בקישור: נשמר עותק של המתכון (בלי ההערות האישיות והדירוג), ולא גישה לספר
+    if (parts.length === 3 && parts[2] === 'share' && request.method === 'POST') {
+      const limited = await rate([{ key: `share:${bookKeyOf(user)}`, limit: 100, window: 86400 }], 'הגעתם למגבלת השיתופים היומית. נסו שוב מחר.');
+      if (limited) return limited;
+      const { body, error } = await readJson();
+      if (error) return error;
+      const res = await internal(book, 'GET', `/recipes/${id}`);
+      if (!res.ok) return fail(404, 'המתכון לא נמצא');
+      const copy = sharedCopy((await res.json()).recipe, await allCategories());
+      if (!copy) return fail(400, 'אי אפשר לשתף את המתכון הזה');
+      if (JSON.stringify(copy).length > 120000) return fail(413, 'המתכון גדול מדי לשיתוף');
+      const by = String(user?.name || body.from || '').trim().slice(0, 60);
+      return pass(await internal(accounts, 'POST', '/shares/put', { recipe: copy, by, userId: user ? user.id : 'owner' }));
+    }
     if (parts.length === 1 && request.method === 'GET') return pass(await internal(book, 'GET', '/recipes'));
     if (parts.length === 2 && request.method === 'GET') return pass(await internal(book, 'GET', `/recipes/${id}`));
     if (parts.length === 2 && request.method === 'DELETE') return pass(await internal(book, 'DELETE', `/recipes/${id}`));
@@ -693,15 +1120,57 @@ export default {
       const limited = await aiBudget();
       if (limited) return limited;
       try {
-        const fields = await suggestCategories(ai(), recipe, await allCategories());
+        const fields = await suggestCategories(ai('categories'), recipe, await allCategories());
         return pass(await internal(book, 'PUT', `/recipes/${id}`, { ...fields, categorized: true }));
       } catch (e) {
         return aiFail(e, (!e.status && e.message) || 'לא הצלחתי לסדר את הקטגוריות');
       }
     }
+    // חסר לי מצרך: תחליפים שמתאימים למתכון הזה (AI קצר; אותה שאלה שוב – מהזיכרון, בחינם)
+    if (parts.length === 3 && parts[2] === 'substitute' && request.method === 'POST') {
+      const { body, error } = await readJson();
+      if (error) return error;
+      const res = await internal(book, 'GET', `/recipes/${id}`);
+      if (!res.ok) return fail(404, 'המתכון לא נמצא');
+      const { recipe } = await res.json();
+      const item = String(body.item || '').trim();
+      // רק מצרך שבאמת מופיע במתכון (לא שאלה חופשית ל-AI)
+      if (!(recipe.ingredients || []).some((g) => (g.items || []).includes(item))) return fail(400, 'המצרך לא נמצא במתכון');
+      const diets = (Array.isArray(body.diets) ? body.diets : []).filter((d) => DIET_IDS.includes(d)).sort();
+      const label = Object.fromEntries(DIETS.map((d) => [d.id, d.label]));
+      const cacheKey = `${id}:${(await sha256(`${item}|${diets.join(',')}`)).replace(/[^\w]/g, '').slice(0, 24)}`;
+      const cached = await (await internal(book, 'GET', `/subs?key=${encodeURIComponent(cacheKey)}`)).json();
+      if (cached.value) return reply(200, cached.value);
+      const limited = await aiBudget();
+      if (limited) return limited;
+      try {
+        const out = { item, ...(await suggestSubstitutes(ai('substitute'), recipe, item, { diets: diets.map((d) => label[d]) })) };
+        await internal(book, 'PUT', `/subs?key=${encodeURIComponent(cacheKey)}`, out);
+        return reply(200, out);
+      } catch (e) {
+        return aiFail(e, (!e.status && e.message) || 'לא הצלחתי למצוא תחליף');
+      }
+    }
+    // הערכה תזונתית למתכון קיים (מתכון ישן, או אחרי עריכת המצרכים): AI קצר, בלי מכסת מתכונים – רק בתקציב היומי
+    if (parts.length === 3 && parts[2] === 'nutrition' && request.method === 'POST') {
+      const res = await internal(book, 'GET', `/recipes/${id}`);
+      if (!res.ok) return fail(404, 'המתכון לא נמצא');
+      const { recipe } = await res.json();
+      const limited = await aiBudget();
+      if (limited) return limited;
+      try {
+        return pass(await internal(book, 'PUT', `/recipes/${id}`, { nutrition: await estimateNutrition(ai('nutrition'), recipe) }));
+      } catch (e) {
+        return aiFail(e, (!e.status && e.message) || 'לא הצלחתי להעריך את הערכים התזונתיים');
+      }
+    }
     if (parts.length === 2 && request.method === 'PUT') {
       const { body: patch, error } = await readJson(MAX_EDIT_BYTES);
       if (error) return error;
+      delete patch.published; // רק דרך /publish
+      // ערכים תזונתיים: רק בצורה הנכונה. שינוי במצרכים או במספר המנות – ההערכה הישנה כבר לא נכונה
+      if ('nutrition' in patch) patch.nutrition = cleanNutrition(patch.nutrition);
+      else if ('ingredients' in patch || 'servings' in patch) patch.nutrition = null;
       if ('categories' in patch) {
         const known = await allCategories();
         if (!Array.isArray(patch.categories) || !patch.categories.length || patch.categories.some((c) => !known.includes(c))) return fail(400, 'קטגוריה לא מוכרת');
@@ -855,7 +1324,7 @@ function restoredRecipe(r, categories) {
   if (!title || (!ingredients.length && !steps.length)) return null;
   const src = r.source && typeof r.source === 'object' ? r.source : {};
   const url = typeof src.url === 'string' && /^https?:\/\//.test(src.url) ? normalizeUrl(src.url) : null;
-  const key = !url && typeof src.key === 'string' && /^(wa|photo|manual):[\w:-]{1,80}$/.test(src.key) ? src.key : null;
+  const key = !url && typeof src.key === 'string' && /^(wa|photo|manual|community):[\w:-]{1,80}$/.test(src.key) ? src.key : null;
   const str = (v, n = 150) => String(v ?? '').trim().slice(0, n);
   const source = {
     url,
@@ -863,6 +1332,7 @@ function restoredRecipe(r, categories) {
     ...(key ? { key } : url ? {} : { key: `manual:restored-${textHash(title)}` }),
     kind: /^[a-z]{2,20}$/.test(src.kind) ? src.kind : url ? sourceKind(url) : 'manual',
     ...['title', 'author', 'site', 'chat', 'date', 'hint'].reduce((o, k) => (src[k] ? { ...o, [k]: str(src[k]) } : o), {}),
+    ...((url || key?.startsWith('community:')) && typeof src.identity === 'string' && /^[a-z]+:.{3,600}$/.test(src.identity) ? { identity: src.identity } : {}),
     ...(typeof src.text === 'string' ? { text: src.text.slice(0, 20000) } : {}),
     ...(typeof src.embed === 'string' && EMBED_ORIGIN.test(src.embed) ? { embed: src.embed.slice(0, 500) } : {}),
   };
@@ -879,6 +1349,8 @@ function restoredRecipe(r, categories) {
     ingredients,
     steps,
     tips: strList(r.tips, 30),
+    nutrition: cleanNutrition(r.nutrition),
+    ...(['source', 'completed', 'guessed'].includes(r.basis) ? { basis: r.basis } : {}),
     confidence: ['high', 'medium', 'low'].includes(r.confidence) ? r.confidence : 'medium',
     notes: str(r.notes, 1000),
     myNotes: str(r.myNotes, 5000),
@@ -888,6 +1360,54 @@ function restoredRecipe(r, categories) {
     source,
     ...(typeof r.createdAt === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(r.createdAt) ? { createdAt: r.createdAt } : {}),
   };
+}
+
+// מתכון לשיתוף: מה שצריך כדי לבשל, בלי מה שאישי (הערות שלי, דירוג, מועדף) ובלי טקסט המקור
+// (הודעת ווטסאפ יכולה לכלול שמות ושיחה פרטית). מתכון בלי קישור נשמר אצל המקבל כמתכון "שנכתב ידנית"
+function sharedCopy(raw, categories) {
+  const r = restoredRecipe(raw, categories);
+  if (!r) return null;
+  delete r.myNotes;
+  delete r.favorite;
+  delete r.rating;
+  delete r.createdAt;
+  const src = r.source;
+  r.source = src.url
+    ? { url: src.url, kind: src.kind, ...['title', 'author', 'site', 'embed'].reduce((o, k) => (src[k] ? { ...o, [k]: src[k] } : o), {}) }
+    : { url: null, key: src.key, kind: src.kind === 'photo' ? 'photo' : 'manual' };
+  return r;
+}
+
+// תצוגה מקדימה של מתכון ששותף (בלי מצרכים ושלבים – אותם רואים באפליקציה)
+function sharePreview(share) {
+  const r = share.recipe || {};
+  const count = (list) => (Array.isArray(list) ? list.reduce((n, s) => n + (Array.isArray(s?.items) ? s.items.length : 0), 0) : 0);
+  return {
+    title: String(r.title || ''),
+    description: String(r.description || '').slice(0, 300),
+    image: typeof r.image === 'string' && /^https:\/\//.test(r.image) ? r.image : null,
+    category: String(r.category || ''),
+    servings: String(r.servings || ''),
+    time: String(r.totalTime || r.cookTime || r.prepTime || ''),
+    ingredients: count(r.ingredients),
+    steps: count(r.steps),
+    by: share.by || '',
+  };
+}
+
+// תמונה של מתכון ששותף: עותק בספר של המקבל (כדי שלא תיעלם אם מי ששיתף ימחק את המתכון)
+async function copyImage(image, { origin, bookKey, source, target }) {
+  const m = typeof image === 'string' && image.startsWith(`${origin}/img/`) && image.slice(origin.length).match(/^\/img\/(book|[0-9a-f-]{36})\/([0-9a-f-]{36})$/);
+  if (!m) return image ?? null; // תמונה מאתר אחר נשארת קישור
+  if (m[1] === bookKey) return image; // אותו ספר – אותה תמונה
+  const res = await internal(source(m[1]), 'GET', `/img/${m[2]}`);
+  const type = res.headers.get('content-type') || '';
+  if (!res.ok || !/^image\/(jpeg|png|webp)$/.test(type)) return null;
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  const saved = await internal(target, 'POST', '/img', { type, data: btoa(bin) });
+  return saved.ok ? `${origin}/img/${bookKey}/${(await saved.json()).id}` : null;
 }
 
 // רשימת קניות: [{id, text, checked, recipeId?, recipeTitle?, group?}]
@@ -978,9 +1498,11 @@ function textSource(body) {
   if (text.length < 20) return null;
   const str = (v) => String(v || '').trim().slice(0, 120);
   const url = body.url ? normalizeUrl(body.url) : null;
-  const key = url ? null : /^wa:[\w-]{1,40}$/.test(body.key) ? body.key : `wa:${text.length}:${text.slice(0, 40)}`;
+  // מסמך שהמשתמש העלה (Word, PDF, טקסט) – "מתוך קובץ"; chat הוא שם הקובץ
+  const file = !url && (body.file === true || body.kind === 'file');
+  const key = url ? null : /^(wa|file):[\w-]{1,40}$/.test(body.key) ? body.key : `${file ? 'file' : 'wa'}:${text.length}:${text.slice(0, 40)}`;
   return {
-    fromText: true, kind: url ? sourceKind(url) : 'whatsapp', url, key, text,
+    fromText: true, kind: url ? sourceKind(url) : file ? 'file' : 'whatsapp', url, key, text,
     chat: str(body.chat), author: str(body.author), date: str(body.date),
   };
 }

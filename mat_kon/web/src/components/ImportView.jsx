@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertCircle, ArrowRight, Check, FileUp, Link2, Loader2, MessageSquareText, MinusCircle, PlayCircle, Square, Upload,
+  AlertCircle, ArrowRight, Check, FileText, FileUp, Image as ImageIcon, Link2, Loader2, MessageSquareText, MinusCircle, PlayCircle, Square, Upload,
 } from 'lucide-react';
-import { addRecipeAndWait, addTextRecipe } from '../lib/api';
+import { addPhotoRecipe, addRecipeAndWait, addTextRecipe } from '../lib/api';
 import { findCandidates, parseChat, readChatFile } from '../lib/whatsapp';
+import { isKeepTakeout, readKeepTakeout } from '../lib/keep';
+import { fileCandidates, isImageFile, readRecipeFile, splitDocument } from '../lib/files';
+import { readImportFile } from '../lib/importers';
+import { dataUrlToPart, photoForReading, thumbnail } from '../lib/image';
 import PasteBox from './PasteBox';
 import { freeLeft } from '../lib/recipes';
 
@@ -30,23 +34,82 @@ export default function ImportView({ session, user, recipes, onBack, onRecipe, o
   const [running, setRunning] = useState(false);
   const [error, setError] = useState('');
   const [showAll, setShowAll] = useState(false);
+  const [reading, setReading] = useState(''); // קריאת קובץ גדול (PDF) – מה קורה עכשיו
   const stopRef = useRef(false);
 
-  const load = async (file) => {
+  const show = (next) => {
+    setChat(next);
+    setSelected(Object.fromEntries(next.items.map((i) => [i.id, i.likely && !i.saved])));
+    setStatus({});
+  };
+
+  // תמונות (גם HEIC מאייפון): עד 4 – מתכון אחד (כמו צילום מתכון); יותר – כל תמונה בנפרד
+  const loadImages = async (files) => {
+    const list = files.slice(0, 20);
+    const groups = list.length <= 4 ? [list] : list.map((f) => [f]);
+    const pages = [];
+    for (const [i, group] of groups.entries()) {
+      setReading(`מכין תמונה ${i + 1} מתוך ${groups.length}…`);
+      const images = [];
+      for (const f of group) images.push(await photoForReading(f));
+      pages.push({ images, thumb: await thumbnail(group[0]).catch(() => null), label: group.length > 1 ? `${group.length} תמונות` : group[0].name });
+    }
+    const name = list.length === 1 ? list[0].name : `${list.length} תמונות`;
+    show({ name, file: true, items: fileCandidates({ name, pages }) });
+  };
+
+  // כל קובץ אחר: צ'אט מווטסאפ, Keep, גיבוי מאפליקציה, או מסמך (Word, PDF, טקסט...)
+  const loadDocument = async (file) => {
+    const read = await readRecipeFile(file, setReading);
+    if (read.pages) {
+      show({ name: read.name, file: true, truncated: read.truncated, items: fileCandidates(read) });
+      return;
+    }
+    const parts = splitDocument(read.text);
+    if (!parts.length || read.text.replace(/\s/g, '').length < 20) throw new Error('לא מצאתי טקסט בקובץ. אם זה צילום או סריקה – בחרו את התמונה עצמה או PDF.');
+    show({ name: read.name, file: true, items: fileCandidates({ name: read.name, parts }, { existingKeys: recipes.map((r) => r.source?.key) }) });
+  };
+
+  const load = async (picked) => {
     setError('');
+    const files = [...(picked instanceof File ? [picked] : picked)];
+    if (!files.length) return;
     try {
-      const { name, text } = await readChatFile(file);
-      const messages = parseChat(text);
-      if (!messages.length) throw new Error('לא נמצאו הודעות בקובץ. ודאו שזה צ\'אט שיוצא מווטסאפ.');
+      if (files.every(isImageFile)) {
+        await loadImages(files);
+        return;
+      }
+      const file = files.find((f) => !isImageFile(f));
+      // קובץ Google Takeout עם פתקים מ-Google Keep – כל פתק כמו הודעה
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const keep = isKeepTakeout(bytes);
+      // קובץ גיבוי מאפליקציית מתכונים אחרת – נכנס בהגדרות, בלי AI ובלי מכסה
+      if (!keep && /\.(zip|paprikarecipes?|rtk|mcb|xml)$/i.test(file.name)) {
+        let app = null;
+        try {
+          app = readImportFile(bytes).app;
+        } catch {
+          // לא גיבוי – ממשיכים
+        }
+        if (app) throw Object.assign(new Error(`זה קובץ גיבוי מ-${app}. מכניסים אותו בהגדרות ← "ייבוא מאפליקציה אחרת" (בלי לגעת במכסה).`), { settings: true });
+      }
+      const chatFile = keep || /\.(txt|zip)$/i.test(file.name) ? (keep ? { name: 'Google Keep', text: '' } : await readChatFile(file).catch(() => null)) : null;
+      const messages = keep ? readKeepTakeout(bytes) : chatFile ? parseChat(chatFile.text) : [];
+      // לא צ'אט (פחות משתי הודעות) – קוראים כמסמך
+      if (!keep && messages.length < 2) {
+        await loadDocument(file);
+        return;
+      }
       const items = findCandidates(messages, {
         existingUrls: recipes.map((r) => r.source?.url),
         existingKeys: recipes.map((r) => r.source?.key),
+        allText: keep,
       });
-      setChat({ name, items, messages: messages.length });
-      setSelected(Object.fromEntries(items.map((i) => [i.id, i.likely && !i.saved])));
-      setStatus({});
+      show({ name: chatFile.name, items, messages: messages.length });
     } catch (e) {
-      setError(e.message || 'לא הצלחתי לקרוא את הקובץ');
+      setError(e);
+    } finally {
+      setReading('');
     }
   };
 
@@ -85,9 +148,15 @@ export default function ImportView({ session, user, recipes, onBack, onRecipe, o
         try {
           const res = item.type === 'link'
             ? await addRecipeAndWait(session, item.url, item.context)
-            : await addTextRecipe(session, { key: item.id, text: item.text, chat: chat.name, author: item.author, date: item.date });
+            : item.type === 'photo'
+              ? await addPhotoRecipe(session, { images: item.images.map(dataUrlToPart), thumb: item.thumb })
+              : await addTextRecipe(session, chat.file
+                ? { key: item.id, text: item.text, file: true, chat: chat.name }
+                : { key: item.id, text: item.text, chat: chat.name, author: item.author, date: item.date });
+          // הודעה עם כמה מתכונים שונים – כולם נוספים
+          for (const r of res.more || []) onRecipe(r, res.user);
           onRecipe(res.recipe, res.user);
-          setOne(item.id, { state: 'done', message: `${res.recipe.title} · ${res.recipe.category}`, recipeId: res.recipe.id });
+          setOne(item.id, { state: 'done', message: [res.recipe, ...(res.more || [])].map((r) => `${r.title} · ${r.category}`).join(' | '), recipeId: res.recipe.id });
         } catch (e) {
           if (e.status === 402) {
             stopRef.current = true;
@@ -112,14 +181,48 @@ export default function ImportView({ session, user, recipes, onBack, onRecipe, o
           <button onClick={onBack} className="p-2 rounded-full hover:bg-stone-100" aria-label="חזרה">
             <ArrowRight size={22} />
           </button>
-          <div className="font-bold truncate">{chat?.name ? `ייבוא מ"${chat.name}"` : 'ייבוא מווטסאפ'}</div>
+          <div className="font-bold truncate">{chat?.name ? `ייבוא מ"${chat.name}"` : 'ייבוא מתכונים'}</div>
         </div>
       </div>
 
       <div className="max-w-2xl mx-auto px-4">
         {!chat && (
           <>
+            <label className={`mt-4 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-orange-300 bg-orange-50 p-6 text-orange-800 text-center ${reading ? 'pointer-events-none opacity-70' : 'cursor-pointer hover:bg-orange-100'}`}>
+              {reading ? <Loader2 size={32} className="animate-spin" /> : <FileUp size={32} />}
+              <span className="font-bold">{reading || 'בחירת קובץ'}</span>
+              {!reading && (
+                <span className="text-sm text-orange-700 leading-relaxed">
+                  Word, PDF, טקסט, תמונות, דף אינטרנט שנשמר, צ'אט מווטסאפ או קובץ Keep –
+                  מהטלפון, מהמחשב, מ-Google Drive או מ-iCloud
+                </span>
+              )}
+              {/* בלי הגבלת סוג: כך באנדרואיד ובאייפון נפתחים גם "קבצים", דרייב ו-iCloud */}
+              <input
+                type="file"
+                multiple
+                className="hidden"
+                disabled={Boolean(reading)}
+                onChange={(e) => { if (e.target.files.length) load(e.target.files); e.target.value = ''; }}
+              />
+            </label>
+            {error && (
+              <p className="mt-3 text-sm text-red-600">
+                {error.message || 'לא הצלחתי לקרוא את הקובץ'}
+                {error.settings && <a href="#/settings" className="mr-1 text-orange-700 underline">להגדרות</a>}
+              </p>
+            )}
             <div className="mt-4 rounded-2xl bg-white shadow-sm p-4 text-stone-700 leading-relaxed text-sm">
+              <h2 className="font-bold text-base text-stone-900 mb-2 flex items-center gap-1.5"><FileText size={18} className="text-orange-500" /> מתכונים בקובץ</h2>
+              <p>
+                מסמך עם מתכון אחד או חוברת שלמה: הקובץ נקרא בטלפון, ואם יש בו כמה מתכונים הוא מחולק לחלקים – בוחרים
+                מה להכניס. PDF סרוק או צילום נקראים כמו צילום מתכון.
+              </p>
+              <p className="mt-1 text-stone-500">
+                באייפון: "עיון" ← iCloud Drive / Google Drive. קובץ Pages – קודם ייצוא ל-PDF או Word.
+              </p>
+            </div>
+            <div className="mt-3 rounded-2xl bg-white shadow-sm p-4 text-stone-700 leading-relaxed text-sm">
               <h2 className="font-bold text-base text-stone-900 mb-2">איך מייצאים צ'אט או קבוצה מווטסאפ</h2>
               <ol className="list-decimal pr-5 space-y-1">
                 <li>פותחים בווטסאפ את הצ'אט או את קבוצת המתכונים.</li>
@@ -134,30 +237,35 @@ export default function ImportView({ session, user, recipes, onBack, onRecipe, o
               </ol>
               <p className="mt-2 text-stone-500">הסריקה נעשית בטלפון. רק המתכונים שתבחרו נשלחים לסידור.</p>
             </div>
-            <label className="mt-4 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-orange-300 bg-orange-50 p-8 text-orange-800 cursor-pointer hover:bg-orange-100">
-              <FileUp size={32} />
-              <span className="font-bold">בחירת קובץ הצ'אט</span>
-              <span className="text-sm text-orange-700">‎.txt או ‎.zip</span>
-              <input
-                type="file"
-                accept=".txt,.zip,text/plain,application/zip"
-                className="hidden"
-                onChange={(e) => { if (e.target.files[0]) load(e.target.files[0]); e.target.value = ''; }}
-              />
-            </label>
-            {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+            <div className="mt-3 rounded-2xl bg-white shadow-sm p-4 text-stone-700 leading-relaxed text-sm">
+              <h2 className="font-bold text-base text-stone-900 mb-2">מתכונים בפתקים של Google Keep?</h2>
+              <ol className="list-decimal pr-5 space-y-1">
+                <li>נכנסים ל-<a href="https://takeout.google.com" target="_blank" rel="noopener noreferrer" className="text-orange-700 underline">takeout.google.com</a> ← <b>ביטול הבחירה</b> בכל השירותים ← מסמנים רק את <b>Keep</b>.</li>
+                <li>יוצרים את הייצוא. גוגל שולחת קישור להורדה במייל (בדרך כלל תוך כמה דקות).</li>
+                <li>מורידים את קובץ ה-ZIP ובוחרים אותו כאן. בוחרים אילו פתקים הם מתכונים – רק הם נשלחים לסידור.</li>
+              </ol>
+            </div>
           </>
         )}
 
         {chat && (
           <>
+            {chat.file ? (
+              <p className="mt-4 text-sm text-stone-600">
+                {items.length > 1
+                  ? `הקובץ חולק ל-${items.length} חלקים. סמנו את החלקים עם מתכונים – בכל חלק יכולים להיות כמה מתכונים, וכל מתכון נספר בנפרד.`
+                  : 'הקובץ מוכן. כל מתכון שיימצא בו נספר בנפרד.'}
+                {chat.truncated && ' נקראו רק 12 העמודים הראשונים – לשאר העמודים פצלו את הקובץ.'}
+              </p>
+            ) : (
             <p className="mt-4 text-sm text-stone-600">
-              נסרקו {chat.messages} הודעות. נמצאו {items.filter((i) => i.type === 'link').length} קישורים
+              נסרקו {chat.messages} {chat.name === 'Google Keep' ? 'פתקים' : 'הודעות'}. נמצאו {items.filter((i) => i.type === 'link').length} קישורים
               ו-{items.filter((i) => i.type === 'text').length} מתכונים כתובים.
               {items.some((i) => !i.likely && !i.saved) && !showAll && (
                 <button onClick={() => setShowAll(true)} className="mr-1 text-orange-700 underline">הצג גם קישורים אחרים</button>
               )}
             </p>
+            )}
 
             {items.length === 0 && <p className="mt-10 text-center text-stone-500">לא נמצאו קישורים או מתכונים בצ'אט הזה</p>}
 
@@ -233,8 +341,8 @@ export default function ImportView({ session, user, recipes, onBack, onRecipe, o
 
 function Row({ item, checked, disabled, status, running, onToggle, onPaste }) {
   const state = status?.state;
-  const icon = item.type === 'text'
-    ? <MessageSquareText size={18} />
+  const icon = item.type === 'photo' ? <ImageIcon size={18} /> : item.type === 'text'
+    ? item.id.startsWith('file:') ? <FileText size={18} /> : <MessageSquareText size={18} />
     : /youtu|tiktok|instagram|facebook|fb\.watch|vimeo/.test(item.host) ? <PlayCircle size={18} /> : <Link2 size={18} />;
   return (
     <li className={`bg-white rounded-2xl shadow-sm p-3 flex gap-3 ${item.saved && !state ? 'opacity-60' : ''}`}>
@@ -253,13 +361,14 @@ function Row({ item, checked, disabled, status, running, onToggle, onPaste }) {
             {item.type === 'link' ? item.host : item.title}
           </span>
         </div>
+        {item.type === 'photo' && item.thumb && <img src={item.thumb} alt="" className="mt-1.5 h-20 rounded-lg border border-stone-200" />}
         {(item.context || item.type === 'text') && (
           <p className="text-sm text-stone-500 mt-0.5 line-clamp-2 whitespace-pre-line">
             {item.type === 'link' ? item.context : item.text.split('\n').slice(1).join(' · ')}
           </p>
         )}
         <p className="text-xs text-stone-400 mt-1">
-          {item.author} · {item.date}
+          {[item.author, item.date].filter(Boolean).join(' · ')}
           {item.shares > 1 ? ` · שותף ${item.shares} פעמים` : ''}
           {item.saved ? ' · כבר בספר' : ''}
         </p>

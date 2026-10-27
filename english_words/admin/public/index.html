@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<title>ניהול – מילים באנגלית</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root {
+    --page: #f0fdfa; --card: #ffffff; --ink: #134e4a; --muted: #64748b; --line: #ccfbf1;
+    --main: #0f766e; --main-ink: #fff; --good: #15803d; --good-bg: #dcfce7; --wait: #b45309; --wait-bg: #fef3c7; --bad: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --page: #0b1220; --card: #172033; --ink: #e2e8f0; --muted: #94a3b8; --line: #263248;
+      --main: #14b8a6; --main-ink: #04201d; --good: #4ade80; --good-bg: #14532d; --wait: #fbbf24; --wait-bg: #451a03; --bad: #f87171;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font-family: system-ui, "Segoe UI", Arial, sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 16px 16px 40px; }
+  h1 { font-size: 24px; margin: 8px 0 16px; }
+  h2 { margin: 0; font-size: 22px; }
+  h3 { margin: 0 0 8px; font-size: 17px; }
+  .card { background: var(--card); border-radius: 20px; padding: 16px; margin-bottom: 16px; box-shadow: 0 4px 16px rgba(0,0,0,.06); }
+  .head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .muted { color: var(--muted); font-size: 14px; margin: 8px 0 4px; }
+  .stages { display: grid; gap: 12px; }
+  .stage { background: var(--page); border-radius: 14px; padding: 12px; }
+  .badge { display: inline-block; padding: 4px 10px; border-radius: 99px; font-weight: 700; font-size: 15px; }
+  .badge.good { background: var(--good-bg); color: var(--good); }
+  .badge.wait { background: var(--wait-bg); color: var(--wait); }
+  .nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; text-align: center; }
+  .nums b { display: block; font-size: 22px; }
+  .nums span { font-size: 13px; color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { background: var(--card); border: 1px solid var(--line); padding: 3px 10px; border-radius: 99px; font-size: 14px; }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; color: var(--main); font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 15px; }
+  th, td { text-align: right; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+  td.ok { color: var(--good); font-weight: 700; } td.no { color: var(--bad); font-weight: 700; }
+  button { font: inherit; border: 0; border-radius: 14px; cursor: pointer; }
+  .big { background: var(--main); color: var(--main-ink); font-weight: 700; font-size: 18px; padding: 14px; width: 100%; }
+  .link { background: none; color: var(--main); padding: 8px 0; }
+  .danger { color: var(--bad); font-size: 14px; margin-top: 8px; }
+  .top { display: flex; justify-content: space-between; align-items: center; }
+  input { font: inherit; font-size: 18px; width: 100%; padding: 12px; border-radius: 12px; border: 2px solid var(--line); background: var(--page); color: var(--ink); margin-bottom: 12px; }
+  .err { color: var(--bad); min-height: 22px; margin: 0 0 8px; }
+  .hidden { display: none !important; }
+  @media (min-width: 1024px) {
+    main { max-width: 1100px; padding-top: 32px; }
+    .stages { grid-template-columns: 1fr 1fr; }
+    #kids { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+    #kids .card { margin: 0; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <section id="login" class="hidden">
+    <h1>📊 ניהול – מילים באנגלית</h1>
+    <div class="card">
+      <p id="loginTitle"></p>
+      <input id="pass" type="password" autocomplete="current-password" placeholder="סיסמה">
+      <input id="pass2" type="password" autocomplete="new-password" placeholder="שוב את הסיסמה" class="hidden">
+      <p class="err" id="loginErr"></p>
+      <button class="big" id="loginBtn">כניסה</button>
+    </div>
+  </section>
+
+  <section id="dash" class="hidden">
+    <div class="top">
+      <h1>📊 איך הולך בתרגול</h1>
+      <div><button class="link" id="refresh">רענון</button> · <button class="link" id="logout">יציאה</button></div>
+    </div>
+    <p class="err" id="dashErr"></p>
+    <div id="kids"></div>
+    <div class="card hidden" id="empty">
+      <p>עוד אין תוצאות. כשהילד יכתוב את השם שלו באפליקציה ויסיים סיבוב – זה יופיע כאן.</p>
+    </div>
+  </section>
+</main>
+<script type="module" src="admin.js"></script>
+</body>
+</html>

@@ -92,12 +92,33 @@ function mockApi(opts = {}) {
       return { job: { id: m[1], status: 'done', recipeId: job.recipe.id, title: job.recipe.title, category: job.recipe.category } };
     }
     if (p === '/recipes/photo') { await sleep(state.delay); return { recipe: created({ source: { kind: 'photo' } }) }; }
-    if (p === '/recipes/text') { await sleep(state.delay); return { recipe: created({ source: { kind: 'whatsapp', ...(body.url ? { url: body.url } : {}), text: body.text } }) }; }
+    if (p === '/recipes/text') {
+      await sleep(state.delay);
+      return { recipe: created({ source: body.file ? { kind: 'file', key: body.key, chat: body.chat, text: body.text } : { kind: 'whatsapp', ...(body.url ? { url: body.url } : {}), text: body.text } }) };
+    }
     if (p === '/recipes/manual') {
       const r = { id: `r-${Date.now()}`, tags: [], tips: [], ...body, ...(body.recipe || {}), source: { kind: 'manual' }, createdAt: new Date().toISOString() };
       delete r.recipe;
       state.recipes = [r, ...state.recipes];
       return { recipe: r };
+    }
+    // פרסום לקהילה: בפעם הראשונה צריך שם תצוגה ואישור תנאים
+    if (p === '/profile') {
+      if (method === 'PUT') state.profile = { displayName: body.displayName, terms: Boolean(body.acceptTerms) };
+      return state.profile || { displayName: '', terms: false };
+    }
+    m = p.match(/^\/recipes\/([\w-]+)\/publish$/);
+    if (m) {
+      const r = state.recipes.find((x) => x.id === m[1]);
+      if (method === 'DELETE') { r.published = false; return { recipe: r }; }
+      if (!state.profile?.terms) return [409, { error: 'צריך לבחור שם תצוגה ולאשר את תנאי השימוש', needProfile: true }];
+      await sleep(1500);
+      r.published = true;
+      return { recipe: r, review: { decision: 'publish', imageRemoved: false } };
+    }
+    if (/^\/recipes\/[\w-]+\/substitute$/.test(p)) {
+      await sleep(1500);
+      return { item: body.item, ...(opts.substitute ?? demo.SUBSTITUTE) };
     }
     m = p.match(/^\/recipes\/([\w-]+)(\/refresh)?$/);
     if (m) {
@@ -109,6 +130,24 @@ function mockApi(opts = {}) {
     }
     if (p === '/categories') { state.custom = [...state.custom, body.name]; return { custom: state.custom }; }
     if (p === '/categories/remove') { state.custom = state.custom.filter((c) => c !== body.name); return { custom: state.custom }; }
+    if (p === '/community' && method === 'GET') return { results: opts.community ?? demo.COMMUNITY };
+    // שיחה על מתכון בקהילה (טיפים, "הכנתי!")
+    m = p.match(/^\/community\/([\w-]+)\/talk$/);
+    if (m) {
+      state.talk ||= clone(opts.talk ?? demo.TALK);
+      if (method === 'GET') return { items: state.talk };
+      if (!state.profile?.terms) return [409, { error: 'צריך לבחור שם תצוגה ולאשר את תנאי השימוש', needProfile: true }];
+      await sleep(1200);
+      const item = { id: `t${state.talk.length + 1}`.padEnd(16, '0'), kind: body.parent ? 'reply' : body.kind, text: body.text || '', rating: body.rating || 0, image: null, parent: body.parent || null, author: state.profile.displayName, at: new Date().toISOString(), likes: 0, liked: false, mine: true };
+      state.talk = [...state.talk, item];
+      return { item };
+    }
+    m = p.match(/^\/community\/([\w-]+)(\/save)?$/);
+    if (m) {
+      const s = (opts.community ?? demo.COMMUNITY).find((x) => x.key === m[1]);
+      if (m[2]) { await sleep(800); return { recipe: created({ title: s.title, source: { url: s.url, kind: 'web' } }) }; }
+      return { recipe: { ...clone(state.newRecipe), title: s.title, image: s.image, source: { url: s.url, kind: 'web', site: s.credit } }, summary: s };
+    }
     if (p === '/search') { await sleep(state.delay); return { results: opts.searchResults ?? demo.SEARCH_RESULTS }; }
     if (p === '/shopping/organize') {
       await sleep(state.delay);
