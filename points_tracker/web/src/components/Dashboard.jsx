@@ -31,7 +31,10 @@ export default function Dashboard({
         <div className="flex justify-between items-start">
           <div>
             <p className="text-emerald-100 text-sm mb-1">{pointsLeft >= 0 ? 'נותרו להיום' : 'חריגה היום'}</p>
-            <div className="text-5xl font-black tracking-tight">{formatPoints(Math.abs(pointsLeft))}</div>
+            <div className="text-5xl font-black tracking-tight">
+              {/* בחריגה מוצג מינוס לפני המספר */}
+              <span dir="ltr">{pointsLeft < 0 ? '-' : ''}{formatPoints(Math.abs(pointsLeft))}</span>
+            </div>
             <p className="text-emerald-100 text-sm mt-1">מתוך {user.dailyTarget}</p>
           </div>
           <div className="h-24 w-24 relative flex items-center justify-center">

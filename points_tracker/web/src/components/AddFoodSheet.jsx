@@ -232,6 +232,8 @@ export default function AddFoodSheet({ db, recent, settings, dateLabel, onLog, o
       <Tabs
         value={tab}
         onChange={(t) => {
+          // מילה שחיפשו במועדפים עוברת לחיפוש הכללי, כדי שלא יצטרכו להקליד שוב
+          if (t === 'search' && tab === 'favorites' && favSearch.trim()) setSearch(favSearch);
           setTab(t);
           setError('');
         }}
