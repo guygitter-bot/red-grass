@@ -879,7 +879,7 @@ export default {
       if (url.pathname === '/admin/settings' && request.method === 'PUT') {
         const { body, error } = await readJson();
         if (error) return error;
-        return pass(await internal(accounts, 'POST', '/admin/settings', { spendAlert: body.spendAlert }));
+        return pass(await internal(accounts, 'POST', '/admin/settings', Object.fromEntries(['spendAlert', 'testStart'].filter((k) => k in body).map((k) => [k, body[k]]))));
       }
       if (url.pathname === '/admin/errors' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/errors'));
       return fail(404, 'Not found');

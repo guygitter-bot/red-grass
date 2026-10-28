@@ -1579,6 +1579,10 @@ test('admin app: overview, issues with status, security events and settings – 
   assert.equal(sec.days[0].signup, 1);
 
   await call('PUT', '/admin/settings', { spendAlert: 0.0001 }, owner);
+  // תאריך תחילת הבדיקה ב-Google Play נשמר בלי למחוק את סף ההוצאה
+  await call('PUT', '/admin/settings', { testStart: '2026-10-20' }, owner);
+  assert.deepEqual((await (await call('GET', '/admin/overview', undefined, owner)).json()).settings, { spendAlert: 0.0001, testStart: '2026-10-20' });
+  assert.equal((await (await call('PUT', '/admin/settings', { testStart: 'bad' }, owner)).json()).settings.testStart, '');
   assert.equal((await (await call('GET', '/admin/overview', undefined, owner)).json()).settings.spendAlert, 0.0001);
   const pre = await worker.fetch(new Request('https://api.example/admin/overview', { method: 'OPTIONS', headers: { origin: 'https://mat-kon-admin.pages.dev' } }), env);
   assert.equal(pre.headers.get('access-control-allow-origin'), 'https://mat-kon-admin.pages.dev');
