@@ -188,6 +188,20 @@ export default function App() {
 
   // רשימות משותפות: נשמרות בשרת פריט-פריט
   const same = useCallback((x) => x, []);
+  // הורדת מתכון מקטגוריה אחת – הוא נשאר בשאר הקטגוריות שלו
+  const removeFromCategory = async (recipe, cat) => {
+    const next = categoriesOf(recipe).filter((c) => c !== cat);
+    if (!next.length || !window.confirm(`להוריד את "${recipe.title}" מ${cat}?\nהמתכון יישאר ב${next.join(', ')}.`)) return;
+    const patch = { category: next[0], categories: next };
+    upsert({ ...recipe, ...patch });
+    try {
+      upsert(await updateRecipe(session, recipe.id, patch));
+      setToast(`"${recipe.title}" הורד מ${cat}`);
+    } catch (e) {
+      upsert(recipe);
+      setToast(e.message);
+    }
+  };
   const syncError = useCallback((what) => (e) => setToast(`${what} לא נשמר${what === 'רשימת הקניות' ? 'ה' : ''}: ${e.message}`), []);
   const shoppingSync = useSyncedList({
     value: shopping, setValue: setShopping, toItems: same, fromItems: same, syncKey: 'matkon_shopping_synced',
@@ -1011,7 +1025,14 @@ export default function App() {
 
         <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
           {visible.map((r) => (
-            <RecipeCard key={r.id} recipe={r} onOpen={() => open(r.id)} />
+            <RecipeCard
+              key={r.id}
+              recipe={r}
+              onOpen={() => open(r.id)}
+              // בתוך קטגוריה: מתכון שנמצא בכמה קטגוריות אפשר להוריד מהקטגוריה הזו בלבד
+              removeFrom={category && categoriesOf(r).length > 1 && categoriesOf(r).includes(category) ? category : null}
+              onRemoveFrom={() => removeFromCategory(r, category)}
+            />
           ))}
         </div>
       </main>
