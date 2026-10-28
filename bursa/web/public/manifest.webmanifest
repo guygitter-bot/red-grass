@@ -1,0 +1,15 @@
+{
+  "name": "בורסאי",
+  "short_name": "בורסאי",
+  "description": "השקעות במניות בעברית: נתוני שוק חיים, ניתוח, תחזיות והתראות",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0d1412",
+  "theme_color": "#047857",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

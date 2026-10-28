@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+/* מצב לילה: מחלקה dark על html (נקבעת ב-src/lib/theme.js) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* כל הצבעים במקום אחד – במצב לילה מחליפים רק אותם:
+   page = רקע המסך, card = כרטיסים, ink = טקסט, muted = טקסט משני, line = מסגרות, soft = רקע מודגש עדין,
+   up = עלייה (ירוק), down = ירידה (אדום), chat/mine = צ'אט */
+@theme {
+  --color-page: #f3f7f5;
+  --color-card: #ffffff;
+  --color-ink: #10201a;
+  --color-muted: #5b6e66;
+  --color-line: #dce6e1;
+  --color-soft: #e8f5ef;
+  --color-accent: #047857;
+  --color-accent-ink: #065f46;
+  --color-on-accent: #ffffff;
+  --color-up: #0a8048;
+  --color-down: #d03238;
+  --color-up-soft: #e3f5ea;
+  --color-down-soft: #fdebec;
+  --color-warn: #b45309;
+  --color-chat: #e9efe9;
+  --color-mine: #d9fdd3;
+  --color-mine-ink: #0b2e1a;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-page: #0d1412;
+  --color-card: #162120;
+  --color-ink: #e8f1ed;
+  --color-muted: #96aba3;
+  --color-line: #263632;
+  --color-soft: #142e27;
+  --color-accent: #34d399;
+  --color-accent-ink: #6ee7b7;
+  --color-on-accent: #04201a;
+  --color-up: #3ddc84;
+  --color-down: #ff7075;
+  --color-up-soft: #12301f;
+  --color-down-soft: #3a1b1e;
+  --color-warn: #f5a623;
+  --color-chat: #0b1210;
+  --color-mine: #005c4b;
+  --color-mine-ink: #e9fff5;
+}
+
+html,
+body {
+  font-family: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--color-page);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* רצועות בטלפון – גלילה לצד בלי פס גלילה */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* נקודת "חי" שמהבהבת */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.7); }
+}
+.live-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+
+/* טפט הצ'אט: דוגמה עדינה של נקודות וקווים (עובד גם בלילה כי הצבעים מהטוקנים) */
+.chat-wall {
+  background-color: var(--color-chat);
+  background-image:
+    radial-gradient(circle at 20px 20px, color-mix(in srgb, var(--color-ink) 7%, transparent) 1.5px, transparent 2px),
+    radial-gradient(circle at 60px 60px, color-mix(in srgb, var(--color-ink) 5%, transparent) 2.5px, transparent 3px);
+  background-size: 80px 80px;
+}
+
+/* נקודות "מקליד..." */
+@keyframes typing {
+  0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-3px); }
+}
+.typing span {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 2px;
+  border-radius: 9999px;
+  background: var(--color-muted);
+  animation: typing 1.2s infinite;
+}
+.typing span:nth-child(2) { animation-delay: 0.15s; }
+.typing span:nth-child(3) { animation-delay: 0.3s; }
+
+/* מרווח לתחתית במכשירים עם פס מערכת */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}

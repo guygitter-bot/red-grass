@@ -194,6 +194,12 @@
   · שרת `api` → Worker `milim-api` (תוצאות סיבובים, סיסמת ניהול שנקבעת בכניסה הראשונה). עלייה: `english-words.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd english_words/api && npm test` · `cd english_words/web && npm test` · `cd english_words/admin && npm test`. טלפון + מחשב + מצב לילה.
 
+### בורסאי – השקעות במניות (`bursa/`)
+- תיאור: `bursa/README.md`. נתוני שוק חיים (Yahoo Finance), ניתוח + תחזית + בדיקה לאחור, תיק אמיתי ותיק דמה, התראות לטלפון, צ'אט AI, מילון ומדריך.
+- `bursa/web` → https://bursa-app.pages.dev · `bursa/api` → Worker `bursa-api` (Durable Object `Market` אחד; alarm סורק ושולח התראות). עלייה: `bursa.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd bursa/api && npm test` · `cd bursa/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- הניתוח (`api/analysis.js`) פונקציות טהורות עם בדיקות. לא להבטיח תשואות: תחזית = טווח הסתברותי, ותמיד ההבהרה "לא ייעוץ השקעות".
+
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).
 
