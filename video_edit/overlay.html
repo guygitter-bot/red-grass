@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="he" dir="rtl"><head><meta charset="utf-8">
+<style>
+@font-face{font-family:K;src:url(file:///root/.fonts/Karantina-Bold.ttf);font-weight:700}
+@font-face{font-family:F;src:url("file:///root/.fonts/Fredoka%255Bwdth,wght%255D.ttf");font-weight:300 700}
+@font-face{font-family:R;src:url("file:///root/.fonts/Rubik%255Bwght%255D.ttf");font-weight:300 900}
+html,body{margin:0;width:1080px;height:1920px;background:transparent;overflow:hidden}
+*{box-sizing:border-box}
+.blk{position:absolute;display:flex;flex-direction:column;align-items:center;gap:10px;opacity:0}
+.chip{font:800 46px/1 R;color:#111;background:#FFE14D;padding:14px 30px 12px;border-radius:999px;
+  box-shadow:0 6px 0 #111;letter-spacing:.5px;white-space:nowrap}
+.main{font:700 132px/0.92 K;color:#fff;padding:18px 40px 8px;border-radius:26px;white-space:nowrap;
+  background:linear-gradient(100deg,#FF2E88,#FF7A18);box-shadow:0 10px 0 #111, 0 18px 40px rgba(0,0,0,.35);
+  text-shadow:0 4px 0 rgba(0,0,0,.25)}
+.main.big{font-size:190px;padding:20px 44px 6px}
+.sub{font:800 52px/1 R;color:#fff;background:#111;padding:14px 30px;border-radius:18px;white-space:nowrap;
+  box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.sub b{color:#FFE14D}
+.arrow{width:0;height:0;border-left:30px solid transparent;border-right:30px solid transparent;
+  border-top:40px solid #FFE14D;filter:drop-shadow(0 5px 0 #111);margin-top:4px}
+/* פתיחה */
+#intro{top:70px;left:0;right:0}
+#intro .main{font-size:120px}
+/* סיום */
+#outro{left:30px;right:30px;top:30px;align-items:stretch;gap:0;
+  background:rgba(17,17,17,.92);border-radius:36px;padding:22px 22px 26px;border:5px solid #FFE14D;
+  box-shadow:0 20px 60px rgba(0,0,0,.5)}
+#outro h2{margin:0 0 14px;text-align:center;font:700 96px/1 K;
+  background:linear-gradient(100deg,#FF2E88,#FF7A18,#FFE14D);-webkit-background-clip:text;color:transparent}
+.rows{display:flex;gap:14px}
+.row{flex:1;display:flex;flex-direction:column;align-items:center;gap:12px;padding:16px 8px;border-radius:22px;background:rgba(255,255,255,.08);text-align:center}
+.row .d{text-align:center;font:800 32px/1.1 R;color:#111;background:#FFE14D;border-radius:18px;padding:12px 6px}
+.row .t{font:700 38px/1.15 R;color:#fff}
+.row .t small{display:block;margin-top:6px;font:500 30px/1.2 R;color:#FFB36B}
+.guys{width:100%;text-align:center;font:700 200px/1 F;letter-spacing:2px;white-space:nowrap;
+  background:linear-gradient(180deg,#FFE14D,#FF7A18 55%,#FF2E88);-webkit-background-clip:text;color:transparent;
+  -webkit-text-stroke:6px #111;paint-order:stroke fill;filter:drop-shadow(0 10px 0 #111) drop-shadow(0 18px 30px rgba(0,0,0,.3))}
+</style></head><body>
+
+<div class="blk" id="intro"><div class="chip">🎤 בואו להופעות</div><div class="main">הופעות קרובות</div></div>
+
+<div class="blk" id="b1" style="top:40px;left:330px;width:700px">
+  <div class="chip">📅 שבת · 31.10</div>
+  <div class="main">ג'אסר א-זרקא</div>
+  <div class="arrow" style="align-self:center"></div>
+</div>
+
+<div class="blk" id="b2" style="top:760px;left:24px;width:400px">
+  <div class="chip">📅 נובמבר</div>
+  <div class="main" style="text-align:center">פסטיבל<br>מרפסות</div>
+  <div class="sub">📍 <b>טבעון</b></div>
+</div>
+
+<div class="blk" id="b3" style="top:150px;left:20px;width:620px">
+  <div class="chip">פסטיבל מרפסות · טבעון</div>
+  <div class="main big">20:30</div>
+  <div class="arrow" style="align-self:flex-end;margin-left:120px"></div>
+</div>
+
+<div class="blk" id="b4" style="top:24px;left:20px;width:760px">
+  <div class="main" style="font-size:118px">פסטיבל דוקו אביב</div>
+  <div style="display:flex;gap:14px"><div class="sub">📍 <b>מעלות</b></div><div class="sub">⏰ <b>18:00</b></div></div>
+</div>
+
+<div class="blk" id="guys" style="top:60px;left:0;width:1080px">
+  <div class="guys">The guys</div>
+</div>
+
+<div class="blk" id="t1330" style="top:50px;left:30px">
+  <div class="chip">ג'אסר א-זרקא</div>
+  <div class="main big" style="font-size:150px">13:30</div>
+</div>
+
+<div class="blk" id="outro">
+  <h2>נתראה בהופעות!</h2>
+  <div class="rows">
+  <div class="row"><div class="d">שבת · 31.10</div><div class="t">ג'אסר א-זרקא<small>בשעה 13:30</small></div></div>
+  <div class="row"><div class="d">נובמבר</div><div class="t">פסטיבל מרפסות<small>טבעון · בשעה 20:30</small></div></div>
+  <div class="row"><div class="d">⏰ 18:00</div><div class="t">פסטיבל דוקו אביב<small>מעלות</small></div></div>
+  </div>
+</div>
+
+<script>
+// זמני ההופעה של כל כיתוב בשניות
+const SEG = {intro:[0.2,3.2], guys:[4.0,7.6], b1:[13.8,16.4], t1330:[18.8,21.6], b2:[29.3,32.6], b3:[35.2,37.6], b4:[46.2,49.2], outro:[60.8,66.9]};
+const anims = [];
+function add(el, kf, start, dur, opts={}){
+  const a = el.animate(kf, {duration:dur*1000, delay:start*1000, fill:'both', easing:'linear', ...opts});
+  a.pause(); anims.push(a);
+}
+const pop = 'cubic-bezier(.2,1.6,.4,1)';
+for (const [id,[a,b]] of Object.entries(SEG)){
+  const el = document.getElementById(id), d = b-a, inT = 0.45/d, outT = 1-0.3/d;
+  const fromY = id==='outro' ? 'translateY(-120px)' : 'translateY(-40px) scale(.6) rotate(-4deg)';
+  add(el,[{opacity:0,transform:fromY,easing:pop},{opacity:1,transform:'none',offset:inT},
+          {opacity:1,transform:'none',offset:outT,easing:'ease-in'},{opacity:0,transform:'scale(.85)'}], a, d);
+  // כל חלק נכנס קצת אחרי הקודם
+  [...el.children].forEach((c,i)=>{
+    if (c.classList.contains('arrow')){
+      add(c,[{transform:'translateY(0)'},{transform:'translateY(16px)'},{transform:'translateY(0)'}], a+0.4, 0.5, {iterations:Math.ceil(d/0.5), easing:'ease-in-out'});
+      return;
+    }
+    add(c,[{opacity:0,transform:'translateX(-60px) scale(.8)',easing:pop},{opacity:1,transform:'none'}], a+0.08*i, 0.4);
+  });
+  // ברק קטן על הכיתוב הראשי
+  const m = el.querySelector('.main');
+  if (m) add(m,[{filter:'brightness(1)'},{filter:'brightness(1.6)'},{filter:'brightness(1)'}], a+0.35, 0.35);
+}
+window.SEG = SEG;
+window.setT = t => { for (const a of anims) a.currentTime = t*1000; };
+</script></body></html>
