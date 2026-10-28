@@ -54,7 +54,10 @@ async function showDash() {
   $('dashErr').textContent = '';
   try {
     const { kids } = await api('/admin/overview', { token: token() });
+    // ברענון – מי שהיה פתוח נשאר פתוח
+    const open = new Set([...document.querySelectorAll('details.kid[open]')].map((d) => d.dataset.id));
     $('kids').innerHTML = kids.map(kidHtml).join('');
+    for (const d of document.querySelectorAll('details.kid')) d.open = open.has(d.dataset.id);
     $('empty').classList.toggle('hidden', kids.length > 0);
   } catch (e) {
     $('dashErr').textContent = e.message;

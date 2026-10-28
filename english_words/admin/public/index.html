@@ -38,6 +38,12 @@
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .chip { background: var(--card); border: 1px solid var(--line); padding: 3px 10px; border-radius: 99px; font-size: 14px; }
   details { margin-top: 12px; }
+  details.kid { margin-top: 0; }
+  details.kid > summary { color: var(--ink); list-style: none; margin-bottom: 0; }
+  details.kid > summary::-webkit-details-marker { display: none; }
+  details.kid > summary h2::before { content: '◀'; display: inline-block; font-size: 14px; margin-left: 8px; color: var(--main); transition: transform .2s; }
+  details.kid[open] > summary h2::before { transform: rotate(-90deg); }
+  details.kid[open] > summary { margin-bottom: 12px; }
   summary { cursor: pointer; color: var(--main); font-weight: 600; }
   table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 15px; }
   th, td { text-align: right; padding: 6px 4px; border-bottom: 1px solid var(--line); }
