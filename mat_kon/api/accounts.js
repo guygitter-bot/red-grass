@@ -648,8 +648,15 @@ export class Accounts {
     }
     if (path === '/admin/settings') {
       if (request.method === 'POST') {
-        const spendAlert = Number(body.spendAlert);
-        await this.storage.put('admin-settings', { spendAlert: Number.isFinite(spendAlert) && spendAlert > 0 ? Math.min(spendAlert, 100000) : 0 });
+        // רק השדות שנשלחו משתנים
+        const next = { spendAlert: 0, ...((await this.storage.get('admin-settings')) || {}) };
+        if ('spendAlert' in body) {
+          const spendAlert = Number(body.spendAlert);
+          next.spendAlert = Number.isFinite(spendAlert) && spendAlert > 0 ? Math.min(spendAlert, 100000) : 0;
+        }
+        // תחילת הבדיקה הסגורה ב-Google Play (לספירת הימים במסך הסקירה)
+        if ('testStart' in body) next.testStart = /^\d{4}-\d{2}-\d{2}$/.test(String(body.testStart)) ? body.testStart : '';
+        await this.storage.put('admin-settings', next);
       }
       return json({ settings: (await this.storage.get('admin-settings')) || { spendAlert: 0 } });
     }

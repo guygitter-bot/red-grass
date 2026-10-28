@@ -160,6 +160,55 @@ const Stat = ({ label, value, sub, onClick }) => (
 
 const LEVEL = { serious: 'bg-red-500/10 text-red-700 dark:text-red-300', warning: 'bg-amber-500/15 text-amber-800 dark:text-amber-300' };
 
+// הבדיקה הסגורה ב-Google Play: 14 ימים רצופים לפני שאפשר לבקש גישה לייצור.
+// ברירת המחדל – היום ה-8 היה ב-28.10.2026; אפשר לתקן את התאריך במסך
+const PLAY_TEST_START = '2026-10-20';
+const PLAY_TEST_DAYS = 14;
+
+function PlayTest({ start, session }) {
+  const [date, setDate] = useState(start);
+  const [editing, setEditing] = useState(false);
+  const day = (iso) => Math.floor(Date.parse(`${iso}T00:00:00Z`) / 86400000);
+  const today = day(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }));
+  const passed = Math.max(0, today - day(date));
+  const left = Math.max(0, PLAY_TEST_DAYS - passed);
+  const end = new Date((day(date) + PLAY_TEST_DAYS) * 86400000).toLocaleDateString('he-IL', { timeZone: 'UTC' });
+  const save = async () => {
+    await api(session, 'PUT', '/admin/settings', { testStart: date });
+    setEditing(false);
+  };
+  return (
+    <Card title="בדיקה סגורה ב-Google Play">
+      {left > 0 ? (
+        <>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-black">{left}</span>
+            <span className="text-sm">{left === 1 ? 'יום נשאר' : 'ימים נשארו'} · עברו {passed} מתוך {PLAY_TEST_DAYS}</span>
+          </div>
+          <div className="mt-2 h-2 rounded-full bg-line overflow-hidden">
+            <div className="h-full bg-brand rounded-full" style={{ width: `${(passed / PLAY_TEST_DAYS) * 100}%` }} />
+          </div>
+          <p className="text-xs text-muted mt-2">אפשר להגיש בקשה לייצור החל מ-{end}</p>
+        </>
+      ) : (
+        <p className="text-sm">
+          ✅ עברו {PLAY_TEST_DAYS} ימים – אפשר להגיש בקשה לגישה לייצור:{' '}
+          <a href="https://play.google.com/console" target="_blank" rel="noopener noreferrer" className="text-brand underline">Play Console</a> ← מרכז שליטה
+        </p>
+      )}
+      {editing ? (
+        <div className="mt-2 flex items-center gap-2 text-sm">
+          תחילת הבדיקה:
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="rounded-lg border border-line bg-card px-2 py-1" />
+          <button onClick={save} className="rounded-full bg-brand text-white px-3 py-1">שמירה</button>
+        </div>
+      ) : (
+        <button onClick={() => setEditing(true)} className="mt-2 text-xs text-muted underline">תיקון תאריך ההתחלה</button>
+      )}
+    </Card>
+  );
+}
+
 function Overview({ d, go, session }) {
   const s = d.stats;
   return (
@@ -179,6 +228,7 @@ function Overview({ d, go, session }) {
       )}
 
       <PushCard session={session} />
+      <PlayTest start={d.settings.testStart || PLAY_TEST_START} session={session} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
         <Stat label="משתמשים" value={s.users} sub={`+${s.today} היום · +${s.week} השבוע`} onClick={() => go('users')} />
