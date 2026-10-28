@@ -47,13 +47,14 @@ export function kidHtml(k) {
       <td>${r.correct}/${r.total}</td>
       <td class="${r.percent >= PASS ? 'ok' : 'no'}">${r.percent}%</td>
     </tr>`).join('');
-  return `<article class="card">
-    <div class="head">
+  // סגור כברירת מחדל – רק לחיצה על השם פותחת את כל הנתונים
+  return `<details class="card kid" data-id="${esc(k.id)}">
+    <summary class="head">
       <h2>${esc(k.name)}</h2>
       <span class="muted">${k.lastSeen ? 'פעם אחרונה: ' + when(k.lastSeen) : ''}</span>
-    </div>
+    </summary>
     <div class="stages">${STAGES.filter(([m]) => ALWAYS.includes(m) || k.summary?.[m]?.attempts).map(([m, t]) => stage(k.summary?.[m], t)).join('')}</div>
     ${rounds ? `<details><summary>כל הסיבובים</summary><table><thead><tr><th>מתי</th><th>שלב</th><th>נכון</th><th>אחוז</th></tr></thead><tbody>${rounds}</tbody></table></details>` : ''}
     <button class="link danger" data-delete="${esc(k.id)}" data-name="${esc(k.name)}">מחיקת הילד מהרשימה</button>
-  </article>`;
+  </details>`;
 }

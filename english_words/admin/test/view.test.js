@@ -33,3 +33,10 @@ test('תרגולי המבחן מוצגים רק אחרי ששיחק בהם', () 
   assert.ok(html.includes('מבחן לדוגמה'));
   assert.ok(html.includes('B→b'));
 });
+
+test('כרטיס הילד סגור, והשם הוא הכפתור שפותח', () => {
+  const html = kidHtml(kid);
+  assert.ok(html.startsWith('<details class="card kid"'));
+  assert.ok(!html.startsWith('<details class="card kid" open'));
+  assert.ok(html.indexOf('<summary class="head">') < html.indexOf('<h2>'));
+});
