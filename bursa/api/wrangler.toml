@@ -1,0 +1,20 @@
+name = "bursa-api"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[vars]
+# האתרים שמותר להם לפנות לשרת (האפליקציה ב-Cloudflare Pages ופיתוח מקומי)
+ALLOWED_ORIGINS = "https://bursa-app.pages.dev,http://localhost:5173,http://localhost:4173"
+
+# כל הנתונים והמנוע שרץ ברקע – אובייקט אחד ("main")
+[[durable_objects.bindings]]
+name = "MARKET"
+class_name = "Market"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Market"]
+
+# סודות, לא כאן (נקבעים אוטומטית מ-GitHub, ראו .github/workflows/bursa.yml):
+#   ANTHROPIC_API_KEY  – המפתח של Claude (צ'אט, תחזית שוק, דעה על מניה)
