@@ -205,6 +205,9 @@
 - `budget/web` → https://bayit-budget.pages.dev · `budget/api` → Worker `bayit-budget-api` (Durable Object `Budget` אחד, סנכרון לפי `rev`). עלייה: `bayit-budget.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd budget/api && npm test` · `cd budget/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 - החישובים ב-`web/src/lib/budget.js` (פונקציות טהורות + בדיקות). שדה חדש ברשומה – ברירת מחדל ב-`safeItem`.
+- דוח חודשי כמו האקסל, גרפים, תובנות AI (`/ai`, עד 40 ביום), ייבוא מהאקסל של המשתמש (`lib/excelImport.js`), איפוס (`/reset`).
+  **הקובץ האמיתי של המשתמש (נתונים כספיים) לא נכנס למאגר** – בבדיקות רק `fixtures/sample.xlsx` המומצא.
+- המשתמש ביקש: **למזג לבד** אחרי שהבדיקות ירוקות, ולבדוק שהעלייה הצליחה.
 
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).

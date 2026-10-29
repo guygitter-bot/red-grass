@@ -144,7 +144,7 @@ export default function MonthView({ data, month, go }) {
           }}
         />
       )}
-      {edit && <ItemEditor item={edit.item} kind={edit.kind} month={month} onClose={() => setEdit(null)} />}
+      {edit && <ItemEditor data={data} item={edit.item} kind={edit.kind} month={month} onClose={() => setEdit(null)} />}
     </div>
   );
 }

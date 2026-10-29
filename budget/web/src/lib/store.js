@@ -126,6 +126,22 @@ export async function changePassword(password, newPassword) {
   setToken(token);
 }
 
+// מחיקת כל הנתונים – בשרת ובכל המכשירים (צריך סיסמה). שינויים שעוד לא נשלחו מהמכשיר הזה לא יישלחו
+export async function resetAll(password) {
+  await api('/reset', { password });
+  dirty = new Set();
+  persist();
+  await sync();
+}
+
+// שאלה ליועץ ה-AI; התשובה נשמרת (ומסתנכרנת) כדי שאפשר יהיה לחזור אליה
+export async function askAi(context, question, month) {
+  const { answer, left } = await api('/ai', { context, question });
+  const id = newId('ai');
+  save({ id, t: 'insight', question, answer: answer.slice(0, 10000), month, at: Date.now() });
+  return { id, answer, left };
+}
+
 // יציאה: מוחקת את הנתונים מהמכשיר הזה (בשרת הם נשארים)
 export async function logout() {
   await api('/logout').catch(() => {});

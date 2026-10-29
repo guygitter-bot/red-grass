@@ -11,9 +11,9 @@ function monthOptions(around, keep) {
   return list.sort();
 }
 
-export default function ItemEditor({ item, month, kind = 'expense', onClose }) {
+export default function ItemEditor({ item, month, kind = 'expense', data, onClose }) {
   const [f, setF] = useState(() =>
-    item ? { ...safeItem(item), amount: String(safeItem(item).amount) } : { kind, type: 'fixed', name: '', category: '', amount: '', start: month, end: '', every: 1, count: 12, note: '' },
+    item ? { ...safeItem(item), amount: String(safeItem(item).amount) } : { kind, type: 'fixed', name: '', category: '', amount: '', start: month, end: '', every: 1, count: 12, payment: '', note: '' },
   );
   const set = (k) => (v) => setF((x) => ({ ...x, [k]: v?.target ? v.target.value : v }));
   const amount = Number(String(f.amount).replace(/[,₪\s]/g, ''));
@@ -34,6 +34,7 @@ export default function ItemEditor({ item, month, kind = 'expense', onClose }) {
       end: f.type === 'fixed' ? f.end : '',
       every: f.type === 'fixed' ? Number(f.every) : 1,
       count: f.type === 'installments' ? Math.max(1, Math.round(Number(f.count)) || 1) : 1,
+      payment: f.payment.trim(),
       note: f.note.trim(),
     });
     onClose();
@@ -47,6 +48,10 @@ export default function ItemEditor({ item, month, kind = 'expense', onClose }) {
   };
 
   const months = monthOptions(month, f.start);
+  // הצעות: הקטגוריות ואמצעי התשלום שכבר בשימוש, ואחריהן ברירות המחדל
+  const items = data?.items || [];
+  const cats = [...new Set([...items.filter((i) => i.kind === f.kind).map((i) => i.category), ...CATEGORIES[f.kind]].filter(Boolean))];
+  const payments = [...new Set(items.map((i) => i.payment).filter(Boolean))];
   const income = f.kind === 'income';
   return (
     <Sheet title={item ? 'עריכה' : income ? 'הכנסה חדשה' : 'הוצאה חדשה'} onClose={onClose}>
@@ -67,7 +72,7 @@ export default function ItemEditor({ item, month, kind = 'expense', onClose }) {
           <Field label="קטגוריה">
             <input className={inputCls} list={`cats-${f.kind}`} value={f.category} onChange={set('category')} placeholder="בחירה או כתיבה" />
             <datalist id={`cats-${f.kind}`}>
-              {CATEGORIES[f.kind].map((c) => (
+              {cats.map((c) => (
                 <option key={c} value={c} />
               ))}
             </datalist>
@@ -119,8 +124,16 @@ export default function ItemEditor({ item, month, kind = 'expense', onClose }) {
             סה״כ: <b className="num">₪{Math.round(amount * (Number(f.count) || 1)).toLocaleString('he-IL')}</b> ב-{Number(f.count) || 1} תשלומים
           </p>
         )}
+        <Field label="אמצעי תשלום (רשות)">
+          <input className={inputCls} list="payments" value={f.payment} onChange={set('payment')} placeholder='למשל: כ"א 8328 / הוראת קבע' />
+          <datalist id="payments">
+            {payments.map((p) => (
+              <option key={p} value={p} />
+            ))}
+          </datalist>
+        </Field>
         <Field label="הערה (רשות)">
-          <input className={inputCls} value={f.note} onChange={set('note')} placeholder="למשל: הוראת קבע מבנק הפועלים" />
+          <input className={inputCls} value={f.note} onChange={set('note')} placeholder="למשל: משוער" />
         </Field>
         <div className="mt-4 flex gap-2">
           <Button className="flex-1" disabled={!ok}>
