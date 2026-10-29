@@ -76,6 +76,18 @@ jobs:
           wranglerVersion: "4.146.0"
           secrets: |
             ANTHROPIC_API_KEY
+      - name: GitHub token for "בקשת שינוי" (optional)
+        working-directory: budget/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GH_FIX_TOKEN: ${{ secrets.POINTS_GITHUB_TOKEN }}
+        run: |
+          if [ -z "$GH_FIX_TOKEN" ]; then
+            echo "::notice::POINTS_GITHUB_TOKEN is not set; the in-app change requests stay off"
+            exit 0
+          fi
+          printf '%s' "$GH_FIX_TOKEN" | npx --yes wrangler@4.146.0 secret put GITHUB_TOKEN
       - name: Summary
         env:
           URL: ${{ steps.deploy.outputs.deployment-url }}

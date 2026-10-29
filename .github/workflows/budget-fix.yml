@@ -1,0 +1,129 @@
+name: Budget change requests
+
+# "בקשת שינוי" באפליקציית תקציב הבית פותחת issue עם התווית budget-fix (דרך השרת bayit-budget-api, בשם בעל המאגר).
+# Claude Code קורא את הבקשה (וצילום המסך), משנה בתוך budget/ ומריץ בדיקות,
+# ופותח PR ל-main מהענף budget-fix/<מספר>. המצב וההסבר של Claude מופיעים באפליקציה, ושם מאשרים
+# ("לאשר ולהעלות" ממזג את ה-PR והשינוי עולה) או דוחים. בקשה לא ברורה -> שאלה, ותשובה מהאפליקציה
+# (תגובה בשם בעל המאגר) מריצה שוב עם כל השיחה. "לנסות שוב" באפליקציה מוסיף את התווית budget-retry.
+on:
+  issues:
+    types: [labeled]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: Issue number
+        required: true
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: budget-fix-${{ github.event.issue.number || inputs.issue }}
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    # רק issues שבעל המאגר פתח (השרת פותח אותם בשמו), ורק תגובות של בעל המאגר
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (contains(github.event.issue.labels.*.name, 'budget-fix') &&
+       github.event.issue.state == 'open' &&
+       github.event.issue.user.login == github.repository_owner &&
+       !github.event.issue.pull_request &&
+       ((github.event_name == 'issues' && (github.event.label.name == 'budget-fix' || github.event.label.name == 'budget-retry')) ||
+        (github.event_name == 'issue_comment' && github.event.comment.user.login == github.repository_owner)))
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ISSUE: ${{ github.event.issue.number || inputs.issue }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check secrets
+        env:
+          PAT: ${{ secrets.POINTS_GITHUB_TOKEN }}
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          [ -n "$PAT" ] || { echo "::error::Missing secret POINTS_GITHUB_TOKEN (see budget/README.md)"; exit 1; }
+          [ -n "$KEY" ] || { echo "::error::Missing secret ANTHROPIC_API_KEY"; exit 1; }
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          # Claude runs without the push token; only the publish step below gets it
+          persist-credentials: false
+      - name: Mark as in progress
+        run: python3 budget/fixbot/fixbot.py start
+      - name: Continue an earlier version of this fix
+        run: |
+          if git fetch -q origin "budget-fix/${ISSUE}" 2>/dev/null; then
+            git checkout -q -B "budget-fix/${ISSUE}" FETCH_HEAD
+            git config user.name "budget-fix"
+            git config user.email "budget-fix@users.noreply.github.com"
+            git merge -q --no-edit origin/main || { git merge --abort; git checkout -q -B "budget-fix/${ISSUE}" origin/main; }
+          else
+            git checkout -q -B "budget-fix/${ISSUE}" origin/main
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: budget/web/package-lock.json
+      - name: Install
+        run: |
+          (cd budget/web && npm ci)
+          (cd budget/api && npm ci)
+          npm install -g @anthropic-ai/claude-code
+      - name: Read the request
+        env:
+          # צילום המסך שמור בשרת של האפליקציה; השרת מזהה את התהליך לפי אותו טוקן
+          SHOT_TOKEN: ${{ secrets.POINTS_GITHUB_TOKEN }}
+        run: python3 budget/fixbot/fixbot.py prepare
+      - name: Claude fixes
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MODEL: ${{ vars.BUDGET_FIX_MODEL || 'claude-opus-5-5' }}
+        run: |
+          claude -p "$(cat .fix/prompt.txt)" \
+            --model "$MODEL" \
+            --max-turns 80 \
+            --permission-mode acceptEdits \
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(cd:*),Bash(ls:*),Bash(npm test:*),Bash(npm run build:*),Bash(npx vitest:*),Bash(node --test:*),Bash(git diff:*),Bash(git status:*)" \
+            --output-format json > .fix/claude.json || echo "::warning::Claude exited with an error"
+          tail -c 2000 .fix/claude.json || true
+      - name: Check the result
+        id: check
+        run: python3 budget/fixbot/fixbot.py check
+      - name: Tests
+        id: tests
+        if: steps.check.outputs.status == 'fixed'
+        run: |
+          (cd budget/web && npm test && npm run build)
+          (cd budget/api && npm test)
+      - name: Prepare the change for approval
+        id: publish
+        if: steps.check.outputs.status == 'fixed'
+        env:
+          # a personal token, so the PR runs the app checks
+          GH_TOKEN: ${{ secrets.POINTS_GITHUB_TOKEN }}
+        run: |
+          branch="budget-fix/${ISSUE}"
+          git config user.name "budget-fix"
+          git config user.email "budget-fix@users.noreply.github.com"
+          git add -A -- budget
+          git commit -q -F .fix/commit.txt
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$branch"
+          if gh pr view "$branch" --json number >/dev/null 2>&1; then
+            gh pr edit "$branch" --body-file .fix/pr.md
+          else
+            gh pr create --base main --head "$branch" --title "$(head -n1 .fix/commit.txt)" --body-file .fix/pr.md
+          fi
+      - name: Report
+        if: always()
+        env:
+          STATUS: ${{ steps.check.outputs.status }}
+          TESTS: ${{ steps.tests.outcome }}
+          PUBLISH: ${{ steps.publish.outcome }}
+        run: python3 budget/fixbot/fixbot.py report

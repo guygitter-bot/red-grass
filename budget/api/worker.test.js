@@ -179,3 +179,113 @@ test('AI בלי מפתח – הודעה ברורה', async () => {
   const t = (await call(env, '/setup', { password: 'secret123' })).data.token;
   assert.equal((await call(env, '/ai', { question: 'שאלה' }, t)).status, 503);
 });
+
+// GitHub מדומה: issues, תגובות, תוויות ו-PR
+function fakeGithub() {
+  const gh = { issues: new Map(), comments: new Map(), prs: [], merged: [], calls: [] };
+  gh.fetch = async (url, { method = 'GET', body, headers } = {}) => {
+    const path = url.replace('https://api.github.com/repos/o/r', '');
+    gh.calls.push(`${method} ${path}`);
+    assert.equal(headers.authorization, 'Bearer gh-token');
+    const data = body ? JSON.parse(body) : null;
+    const ok = (v, status = 200) => new Response(JSON.stringify(v), { status });
+    let m;
+    if (method === 'POST' && path === '/issues') {
+      const number = gh.issues.size + 1;
+      gh.issues.set(number, { number, title: data.title, body: data.body, state: 'open', labels: data.labels.map((name) => ({ name })), created_at: 'now' });
+      return ok({ number }, 201);
+    }
+    if ((m = path.match(/^\/issues\/(\d+)$/))) {
+      const issue = gh.issues.get(+m[1]);
+      if (method === 'PATCH') Object.assign(issue, data);
+      return ok(issue);
+    }
+    if ((m = path.match(/^\/issues\/(\d+)\/comments/))) {
+      const list = gh.comments.get(+m[1]) || [];
+      if (method === 'POST') list.push({ user: { login: 'o' }, body: data.body });
+      gh.comments.set(+m[1], list);
+      return ok(list);
+    }
+    if ((m = path.match(/^\/issues\/(\d+)\/labels$/))) {
+      const issue = gh.issues.get(+m[1]);
+      issue.labels = method === 'PUT' ? data.labels.map((name) => ({ name })) : [...issue.labels, ...data.labels.map((name) => ({ name }))];
+      return ok(issue.labels);
+    }
+    if (path.startsWith('/pulls?')) return ok(gh.prs.filter((p) => path.includes(encodeURIComponent(`o:${p.branch}`))));
+    if ((m = path.match(/^\/pulls\/(\d+)\/merge$/))) {
+      gh.merged.push(+m[1]);
+      return ok({ merged: true });
+    }
+    if (path.startsWith('/git/refs/')) return new Response(null, { status: 204 });
+    return ok({}, 404);
+  };
+  return gh;
+}
+
+test('בקשת שינוי מהאפליקציה: נשלחת ל-GitHub, צילום המסך נשאר בשרת, ומאשרים מהאפליקציה', async () => {
+  const gh = fakeGithub();
+  const env = fakeEnv({ FETCH: gh.fetch, GITHUB_TOKEN: 'gh-token', GITHUB_REPO: 'o/r' });
+  Object.assign(env, { GITHUB_TOKEN: 'gh-token' });
+  const t = (await call(env, '/setup', { password: 'secret123' })).data.token;
+  assert.equal((await call(env, '/fix/send', { text: 'שינוי' }, '')).status, 401);
+  assert.equal((await call(env, '/fix/send', { text: '  ' }, t)).status, 400);
+  const img = `data:image/jpeg;base64,${btoa('JPEGDATA')}`;
+  const sent = await call(env, '/fix/send', { text: 'להגדיל את הגרף\nבמסך גרפים', image: img, view: 'charts' }, t);
+  assert.equal(sent.status, 200);
+  const issue = gh.issues.get(sent.data.number);
+  assert.deepEqual(issue.labels.map((l) => l.name), ['budget-fix']);
+  assert.match(issue.title, /להגדיל את הגרף/);
+  // ב-issue (ציבורי) רק קישור, לא התמונה
+  assert.ok(!issue.body.includes('JPEGDATA') && !issue.body.includes(btoa('JPEGDATA')));
+  const shotUrl = issue.body.match(/budget-fix-screenshot: (\S+) -->/)[1];
+  assert.match(shotUrl, /^https:\/\/api\.test\/fix\/image\?id=/);
+
+  // את התמונה מקבלים רק עם הטוקן של GitHub
+  const get = (auth) => worker.fetch(new Request(shotUrl, { headers: auth ? { authorization: `Bearer ${auth}` } : {} }), env);
+  assert.equal((await get('')).status, 403);
+  assert.equal((await get('wrong')).status, 403);
+  const shot = await get('gh-token');
+  assert.equal(shot.status, 200);
+  assert.equal(new TextDecoder().decode(await shot.arrayBuffer()), 'JPEGDATA');
+
+  // Claude הכין שינוי
+  issue.labels = [{ name: 'budget-fix' }, { name: 'budget-ready' }];
+  gh.comments.set(issue.number, [{ user: { login: 'github-actions[bot]' }, body: '✅ הגרף גדול יותר <!-- x --> (עלות משוערת: $0.40)' }]);
+  gh.prs.push({ number: 77, branch: `budget-fix/${issue.number}` });
+  const list = await call(env, '/fix/list', {}, t);
+  assert.deepEqual(list.data.requests.map((r) => [r.status, r.message, r.title]), [['ready', '✅ הגרף גדול יותר', 'להגדיל את הגרף']]);
+
+  // בקשה שלא נשלחה מכאן – אסור
+  assert.equal((await call(env, '/fix/approve', { number: 999 }, t)).status, 403);
+  assert.equal((await call(env, '/fix/approve', { number: issue.number }, t)).status, 200);
+  assert.deepEqual(gh.merged, [77]);
+  assert.equal(issue.state, 'closed');
+  assert.ok(issue.labels.some((l) => l.name === 'budget-done'));
+  assert.equal((await call(env, '/fix/reply', { number: issue.number, text: 'עוד' }, t)).status, 409);
+});
+
+test('בקשת שינוי: תשובה ל-Claude, ניסיון חוזר, דחייה ומגבלה ליום', async () => {
+  const gh = fakeGithub();
+  const env = fakeEnv({ FETCH: gh.fetch, GITHUB_TOKEN: 'gh-token', GITHUB_REPO: 'o/r' });
+  const t = (await call(env, '/setup', { password: 'secret123' })).data.token;
+  const n = (await call(env, '/fix/send', { text: 'משהו' }, t)).data.number;
+  assert.equal((await call(env, '/fix/reply', { number: n, text: 'בגרף העליון' }, t)).status, 200);
+  assert.equal(gh.comments.get(n)[0].body, 'בגרף העליון');
+  gh.issues.get(n).labels = [{ name: 'budget-fix' }, { name: 'budget-working' }];
+  assert.equal((await call(env, '/fix/retry', { number: n }, t)).status, 409);
+  gh.issues.get(n).labels = [{ name: 'budget-fix' }, { name: 'budget-failed' }];
+  assert.equal((await call(env, '/fix/retry', { number: n }, t)).status, 200);
+  assert.ok(gh.issues.get(n).labels.some((l) => l.name === 'budget-retry'));
+  assert.equal((await call(env, '/fix/reject', { number: n }, t)).status, 200);
+  assert.equal(gh.issues.get(n).state, 'closed');
+  for (let i = 0; i < 9; i++) await call(env, '/fix/send', { text: 'עוד' }, t);
+  assert.equal((await call(env, '/fix/send', { text: 'עוד' }, t)).status, 429);
+});
+
+test('בלי טוקן של GitHub – הכפתור כבוי', async () => {
+  const env = fakeEnv();
+  const t = (await call(env, '/setup', { password: 'secret123' })).data.token;
+  assert.deepEqual((await call(env, '/fix/list', {}, t)).data, { enabled: false, requests: [] });
+  assert.equal((await call(env, '/fix/send', { text: 'x' }, t)).status, 503);
+  assert.equal((await worker.fetch(new Request('https://api.test/fix/image?id=x', { headers: { authorization: 'Bearer ' } }), env)).status, 403);
+});

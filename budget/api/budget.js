@@ -3,6 +3,7 @@
 // כדי שתעבור לכל המכשירים). כל שינוי שהתקבל מקבל מספר גרסה (rev) עולה, והמכשיר מבקש "מה השתנה מאז".
 import Anthropic from '@anthropic-ai/sdk';
 import { advise } from './ai.js';
+import { Fixes } from './fixes.js';
 
 const SESSION_MS = 365 * 24 * 60 * 60 * 1000;
 const MAX_SESSIONS = 20;
@@ -84,11 +85,23 @@ export class Budget {
       if (path === 'status') return json(200, { ready: !!this.d.meta });
       if (path === 'setup') return json(200, await this.setup(body));
       if (path === 'login') return json(200, await this.login(body));
+      // צילום מסך של בקשת שינוי – לתהליך ב-GitHub בלבד (הטוקן נבדק ב-worker)
+      if (path === 'fix-image') {
+        const data = await new Fixes({ storage: this.storage, env: this.env, now: this.now }).image(body.id);
+        return data ? json(200, { data }) : json(404, { error: 'לא נמצא' });
+      }
       const session = await this.auth(request);
       if (path === 'sync') return json(200, await this.sync(body));
       if (path === 'password') return json(200, await this.password(body));
       if (path === 'reset') return json(200, await this.reset(body));
       if (path === 'ai') return json(200, await this.ai(body));
+      if (path.startsWith('fix/')) {
+        const fixes = new Fixes({ storage: this.storage, env: this.env, now: this.now, origin: request.headers.get('x-origin') || '' });
+        const action = path.slice(4);
+        if (action === 'list') return json(200, await fixes.list());
+        if (action === 'send') return json(200, await fixes.send(body));
+        if (['approve', 'reject', 'retry', 'reply'].includes(action)) return json(200, await fixes.act(action, body));
+      }
       if (path === 'logout') {
         delete this.d.sessions[session];
         await this.storage.put('sessions', this.d.sessions);
