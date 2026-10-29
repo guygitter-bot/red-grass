@@ -35,54 +35,58 @@ html,body{margin:0;width:1080px;height:1920px;background:transparent;overflow:hi
 .guys{width:100%;text-align:center;font:700 200px/1 F;letter-spacing:2px;white-space:nowrap;
   background:linear-gradient(180deg,#FFE14D,#FF7A18 55%,#FF2E88);-webkit-background-clip:text;color:transparent;
   -webkit-text-stroke:6px #111;paint-order:stroke fill;filter:drop-shadow(0 10px 0 #111) drop-shadow(0 18px 30px rgba(0,0,0,.3))}
+
+.cal{width:1em;height:1em;vertical-align:-0.14em;margin-left:10px}
+.R{right:30px;align-items:flex-start}
+.L{left:30px;align-items:flex-end}
+.C{left:0;width:1080px;align-items:center}
 </style></head><body>
 
-<div class="blk" id="intro"><div class="chip">🎤 בואו להופעות</div><div class="main">הופעות קרובות</div></div>
+<div class="blk C" id="guys" style="top:60px"><div class="guys">The guys</div></div>
 
-<div class="blk" id="b1" style="top:40px;left:330px;width:700px">
-  <div class="chip">📅 שבת · 31.10</div>
-  <div class="main">ג'אסר א-זרקא</div>
-  <div class="arrow" style="align-self:center"></div>
+<div class="blk R" id="t1" style="top:50px">
+  <div class="chip"><svg class="cal" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3" fill="#FF2E88" stroke="#111" stroke-width="2"/><rect x="3" y="5" width="18" height="5" rx="2" fill="#111"/><rect x="7" y="2.5" width="2.4" height="5" rx="1.2" fill="#111"/><rect x="14.6" y="2.5" width="2.4" height="5" rx="1.2" fill="#111"/></svg>31.10</div>
+  <div class="main big" style="font-size:150px">13:30</div>
 </div>
 
-<div class="blk" id="b2" style="top:760px;left:24px;width:400px">
-  <div class="chip">📅 נובמבר</div>
-  <div class="main" style="text-align:center">פסטיבל<br>מרפסות</div>
+<div class="blk L" id="j" style="top:50px">
+  <div class="main">ג'אסר א-זארקא</div>
+</div>
+
+<div class="blk L" id="b2" style="top:40px">
+  <div class="chip"><svg class="cal" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3" fill="#FF2E88" stroke="#111" stroke-width="2"/><rect x="3" y="5" width="18" height="5" rx="2" fill="#111"/><rect x="7" y="2.5" width="2.4" height="5" rx="1.2" fill="#111"/><rect x="14.6" y="2.5" width="2.4" height="5" rx="1.2" fill="#111"/></svg>יום חמישי · 5.11</div>
+  <div class="main">פסטיבל המרפסות</div>
   <div class="sub">📍 <b>טבעון</b></div>
 </div>
 
-<div class="blk" id="b3" style="top:150px;left:20px;width:620px">
-  <div class="chip">פסטיבל מרפסות · טבעון</div>
+<div class="blk C" id="t2" style="top:50px">
+  <div class="chip">פסטיבל המרפסות · טבעון</div>
   <div class="main big">20:30</div>
-  <div class="arrow" style="align-self:flex-end;margin-left:120px"></div>
 </div>
 
-<div class="blk" id="b4" style="top:24px;left:20px;width:760px">
-  <div class="main" style="font-size:118px">פסטיבל דוקו אביב</div>
-  <div style="display:flex;gap:14px"><div class="sub">📍 <b>מעלות</b></div><div class="sub">⏰ <b>18:00</b></div></div>
+<div class="blk R" id="b4" style="top:40px">
+  <div class="chip"><svg class="cal" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3" fill="#FF2E88" stroke="#111" stroke-width="2"/><rect x="3" y="5" width="18" height="5" rx="2" fill="#111"/><rect x="7" y="2.5" width="2.4" height="5" rx="1.2" fill="#111"/><rect x="14.6" y="2.5" width="2.4" height="5" rx="1.2" fill="#111"/></svg>יום שישי · 6.11</div>
+  <div class="main">פסטיבל דוקואביב</div>
+  <div class="sub">📍 <b>מעלות</b></div>
 </div>
 
-<div class="blk" id="guys" style="top:60px;left:0;width:1080px">
-  <div class="guys">The guys</div>
-</div>
-
-<div class="blk" id="t1330" style="top:50px;left:30px">
-  <div class="chip">ג'אסר א-זרקא</div>
-  <div class="main big" style="font-size:150px">13:30</div>
+<div class="blk R" id="t3" style="top:50px">
+  <div class="chip">דוקואביב · מעלות</div>
+  <div class="main big" style="font-size:150px">18:00</div>
 </div>
 
 <div class="blk" id="outro">
   <h2>נתראה בהופעות!</h2>
   <div class="rows">
-  <div class="row"><div class="d">שבת · 31.10</div><div class="t">ג'אסר א-זרקא<small>בשעה 13:30</small></div></div>
-  <div class="row"><div class="d">נובמבר</div><div class="t">פסטיבל מרפסות<small>טבעון · בשעה 20:30</small></div></div>
-  <div class="row"><div class="d">⏰ 18:00</div><div class="t">פסטיבל דוקו אביב<small>מעלות</small></div></div>
+  <div class="row"><div class="d">31.10</div><div class="t">ג'אסר א-זארקא<small>בשעה 13:30</small></div></div>
+  <div class="row"><div class="d">חמישי · 5.11</div><div class="t">פסטיבל המרפסות<small>טבעון · 20:30</small></div></div>
+  <div class="row"><div class="d">שישי · 6.11</div><div class="t">פסטיבל דוקואביב<small>מעלות · 18:00</small></div></div>
   </div>
 </div>
 
 <script>
 // זמני ההופעה של כל כיתוב בשניות
-const SEG = {intro:[0.2,3.2], guys:[4.0,7.6], b1:[13.8,16.4], t1330:[18.8,21.6], b2:[29.3,32.6], b3:[35.2,37.6], b4:[46.2,49.2], outro:[60.8,66.9]};
+const SEG = {guys:[3.0,6.2], t1:[13.0,16.2], j:[18.0,21.2], b2:[32.0,35.4], t2:[36.0,39.2], b4:[46.0,49.6], t3:[60.0,62.8], outro:[63.0,67.8]};
 const anims = [];
 function add(el, kf, start, dur, opts={}){
   const a = el.animate(kf, {duration:dur*1000, delay:start*1000, fill:'both', easing:'linear', ...opts});
