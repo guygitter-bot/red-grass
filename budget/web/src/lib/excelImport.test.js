@@ -21,7 +21,7 @@ describe('ייבוא מאקסל', () => {
     const sheets = await sample();
     expect(sheets.map((s) => s.name)).toEqual(['07.26', '08.26', 'מעקב כרטיסים']);
     expect(sheets[0].cells.get('B7')).toBe('ועד בית');
-    expect(sheets[0].cells.get('C7')).toBe(280);
+    expect(sheets[0].cells.get('C7')).toBe(111);
   });
 
   it('בונה קבועות, תשלומים, חד־פעמיות, הכנסות וכרטיסים – וכל חודש יוצא כמו באקסל', async () => {
@@ -29,20 +29,20 @@ describe('ייבוא מאקסל', () => {
     expect(r.months).toEqual(['2026-07', '2026-08']);
     const items = r.records.filter((x) => x.t === 'item');
     const vaad = items.find((i) => i.name === 'ועד בית');
-    expect(vaad).toMatchObject({ type: 'fixed', amount: 300, start: '2026-07', end: '', category: 'דיור' });
+    expect(vaad).toMatchObject({ type: 'fixed', amount: 120, start: '2026-07', end: '', category: 'דיור' });
     const car = items.find((i) => i.name === 'ביטוח רכב' && i.type === 'installments');
-    expect(car).toMatchObject({ start: '2026-06', count: 10, amount: 300 });
-    expect(items.find((i) => i.name === 'ביטוח רכב' && i.type === 'once')).toMatchObject({ amount: 100, start: '2026-08' });
+    expect(car).toMatchObject({ start: '2026-06', count: 10, amount: 100 });
+    expect(items.find((i) => i.name === 'ביטוח רכב' && i.type === 'once')).toMatchObject({ amount: 50, start: '2026-08' });
     expect(items.find((i) => i.name === 'קופת חולים')).toMatchObject({ payment: 'כ"א 1234', category: 'בריאות' });
-    expect(items.find((i) => i.name === 'משכורת')).toMatchObject({ kind: 'income', type: 'fixed', amount: 15000 });
+    expect(items.find((i) => i.name === 'משכורת')).toMatchObject({ kind: 'income', type: 'fixed', amount: 10000 });
 
     const data = prepare(r.records.map((x) => ({ ...x, updatedAt: 1 })));
     const jul = monthSummary(data, '2026-07');
-    expect(jul.expense).toBe(280 + 500 + 300 + 900);
-    expect(jul.income).toBe(15000);
-    expect(monthSummary(data, '2026-08').expense).toBe(300 + 300 + 100 + 900);
+    expect(jul.expense).toBe(111 + 222 + 100 + 400);
+    expect(jul.income).toBe(10000);
+    expect(monthSummary(data, '2026-08').expense).toBe(120 + 100 + 50 + 400);
     // אחרי האקסל: הקבועות והתשלומים ממשיכים, החד־פעמיות לא
-    expect(monthSummary(data, '2026-09').expense).toBe(300 + 300 + 900);
+    expect(monthSummary(data, '2026-09').expense).toBe(120 + 100 + 400);
 
     // כרטיסים: עד שורת סה"כ, והשנה מתחלפת אחרי דצמבר
     expect(r.cardNames).toEqual(['כרטיס א', 'כרטיס ב']);
