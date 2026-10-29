@@ -1,8 +1,8 @@
 // תקציב הבית: מסך חודש, דוח חודשי (כמו האקסל), שנה קדימה, גרפים, תובנות AI, כרטיסי אשראי, כל הרשומות והגדרות.
-// ניווט לפי כתובת (#/month/2027-03, #/report/2027-03, #/year, #/charts, #/ai, #/cards, #/items, #/settings, #/more)
+// ניווט לפי כתובת (#/month/2027-03, #/report/2027-03, #/year, #/charts, #/ai, #/cards, #/items, #/settings, #/fixes, #/more)
 // כדי שכפתור "חזרה" יעבוד.
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, CalendarDays, ChevronLeft, Cloud, CloudOff, CreditCard, FileText, ListChecks, Menu, Moon, RefreshCw, Settings as Gear, Sparkles, Sun, TrendingUp, Wallet } from 'lucide-react';
+import { BarChart3, CalendarDays, ChevronLeft, Cloud, CloudOff, CreditCard, FileText, ListChecks, Menu, Moon, RefreshCw, Settings as Gear, Sparkles, Sun, TrendingUp, Wallet, Wrench } from 'lucide-react';
 import { prepare, thisMonth } from './lib/budget';
 import { sync, useStore } from './lib/store';
 import { isDark, setTheme } from './lib/theme';
@@ -15,6 +15,7 @@ import ReportView from './components/ReportView';
 import ChartsView from './components/ChartsView';
 import InsightsView from './components/InsightsView';
 import CardsView from './components/CardsView';
+import FixesView from './components/FixesView';
 
 function parseHash() {
   const [, page = 'month', arg] = window.location.hash.replace(/^#/, '').split('/');
@@ -22,7 +23,7 @@ function parseHash() {
   return { page: PAGES.includes(page) ? page : 'month', month };
 }
 
-const PAGES = ['month', 'report', 'year', 'charts', 'ai', 'cards', 'items', 'settings', 'more'];
+const PAGES = ['month', 'report', 'year', 'charts', 'ai', 'cards', 'items', 'settings', 'fixes', 'more'];
 
 // תפריט הצד במחשב – הכול
 const NAV = [
@@ -34,6 +35,7 @@ const NAV = [
   ['cards', 'כרטיסי אשראי', CreditCard],
   ['items', 'הכול', ListChecks],
   ['settings', 'הגדרות', Gear],
+  ['fixes', 'בקשת שינוי', Wrench],
 ];
 // הסרגל התחתון בטלפון – החמישה העיקריים, והשאר תחת "עוד"
 const TABS = [
@@ -43,7 +45,7 @@ const TABS = [
   ['ai', 'תובנות', Sparkles],
   ['more', 'עוד', Menu],
 ];
-const MORE = ['year', 'cards', 'items', 'settings'];
+const MORE = ['year', 'cards', 'items', 'settings', 'fixes'];
 
 function MoreView({ go }) {
   return (
@@ -155,6 +157,7 @@ export default function App() {
           {route.page === 'cards' && <CardsView data={data} />}
           {route.page === 'items' && <ItemsView data={data} />}
           {route.page === 'settings' && <Settings data={data} records={records} />}
+          {route.page === 'fixes' && <FixesView />}
           {route.page === 'more' && <MoreView go={go} />}
         </main>
       </div>
