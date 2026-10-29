@@ -4,6 +4,8 @@
 //   POST /login {password}          -> { token }
 //   POST /sync {since, changes}     -> { rev, changes } שליחת השינויים מהמכשיר וקבלת מה שהשתנה מאז since
 //   POST /password {password, newPassword} -> { token } החלפת סיסמה (מנתקת את שאר המכשירים)
+//   POST /reset {password}          מחיקת כל הנתונים (בכל המכשירים)
+//   POST /ai {context, question}    -> { answer, left } תובנות והמלצות מה-AI (עד 40 ביום)
 //   POST /logout
 // הכניסה: authorization: Bearer <סוד> שמתקבל אחרי סיסמה.
 import { Budget } from './budget.js';
@@ -11,7 +13,7 @@ import { Budget } from './budget.js';
 export { Budget };
 
 const MAX_BODY_BYTES = 1024 * 1024;
-const ROUTES = ['/status', '/setup', '/login', '/sync', '/password', '/logout'];
+const ROUTES = ['/status', '/setup', '/login', '/sync', '/password', '/reset', '/ai', '/logout'];
 
 // כתובת מותרת? (* בהגדרה = כל רצף אותיות)
 export function originAllowed(origin, list) {

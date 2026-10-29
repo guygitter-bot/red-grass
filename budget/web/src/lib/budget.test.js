@@ -89,3 +89,34 @@ describe('סיכום חודש ותחזית', () => {
     expect(money(1234.4)).toBe('₪1,234');
   });
 });
+
+describe('דוח, כרטיסים ותובנות', async () => {
+  const { reportGroups, lineDetail, cardTable, endingSoon, aiContext } = await import('./budget');
+  const data = prepare([
+    ...records,
+    { id: 'card:א:2026-10', t: 'card', name: 'א', month: '2026-10', amount: 1000, updatedAt: 1 },
+    { id: 'card:ב:2026-10', t: 'card', name: 'ב', month: '2026-10', amount: 500, updatedAt: 1 },
+    { id: 'card:א:2026-09', t: 'card', name: 'א', month: '2026-09', amount: 800, updatedAt: 1 },
+    { id: 'ai1', t: 'insight', question: 'q', answer: 'a', at: 5, updatedAt: 1 },
+  ]);
+  it('קבוצות לפי קטגוריה, הכנסות בסוף', () => {
+    const g = reportGroups(monthSummary(data, '2026-11'));
+    expect(g.map((x) => [x.category, x.total])).toEqual([['דיור', 5000], ['אחר', 300], ['הכנסות', 15000]]);
+    expect(lineDetail(g[1].lines[0])).toBe('1/3');
+    expect(lineDetail(g[0].lines[0])).toBe('קבוע');
+  });
+  it('טבלת כרטיסים', () => {
+    const t = cardTable(data);
+    expect(t.names).toEqual(['א', 'ב']);
+    expect(t.rows.map((r) => [r.month, r.total])).toEqual([['2026-09', 800], ['2026-10', 1500]]);
+  });
+  it('מסתיימים בקרוב', () => {
+    expect(endingSoon(data, '2026-11').map((e) => [e.item.name, e.end])).toEqual([['טלוויזיה', '2027-01']]);
+  });
+  it('סיכום ל-AI', () => {
+    const t = aiContext(data, '2026-11');
+    expect(t).toContain('טלוויזיה: 300 (1/3)');
+    expect(t).toContain('חיובי כרטיסי אשראי');
+    expect(data.insights).toHaveLength(1);
+  });
+});

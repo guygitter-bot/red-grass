@@ -75,7 +75,7 @@ export default function ItemsView({ data }) {
         )}
       </div>
       {groups.every(([, l]) => !l.length) && <p className="rounded-2xl bg-card p-6 text-center text-muted shadow-sm">{q ? 'לא נמצא' : 'אין כאן כלום עדיין'}</p>}
-      {edit && <ItemEditor item={edit.item} kind={edit.kind} month={now} onClose={() => setEdit(null)} />}
+      {edit && <ItemEditor data={data} item={edit.item} kind={edit.kind} month={now} onClose={() => setEdit(null)} />}
     </div>
   );
 }

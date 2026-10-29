@@ -4,6 +4,8 @@ import { addMonths, monthName, thisMonth, toCsv } from '../lib/budget';
 import { changePassword, logout, save } from '../lib/store';
 import { getTheme, setTheme } from '../lib/theme';
 import { Button, Field, Segmented, inputCls } from './ui';
+import ImportExcel from './ImportExcel';
+import ResetSheet from './ResetSheet';
 
 function download(name, text, type) {
   const url = URL.createObjectURL(new Blob([text], { type }));
@@ -29,6 +31,10 @@ export default function Settings({ data, records }) {
   const [pw, setPw] = useState({ old: '', next: '' });
   const [msg, setMsg] = useState('');
   const fileRef = useRef(null);
+  const xlRef = useRef(null);
+  const [xlFile, setXlFile] = useState(null);
+  const [resetOpen, setResetOpen] = useState(false);
+  const backup = () => download(`גיבוי-תקציב-${now}.json`, JSON.stringify({ app: 'bayit-budget', at: new Date().toISOString(), records }, null, 1), 'application/json');
 
   const saveBalance = () => {
     const v = balance.trim() === '' ? '' : Number(balance.replace(/[,₪\s]/g, ''));
@@ -106,10 +112,21 @@ export default function Settings({ data, records }) {
 
       <Card title="אקסל וגיבוי">
         <div className="flex flex-wrap gap-2">
+          <Button onClick={() => xlRef.current?.click()}>ייבוא מקובץ אקסל</Button>
+          <input
+            ref={xlRef}
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="hidden"
+            onChange={(e) => {
+              setXlFile(e.target.files?.[0] || null);
+              e.target.value = '';
+            }}
+          />
           <Button kind="ghost" onClick={() => download(`תקציב-הבית-${now}.csv`, toCsv(data, now, 24), 'text/csv;charset=utf-8')}>
             ייצוא לאקסל (24 חודשים)
           </Button>
-          <Button kind="ghost" onClick={() => download(`גיבוי-תקציב-${now}.json`, JSON.stringify({ app: 'bayit-budget', at: new Date().toISOString(), records }, null, 1), 'application/json')}>
+          <Button kind="ghost" onClick={backup}>
             גיבוי לקובץ
           </Button>
           <Button kind="ghost" onClick={() => fileRef.current?.click()}>
@@ -129,14 +146,44 @@ export default function Settings({ data, records }) {
       </Card>
 
       <Button
-        kind="danger"
-        className="w-full"
+        kind="ghost"
+        className="mb-4 w-full"
         onClick={() => {
           if (confirm('לצאת מהמכשיר הזה? הנתונים נשארים בשרת, וכדי לחזור צריך את הסיסמה.')) logout();
         }}
       >
         יציאה מהמכשיר הזה
       </Button>
+
+      <section className="rounded-2xl border border-minus/40 bg-card p-4 shadow-sm">
+        <h2 className="mb-1 font-bold text-minus">אזור מסוכן</h2>
+        <p className="mb-3 text-sm text-muted">מחיקה של כל הנתונים בכל המכשירים, כדי להתחיל מחדש.</p>
+        <Button kind="danger" className="w-full" onClick={() => setResetOpen(true)}>
+          איפוס – מחיקת כל הנתונים
+        </Button>
+      </section>
+
+      {xlFile && (
+        <ImportExcel
+          file={xlFile}
+          onClose={() => setXlFile(null)}
+          onDone={(m) => {
+            setXlFile(null);
+            setMsg(m);
+          }}
+        />
+      )}
+      {resetOpen && (
+        <ResetSheet
+          onBackup={backup}
+          onClose={() => setResetOpen(false)}
+          onDone={(m) => {
+            setResetOpen(false);
+            setBalance('');
+            setMsg(m);
+          }}
+        />
+      )}
     </div>
   );
 }

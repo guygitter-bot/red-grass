@@ -1,7 +1,7 @@
 name: bayit-budget
 
 # תקציב הבית – הוצאות והכנסות לפי חודשים (budget/):
-#   api -> Cloudflare Worker "bayit-budget-api" (כל הנתונים, Durable Object אחד)
+#   api -> Cloudflare Worker "bayit-budget-api" (כל הנתונים, Durable Object אחד; סוד ANTHROPIC_API_KEY ליועץ ה-AI)
 #   web -> Cloudflare Pages "bayit-budget" -> https://bayit-budget.pages.dev
 on:
   push:
@@ -48,10 +48,12 @@ jobs:
         env:
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           missing=""
           [ -n "$CF_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
           [ -n "$CF_ACCOUNT" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          [ -n "$API_KEY" ] || missing="$missing ANTHROPIC_API_KEY"
           if [ -n "$missing" ]; then
             echo "::error::Missing repository secrets:$missing (see budget/README.md)"
             exit 1
@@ -65,11 +67,15 @@ jobs:
       - name: Deploy worker
         id: deploy
         uses: cloudflare/wrangler-action@v3
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: budget/api
           wranglerVersion: "4.146.0"
+          secrets: |
+            ANTHROPIC_API_KEY
       - name: Summary
         env:
           URL: ${{ steps.deploy.outputs.deployment-url }}

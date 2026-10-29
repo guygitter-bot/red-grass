@@ -29,13 +29,13 @@ function fakeStorage() {
 
 const ORIGIN = 'https://bayit-budget.pages.dev';
 
-function fakeEnv() {
+function fakeEnv(extra = {}) {
   const env = { ALLOWED_ORIGINS: `${ORIGIN},http://localhost:5173`, time: 1_800_000_000_000 };
   const storage = fakeStorage();
   let obj = null;
   env.BUDGET = {
     idFromName: (n) => n,
-    get: () => ({ fetch: (req) => (obj ||= new Budget({ storage }, { NOW: () => env.time })).fetch(req) }),
+    get: () => ({ fetch: (req) => (obj ||= new Budget({ storage }, { NOW: () => env.time, ...extra })).fetch(req) }),
   };
   env.restart = () => {
     obj = null;
@@ -129,6 +129,53 @@ test('החלפת סיסמה מנתקת את שאר המכשירים', async () =
 test('רשומות פגומות לא נשמרות', () => {
   assert.equal(cleanRecord(null), null);
   assert.equal(cleanRecord({ id: 'a' }), null);
-  assert.equal(cleanRecord({ id: 'a', updatedAt: 1, note: 'x'.repeat(5000) }), null);
+  assert.equal(cleanRecord({ id: 'a', updatedAt: 1, note: 'x'.repeat(13000) }), null);
   assert.deepEqual(cleanRecord({ id: 'a', updatedAt: 1, rev: 9 }), { id: 'a', updatedAt: 1 });
+});
+
+test('מחיקת כל הנתונים: צריך סיסמה, והמחיקה עוברת לשאר המכשירים', async () => {
+  const env = fakeEnv();
+  const a = (await call(env, '/setup', { password: 'secret123' })).data.token;
+  const b = (await call(env, '/login', { password: 'secret123' })).data.token;
+  await call(env, '/sync', { since: 0, changes: [{ id: 'i1', t: 'item', name: 'חשמל', amount: 400, updatedAt: 100 }, { id: 'settings', t: 'settings', balance: 5, updatedAt: 100 }] }, a);
+  const before = (await call(env, '/sync', { since: 0, changes: [] }, b)).data;
+  assert.equal((await call(env, '/reset', { password: 'wrong' }, a)).status, 401);
+  assert.equal((await call(env, '/reset', { password: 'secret123' }, '')).status, 401);
+  assert.equal((await call(env, '/reset', { password: 'secret123' }, a)).status, 200);
+  const after = (await call(env, '/sync', { since: before.rev, changes: [] }, b)).data;
+  assert.equal(after.changes.length, 2);
+  assert.ok(after.changes.every((r) => r.deleted && !r.name && !r.amount));
+});
+
+test('AI: שאלה עם סיכום התקציב, ומגבלה ליום', async () => {
+  const seen = [];
+  const AI_CLIENT = {
+    beta: {
+      messages: {
+        create: async (req) => {
+          seen.push(req);
+          return { stop_reason: 'end_turn', content: [{ type: 'text', text: '## תובנות\n- אפשר לחסוך בביטוחים' }] };
+        },
+      },
+    },
+  };
+  const env = fakeEnv({ AI_CLIENT });
+  const t = (await call(env, '/setup', { password: 'secret123' })).data.token;
+  assert.equal((await call(env, '/ai', { context: 'x', question: '' }, t)).status, 400);
+  const r = await call(env, '/ai', { context: 'הכנסות 20000', question: 'איפה לחסוך?' }, t);
+  assert.equal(r.status, 200);
+  assert.match(r.data.answer, /ביטוחים/);
+  assert.match(seen[0].messages[0].content, /הכנסות 20000/);
+  assert.equal(seen[0].model, 'claude-opus-5-5');
+  for (let i = 0; i < 39; i++) await call(env, '/ai', { question: 'שוב' }, t);
+  assert.equal((await call(env, '/ai', { question: 'שוב' }, t)).status, 429);
+  // יום חדש
+  env.time += 24 * 60 * 60 * 1000;
+  assert.equal((await call(env, '/ai', { question: 'שוב' }, t)).status, 200);
+});
+
+test('AI בלי מפתח – הודעה ברורה', async () => {
+  const env = fakeEnv();
+  const t = (await call(env, '/setup', { password: 'secret123' })).data.token;
+  assert.equal((await call(env, '/ai', { question: 'שאלה' }, t)).status, 503);
 });

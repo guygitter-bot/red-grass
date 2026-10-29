@@ -1,13 +1,18 @@
 // Durable Object אחד לכל התקציב: סיסמה, מכשירים מחוברים והרשומות (הוצאות, הכנסות, שינויים לחודש, הגדרות).
 // סנכרון: כל רשומה נושאת updatedAt (זמן עריכה במכשיר); העריכה המאוחרת גוברת. מחיקה = deleted: true (נשמרת,
 // כדי שתעבור לכל המכשירים). כל שינוי שהתקבל מקבל מספר גרסה (rev) עולה, והמכשיר מבקש "מה השתנה מאז".
+import Anthropic from '@anthropic-ai/sdk';
+import { advise } from './ai.js';
 
 const SESSION_MS = 365 * 24 * 60 * 60 * 1000;
 const MAX_SESSIONS = 20;
 const MAX_FAILS = 10;
 const LOCK_MS = 15 * 60 * 1000;
 const MAX_RECORDS = 8000;
-const MAX_RECORD_CHARS = 4000;
+const MAX_RECORD_CHARS = 12000;
+// שאלות ל-AI ביום (הגנה מעלויות)
+const AI_PER_DAY = 40;
+const MAX_CONTEXT_CHARS = 60000;
 // PBKDF2 ב-Cloudflare Workers מוגבל ל-100,000 סבבים
 const ITERATIONS = 100000;
 
@@ -52,6 +57,7 @@ export function cleanRecord(r) {
 export class Budget {
   constructor(state, env = {}) {
     this.storage = state.storage;
+    this.env = env;
     this.now = env.NOW || (() => Date.now());
     this.d = null;
   }
@@ -81,6 +87,8 @@ export class Budget {
       const session = await this.auth(request);
       if (path === 'sync') return json(200, await this.sync(body));
       if (path === 'password') return json(200, await this.password(body));
+      if (path === 'reset') return json(200, await this.reset(body));
+      if (path === 'ai') return json(200, await this.ai(body));
       if (path === 'logout') {
         delete this.d.sessions[session];
         await this.storage.put('sessions', this.d.sessions);
@@ -160,6 +168,51 @@ export class Budget {
     return { token: await this.newSession() };
   }
 
+  // מחיקת כל הנתונים (אחרי סיסמה): כל רשומה הופכת ל"נמחקה", כדי שהמחיקה תעבור גם לשאר המכשירים
+  async reset({ password }) {
+    const meta = this.d.meta;
+    if (!safeEqual(await hashPassword(String(password || ''), meta.salt), meta.hash)) throw fail(401, 'הסיסמה לא נכונה');
+    const d = this.d;
+    const writes = {};
+    const now = this.now();
+    for (const r of d.recs.values()) {
+      if (r.deleted) continue;
+      d.rev += 1;
+      const gone = { id: r.id, t: r.t, deleted: true, updatedAt: Math.max(now, r.updatedAt + 1), rev: d.rev };
+      d.recs.set(r.id, gone);
+      writes[`r:${r.id}`] = gone;
+    }
+    await this.write(writes);
+    return { ok: true, rev: d.rev };
+  }
+
+  async write(writes) {
+    const keys = Object.keys(writes);
+    // עד 128 מפתחות בכל כתיבה
+    for (let i = 0; i < keys.length; i += 100) await this.storage.put(Object.fromEntries(keys.slice(i, i + 100).map((k) => [k, writes[k]])));
+    if (keys.length) await this.storage.put('rev', this.d.rev);
+  }
+
+  async ai({ context, question }) {
+    context = String(context || '').slice(0, MAX_CONTEXT_CHARS);
+    question = String(question || '').trim().slice(0, 2000);
+    if (!question) throw fail(400, 'מה לשאול?');
+    if (!this.env.AI_CLIENT && !this.env.ANTHROPIC_API_KEY) throw fail(503, 'ה-AI עוד לא הוגדר בשרת');
+    const day = new Date(this.now()).toISOString().slice(0, 10);
+    const usage = (await this.storage.get('ai-usage')) || {};
+    if (usage.day !== day) Object.assign(usage, { day, count: 0 });
+    if (usage.count >= AI_PER_DAY) throw fail(429, 'הגעתם למספר השאלות להיום. אפשר לשאול שוב מחר');
+    usage.count += 1;
+    await this.storage.put('ai-usage', usage);
+    const client = this.env.AI_CLIENT || new Anthropic({ apiKey: this.env.ANTHROPIC_API_KEY });
+    try {
+      return { answer: await advise(client, context, question), left: AI_PER_DAY - usage.count };
+    } catch (err) {
+      console.error('ai failed', err?.status, err?.message);
+      throw fail(502, 'ה-AI לא זמין כרגע. נסו שוב בעוד כמה דקות');
+    }
+  }
+
   async sync({ since, changes }) {
     const d = this.d;
     const writes = {};
@@ -174,10 +227,7 @@ export class Budget {
       d.recs.set(rec.id, saved);
       writes[`r:${rec.id}`] = saved;
     }
-    const keys = Object.keys(writes);
-    // עד 128 מפתחות בכל כתיבה
-    for (let i = 0; i < keys.length; i += 100) await this.storage.put(Object.fromEntries(keys.slice(i, i + 100).map((k) => [k, writes[k]])));
-    if (keys.length) await this.storage.put('rev', d.rev);
+    await this.write(writes);
     const from = Number(since) || 0;
     // המכשיר מכיר גרסה מאוחרת ממה שיש בשרת (לא אמור לקרות) – שולחים הכול מחדש
     const all = from > d.rev;
