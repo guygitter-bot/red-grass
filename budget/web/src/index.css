@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+/* מצב לילה: מחלקה dark על html (נקבעת ב-src/lib/theme.js) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* כל הצבעים במקום אחד – במצב לילה מחליפים רק אותם:
+   page = רקע המסך, card = כרטיסים, ink = טקסט, muted = טקסט משני, line = מסגרות, soft = רקע מודגש עדין
+   plus = הכנסה, minus = הוצאה */
+@theme {
+  --color-page: #f5f7f6;
+  --color-card: #ffffff;
+  --color-ink: #17201e;
+  --color-muted: #64716e;
+  --color-line: #e2e8e6;
+  --color-soft: #e7f4f1;
+  --color-accent: #0f766e;
+  --color-accent-ink: #0d5f59;
+  --color-plus: #15803d;
+  --color-minus: #c2410c;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-page: #0f1413;
+  --color-card: #19201f;
+  --color-ink: #e8efed;
+  --color-muted: #9aa8a5;
+  --color-line: #2a3432;
+  --color-soft: #16302d;
+  --color-accent: #14b8a6;
+  --color-accent-ink: #5eead4;
+  --color-plus: #4ade80;
+  --color-minus: #fb923c;
+}
+
+html,
+body {
+  font-family: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--color-page);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* מספרים ברוחב אחיד, כדי שעמודות יישרו */
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
