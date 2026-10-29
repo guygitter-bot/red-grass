@@ -4,7 +4,7 @@
 //   item     – הכנסה או הוצאה:
 //              { t: 'item', kind: 'income' | 'expense', type: 'fixed' | 'installments' | 'once',
 //                name, category, amount, start: 'YYYY-MM', end?: 'YYYY-MM' (קבועה), every?: 1|2|3|6|12 (קבועה),
-//                count?: מספר תשלומים, payment?: אמצעי תשלום (למשל "כ\"א 8328"), note? }
+//                count?: מספר תשלומים, payment?: אמצעי תשלום (למשל "כ\"א 1234"), note? }
 //   override – סכום אחר לרשומה בחודש אחד: { t: 'override', itemId, month: 'YYYY-MM', amount } (0 = לא בחודש הזה)
 //   settings – { id: 'settings', t: 'settings', balance, balanceMonth } יתרה בבנק בתחילת חודש
 //   card     – חיוב כרטיס אשראי בפועל בחודש (מעקב בלבד, לא נכנס לסיכום): { t: 'card', name, month, amount }

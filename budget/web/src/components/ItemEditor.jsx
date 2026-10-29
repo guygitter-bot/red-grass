@@ -125,7 +125,7 @@ export default function ItemEditor({ item, month, kind = 'expense', data, onClos
           </p>
         )}
         <Field label="אמצעי תשלום (רשות)">
-          <input className={inputCls} list="payments" value={f.payment} onChange={set('payment')} placeholder='למשל: כ"א 8328 / הוראת קבע' />
+          <input className={inputCls} list="payments" value={f.payment} onChange={set('payment')} placeholder='למשל: כ"א 1234 / הוראת קבע' />
           <datalist id="payments">
             {payments.map((p) => (
               <option key={p} value={p} />
