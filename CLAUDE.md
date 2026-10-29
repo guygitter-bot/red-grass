@@ -200,6 +200,12 @@
 - בדיקה: `cd bursa/api && npm test` · `cd bursa/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 - הניתוח (`api/analysis.js`) פונקציות טהורות עם בדיקות. לא להבטיח תשואות: תחזית = טווח הסתברותי, ותמיד ההבהרה "לא ייעוץ השקעות".
 
+### תקציב הבית (`budget/`)
+- תיאור: `budget/README.md`. הוצאות והכנסות לפי חודשים (קבועות, תשלומים, חד־פעמיות), סכום שונה לחודש אחד, שנה קדימה ויתרה צפויה.
+- `budget/web` → https://bayit-budget.pages.dev · `budget/api` → Worker `bayit-budget-api` (Durable Object `Budget` אחד, סנכרון לפי `rev`). עלייה: `bayit-budget.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd budget/api && npm test` · `cd budget/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- החישובים ב-`web/src/lib/budget.js` (פונקציות טהורות + בדיקות). שדה חדש ברשומה – ברירת מחדל ב-`safeItem`.
+
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).
 

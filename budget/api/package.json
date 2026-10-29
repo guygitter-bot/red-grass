@@ -1,0 +1,8 @@
+{
+  "name": "bayit-budget-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}
