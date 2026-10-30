@@ -107,7 +107,7 @@ export default function App() {
           <div className="mx-auto max-w-5xl px-4 py-4 lg:px-8 lg:py-6">
             {route.name === 'home' && <Home />}
             {route.name === 'stock' && <Stock key={route.symbol} symbol={route.symbol} />}
-            {route.name === 'portfolio' && <Portfolio />}
+            {route.name === 'portfolio' && <Portfolio params={route.params} />}
             {route.name === 'alerts' && <Alerts onRead={onRead} />}
             {route.name === 'learn' && <Learn params={route.params} />}
             {route.name === 'settings' && <Settings />}

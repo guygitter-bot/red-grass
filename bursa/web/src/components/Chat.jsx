@@ -2,13 +2,35 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCheck, Send, Trash2 } from 'lucide-react';
 import { api } from '../lib/api';
+import { stockLink } from '../lib/route';
 import Md from './Md';
 
 const SUGGESTIONS = ['מה מצב השוק היום?', 'מה כדאי לקנות עכשיו?', 'איך התיק שלי?', 'מה זה RSI?', 'איך מתחילים להשקיע 1000 ₪?'];
 
 const clock = (ms) => new Date(ms).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
 
-function Bubble({ m }) {
+// כרטיס הצעה: מניה שהבוט מציע להוסיף לרשימת הקניות
+function Proposal({ p, onAnswer, sending }) {
+  return (
+    <div className="rounded-xl border border-line bg-soft p-2.5 text-sm">
+      <a href={stockLink(p.symbol)} className="font-bold text-accent-ink"><bdi>{p.name || p.symbol}</bdi> <span dir="ltr" className="text-xs font-normal text-muted">{p.symbol}</span></a>
+      {p.reason && <p className="mt-1 text-muted">{p.reason}</p>}
+      {typeof p.target === 'number' && <div className="mt-1 text-xs text-muted">מחיר קנייה מוצע: <b dir="ltr" className="text-ink">{p.target}</b></div>}
+      {p.status === 'added' ? (
+        <div className="mt-2 font-medium text-up">✓ נוסף לרשימת הקניות · <a href="#/portfolio?tab=buy" className="underline">לרשימה</a></div>
+      ) : p.status === 'declined' ? (
+        <div className="mt-2 text-muted">לא נוסף</div>
+      ) : (
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button type="button" disabled={sending} onClick={() => onAnswer(p.id, true)} className="min-h-9 rounded-lg bg-accent px-3 font-medium text-on-accent disabled:opacity-50">🛒 להוסיף לרשימת הקניות</button>
+          <button type="button" disabled={sending} onClick={() => onAnswer(p.id, false)} className="min-h-9 rounded-lg border border-line bg-card px-3 text-muted disabled:opacity-50">לא תודה</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Bubble({ m, onAnswer, sending }) {
   const mine = m.role === 'user';
   return (
     <div className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
@@ -18,6 +40,11 @@ function Bubble({ m }) {
         }`}
       >
         {mine || m.error ? <div className="whitespace-pre-wrap break-words leading-relaxed">{m.text}</div> : <Md text={m.text} />}
+        {!mine && m.proposals?.length > 0 && (
+          <div className="mt-2 flex flex-col gap-2">
+            {m.proposals.map((p) => <Proposal key={p.id} p={p} onAnswer={onAnswer} sending={sending} />)}
+          </div>
+        )}
         <div className={`mt-0.5 flex items-center gap-1 text-[11px] ${mine ? 'justify-end text-mine-ink/70' : 'justify-end text-muted'}`}>
           <span dir="ltr">{clock(m.t)}</span>
           {mine && <CheckCheck size={14} className="text-accent" aria-label="נשלח" />}
@@ -81,6 +108,22 @@ export default function Chat({ params }) {
     }
   }, [text, busy]);
 
+  // אישור / דחיית הצעה של הבוט
+  const [answering, setAnswering] = useState(false);
+  const answer = async (id, approve) => {
+    if (answering) return;
+    setAnswering(true);
+    setNotice(null);
+    try {
+      const r = await api('/chat/approve', { id, approve });
+      setMessages(r.messages);
+    } catch (e) {
+      setNotice({ role: 'assistant', text: e.message, t: Date.now(), error: true });
+    } finally {
+      setAnswering(false);
+    }
+  };
+
   const clear = async () => {
     if (!window.confirm('למחוק את כל השיחה?')) return;
     try {
@@ -127,7 +170,7 @@ export default function Chat({ params }) {
               </div>
             </div>
           )}
-          {messages.map((m, i) => <Bubble key={`${m.t}-${i}`} m={m} />)}
+          {messages.map((m, i) => <Bubble key={`${m.t}-${i}`} m={m} onAnswer={answer} sending={answering} />)}
           {busy && (
             <div className="flex justify-start">
               <div className="typing rounded-2xl rounded-bl-md bg-card px-3 py-3 shadow-sm" aria-label="מקליד"><span /><span /><span /></div>

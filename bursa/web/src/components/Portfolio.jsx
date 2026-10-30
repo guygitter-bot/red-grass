@@ -1,5 +1,5 @@
 // התיק: אמיתי, תיק דמה (תרגול) ומעקב + התראות מחיר
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Bell, Pencil, Trash2, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { currencySymbol, fmtILS, fmtPct, fmtPrice, fmtSigned, timeAgo, tone } from '../lib/format';
@@ -139,7 +139,59 @@ function DemoTab({ data, quotes, reload, onSell }) {
   );
 }
 
+// רשימת קניות: מניות שהבוט הציע או שהוספתם, עם מחיר קנייה רצוי
+function BuyTab({ data, quotes, reload }) {
+  const items = data.watch.filter((w) => w.plan === 'buy');
+  const act = async (body, msg) => {
+    try {
+      await api('/watch', body);
+      if (msg) toast(msg);
+      reload();
+    } catch (e) {
+      toast(e.message);
+    }
+  };
+  if (!items.length) {
+    return (
+      <Empty>
+        רשימת הקניות ריקה. אפשר לבקש מהבוט בצ'אט: "תמליץ לי על מניות ותוסיף לרשימת הקניות", או ללחוץ "לרשימת הקניות" בדף מניה.
+      </Empty>
+    );
+  }
+  return (
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+      {items.map((w) => {
+        const q = quotes?.[w.symbol];
+        const cs = currencySymbol(q?.currency || w.currency);
+        const hit = q && typeof w.target === 'number' && q.price <= w.target;
+        return (
+          <Card key={w.symbol}>
+            <div className="flex items-start justify-between gap-2">
+              <Symbol h={w} />
+              <span className="shrink-0 text-end">
+                <Num className="block font-medium">{q ? `${cs}${fmtPrice(q.price)}` : '–'}</Num>
+                <Change value={q?.change} digits={1} className="text-xs" />
+              </span>
+            </div>
+            {hit && <div className="mt-2 inline-block rounded-full bg-up-soft px-2.5 py-0.5 text-xs font-bold text-up">הגיע למחיר הקנייה 🎯</div>}
+            {w.reason && <p className="mt-2 text-sm text-muted">{w.reason}</p>}
+            {typeof w.target === 'number' && (
+              <div className="mt-2 text-sm"><span className="text-xs text-muted">מחיר קנייה מוצע </span><Num className="font-bold">{cs}{fmtPrice(w.target)}</Num></div>
+            )}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <a href={stockLink(w.symbol)} className="flex-1"><Button variant="soft" className="min-h-9 w-full">קניתי</Button></a>
+              <Button variant="ghost" className="min-h-9 flex-1" onClick={() => act({ symbol: w.symbol, plan: null }, 'הוצאה מהרשימה, נשארה במעקב')}>להוציא מהרשימה</Button>
+              <Button variant="danger" className="min-h-9" onClick={() => act({ symbol: w.symbol, remove: true }, 'הוסרה')} aria-label="הסרה"><Trash2 size={14} /></Button>
+            </div>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
 function WatchTab({ data, quotes, reload }) {
+  const watchList = data.watch.filter((w) => w.plan !== 'buy');
   const removeWatch = async (symbol) => {
     try {
       await api('/watch', { symbol, remove: true });
@@ -158,9 +210,9 @@ function WatchTab({ data, quotes, reload }) {
   };
   return (
     <>
-      {data.watch.length === 0 && <Empty>רשימת המעקב ריקה. בדף מניה לחצו על "מעקב".</Empty>}
-      <Card className={`divide-y divide-line p-0 ${data.watch.length ? '' : 'hidden'}`}>
-        {data.watch.map((w) => {
+      {watchList.length === 0 && <Empty>רשימת המעקב ריקה. בדף מניה לחצו על "מעקב".</Empty>}
+      <Card className={`divide-y divide-line p-0 ${watchList.length ? '' : 'hidden'}`}>
+        {watchList.map((w) => {
           const q = quotes?.[w.symbol];
           const sig = data.signals?.[w.symbol];
           return (
@@ -192,8 +244,13 @@ function WatchTab({ data, quotes, reload }) {
   );
 }
 
-export default function Portfolio() {
-  const [tab, setTab] = useState('real');
+export default function Portfolio({ params }) {
+  const [tab, setTab] = useState(params?.get('tab') || 'real');
+  // קישור ישיר ללשונית (למשל #/portfolio?tab=buy מהצ'אט)
+  const tabParam = params?.get('tab');
+  useEffect(() => {
+    if (tabParam) setTab(tabParam);
+  }, [tabParam]);
   const [data, setData] = useState(null);
   const [quotes, setQuotes] = useState({});
   const [error, setError] = useState('');
@@ -216,11 +273,12 @@ export default function Portfolio() {
   return (
     <div>
       <h1 className="mb-3 text-xl font-bold">התיק</h1>
-      <Tabs tabs={[['real', 'התיק שלי'], ['demo', 'תיק דמה'], ['watch', 'מעקב']]} value={tab} onChange={setTab} />
+      <Tabs tabs={[['real', 'התיק שלי'], ['demo', 'תיק דמה'], ['buy', '🛒 רשימת קניות'], ['watch', 'מעקב']]} value={tab} onChange={setTab} />
       {error && <ErrorBox onRetry={load}>{error}</ErrorBox>}
       {!data && !error && <Spinner />}
       {data && tab === 'real' && <RealTab data={data} quotes={quotes} reload={load} onEdit={setEdit} />}
       {data && tab === 'demo' && <DemoTab data={data} quotes={quotes} reload={load} onSell={setSell} />}
+      {data && tab === 'buy' && <BuyTab data={data} quotes={quotes} reload={load} />}
       {data && tab === 'watch' && <WatchTab data={data} quotes={quotes} reload={load} />}
       {edit && <HoldingSheet symbol={edit.symbol} name={edit.name} price={edit.now} currency={edit.currency} holding={edit} onClose={() => setEdit(null)} onSaved={load} />}
       {sell && <DemoSheet symbol={sell.symbol} name={sell.name} price={sell.now} currency={sell.currency} demo={data?.demo} quotes={quotes} initialSide="sell" onClose={() => setSell(null)} onDone={load} />}
