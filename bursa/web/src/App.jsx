@@ -8,6 +8,7 @@ import Home from './components/Home';
 import Stock from './components/Stock';
 import Portfolio from './components/Portfolio';
 import Chat from './components/Chat';
+import FloatingChat from './components/FloatingChat';
 import Alerts from './components/Alerts';
 import Learn from './components/Learn';
 import Settings from './components/Settings';
@@ -125,6 +126,9 @@ export default function App() {
           </a>
         ))}
       </nav>
+
+      {/* צ'אט צף: נשאר בין מסכים, מוסתר במסך הצ'אט המלא */}
+      {route.name !== 'chat' && <FloatingChat symbol={route.name === 'stock' ? route.symbol : ''} />}
 
       {toastText && (
         <div role="status" className="fixed inset-x-4 bottom-20 z-50 mx-auto max-w-sm rounded-xl bg-ink px-4 py-2.5 text-center text-sm text-page shadow-lg lg:bottom-6">{toastText}</div>
