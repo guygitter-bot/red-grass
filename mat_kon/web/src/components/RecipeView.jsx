@@ -21,6 +21,9 @@ import { bisPoints, formatBis } from '../lib/bis';
 // רק נגני סרטונים מהאתרים המוכרים
 const SAFE_EMBED = /^https:\/\/(www\.youtube-nocookie\.com\/embed\/|www\.tiktok\.com\/embed\/|www\.instagram\.com\/(p|reel|tv)\/|player\.vimeo\.com\/video\/)/;
 
+// חלק שה-AI השלים בעצמו ("השלמה (לא מהמקור)") – מסומן ליד כל מצרך ושלב, לא רק בכותרת
+const isAddition = (title) => /^השלמה/.test(String(title || '').trim());
+
 export default function RecipeView({ recipe, pantryNames = [], categories, onBack, onUpdate, onRefresh, onDelete, onAddToShopping, onAddToPlan, onShareLink, onEstimateNutrition, onSubstitute, community, bis = false }) {
   const [editing, setEditing] = useState(false);
   const [planning, setPlanning] = useState(false);
@@ -306,7 +309,10 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
                             <span className={`mt-0.5 w-5 h-5 rounded-md border-2 shrink-0 flex items-center justify-center ${checked[key] ? 'bg-orange-500 border-orange-500 text-white' : 'border-stone-300'}`}>
                               {checked[key] && <Check size={14} strokeWidth={3} />}
                             </span>
-                            <span className={checked[key] ? 'line-through text-stone-400' : 'text-stone-800'}>{item}</span>
+                            <span className={checked[key] ? 'line-through text-stone-400' : 'text-stone-800'}>
+                              {item}
+                              {isAddition(s.title) && <span className="text-xs text-amber-700 mr-1">(תוספת – לא מהמתכון המקורי)</span>}
+                            </span>
                           </button>
                           {/* חסר לי: תחליף מתאים למתכון (לפי המצרך כמו שהוא כתוב במתכון המקורי) */}
                           {onSubstitute && recipe.ingredients[si]?.items[i] && (
@@ -364,7 +370,10 @@ export default function RecipeView({ recipe, pantryNames = [], categories, onBac
                             <span className={`w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-sm font-bold ${checked[key] ? 'bg-stone-200 text-stone-400' : 'bg-orange-500 text-white'}`}>
                               {checked[key] ? <Check size={15} strokeWidth={3} /> : stepNumber}
                             </span>
-                            <span className={`leading-relaxed pt-0.5 ${checked[key] ? 'text-stone-400' : 'text-stone-800'}`}>{item}</span>
+                            <span className={`leading-relaxed pt-0.5 ${checked[key] ? 'text-stone-400' : 'text-stone-800'}`}>
+                              {item}
+                              {isAddition(s.title) && <span className="text-xs text-amber-700 mr-1">(תוספת – לא מהמתכון המקורי)</span>}
+                            </span>
                           </button>
                         </li>
                       );
