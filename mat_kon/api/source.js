@@ -155,6 +155,15 @@ export function pageText(html) {
     .slice(0, MAX_TEXT);
 }
 
+// הקטע בטקסט הדף שבו נמצא המתכון: מקצת לפני המצרך הראשון ועד 7000 תווים. לא נמצא – בלי טקסט
+export function recipeWindow(text, recipe) {
+  const first = String(recipe.ingredients[0] || '').replace(/\s+/g, ' ').trim().slice(0, 20);
+  const at = first.length >= 3 ? text.indexOf(first) : -1;
+  if (at < 0) return '';
+  const start = Math.max(0, at - 800);
+  return text.slice(start, start + 7000);
+}
+
 // ---------- YouTube ----------
 
 // מוציא אובייקט JSON שמתחיל אחרי marker (למשל ytInitialPlayerResponse = {...})
@@ -361,10 +370,11 @@ export async function gatherSource(url, fetchFn = fetch, { hint = '', igDocId } 
     }
     out.recipes = findJsonLdRecipes(html).map(compactRecipe);
     if (!out.image && out.recipes[0]?.image) out.image = out.recipes[0].image;
-    // בדף עם מתכון מובנה מלא אין צורך בכל טקסט הדף
-    const full = out.recipes.some((r) => r.ingredients.length && r.instructions.length);
+    // בדף עם מתכון מובנה מלא – רק קטע הדף שסביב המתכון: הנתונים המובנים לפעמים חלקיים
+    // (ב-mako למשל רק קבוצת המצרכים הראשונה), והסוכן משווה מול הטקסט שבדף
+    const full = out.recipes.find((r) => r.ingredients.length && r.instructions.length);
     // ברשת חברתית טקסט הדף הוא רק תפריטים - הכיתוב והתגובות כבר נאספו
-    out.text = full || kind !== 'page' ? '' : pageText(html);
+    out.text = kind !== 'page' ? '' : full ? recipeWindow(pageText(html), full) : pageText(html);
     if (kind === 'instagram') {
       const post = new URL(url).pathname.match(/\/(reel|reels|p|tv)\/([\w-]+)/);
       if (post) out.embed = `https://www.instagram.com/${post[1] === 'reels' ? 'reel' : post[1]}/${post[2]}/embed/captioned/`;

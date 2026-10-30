@@ -7,7 +7,8 @@ import { deps } from './deps.js';
 // המשתמשים, גם כשהסוכן השלים או העריך משהו. נבדק לפי הקישור שנשלח, ואחרי הקריאה – לפי זהות המקור
 const cacheOf = (env) => env.BOOK?.get(env.BOOK.idFromName('recipe-cache'));
 // v2: מתכונים שנשמרו לפני שסומן אם הם משוערים (basis) לא נלקחים מהמטמון
-const cacheKey = async (k) => 'v2:' + btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(k)))));
+// v3: מתכונים שנקראו רק מהנתונים המובנים של הדף (לפעמים חלקיים) נקראים שוב, עם טקסט הדף
+const cacheKey = async (k) => 'v3:' + btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(k)))));
 async function cacheCall(env, path, body) {
   const stub = cacheOf(env);
   if (!stub) return null;
