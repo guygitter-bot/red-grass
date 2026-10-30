@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   captionsToText, compactRecipe, findJsonLdRecipes, gatherSource, jsonAfter, looksComplete, metaTags,
-  normalizeUrl, pageText, sourceKind, youtubeId,
+  normalizeUrl, pageText, recipeWindow, sourceKind, youtubeId,
 } from './source.js';
 
 test('normalizes links, also from shared text', () => {
@@ -74,6 +74,16 @@ test('gathers a YouTube video: oEmbed, description and captions', async () => {
   assert.equal(src.transcript, 'מבשלים');
   assert.equal(src.embed, 'https://www.youtube-nocookie.com/embed/AbCdEf12345');
   assert.ok(calls.some((u) => u.includes('timedtext?v=2&fmt=json3')), 'prefers the Hebrew track');
+});
+
+test('structured data with only part of the ingredients: the page text around the recipe goes along', async () => {
+  const ld = { '@type': 'Recipe', name: 'מרק ירקות', recipeIngredient: ['2 בצלים', '2 גזרים'], recipeInstructions: ['מבשלים'] };
+  const html = `<html><head><script type="application/ld+json">${JSON.stringify(ld)}</script></head><body>
+    <nav>תפריט האתר</nav><h2>לבסיס</h2><ul><li>2 בצלים</li><li>2 גזרים</li></ul><h2>למרק</h2><ul><li>3 תפוחי אדמה</li><li>3 קישואים</li></ul></body></html>`;
+  const src = await gatherSource('https://www.mako.co.il/food-recipes/r.htm', async () => new Response(html, { headers: { 'content-type': 'text/html' } }));
+  assert.equal(src.recipes[0].ingredients.length, 2);
+  assert.match(src.text, /למרק\n3 תפוחי אדמה/);
+  assert.equal(recipeWindow('בלי שום מצרך כאן', { ingredients: ['2 בצלים'] }), '');
 });
 
 test('a blocked page is a warning, not a crash', async () => {

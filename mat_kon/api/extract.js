@@ -214,7 +214,11 @@ different recipes (each usually with its own heading) – return each one separa
     if (l.recipes.length) parts.push(`Linked page ${l.url} - structured recipe data:\n${JSON.stringify(l.recipes, null, 1)}`);
     else if (l.text) parts.push(`Linked page ${l.url} - text:\n${l.text}`);
   }
-  if (src.text) parts.push(`Page text:\n${src.text}`);
+  if (src.text) {
+    parts.push(src.recipes.length
+      ? `Page text around the recipe (the structured data above is sometimes partial – e.g. only the first ingredient group, or missing steps. Compare: if the page text has more ingredients, groups or steps, use the full version from the page text):\n${src.text}`
+      : `Page text:\n${src.text}`);
+  }
   if (src.warnings.length) parts.push(`Could not read everything: ${src.warnings.join('; ')}`);
   return parts.join('\n\n');
 }
