@@ -262,6 +262,18 @@ export default function Stock({ symbol }) {
     }
   };
 
+  // רשימת הקניות: פריט במעקב עם plan === 'buy' (רשומות ישנות בלי plan = מעקב רגיל)
+  const inBuy = user?.watch?.some((w) => w.symbol === symbol && w.plan === 'buy');
+  const toggleBuy = async () => {
+    try {
+      const r = await api('/watch', { symbol, plan: inBuy ? null : 'buy' });
+      setUser((u) => ({ ...u, watch: r.watch }));
+      toast(inBuy ? 'הוסרה מרשימת הקניות' : 'נוספה לרשימת הקניות');
+    } catch (e) {
+      toast(e.message);
+    }
+  };
+
   if (error && !s) {
     return (
       <div className="space-y-3">
@@ -297,6 +309,7 @@ export default function Stock({ symbol }) {
 
       <div className="flex flex-wrap gap-2">
         <Button variant={watched ? 'soft' : 'ghost'} onClick={toggleWatch}><Star size={16} fill={watched ? 'currentColor' : 'none'} /> {watched ? 'במעקב' : 'מעקב'}</Button>
+        <Button variant={inBuy ? 'soft' : 'ghost'} onClick={toggleBuy}>🛒 {inBuy ? 'ברשימת הקניות' : 'לרשימת הקניות'}</Button>
         <Button variant="ghost" onClick={() => setSheet('holding')}><Wallet size={16} /> קניתי</Button>
         <Button variant="ghost" onClick={() => setSheet('demo')}><Gamepad2 size={16} /> תיק דמה</Button>
         <Button variant="ghost" onClick={() => setSheet('alert')}><Bell size={16} /> התראת מחיר</Button>

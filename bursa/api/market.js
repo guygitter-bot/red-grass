@@ -3,7 +3,7 @@
 // אחסון (key-value של Durable Object):
 //   auth        -> { salt, iter, hash }  הסיסמה (PBKDF2; הסיסמה עצמה לא נשמרת)
 //   sessions    -> { <token>: תוקף }      מכשירים מחוברים
-//   watch       -> [{ symbol, name, added }]                         רשימת מעקב
+//   watch       -> [{ symbol, name, added, plan?, reason?, target? }]  רשימת מעקב; plan: 'buy' = ברשימת הקניות
 //   holdings    -> [{ id, symbol, name, qty, price, currency, date, stop?, target?, note? }]  התיק האמיתי
 //   demo        -> { cash, start, holdings: [...], trades: [...] }   תיק דמה (כסף וירטואלי בשקלים)
 //   palerts     -> [{ id, symbol, op: 'above'|'below', price, created }]  התראות מחיר
@@ -12,7 +12,8 @@
 //   signals     -> { <symbol>: { name, price, currency, change, score, verdict, reasons, t } }  תוצאות הסריקה
 //   outlook     -> { mood, score, headline, summary, drivers, risks, watch, t }  תחזית השוק מה-AI
 //   opinion:<s> -> { ..., t }   דעת ה-AI על מניה (6 שעות)
-//   chat        -> [{ role, text, t }]   הצ'אט (200 הודעות אחרונות)
+//   chat        -> [{ role, text, t, proposals? }]   הצ'אט (200 הודעות אחרונות). proposals = מניות שהבוט הציע לרשימת הקניות:
+//                  [{ id, symbol, name, reason, target, status: 'pending'|'added'|'declined' }]
 //   subs        -> [{ id, sub }]          מכשירים שנרשמו להתראות
 //   vapid       -> מפתחות ההתראות של השרת
 //   settings    -> { buy, sell, moves, market, movePct }
@@ -158,7 +159,8 @@ export class Market {
       case '/opinion': return await this.opinion(b.symbol, !!b.refresh);
       case '/search': return json(200, await this.search(b.q));
       case '/data': return json(200, await this.data());
-      case '/watch': return json(200, await this.watch(b.symbol, !!b.remove));
+      case '/watch': return json(200, await this.watch(b.symbol, !!b.remove, b.plan));
+      case '/chat/approve': return await this.approve(b.id, b.approve !== false);
       case '/holding': return await this.saveHolding(b.holding || {});
       case '/holding/delete': return json(200, await this.deleteHolding(b.id));
       case '/demo/trade': return await this.demoTrade(b);
@@ -417,14 +419,35 @@ export class Market {
     }
   }
 
-  async watch(symbolIn, remove) {
+  // plan: 'buy' = להעביר לרשימת הקניות, null = רק מעקב, undefined = בלי שינוי. extra = { reason, target } מהבוט
+  async watch(symbolIn, remove, plan, extra = {}) {
     const symbol = cleanSymbol(symbolIn);
     let list = (await this.storage.get('watch')) || [];
     if (!symbol) return { watch: list };
+    const old = list.find((w) => w.symbol === symbol);
     list = list.filter((w) => w.symbol !== symbol);
-    if (!remove) list.unshift({ symbol, name: await this.nameOf(symbol), added: Date.now() });
+    if (!remove) {
+      const row = { ...(old || {}), symbol, name: old?.name || (await this.nameOf(symbol)), added: old?.added || Date.now() };
+      if (plan === 'buy') Object.assign(row, { plan: 'buy' }, extra.reason ? { reason: text(extra.reason, 300) } : {}, num(extra.target) > 0 ? { target: num(extra.target) } : {});
+      else if (plan === null) for (const k of ['plan', 'reason', 'target']) delete row[k];
+      list.unshift(row);
+    }
     await this.storage.put('watch', list.slice(0, 100));
     return { watch: list };
+  }
+
+  // אישור (או דחייה) של מניה שהבוט הציע לרשימת הקניות – רק בלחיצה של המשתמשת
+  async approve(id, yes) {
+    const history = (await this.storage.get('chat')) || [];
+    const msg = history.find((m) => m.proposals?.some((p) => p.id === id));
+    const p = msg?.proposals.find((x) => x.id === id);
+    if (!p) return json(404, { error: 'ההצעה לא נמצאה' });
+    if (p.status === 'pending') {
+      if (yes) await this.watch(p.symbol, false, 'buy', p);
+      p.status = yes ? 'added' : 'declined';
+      await this.storage.put('chat', history);
+    }
+    return json(200, { messages: history, watch: (await this.storage.get('watch')) || [] });
   }
 
   async saveHolding(h) {
@@ -523,21 +546,40 @@ export class Market {
     const history = (await this.storage.get('chat')) || [];
     history.push({ role: 'user', text: msg, t: Date.now() });
     let reply;
+    const proposals = [];
     try {
       // 30 ההודעות האחרונות כהקשר (מתחיל תמיד בהודעה של המשתמשת)
       let context = history.slice(-30);
       while (context.length && context[0].role !== 'user') context = context.slice(1);
-      reply = await chat(this.client(), context, (name, inp) => this.tool(name, inp));
+      reply = await chat(this.client(), context, (name, inp) => this.tool(name, inp, proposals));
     } catch (e) {
       return json(502, { error: aiMessage(e) });
     }
-    history.push({ role: 'assistant', text: reply, t: Date.now() });
+    history.push({ role: 'assistant', text: reply, t: Date.now(), ...(proposals.length ? { proposals } : {}) });
     const kept = history.slice(-200);
     await this.storage.put('chat', kept);
     return json(200, { messages: kept });
   }
 
-  async tool(name, input) {
+  // proposals: לשם נאספות ההצעות לרשימת הקניות (מוצגות עם כפתור אישור מתחת לתשובה)
+  async tool(name, input, proposals = []) {
+    if (name === 'propose_buy_list') {
+      const out = [];
+      for (const st of (input.stocks || []).slice(0, 8)) {
+        const symbol = cleanSymbol(st.symbol);
+        if (!symbol || proposals.some((p) => p.symbol === symbol)) continue;
+        let name;
+        try {
+          name = await this.nameOf(symbol);
+        } catch {
+          out.push({ symbol, error: 'not found' });
+          continue;
+        }
+        proposals.push({ id: newId(), symbol, name, reason: text(st.reason, 300), target: num(st.target) > 0 ? num(st.target) : null, status: 'pending' });
+        out.push({ symbol, status: 'awaiting_user_approval' });
+      }
+      return { proposed: out, note: 'Not added yet. The user sees an approve button under your reply.' };
+    }
     if (name === 'get_stock') {
       const s = await this.stock(input.symbol, '1m');
       if (s.error) return s;
@@ -557,7 +599,8 @@ export class Market {
       return {
         real: valuePortfolio(d.holdings, quotes, fx),
         demo: { ...demo, cash: d.demo.cash, totalILS: r2(d.demo.cash + demo.valueILS), startILS: DEMO_START },
-        watch: d.watch.map((w) => w.symbol),
+        watch: d.watch.filter((w) => w.plan !== 'buy').map((w) => w.symbol),
+        buyList: d.watch.filter((w) => w.plan === 'buy').map(({ symbol, reason, target }) => ({ symbol, reason, target })),
         priceAlerts: d.palerts,
         usdIls: fx.USD ?? null,
       };

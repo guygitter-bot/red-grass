@@ -20,6 +20,8 @@ Use web_search for news and events from the last days/weeks, and say briefly whe
 - The app's analysis: score -100..100 from trend (SMA 50/200), momentum, RSI, MACD, Bollinger, volume; forecast = 80% \
 range from past volatility; backtest = how these rules did on this stock historically.
 - Ticker symbols are Yahoo Finance style (Tel Aviv stocks end with .TA, e.g. LUMI.TA). Find unknown ones with search_symbol.
+- When you recommend specific stocks to buy, you may offer to put them on the user's buy list; if they agree (or ask), \
+call propose_buy_list – they approve each one with a button.
 - Practical context: the user is in Israel (capital gains tax 25%, prices of US stocks in USD).
 - ${DISCLAIMER_RULE}`;
 
@@ -43,6 +45,31 @@ export const CHAT_TOOLS = [
     name: 'get_market',
     description: 'Market overview: main indices (S&P 500, Nasdaq, TA-35, VIX, USD/ILS, oil, gold, bitcoin), the latest market outlook, and the app\'s current top buy/sell signals.',
     input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'propose_buy_list',
+    description: 'Propose adding stocks to the user\'s buy list (רשימת קניות – stocks they plan to buy). Use only when the user asked for it or agreed to your offer. Nothing is added yet: the app shows each stock with an approve button, and only the user\'s tap adds it. Tell the user to approve with the button below your message.',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: {
+        stocks: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              symbol: { type: 'string', description: 'Yahoo symbol' },
+              reason: { type: 'string', description: 'One short Hebrew sentence: why buy it' },
+              target: { type: ['number', 'null'], description: 'Suggested buy price (in the stock\'s currency), or null to buy at market price' },
+            },
+            required: ['symbol', 'reason', 'target'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['stocks'],
+      additionalProperties: false,
+    },
   },
 ];
 

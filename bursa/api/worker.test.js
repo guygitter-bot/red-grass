@@ -352,3 +352,37 @@ test('search finds Hebrew names locally and symbols from Yahoo', async () => {
   const r = await call(env, '/search', { q: 'teva' }, token);
   assert.ok(r.data.results.some((x) => x.symbol === 'TEVA'));
 });
+
+test('buy list: the bot proposes, and a stock is added only after approval', async () => {
+  const env = fakeEnv();
+  // הבוט מציע שתי מניות לרשימת הקניות ואז עונה
+  env.market.env.AI_CLIENT = {
+    beta: {
+      messages: {
+        async create(req) {
+          const last = req.messages.at(-1);
+          if (Array.isArray(last.content) && last.content[0]?.type === 'tool_result') {
+            return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'הוספתי הצעה – אשרו בכפתור 👇' }] };
+          }
+          return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'b1', name: 'propose_buy_list', input: { stocks: [{ symbol: 'aapl', reason: 'מגמה חיובית', target: 150 }, { symbol: 'TEVA', reason: 'זולה', target: null }, { symbol: 'NOPE', reason: 'x', target: null }] } }] };
+        },
+      },
+    },
+  };
+  const { data: { token } } = await call(env, '/setup', { password: 'secret123' });
+  const { data } = await call(env, '/chat', { text: 'תוסיף לי מניות לרשימת הקניות' }, token);
+  const props = data.messages.at(-1).proposals;
+  assert.deepEqual(props.map((p) => [p.symbol, p.status]), [['AAPL', 'pending'], ['TEVA', 'pending']]);
+  // עדיין לא נוסף כלום
+  assert.equal((await call(env, '/data', {}, token)).data.watch.length, 0);
+  const ok = await call(env, '/chat/approve', { id: props[0].id }, token);
+  assert.equal(ok.data.messages.at(-1).proposals[0].status, 'added');
+  assert.deepEqual(ok.data.watch.map((w) => [w.symbol, w.plan, w.target, w.reason]), [['AAPL', 'buy', 150, 'מגמה חיובית']]);
+  const no = await call(env, '/chat/approve', { id: props[1].id, approve: false }, token);
+  assert.equal(no.data.messages.at(-1).proposals[1].status, 'declined');
+  assert.equal(no.data.watch.length, 1);
+  assert.equal((await call(env, '/chat/approve', { id: 'nope' }, token)).status, 404);
+  // הוצאה מרשימת הקניות (נשאר במעקב)
+  const moved = await call(env, '/watch', { symbol: 'AAPL', plan: null }, token);
+  assert.equal(moved.data.watch[0].plan, undefined);
+});
