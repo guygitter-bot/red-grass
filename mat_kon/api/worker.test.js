@@ -321,6 +321,9 @@ test('a recipe from photos: images go to the agent, no web tools, counted, no re
   assert.match(content.at(-1).text, /photos of a recipe/);
   assert.match(content.at(-1).text, /העוגה של סבתא/);
   assert.equal(apiCalls[0].tools.length, 1);
+  // צילום נקרא בחשיבה בינונית (שורות לא נשמטות), ובלי השלמה לצילום מסך של אתר
+  assert.equal(apiCalls[0].output_config.effort, 'medium');
+  assert.match(apiCalls[0].system[0].text, /screenshot of a recipe site or app is a full written recipe/);
   assert.equal((await call('POST', `/recipes/${recipe.id}/refresh`)).status, 400);
 
   assert.equal((await call('POST', '/recipes/photo', { images: [] })).status, 400);

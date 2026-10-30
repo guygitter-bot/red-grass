@@ -156,6 +156,7 @@ reconstruct the dish from what is visible and set basis to "guessed".
 - A WhatsApp message or text the user pasted: build the recipe from that text. If it is chatter and not a recipe, set found=false.
 - Photos and messages: if one source has several different dishes, give each its own recipe (more_recipes) – never \
 merge two dishes into one recipe or one title.
+- Photos and screenshots: copy EVERY ingredient and step line that is visible in ANY of the images, in every section (e.g. "לבסיס", "למרק", "לרוטב"), with its own section title and its exact amount – go over each image line by line, including lines partly hidden behind a floating button or banner, and never move a line to a different section. A screenshot of a recipe site or app is a full written recipe: do NOT add a "השלמה" section to it.
 - Photos and messages: a handwritten note or short message often leaves out what is needed to actually cook the dish \
 (e.g. kreplach with the dough written but not the meat filling, or no cooking time). Keep everything that is written \
 exactly as written, and complete only what is missing from the standard version of that dish: put the completed \
@@ -577,7 +578,8 @@ export async function extractRecipe(client, src, { categories = CATEGORIES } = {
       max_tokens: 16000,
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
-      output_config: { effort: complete ? 'low' : 'medium' },
+      // צילום: קריאה מדויקת של כל השורות (בחשיבה נמוכה דילג על חלק שלם מצילום מסך)
+      output_config: { effort: complete && !src.images ? 'low' : 'medium' },
       system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
       tools: complete ? [RECIPE_TOOL] : [...WEB_TOOLS, RECIPE_TOOL],
       messages,
