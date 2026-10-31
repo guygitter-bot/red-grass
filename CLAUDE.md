@@ -134,6 +134,7 @@
 - תיאור: `ai_maagar/README.md`. קישורים וקבצים על AI שממופים לקטגוריות לפי נושא (Claude, ברקע ב-Durable Object alarm).
 - `ai_maagar/web` → https://ai-maagar-631.pages.dev · `ai_maagar/api` → Worker `ai-maagar-api`. עלייה: `ai-maagar.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd ai_maagar/api && npm test` · `cd ai_maagar/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- **תמיד למזג לבד** את ה-PR (אחרי שהבדיקות ירוקות), לבדוק שהעלייה (`ai-maagar.yml` על main) הצליחה, ולדווח. אזור "לימוד וסקילים": `api/learn.js` (`mode: 'learn'`).
 
 ### ארץ עיר (`eretz_ir/`)
 - תיאור: `eretz_ir/README.md`. משחק לכמה שחקנים בקישור, עם שם ותמונה; 9 קטגוריות (כולל מאכל); ניקוד 10 (רק אחד) / 5 (כמה), בונוס 10 למי שסיים ראשון (עם צלצול).
