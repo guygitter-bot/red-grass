@@ -263,3 +263,28 @@ test('technical English errors reach the user in Hebrew', () => {
   assert.match(aiMessage(new Error('Streaming is required for operations that may take longer than 10 minutes')), /תקלה זמנית/);
   assert.equal(aiMessage(new Error('החומר ארוך מדי')), 'החומר ארוך מדי');
 });
+
+test('"learn from this" on a saved item, and a failed link is retried when pasted again', async () => {
+  const env = fakeEnv();
+  const link = (await call(env, '/add', { kind: 'link', url: 'https://eilon.co/guide', note: 'חשוב' })).data.item;
+  const file = (await call(env, '/add', { kind: 'file', file: { name: 'a.md', type: 'text/markdown', data: Buffer.from('שלום').toString('base64') } })).data.item;
+
+  const learned = await call(env, '/learn-from', { id: link.id });
+  assert.equal(learned.status, 200);
+  assert.equal(learned.data.item.mode, 'learn');
+  assert.equal(learned.data.item.url, 'https://eilon.co/guide');
+  assert.equal(learned.data.item.note, 'חשוב');
+  // פעם שנייה – אותו פריט לימוד
+  assert.equal((await call(env, '/learn-from', { id: link.id })).data.item.id, learned.data.item.id);
+  assert.equal((await call(env, '/learn-from', { id: learned.data.item.id })).status, 400);
+
+  const fromFile = (await call(env, '/learn-from', { id: file.id })).data.item;
+  assert.equal(fromFile.file.name, 'a.md');
+  assert.equal((await call(env, '/file', { id: fromFile.id })).data.file.data, Buffer.from('שלום').toString('base64'));
+
+  // לימוד שנכשל – הדבקה חוזרת מנסה שוב
+  await env.lib.save(learned.data.item.id, { status: 'failed', error: 'x' });
+  const again = await call(env, '/add', { kind: 'link', url: 'https://eilon.co/guide', mode: 'learn' });
+  assert.equal(again.data.retried, true);
+  assert.equal(again.data.item.status, 'pending');
+});

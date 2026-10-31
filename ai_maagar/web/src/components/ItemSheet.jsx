@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Download, ExternalLink, RefreshCw, Trash2, X } from 'lucide-react';
+import { Download, ExternalLink, GraduationCap, RefreshCw, Trash2, X } from 'lucide-react';
 import { domainOf, isWaiting, sizeText } from '../lib/library';
 
 const NEW = '__new__';
 
-// פרטי פריט: תקציר, נקודות, קישור / קובץ, הערה, העברה לקטגוריה אחרת, מיפוי מחדש ומחיקה
-export default function ItemSheet({ item, categories, onClose, onUpdate, onDelete, onRetry, onDownload }) {
+// פרטי פריט: תקציר, נקודות, קישור / קובץ, הערה, העברה לקטגוריה אחרת, מיפוי מחדש, לימוד ומחיקה
+// learned = הפריט כבר נשלח ללימוד והלימוד קיים ברשימה
+export default function ItemSheet({ item, categories, learned, onClose, onUpdate, onDelete, onRetry, onDownload, onLearn }) {
   const [note, setNote] = useState(item.note || '');
 
   useEffect(() => {
@@ -102,6 +103,9 @@ export default function ItemSheet({ item, categories, onClose, onUpdate, onDelet
         <div className="flex gap-2 pt-1">
           <button onClick={onRetry} disabled={isWaiting(item)} className="flex items-center gap-1.5 rounded-xl border border-line px-3 py-2 text-sm hover:bg-soft disabled:opacity-40">
             <RefreshCw size={16} /> מיפוי מחדש
+          </button>
+          <button onClick={onLearn} className="flex items-center gap-1.5 rounded-xl border border-line px-3 py-2 text-sm hover:bg-soft">
+            <GraduationCap size={16} /> {learned ? '🎓 פתיחת הלימוד' : '🎓 ללמוד מזה'}
           </button>
           <button
             onClick={() => {
