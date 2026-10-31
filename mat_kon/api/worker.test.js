@@ -239,6 +239,16 @@ test('a recipe from an uploaded document: kind file, the file name, a document p
   assert.match(apiCalls.at(-1).messages[0].content, /document the user uploaded/);
 });
 
+test('a recipe read aloud: kind voice, a transcript prompt, refreshable', async () => {
+  const res = await call('POST', '/recipes/text', { voice: true, text: 'עוגת שוקולד שתי כוסות קמח כוס סוכר שלוש ביצים אופים ארבעים דקות' });
+  assert.equal(res.status, 200);
+  const { recipe } = await res.json();
+  assert.equal(recipe.source.kind, 'voice');
+  assert.match(recipe.source.key, /^voice:/);
+  assert.match(apiCalls[0].messages[0].content, /read the recipe aloud/);
+  assert.equal((await call('POST', `/recipes/${recipe.id}/refresh`)).status, 200);
+});
+
 test('WhatsApp text recipes count toward the free recipes', async () => {
   env = fakeEnv({ FREE_RECIPES: '1' });
   const inv = await invite();
