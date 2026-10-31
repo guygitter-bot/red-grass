@@ -215,3 +215,8 @@
 
 ### חשבוניות סקאלה (`scala_invoices/`)
 - תיאור: `scala_invoices/README.md`. רץ פעם בחודש (`scala-invoices.yml`).
+
+### סקילים לאינסטגרם (`.claude/skills/ig-*`)
+- 13 סקילים מהחבילה `Jakeschincariol/instagram-agent-skill` (רישיון MIT, `.claude/skills/LICENSE-instagram-agent-skill`). מפעילים בצ'אט: `/ig-reel`, `/ig-caption` וכו'.
+- קובץ "הקול האישי" וקובצי העבודה שלהם: `.claude/instagram/` (במאגר, כדי שיישמרו בין שיחות). המאגר ציבורי – לא לשים שם מידע פרטי.
+- הסקילים לא מפרסמים כלום ולא נכנסים לאינסטגרם: רק כותבים טקסט. לכתוב למשתמש בעברית גם כשהסקיל באנגלית.
