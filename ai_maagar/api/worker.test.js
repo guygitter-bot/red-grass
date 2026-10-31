@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import worker, { Library } from './worker.js';
-import { cleanResult, material } from './ai.js';
+import { aiMessage, cleanResult, material } from './ai.js';
 import { captionText, readPage, youtubeId } from './source.js';
 import { cleanLearning, skillName } from './learn.js';
 import { MAX_PER_DAY, sameUrl } from './library.js';
@@ -41,6 +41,10 @@ function fakeAI(calls = []) {
   return {
     beta: {
       messages: {
+        // לימוד עובר בסטרימינג – אותה תשובה
+        stream(req) {
+          return { finalMessage: () => this.create(req) };
+        },
         async create(req) {
           calls.push(req);
           if (req.tools.some((t) => t.name === 'submit_learning')) {
@@ -253,4 +257,9 @@ test('learning helpers', () => {
   assert.equal(r.learn.coverage, 'partial');
   assert.deepEqual(r.learn.skills.map((s) => s.name), ['video-prompt-writer', 'video-prompt-writer-2']);
   assert.equal(r.learn.prompts.length, 0);
+});
+
+test('technical English errors reach the user in Hebrew', () => {
+  assert.match(aiMessage(new Error('Streaming is required for operations that may take longer than 10 minutes')), /תקלה זמנית/);
+  assert.equal(aiMessage(new Error('החומר ארוך מדי')), 'החומר ארוך מדי');
 });

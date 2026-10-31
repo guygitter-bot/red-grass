@@ -131,7 +131,8 @@ export function learnMaterial(item, src) {
 export async function learn(client, item, src) {
   const messages = [{ role: 'user', content: learnMaterial(item, src) }];
   for (let step = 0; step < MAX_STEPS; step++) {
-    const response = await client.beta.messages.create({
+    // בסטרימינג: תשובה ארוכה (סקילים מלאים) יכולה לקחת כמה דקות, והספרייה לא מרשה בקשה ארוכה כזאת בלי סטרימינג
+    const response = await client.beta.messages.stream({
       model: MODEL,
       max_tokens: 24000,
       betas: ['server-side-fallback-2026-07-01'],
@@ -140,7 +141,7 @@ export async function learn(client, item, src) {
       system: [{ type: 'text', text: LEARN_SYSTEM, cache_control: { type: 'ephemeral' } }],
       tools: [...WEB_TOOLS, LEARN_TOOL],
       messages,
-    });
+    }).finalMessage();
     if (response.stop_reason === 'refusal') throw new Error('המודל סירב לטפל בחומר הזה.');
     const submit = response.content.find((b) => b.type === 'tool_use' && b.name === LEARN_TOOL.name);
     if (submit) return cleanLearning(submit.input);
