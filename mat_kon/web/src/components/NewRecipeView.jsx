@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Camera, ImagePlus, Loader2, PenLine, X } from 'lucide-react';
-import { addManualRecipe, addPhotoRecipe, bugMessage } from '../lib/api';
+import { ArrowRight, Camera, ImagePlus, Loader2, Mic, PenLine, Square, X } from 'lucide-react';
+import { addManualRecipe, addPhotoRecipe, addTextRecipe, bugMessage } from '../lib/api';
+import { startDictation, voiceSupported } from '../lib/voice';
 import { dataUrlToPart, photoForReading, thumbnail } from '../lib/image';
 import { textToSections } from '../lib/recipes';
 
-// מתכון חדש בלי קישור: מצלמים דף מספר / פתק / צילום מסך, או כותבים בעצמכם
+// מתכון חדש בלי קישור: מצלמים דף מספר / פתק / צילום מסך, מקריאים בקול, או כותבים בעצמכם
 export default function NewRecipeView({ session, categories, initialMode = 'photo', initialFiles, onFilesTaken, onBack, onSaved, onPaywall }) {
   const [mode, setMode] = useState(initialMode);
   return (
@@ -18,8 +19,8 @@ export default function NewRecipeView({ session, categories, initialMode = 'phot
         </div>
       </div>
       <div className="max-w-2xl mx-auto px-4">
-        <div className="mt-4 grid grid-cols-2 gap-2 bg-stone-100 p-1 rounded-2xl">
-          {[['photo', 'מתמונה', Camera], ['manual', 'כתיבה ידנית', PenLine]].map(([key, label, Icon]) => (
+        <div className="mt-4 grid grid-cols-3 gap-2 bg-stone-100 p-1 rounded-2xl">
+          {[['photo', 'מתמונה', Camera], ['voice', 'בהקלטה', Mic], ['manual', 'כתיבה ידנית', PenLine]].map(([key, label, Icon]) => (
             <button
               key={key}
               onClick={() => setMode(key)}
@@ -29,7 +30,9 @@ export default function NewRecipeView({ session, categories, initialMode = 'phot
             </button>
           ))}
         </div>
-        {mode === 'photo' ? <PhotoForm session={session} initialFiles={initialFiles} onFilesTaken={onFilesTaken} onSaved={onSaved} onPaywall={onPaywall} /> : <ManualForm session={session} categories={categories} onSaved={onSaved} />}
+        {mode === 'photo' && <PhotoForm session={session} initialFiles={initialFiles} onFilesTaken={onFilesTaken} onSaved={onSaved} onPaywall={onPaywall} />}
+        {mode === 'voice' && <VoiceForm session={session} onSaved={onSaved} onPaywall={onPaywall} />}
+        {mode === 'manual' && <ManualForm session={session} categories={categories} onSaved={onSaved} />}
       </div>
     </div>
   );
@@ -119,6 +122,101 @@ function PhotoForm({ session, initialFiles, onFilesTaken, onSaved, onPaywall }) 
       >
         {busy && <Loader2 size={18} className="animate-spin" />}
         {busy ? 'קורא את המתכון מהתמונה…' : 'בניית מתכון מהתמונות'}
+      </button>
+    </div>
+  );
+}
+
+// מקריאים את המתכון בקול: הטלפון כותב (בלי עלות), אפשר לתקן, וה-AI מסדר למצרכים ושלבים
+function VoiceForm({ session, onSaved, onPaywall }) {
+  const [text, setText] = useState('');
+  const [recording, setRecording] = useState(false);
+  const [supported, setSupported] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const stopRef = useRef(null);
+  const before = useRef(''); // מה שכבר היה כתוב לפני ההקלטה הנוכחית
+
+  useEffect(() => {
+    voiceSupported().then(setSupported);
+    return () => {
+      stopRef.current?.();
+    };
+  }, []);
+
+  const start = async () => {
+    setError('');
+    before.current = text.trim();
+    try {
+      stopRef.current = await startDictation({
+        onText: (t) => setText([before.current, t].filter(Boolean).join('\n')),
+        onError: (m) => {
+          setError(m);
+          setRecording(false);
+        },
+      });
+      setRecording(true);
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+  const stop = async () => {
+    const s = stopRef.current;
+    stopRef.current = null;
+    setRecording(false);
+    await s?.();
+  };
+
+  const submit = async () => {
+    await stop();
+    setBusy(true);
+    setError('');
+    try {
+      const { recipe, user, more } = await addTextRecipe(session, { text, voice: true });
+      onSaved(recipe, user, more || []);
+    } catch (e) {
+      if (e.status === 402) onPaywall(e.data.paymentUrl || '');
+      setError(e.status === 422 ? e.message : bugMessage('NewRecipeView:voice', e));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-4 space-y-4">
+      <p className="text-sm text-stone-600 leading-relaxed">
+        לוחצים על המיקרופון ומקריאים את המתכון: השם, המצרכים עם הכמויות, ואיך מכינים. אפשר לעצור ולהמשיך, ולתקן את הטקסט לפני הבנייה.
+      </p>
+      {supported ? (
+        <button
+          onClick={recording ? stop : start}
+          disabled={busy}
+          className={`mx-auto w-28 h-28 rounded-full flex flex-col items-center justify-center gap-1 text-white font-bold shadow-lg disabled:opacity-40 ${recording ? 'bg-red-500 animate-pulse' : 'bg-orange-500'}`}
+          aria-label={recording ? 'סיום ההקלטה' : 'התחלת הקלטה'}
+        >
+          {recording ? <Square size={30} fill="currentColor" /> : <Mic size={36} />}
+          <span className="text-sm">{recording ? 'עצירה' : text ? 'להמשיך' : 'הקלטה'}</span>
+        </button>
+      ) : (
+        <p className="text-sm rounded-2xl bg-amber-50 text-amber-800 p-3">
+          כאן אין הקלטה ישירה. לוחצים על תיבת הטקסט ואז על המיקרופון 🎤 שבמקלדת, ומקריאים.
+        </p>
+      )}
+      {recording && <p className="text-center text-sm text-red-600">מקשיב… דברו ברור ובקצב רגיל</p>}
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={8}
+        placeholder="כאן יופיע מה שהקראתם"
+        className="w-full rounded-2xl border border-stone-200 bg-white p-3 outline-none focus:border-orange-400 leading-relaxed"
+      />
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <button
+        disabled={text.trim().length < 20 || busy}
+        onClick={submit}
+        className="w-full rounded-2xl bg-orange-500 text-white font-bold py-3 disabled:opacity-40 flex items-center justify-center gap-2"
+      >
+        {busy && <Loader2 size={18} className="animate-spin" />}
+        {busy ? 'מסדר את המתכון…' : 'בניית מתכון מההקלטה'}
       </button>
     </div>
   );

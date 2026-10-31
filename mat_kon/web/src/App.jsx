@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FileUp, Globe, Heart, Loader2, LogOut, PenLine, Search, Settings, X } from 'lucide-react';
+import { FileUp, Globe, Mic, Heart, Loader2, LogOut, PenLine, Search, Settings, X } from 'lucide-react';
 import SearchView from './components/SearchView';
 import DietFilter from './components/DietFilter';
 import SettingsView from './components/SettingsView';
@@ -92,7 +92,7 @@ const route = () => {
   if (h === '#/categories') return { view: 'categories' };
   if (h === '#/help' || h.startsWith('#/help/')) return { view: 'help', play: h.slice(7) };
   if (h === '#/shopping') return { view: 'shopping' };
-  if (h.startsWith('#/new')) return { view: 'new', mode: h.includes('manual') ? 'manual' : 'photo' };
+  if (h.startsWith('#/new')) return { view: 'new', mode: h.includes('manual') ? 'manual' : h.includes('voice') ? 'voice' : 'photo' };
   if (h === '#/plan') return { view: 'plan' };
   if (h === '#/fridge') return { view: 'fridge' };
   if (h === '#/fridge/fridge' || h === '#/fridge/pantry') return { view: 'fridge', place: h.slice(9) };
@@ -888,9 +888,12 @@ export default function App() {
           </div>
           <AddLink onAdd={add} onSearch={(q) => { window.location.hash = `#/search?q=${encodeURIComponent(q)}`; }} />
           {/* עוד דרכים להוסיף מתכון */}
-          <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs font-medium">
+          <div className="mt-3 grid grid-cols-4 gap-2 text-center text-xs font-medium">
             <a href="#/new?manual" className="rounded-2xl bg-white/15 hover:bg-white/25 py-2.5 flex flex-col items-center gap-1">
               <PenLine size={20} /> כתיבה ידנית
+            </a>
+            <a href="#/new?voice" className="rounded-2xl bg-white/15 hover:bg-white/25 py-2.5 flex flex-col items-center gap-1">
+              <Mic size={20} /> בהקלטה
             </a>
             <a href="#/search" className="rounded-2xl bg-white/15 hover:bg-white/25 py-2.5 flex flex-col items-center gap-1">
               <Globe size={20} /> חיפוש מתכון

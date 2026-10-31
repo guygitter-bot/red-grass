@@ -187,12 +187,14 @@ different recipes (each usually with its own heading) – return each one separa
     return [
       src.url
         ? `Source: text the user copied from the post at ${src.url} (the link itself could not be read). Build the recipe from this text only.`
-        : src.kind === 'file'
+        : src.kind === 'voice'
+          ? 'Source: the user read the recipe aloud and the phone transcribed it (Hebrew speech-to-text, no punctuation, may have misheard words – e.g. numbers or units written as words, "כף" vs "קף"). Fix obvious transcription mistakes from context, keep every ingredient and amount that was said, and build the recipe from this text only. If the user said the title, use it.'
+          : src.kind === 'file'
           ? 'Source: text read from a document the user uploaded (Word / PDF / text file; layout may be messy, and Hebrew from a PDF may have odd line order). It may hold one recipe or a section of a cookbook with several – give each recipe its own entry (more_recipes), and ignore tables of contents, page numbers and headers. Build the recipes from this text only.'
           : 'Source: a message from a WhatsApp chat (no link). Build the recipe from this text only.',
       src.chat ? `${src.kind === 'file' ? 'File' : 'Chat'}: ${src.chat}` : '',
       src.author ? `Sent by: ${src.author}` : '',
-      `${src.url ? 'Copied text' : src.kind === 'file' ? 'Document text' : 'Message'}:\n${src.text}`,
+      `${src.url ? 'Copied text' : src.kind === 'file' ? 'Document text' : src.kind === 'voice' ? 'Transcript' : 'Message'}:\n${src.text}`,
     ].filter(Boolean).join('\n\n');
   }
   const video = isVideoKind(src.kind);
