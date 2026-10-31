@@ -124,12 +124,16 @@ export default function App() {
     setBusy(true);
     try {
       let duplicates = 0;
+      let retried = 0;
       for (const url of links) {
         const res = await api('/add', { kind: 'link', url, note, ...extra });
-        if (res.duplicate) duplicates += 1;
+        // קישור שנכשל בעבר נוסה שוב – לא נחשב "כבר שמור"
+        if (res.retried) retried += 1;
+        else if (res.duplicate) duplicates += 1;
       }
       if (!links.length && text) await api('/add', { kind: 'text', text, ...extra });
-      if (duplicates) setMessage(duplicates === 1 ? 'הקישור כבר שמור' : `${duplicates} קישורים כבר שמורים`);
+      if (retried) setMessage(mode === 'learn' ? 'ניסיתי שוב ללמוד מהקישור' : 'ניסיתי שוב למפות את הקישור');
+      else if (duplicates) setMessage(duplicates === 1 ? 'הקישור כבר שמור' : `${duplicates} קישורים כבר שמורים`);
       await load();
       return true;
     } catch (e) {
@@ -169,6 +173,19 @@ export default function App() {
     try {
       const { file } = await api('/file', { id: item.id });
       downloadFile(file);
+    } catch (e) {
+      fail(e);
+    }
+  }
+
+  // "ללמוד מזה" – שולח את הפריט ללימוד (או פותח את הקיים) ומציג את הלימוד
+  async function learnFrom(item) {
+    try {
+      const res = await api('/learn-from', { id: item.id });
+      if (!res.duplicate) setMessage('נשלח ללימוד – זה לוקח כמה דקות');
+      await load();
+      setOpenId(res.item.id);
+      openFilter(LEARN);
     } catch (e) {
       fail(e);
     }
@@ -327,6 +344,8 @@ export default function App() {
         <ItemSheet
           item={open}
           categories={cats}
+          learned={Boolean(open.learnId && allItems.some((i) => i.id === open.learnId))}
+          onLearn={() => learnFrom(open)}
           onClose={() => setOpenId(null)}
           onUpdate={(patch) => act('/update', { id: open.id, ...patch })}
           onRetry={() => act('/retry', { id: open.id })}

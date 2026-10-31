@@ -4,6 +4,7 @@
 //        mode: "learn" -> אזור "לימוד וסקילים": במקום קטגוריה – סקילים, פרומפטים וצעדים (ראו learn.js)
 //        {kind: 'text', text, note} | {kind: 'file', file: {name, type, data}, note}  (data = base64, עד 10MB)
 //   POST /update {id, title?, note?, category?, emoji?} | /delete {id} | /retry {id} (מיפוי מחדש)
+//   POST /learn-from {id}                  -> {item, duplicate?}  "ללמוד מזה": פריט לימוד מפריט שבמאגר
 //   POST /file {id}                        -> {file: {name, type, size, data}}
 //   POST /category {from, to?, emoji?}     -> שינוי שם / איחוד / סמל של קטגוריה
 // בלי סיסמה (לבקשת המשתמשת). הגנה מעלויות: מגבלת הוספות ליום (ראו library.js)
@@ -14,7 +15,7 @@ export { Library };
 const MAX_BODY_BYTES = 256 * 1024;
 // קובץ מגיע כ-base64 (גדול בשליש מהקובץ עצמו)
 const MAX_FILE_BODY_BYTES = 14 * 1024 * 1024;
-const ROUTES = ['/list', '/add', '/update', '/delete', '/retry', '/file', '/category'];
+const ROUTES = ['/list', '/add', '/update', '/delete', '/retry', '/file', '/category', '/learn-from'];
 
 function corsHeaders(request, env) {
   const origin = request.headers.get('origin') || '';

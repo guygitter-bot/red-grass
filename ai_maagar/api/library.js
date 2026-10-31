@@ -92,6 +92,7 @@ export class Library {
     }
 
     const item = ID_RE.test(String(body.id || '')) ? await this.storage.get(itemKey(body.id)) : null;
+    if (pathname === '/learn-from') return item ? this.learnFrom(item) : json(404, { error: 'הפריט לא נמצא' });
     if (pathname === '/category') return this.renameCategory(body);
     if (!item) return json(404, { error: 'הפריט לא נמצא' });
 
@@ -141,7 +142,15 @@ export class Library {
       if (!isPublicUrl(url)) return json(400, { error: 'הקישור לא תקין' });
       const key = sameUrl(url);
       const existing = [...(await this.storage.list({ prefix: 'i:' })).values()].find((i) => i.kind === 'link' && (i.mode || '') === mode && sameUrl(i.url) === key);
-      if (existing) return json(200, { item: existing, duplicate: true });
+      if (existing) {
+        // אותו קישור שוב אחרי שנכשל – מנסים שוב (במקום רק "כבר שמור")
+        if (existing.status === 'failed') {
+          const retried = await this.save(existing.id, { status: 'pending', attempts: 0, error: '', retryAt: 0 });
+          await this.wake();
+          return json(200, { item: retried, duplicate: true, retried: true });
+        }
+        return json(200, { item: existing, duplicate: true });
+      }
       item.url = url;
       try {
         item.title = new URL(url).hostname.replace(/^www\./, '');
@@ -173,6 +182,23 @@ export class Library {
     await this.storage.put(itemKey(item.id), item);
     await this.wake();
     return json(200, { item: item });
+  }
+
+  // "ללמוד מזה" על פריט מהמאגר: פריט לימוד חדש מאותו קישור / קובץ / טקסט (המקור נשאר במקומו)
+  async learnFrom(source) {
+    if (source.mode === 'learn') return json(400, { error: 'זה כבר פריט לימוד' });
+    const already = source.learnId && (await this.storage.get(itemKey(source.learnId)));
+    if (already) return json(200, { item: already, duplicate: true });
+    const body = { kind: source.kind, mode: 'learn', note: source.note, url: source.url, text: source.text };
+    if (source.kind === 'file') {
+      const file = await this.getFile(source.id);
+      if (!file) return json(404, { error: 'הקובץ לא נמצא' });
+      body.file = file;
+    }
+    const res = await this.add(body);
+    const data = await res.clone().json();
+    if (res.ok && data.item) await this.save(source.id, { learnId: data.item.id });
+    return res;
   }
 
   async wake(at = Date.now()) {
