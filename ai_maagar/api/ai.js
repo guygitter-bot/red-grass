@@ -154,7 +154,8 @@ export function cleanResult(r, categories = []) {
 // ---------- שגיאות מה-API של Anthropic בעברית ----------
 export function aiMessage(e) {
   const status = Number(e?.status) || 0;
-  if (!status) return e?.message || 'תקלה. נסו שוב.';
+  // שגיאה שלנו (כבר בעברית) – כמו שהיא; הודעה טכנית באנגלית לא מגיעה למשתמשת
+  if (!status) return /[\u0590-\u05FF]/.test(e?.message || '') ? e.message : 'תקלה זמנית. נסו שוב ("ללמוד מחדש").';
   const text = `${e?.message || ''} ${JSON.stringify(e?.error || {})}`.toLowerCase();
   if (/credit balance|billing|purchase credits/.test(text)) return 'נגמר הקרדיט בחשבון Anthropic (console.anthropic.com ← Billing).';
   if (status === 401 || status === 403) return 'מפתח ה-API של Anthropic לא תקין. צריך לעדכן אותו בסודות של GitHub.';
