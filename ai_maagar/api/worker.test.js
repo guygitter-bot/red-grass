@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import worker, { Library } from './worker.js';
 import { cleanResult, material } from './ai.js';
-import { readPage } from './source.js';
+import { captionText, readPage, youtubeId } from './source.js';
+import { cleanLearning, skillName } from './learn.js';
 import { MAX_PER_DAY, sameUrl } from './library.js';
 
 // זיכרון מדומה במקום האחסון של Durable Object (get/put/delete/list/alarm כמו ב-Cloudflare)
@@ -24,13 +25,27 @@ function fakeStorage() {
   };
 }
 
-// סוכן מדומה: מחזיר קטגוריה לפי מה שכתוב בחומר
+const LEARNED = {
+  title: 'יצירת סרטונים עם Veo',
+  summary: 'איך כותבים פרומפט לסרטון.',
+  coverage: 'full',
+  coverage_note: 'קראתי את התמליל המלא',
+  lessons: ['לתאר תנועת מצלמה'],
+  steps: [{ title: 'לבחור סגנון', detail: 'קולנועי' }],
+  prompts: [{ title: 'פרומפט בסיס', purpose: 'סרטון קצר', tool: 'Veo', prompt: 'A cinematic shot of [subject]', from_source: true }],
+  skills: [{ name: 'Video Prompt Writer!', title: 'כותב פרומפטים לווידאו', description: 'Writes video prompts. Use for סרטון, וידאו.', instructions: '# מטרה\nלכתוב פרומפט.' }],
+};
+
+// סוכן מדומה: מחזיר קטגוריה לפי מה שכתוב בחומר (ובלימוד – את LEARNED)
 function fakeAI(calls = []) {
   return {
     beta: {
       messages: {
         async create(req) {
           calls.push(req);
+          if (req.tools.some((t) => t.name === 'submit_learning')) {
+            return { stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_learning', input: LEARNED }] };
+          }
           const content = JSON.stringify(req.messages);
           const category = content.includes('midjourney') ? 'תמונות, וידאו וקול' : 'כלים ואפליקציות';
           return {
@@ -186,4 +201,56 @@ test('helpers', () => {
   // קישור בלי מספיק טקסט – הסוכן מקבל web_fetch
   assert.equal(material({ kind: 'link', url: 'https://x.com' }, { title: '', description: '', text: '' }, []).web, true);
   assert.equal(material({ kind: 'link', url: 'https://x.com' }, { title: 't', description: '', text: 'א'.repeat(500) }, []).web, false);
+});
+
+test('learning from a YouTube video: transcript in, skills and prompts out', async () => {
+  const calls = [];
+  const fetched = [];
+  const FETCH = async (url, init) => {
+    fetched.push(url);
+    if (url.includes('/youtubei/v1/player')) {
+      assert.equal(JSON.parse(init.body).videoId, 'dQw4w9WgXcQ');
+      return Response.json({
+        videoDetails: { title: 'Veo tutorial', author: 'AI Guy', shortDescription: 'desc', lengthSeconds: '600' },
+        captions: { playerCaptionsTracklistRenderer: { captionTracks: [{ baseUrl: 'https://www.youtube.com/api/timedtext?v=1', kind: 'asr' }] } },
+      });
+    }
+    if (url.includes('timedtext')) return new Response('<transcript><text start="0">first write the &amp;#39;scene&amp;#39;</text><text start="2">then the camera</text></transcript>');
+    return page(url);
+  };
+  const env = fakeEnv({ AI_CLIENT: fakeAI(calls), FETCH });
+  // אותו קישור במאגר הרגיל ובלימוד – לא נחשב כפול
+  await call(env, '/add', { kind: 'link', url: 'https://youtu.be/dQw4w9WgXcQ' });
+  const added = await call(env, '/add', { kind: 'link', url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ', mode: 'learn' });
+  assert.equal(added.data.duplicate, undefined);
+  assert.equal(added.data.item.mode, 'learn');
+  await env.lib.alarm();
+  await env.lib.alarm();
+
+  const learnCall = calls.find((c) => c.tools.some((t) => t.name === 'submit_learning'));
+  assert.match(learnCall.messages[0].content, /Transcript:\nfirst write the 'scene' then the camera/);
+  assert.match(learnCall.messages[0].content, /Length: ~10 minutes/);
+
+  const { data } = await call(env, '/list', {});
+  const item = data.items.find((i) => i.mode === 'learn');
+  assert.equal(item.status, 'ready');
+  assert.equal(item.category, undefined);
+  assert.equal(item.learn.prompts[0].fromSource, true);
+  assert.equal(item.learn.skills[0].name, 'video-prompt-writer');
+  assert.match(item.learn.skills[0].file, /^---\nname: video-prompt-writer\ndescription: "Writes video prompts\. Use for סרטון, וידאו\."\n---\n\n# מטרה/);
+  // פריט לימוד לא פותח קטגוריה במאגר
+  assert.deepEqual(await env.lib.categoryNames(), ['כלים ואפליקציות']);
+});
+
+test('learning helpers', () => {
+  assert.equal(youtubeId('https://youtu.be/dQw4w9WgXcQ?t=3'), 'dQw4w9WgXcQ');
+  assert.equal(youtubeId('https://m.youtube.com/shorts/dQw4w9WgXcQ'), 'dQw4w9WgXcQ');
+  assert.equal(youtubeId('https://example.com/watch?v=dQw4w9WgXcQ'), '');
+  assert.equal(captionText('<p t="1">a<s>b</s></p><p>c</p>'), 'ab c');
+  assert.equal(skillName('  My Cool Skill (v2) '), 'my-cool-skill-v2');
+  assert.equal(skillName('סקיל'), 'my-skill');
+  const r = cleanLearning({ ...LEARNED, coverage: 'weird', skills: [LEARNED.skills[0], LEARNED.skills[0]], prompts: [{ ...LEARNED.prompts[0], prompt: '' }] });
+  assert.equal(r.learn.coverage, 'partial');
+  assert.deepEqual(r.learn.skills.map((s) => s.name), ['video-prompt-writer', 'video-prompt-writer-2']);
+  assert.equal(r.learn.prompts.length, 0);
 });

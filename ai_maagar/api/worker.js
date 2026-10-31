@@ -1,6 +1,7 @@
 // השרת של "מאגר AI" (Cloudflare Worker): שומר קישורים וקבצים, וממפה כל אחד לקטגוריה לפי הנושא.
 //   POST /list                             -> {items, categories}
 //   POST /add {kind: 'link', url, note}    -> {item, duplicate?}  המיפוי רץ ברקע (ראו library.js)
+//        mode: "learn" -> אזור "לימוד וסקילים": במקום קטגוריה – סקילים, פרומפטים וצעדים (ראו learn.js)
 //        {kind: 'text', text, note} | {kind: 'file', file: {name, type, data}, note}  (data = base64, עד 10MB)
 //   POST /update {id, title?, note?, category?, emoji?} | /delete {id} | /retry {id} (מיפוי מחדש)
 //   POST /file {id}                        -> {file: {name, type, size, data}}

@@ -12,7 +12,8 @@
 // כך שאפשר לסגור את האפליקציה באמצע, והמיפוי ממשיך.
 import Anthropic from '@anthropic-ai/sdk';
 import { aiMessage, classify, fileSource, temporary } from './ai.js';
-import { gatherLink } from './source.js';
+import { gatherLink, youtubeId, youtubeSource } from './source.js';
+import { learn } from './learn.js';
 import { isPublicUrl } from './net.js';
 
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -132,11 +133,14 @@ export class Library {
     const now = Date.now();
     const note = text(body.note, MAX_NOTE);
     const item = { id: newId(), kind: body.kind, note, status: 'pending', attempts: 0, createdAt: now, updatedAt: now };
+    // mode: 'learn' – אזור "לימוד וסקילים" (בלי קטגוריה). פריט ישן בלי mode שייך למאגר הרגיל
+    const mode = body.mode === 'learn' ? 'learn' : '';
+    if (mode) item.mode = mode;
     if (body.kind === 'link') {
       const url = text(body.url, 2000);
       if (!isPublicUrl(url)) return json(400, { error: 'הקישור לא תקין' });
       const key = sameUrl(url);
-      const existing = [...(await this.storage.list({ prefix: 'i:' })).values()].find((i) => i.kind === 'link' && sameUrl(i.url) === key);
+      const existing = [...(await this.storage.list({ prefix: 'i:' })).values()].find((i) => i.kind === 'link' && (i.mode || '') === mode && sameUrl(i.url) === key);
       if (existing) return json(200, { item: existing, duplicate: true });
       item.url = url;
       try {
@@ -182,8 +186,14 @@ export class Library {
     const waiting = [...(await this.storage.list({ prefix: 'i:' })).values()]
       .filter((i) => (i.status === 'pending' && !(i.retryAt > now)) || (i.status === 'working' && now - i.startedAt > STUCK_MS))
       .sort((a, b) => a.createdAt - b.createdAt);
-    for (const item of waiting.slice(0, PER_ALARM)) await this.process(item.id);
-    if (waiting.length > PER_ALARM) return this.wake();
+    let done = 0;
+    for (const item of waiting.slice(0, PER_ALARM)) {
+      await this.process(item.id);
+      done += 1;
+      // לימוד לוקח כמה דקות – אחד בכל פעם, כדי לא לעבור את זמן ה-alarm
+      if (item.mode === 'learn') break;
+    }
+    if (waiting.length > done) return this.wake();
     // פריט שמחכה לניסיון חוזר אחרי עומס
     const later = [...(await this.storage.list({ prefix: 'i:' })).values()].filter((i) => i.status === 'pending' && i.retryAt > now);
     if (later.length) await this.wake(Math.min(...later.map((i) => i.retryAt)));
@@ -196,6 +206,7 @@ export class Library {
     if (item.attempts > MAX_ATTEMPTS) return this.save(id, { status: 'failed', error: item.error || 'לא הצלחתי למפות. נסו שוב.' });
     item = await this.save(id, { status: 'working', startedAt: Date.now(), attempts: item.attempts });
 
+    if (item.mode === 'learn') return this.processLearning(item);
     const categories = await this.categoryNames();
     let result;
     try {
@@ -226,6 +237,36 @@ export class Library {
     await this.save(id, { ...result, category, status: 'ready', error: '', retryAt: 0 });
   }
 
+  // לימוד: קריאת החומר (בסרטון – התמליל) ובניית סקילים / פרומפטים / צעדים
+  async processLearning(item) {
+    const { id } = item;
+    const fetchFn = this.env.FETCH || fetch;
+    let result;
+    try {
+      let src = null;
+      if (item.kind === 'link') {
+        const video = youtubeId(item.url);
+        src = video ? { video: await youtubeSource(video, fetchFn) } : await gatherLink(item.url, fetchFn, { maxText: 60000 });
+      }
+      if (item.kind === 'file') {
+        const file = await this.getFile(id);
+        src = file ? fileSource(file) : null;
+      }
+      try {
+        result = await learn(this.client(), item, src);
+      } catch (e) {
+        if (item.kind !== 'file' || !src || Number(e?.status) !== 400) throw e;
+        result = await learn(this.client(), item, null);
+      }
+    } catch (e) {
+      if (temporary(e) && item.attempts < MAX_ATTEMPTS) {
+        return this.save(id, { status: 'pending', retryAt: Date.now() + 60_000, error: aiMessage(e) });
+      }
+      return this.save(id, { status: 'failed', error: aiMessage(e) });
+    }
+    await this.save(id, { ...result, status: 'ready', error: '', retryAt: 0 });
+  }
+
   async save(id, patch) {
     const item = await this.storage.get(itemKey(id));
     if (!item) return null;
@@ -238,7 +279,7 @@ export class Library {
   async categoryNames() {
     const cats = (await this.storage.get('cats')) || {};
     const used = new Set(Object.keys(cats));
-    for (const i of (await this.storage.list({ prefix: 'i:' })).values()) if (i.category) used.add(i.category);
+    for (const i of (await this.storage.list({ prefix: 'i:' })).values()) if (i.category && i.mode !== 'learn') used.add(i.category);
     return [...used];
   }
 

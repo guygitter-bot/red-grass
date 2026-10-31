@@ -55,10 +55,15 @@ export function newestTitles(items, name, limit = 2) {
     .map((i) => i.title);
 }
 
-// כתובת (hash) -> filter: '' = 'all', '#/waiting', '#/c/<שם>'
+// מסך הלימוד והסקילים – ערך מיוחד שלא יכול להיות שם של קטגוריה
+export const LEARN = '__learn__';
+export const isLearn = (item) => item.mode === 'learn';
+
+// כתובת (hash) -> filter: '' = 'all', '#/waiting', '#/learn', '#/c/<שם>'
 export function filterFromHash(hash) {
   const h = String(hash || '');
   if (h === '#/waiting') return 'waiting';
+  if (h === '#/learn') return LEARN;
   if (h.startsWith('#/c/')) {
     try {
       return decodeURIComponent(h.slice(4)) || 'all';
@@ -73,6 +78,7 @@ export function filterFromHash(hash) {
 export function hashFromFilter(filter) {
   if (!filter || filter === 'all') return '';
   if (filter === 'waiting') return '#/waiting';
+  if (filter === LEARN) return '#/learn';
   return `#/c/${encodeURIComponent(filter)}`;
 }
 
@@ -139,3 +145,17 @@ export function downloadFile({ name, type, data }) {
 
 // "פריט אחד" / "3 פריטים"
 export const countText = (n) => (n === 1 ? 'פריט אחד' : `${n} פריטים`);
+
+// "סקיל אחד" / "3 סקילים" (רק כשיש)
+const plural = (n, one, many) => (n === 1 ? one : `${n} ${many}`);
+
+// תגיות הכמות בכרטיס לימוד: ["2 סקילים", "פרומפט אחד", ...] – רק מה שאינו אפס
+export function learnCounts(learn) {
+  const l = learn || {};
+  const n = (a) => (Array.isArray(a) ? a.length : 0);
+  const out = [];
+  if (n(l.skills)) out.push(plural(n(l.skills), 'סקיל אחד', 'סקילים'));
+  if (n(l.prompts)) out.push(plural(n(l.prompts), 'פרומפט אחד', 'פרומפטים'));
+  if (n(l.steps)) out.push(plural(n(l.steps), 'צעד אחד', 'צעדים'));
+  return out;
+}
