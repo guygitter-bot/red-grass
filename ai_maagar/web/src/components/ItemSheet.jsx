@@ -105,7 +105,7 @@ export default function ItemSheet({ item, categories, learned, onClose, onUpdate
             <RefreshCw size={16} /> מיפוי מחדש
           </button>
           <button onClick={onLearn} className="flex items-center gap-1.5 rounded-xl border border-line px-3 py-2 text-sm hover:bg-soft">
-            <GraduationCap size={16} /> {learned ? '🎓 פתיחת הלימוד' : '🎓 ללמוד מזה'}
+            <GraduationCap size={16} /> {learned ? 'פתיחת הלימוד' : 'ללמוד מזה'}
           </button>
           <button
             onClick={() => {
