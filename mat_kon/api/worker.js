@@ -41,8 +41,9 @@ function corsHeaders(request, env) {
     'access-control-max-age': '86400',
     vary: 'origin',
   };
-  // אפליקציית הניהול (mat_kon/admin) – Cloudflare Pages נפרד; כל הנתונים בה מוגנים בכניסת בעלים
-  if (allowed.includes(origin) || /^https:\/\/mat-kon-admin(-[a-z0-9]+)?\.pages\.dev$/.test(origin)) headers['access-control-allow-origin'] = origin;
+  // אפליקציית הניהול (mat_kon/admin) – Cloudflare Pages נפרד; כל הנתונים בה מוגנים בכניסת בעלים.
+  // רק הפרויקט שלנו והתצוגות המקדימות שלו (<hash>.mat-kon-admin.pages.dev) – לא כל פרויקט ששמו מתחיל ב-mat-kon-admin-
+  if (allowed.includes(origin) || /^https:\/\/([a-z0-9-]+\.)?mat-kon-admin\.pages\.dev$/.test(origin)) headers['access-control-allow-origin'] = origin;
   return headers;
 }
 
@@ -1085,7 +1086,8 @@ export default {
       if (limited) return limited;
       const budget = await aiBudget();
       if (budget) return budget;
-      const image = typeof recipe.image === 'string' && /^https:\/\//.test(recipe.image) ? recipe.image : null;
+      // רק תמונה שנשמרה אצלנו: תמונה מאתר חיצוני הייתה חושפת לאתר את כתובות הצופים בקהילה
+      const image = typeof recipe.image === 'string' && recipe.image.startsWith(`${url.origin}/img/`) ? recipe.image : null;
       let review;
       try {
         review = await moderateRecipe(ai('moderation'), recipe, image);

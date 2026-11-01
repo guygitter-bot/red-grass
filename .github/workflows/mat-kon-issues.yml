@@ -2,6 +2,7 @@ name: mat-kon issues
 
 # קריאת רשימת התקלות של mat-kon (כמו במסך התקלות באפליקציית הניהול) – לקריאה בלבד, בכניסת בעלים.
 # המאגר ציבורי: בלי אימיילים ובלי קישורים מלאים (רק שם האתר), ובלי שמות משתמשים – רק כמה משתמשים נפגעו.
+# ההודעות מקוצרות, ואחרי הקריאה מוחקים את הלוג (Actions → הריצה → Delete all logs, או delete_workflow_run_logs).
 on:
   workflow_dispatch:
 
@@ -22,7 +23,7 @@ jobs:
           echo "::add-mask::$SESSION"
           curl -sS --max-time 30 "$API/admin/issues" -H "authorization: Bearer $SESSION" > raw.json
           curl -sS --max-time 30 -X POST "$API/logout" -H 'content-type: application/json' -H "authorization: Bearer $SESSION" -d '{}' > /dev/null || true
-          jq '[.issues[] | select(.status != "fixed") | {where, group, status, count, firstAt, lastAt, reopened, users: (.users | length), note, message}]
+          jq '[.issues[] | select(.status != "fixed") | {where, group, status, count, firstAt, lastAt, reopened, users: (.users | length), note: (.note // "" | .[0:120]), message: (.message // "" | .[0:200])}]
               | walk(if type == "string" then gsub("https?://(?<h>[^/\\s\"]+)[^\\s\"]*"; "[\(.h)]") | gsub("[\\w.+-]+@[\\w-]+(\\.[\\w-]+)+"; "[email]") else . end)' raw.json > open.json
           rm raw.json
           jq . open.json
