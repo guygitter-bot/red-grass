@@ -1,19 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Inbox, Moon, Pencil, Search, Sun } from 'lucide-react';
+import { ArrowRight, GraduationCap, Inbox, Loader2, Moon, Pencil, Search, Sun } from 'lucide-react';
 import { api } from './lib/api';
-import { categoryList, countText, downloadFile, filterFromHash, filterItems, hashFromFilter, isWaiting, newestTitles, parsePasted, readFile, sharedText } from './lib/library';
+import { LEARN, categoryList, countText, downloadFile, filterFromHash, filterItems, hashFromFilter, isLearn, isWaiting, newestTitles, parsePasted, readFile, sharedText } from './lib/library';
 import { isDark, setTheme } from './lib/theme';
 import AddBox from './components/AddBox';
 import CategoryTile from './components/CategoryTile';
 import ItemCard from './components/ItemCard';
 import ItemSheet from './components/ItemSheet';
+import LearnCard from './components/LearnCard';
+import LearnSheet from './components/LearnSheet';
 
 // טקסט ששותף לאפליקציה (‎?url=...‎) – נכנס לתיבה ומחכה ל"הוספה", ולא נשמר לבד
 const SHARED = sharedText(window.location.search);
 if (SHARED) window.history.replaceState(null, '', window.location.pathname);
 
 export default function App() {
-  const [items, setItems] = useState([]);
+  const [allItems, setItems] = useState([]);
   const [categories, setCategories] = useState({});
   const [loaded, setLoaded] = useState(false);
   const [filter, setFilter] = useState(() => filterFromHash(window.location.hash));
@@ -44,15 +46,21 @@ export default function App() {
     load();
   }, [load]);
 
-  // בזמן מיפוי – רענון כל 3 שניות עד שהכול מוכן
+  // הספרייה הרגילה ופריטי הלימוד נפרדים: פריט לימוד לא מופיע בקטגוריות, ב"בטיפול" ובחיפוש
+  const items = useMemo(() => allItems.filter((i) => !isLearn(i)), [allItems]);
+  const learnItems = useMemo(() => allItems.filter(isLearn).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)), [allItems]);
+  const learnWaiting = learnItems.some(isWaiting);
+
+  // בזמן מיפוי / לימוד – רענון כל 3 שניות עד שהכול מוכן
   const waiting = items.some(isWaiting);
+  const anyWaiting = waiting || learnWaiting;
   useEffect(() => {
-    if (!waiting) return undefined;
+    if (!anyWaiting) return undefined;
     const timer = setInterval(load, 3000);
     return () => {
       clearInterval(timer);
     };
-  }, [waiting, load]);
+  }, [anyWaiting, load]);
 
   // חזרה לאפליקציה – רענון (אולי נוסף משהו ממכשיר אחר)
   useEffect(() => {
@@ -76,7 +84,7 @@ export default function App() {
   const cats = useMemo(() => categoryList(items, categories), [items, categories]);
   const shown = useMemo(() => filterItems(items, filter, query), [items, filter, query]); // במסך הראשי עם חיפוש – כל הפריטים
   const waitingCount = items.filter((i) => isWaiting(i) || i.status === 'failed').length;
-  const open = items.find((i) => i.id === openId);
+  const open = allItems.find((i) => i.id === openId);
 
   // המסך הפתוח נשמר בכתובת (hash), כדי שכפתור "אחורה" בטלפון יחזור לקטגוריות
   useEffect(() => {
@@ -104,23 +112,28 @@ export default function App() {
   // קטגוריה שהתרוקנה (העברה / מחיקה) – חזרה למסך הראשי
   useEffect(() => {
     if (renaming.current) return;
-    if (loaded && filter !== 'all' && filter !== 'waiting' && !cats.some((c) => c.name === filter)) {
+    if (loaded && filter !== 'all' && filter !== 'waiting' && filter !== LEARN && !cats.some((c) => c.name === filter)) {
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
       setFilter('all');
     }
   }, [loaded, filter, cats]);
 
-  async function add(input) {
+  async function add(input, mode) {
+    const extra = mode ? { mode } : {};
     const { links, text, note } = parsePasted(input);
     setBusy(true);
     try {
       let duplicates = 0;
+      let retried = 0;
       for (const url of links) {
-        const res = await api('/add', { kind: 'link', url, note });
-        if (res.duplicate) duplicates += 1;
+        const res = await api('/add', { kind: 'link', url, note, ...extra });
+        // קישור שנכשל בעבר נוסה שוב – לא נחשב "כבר שמור"
+        if (res.retried) retried += 1;
+        else if (res.duplicate) duplicates += 1;
       }
-      if (!links.length && text) await api('/add', { kind: 'text', text });
-      if (duplicates) setMessage(duplicates === 1 ? 'הקישור כבר שמור' : `${duplicates} קישורים כבר שמורים`);
+      if (!links.length && text) await api('/add', { kind: 'text', text, ...extra });
+      if (retried) setMessage(mode === 'learn' ? 'ניסיתי שוב ללמוד מהקישור' : 'ניסיתי שוב למפות את הקישור');
+      else if (duplicates) setMessage(duplicates === 1 ? 'הקישור כבר שמור' : `${duplicates} קישורים כבר שמורים`);
       await load();
       return true;
     } catch (e) {
@@ -131,11 +144,11 @@ export default function App() {
     }
   }
 
-  async function addFiles(files) {
+  async function addFiles(files, mode) {
     setBusy(true);
     setMessage(files.length > 1 ? `מעלה ${files.length} קבצים...` : 'מעלה...');
     try {
-      for (const f of files) await api('/add', { kind: 'file', file: await readFile(f) });
+      for (const f of files) await api('/add', { kind: 'file', file: await readFile(f), ...(mode ? { mode } : {}) });
       setMessage('');
       await load();
     } catch (e) {
@@ -165,6 +178,19 @@ export default function App() {
     }
   }
 
+  // "ללמוד מזה" – שולח את הפריט ללימוד (או פותח את הקיים) ומציג את הלימוד
+  async function learnFrom(item) {
+    try {
+      const res = await api('/learn-from', { id: item.id });
+      if (!res.duplicate) setMessage('נשלח ללימוד – זה לוקח כמה דקות');
+      await load();
+      setOpenId(res.item.id);
+      openFilter(LEARN);
+    } catch (e) {
+      fail(e);
+    }
+  }
+
   async function renameCategory(name) {
     const to = window.prompt('שם חדש לקטגוריה (שם של קטגוריה קיימת = איחוד)', name)?.trim();
     if (!to || to === name) return;
@@ -181,8 +207,10 @@ export default function App() {
   }
 
   const current = cats.find((c) => c.name === filter);
+  const learnView = filter === LEARN;
   const home = filter === 'all';
   const showTiles = home && !query.trim() && items.length > 0;
+  const showBanner = home && !query.trim();
 
   return (
     <div className="min-h-dvh bg-page">
@@ -198,9 +226,9 @@ export default function App() {
 
       <main className="max-w-6xl mx-auto px-4 py-4">
         <section className="space-y-4 min-w-0">
-          <AddBox initial={SHARED} busy={busy} onAdd={add} onFiles={addFiles} />
+          {!learnView && <AddBox initial={SHARED} busy={busy} onAdd={add} onFiles={addFiles} />}
 
-          <div className="flex items-center gap-2">
+          {!learnView && <div className="flex items-center gap-2">
             <div className="flex-1 flex items-center gap-2 bg-card border border-line rounded-xl px-3">
               <Search size={18} className="text-muted" />
               <input
@@ -210,9 +238,9 @@ export default function App() {
                 className="flex-1 bg-transparent py-2.5 outline-none placeholder:text-muted"
               />
             </div>
-          </div>
+          </div>}
 
-          {!home && (
+          {!home && !learnView && (
             <div className="flex items-center gap-3 flex-wrap">
               <button onClick={goBack} className="flex items-center gap-1.5 rounded-xl border border-line bg-card px-3 py-2 text-sm hover:bg-soft">
                 <ArrowRight size={16} /> כל הקטגוריות
@@ -230,7 +258,45 @@ export default function App() {
             </div>
           )}
 
-          {loaded && !items.length && (
+          {learnView && (
+            <>
+              <div className="flex items-center gap-3 flex-wrap">
+                <button onClick={goBack} className="flex items-center gap-1.5 rounded-xl border border-line bg-card px-3 py-2 text-sm hover:bg-soft">
+                  <ArrowRight size={16} /> כל הקטגוריות
+                </button>
+                <h2 className="flex items-center gap-2 text-lg font-bold min-w-0">🎓 לימוד וסקילים</h2>
+              </div>
+              <div className="space-y-1">
+                <p className="leading-relaxed">הדביקו כאן קישור לסרטון, מדריך או פוסט (או העלו קובץ) – ואלמד ממנו: אבנה סקילים ל-Claude, אכתוב פרומפטים מוכנים ואסדר צעד אחר צעד.</p>
+                <p className="text-xs text-muted">בסרטון יוטיוב אני קורא את מה שנאמר בו (הכתוביות) – את התמונה עצמה אני לא רואה.</p>
+              </div>
+              <AddBox busy={busy} placeholder="קישור לסרטון / מדריך, או טקסט ללמוד ממנו" onAdd={(v) => add(v, 'learn')} onFiles={(f) => addFiles(f, 'learn')} />
+              {loaded && !learnItems.length && <p className="text-center text-muted py-10">עוד לא למדתי כלום – הדביקו קישור למעלה.</p>}
+              <div className="grid gap-3 grid-cols-1 lg:grid-cols-2">
+                {learnItems.map((item) => <LearnCard key={item.id} item={item} onOpen={setOpenId} />)}
+              </div>
+            </>
+          )}
+
+          {showBanner && (
+            <button onClick={() => openFilter(LEARN)} className="w-full text-start bg-soft border border-line rounded-2xl p-4 shadow-sm hover:border-accent/50 transition flex items-center gap-3">
+              <GraduationCap size={36} className="text-accent-ink shrink-0" />
+              <span className="flex-1 min-w-0">
+                <span className="block font-bold">🎓 לימוד וסקילים</span>
+                <span className="block text-sm text-muted">סרטון, מדריך או פוסט → סקילים, פרומפטים וצעדים</span>
+              </span>
+              <span className="shrink-0 text-end text-sm">
+                <span className="block text-muted">{countText(learnItems.length)}</span>
+                {learnWaiting && (
+                  <span className="flex items-center gap-1.5 text-accent-ink">
+                    <Loader2 size={14} className="animate-spin" /> לומד...
+                  </span>
+                )}
+              </span>
+            </button>
+          )}
+
+          {loaded && !items.length && home && (
             <div className="text-center text-muted py-16 space-y-2">
               <p className="text-4xl">🧠</p>
               <p>עוד אין כאן כלום.</p>
@@ -238,7 +304,7 @@ export default function App() {
             </div>
           )}
 
-          {showTiles ? (
+          {learnView ? null : showTiles ? (
             <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
               {waitingCount > 0 && (
                 <CategoryTile icon={<Inbox size={36} />} name="בטיפול" count={waitingCount} busy={waiting} onOpen={() => openFilter('waiting')} />
@@ -260,10 +326,26 @@ export default function App() {
         </section>
       </main>
 
-      {open && (
+      {open && isLearn(open) && (
+        <LearnSheet
+          item={open}
+          onClose={() => setOpenId(null)}
+          onUpdate={(patch) => act('/update', { id: open.id, ...patch })}
+          onRetry={() => act('/retry', { id: open.id })}
+          onDelete={async () => {
+            setOpenId(null);
+            await act('/delete', { id: open.id });
+          }}
+          onDownload={download}
+        />
+      )}
+
+      {open && !isLearn(open) && (
         <ItemSheet
           item={open}
           categories={cats}
+          learned={Boolean(open.learnId && allItems.some((i) => i.id === open.learnId))}
+          onLearn={() => learnFrom(open)}
           onClose={() => setOpenId(null)}
           onUpdate={(patch) => act('/update', { id: open.id, ...patch })}
           onRetry={() => act('/retry', { id: open.id })}

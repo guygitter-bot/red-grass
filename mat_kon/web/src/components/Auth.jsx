@@ -143,7 +143,7 @@ export default function Auth({ mode: initialMode, token, onDone }) {
               <p className="text-xs text-stone-500 text-center">{invite?.freeLimit ?? 10} המתכונים הראשונים בחינם.</p>
             )}
             {mode === 'signup' && (
-              <p className="text-xs text-stone-500 text-center">{config.freeLimit ?? 30} המתכונים הראשונים בחינם.</p>
+              <p className="text-xs text-stone-500 text-center">{config.freeLimit ?? 20} המתכונים הראשונים בחינם.</p>
             )}
             {mode === 'login' && canSignup && (
               <button type="button" onClick={go('signup')} className="w-full text-sm text-orange-600 font-medium underline">

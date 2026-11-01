@@ -24,7 +24,7 @@ function meta(html, name) {
 }
 
 // HTML -> { title, description, site, text }
-export function readPage(html) {
+export function readPage(html, maxText = MAX_TEXT) {
   const title = meta(html, 'og:title') || clean(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]);
   const description = meta(html, 'og:description') || meta(html, 'description');
   const site = meta(html, 'og:site_name');
@@ -38,12 +38,12 @@ export function readPage(html) {
     .map((l) => l.replace(/\s+/g, ' ').trim())
     .filter((l) => l.length > 1)
     .join('\n')
-    .slice(0, MAX_TEXT);
+    .slice(0, maxText);
   return { title, description, site, text };
 }
 
 // מוריד את הדף. לא נכשל: בלי חומר מחזיר רק את הכתובת (והסוכן ינסה לבד)
-export async function gatherLink(url, fetchFn = fetch) {
+export async function gatherLink(url, fetchFn = fetch, { maxText = MAX_TEXT } = {}) {
   if (!isPublicUrl(url)) throw new Error('כתובת לא תקינה');
   try {
     const { res, finalUrl, text } = await safeFetch(fetchFn, url, {
@@ -51,9 +51,9 @@ export async function gatherLink(url, fetchFn = fetch) {
     });
     if (!res.ok) return { url, finalUrl, title: '', description: '', site: '', text: '' };
     const type = res.headers?.get?.('content-type') || '';
-    if (/text\/plain|markdown/.test(type)) return { url, finalUrl, title: '', description: '', site: '', text: (await text()).slice(0, MAX_TEXT) };
+    if (/text\/plain|markdown/.test(type)) return { url, finalUrl, title: '', description: '', site: '', text: (await text()).slice(0, maxText) };
     if (!/html/.test(type)) return { url, finalUrl, title: '', description: '', site: '', text: '' };
-    return { url, finalUrl, ...readPage(await text()) };
+    return { url, finalUrl, ...readPage(await text(), maxText) };
   } catch {
     return { url, finalUrl: url, title: '', description: '', site: '', text: '' };
   }
@@ -61,3 +61,63 @@ export async function gatherLink(url, fetchFn = fetch) {
 
 // יש מספיק חומר כדי למפות בלי לקרוא את הדף שוב?
 export const enoughText = (src) => `${src.title} ${src.description} ${src.text}`.trim().length >= 400;
+
+// ---------- סרטוני יוטיוב: כותרת, תיאור ותמליל (כתוביות) ----------
+// הסוכן לא צופה בסרטון עצמו – הוא קורא את מה שנאמר בו (הכתוביות של יוטיוב, גם האוטומטיות).
+
+export function youtubeId(input) {
+  let url;
+  try {
+    url = new URL(input);
+  } catch {
+    return '';
+  }
+  const host = url.hostname.replace(/^(www|m|music)\./, '');
+  let id = '';
+  if (host === 'youtu.be') id = url.pathname.slice(1).split('/')[0];
+  else if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+    id = url.searchParams.get('v') || url.pathname.match(/^\/(?:shorts|live|embed|v)\/([^/?#]+)/)?.[1] || '';
+  }
+  return /^[\w-]{11}$/.test(id) ? id : '';
+}
+
+// XML של כתוביות -> טקסט רציף
+export function captionText(xml) {
+  const parts = [...String(xml).matchAll(/<(?:text|p)\b[^>]*>([\s\S]*?)<\/(?:text|p)>/g)].map((m) =>
+    decodeEntities(decodeEntities(m[1].replace(/<[^>]+>/g, ''))).replace(/\s+/g, ' ').trim(),
+  );
+  return parts.filter(Boolean).join(' ');
+}
+
+const YT_CLIENT = { clientName: 'ANDROID', clientVersion: '20.10.38', androidSdkVersion: 34, hl: 'he' };
+
+// { title, author, description, transcript, minutes } – לא נכשל: בלי תמליל מחזיר מה שיש
+export async function youtubeSource(id, fetchFn = fetch, { maxText = 60000 } = {}) {
+  const out = { title: '', author: '', description: '', transcript: '', minutes: 0 };
+  try {
+    const res = await fetchFn('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'user-agent': 'com.google.android.youtube/20.10.38 (Linux; U; Android 14) gzip' },
+      body: JSON.stringify({ context: { client: YT_CLIENT }, videoId: id }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) return out;
+    const data = await res.json();
+    const d = data.videoDetails || {};
+    Object.assign(out, {
+      title: String(d.title || ''),
+      author: String(d.author || ''),
+      description: String(d.shortDescription || '').slice(0, 5000),
+      minutes: Math.round(Number(d.lengthSeconds || 0) / 60),
+    });
+    const tracks = data.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+    // כתוביות שנכתבו ביד עדיפות על אוטומטיות
+    const track = tracks.find((t) => t.kind !== 'asr') || tracks[0];
+    if (!track?.baseUrl || !/^https:\/\/(www\.)?youtube\.com\//.test(track.baseUrl)) return out;
+    const cap = await fetchFn(track.baseUrl, { signal: AbortSignal.timeout(15000) });
+    if (cap.ok) out.transcript = captionText(await cap.text()).slice(0, maxText);
+  } catch {
+    // יוטיוב חסם / אין רשת – ממשיכים עם מה שיש (והסוכן ינסה לבד)
+  }
+  return out;
+}

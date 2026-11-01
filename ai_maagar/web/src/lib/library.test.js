@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { categoryList, filterFromHash, filterItems, hashFromFilter, matches, newestTitles, parsePasted, sharedText } from './library';
+import { categoryList, filterFromHash, filterItems, hashFromFilter, isLearn, LEARN, learnCounts, matches, newestTitles, parsePasted, sharedText } from './library';
 
 describe('parsePasted', () => {
   it('finds links and keeps the rest as a note', () => {
@@ -64,5 +64,21 @@ describe('hash <-> filter', () => {
     }
     expect(hashFromFilter('all')).toBe('');
     expect(filterFromHash('#/c/%E0%A4%A')).toBe('all');
+  });
+});
+
+describe('learning area', () => {
+  it('hash round-trips', () => {
+    expect(hashFromFilter(LEARN)).toBe('#/learn');
+    expect(filterFromHash('#/learn')).toBe(LEARN);
+  });
+  it('counts text uses Hebrew singular and skips zeros', () => {
+    expect(learnCounts({ skills: [1], prompts: [1, 2], steps: [] })).toEqual(['סקיל אחד', '2 פרומפטים']);
+    expect(learnCounts({ steps: [1, 2, 3] })).toEqual(['3 צעדים']);
+    expect(learnCounts(undefined)).toEqual([]);
+  });
+  it('detects learning items', () => {
+    expect(isLearn({ mode: 'learn' })).toBe(true);
+    expect(isLearn({})).toBe(false);
   });
 });

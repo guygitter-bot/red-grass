@@ -125,6 +125,8 @@
   לוודא שהגיבוי והשחזור (`/backup/export`, `/backup/import`) עדיין מכסים אותו.
 
 #### ייבוא
+- "מתכון בהקלטה" (`#/new?voice`): זיהוי דיבור של המערכת (`web/src/lib/voice.js`: Web Speech בדפדפן, התוסף `@capacitor-community/speech-recognition`
+  באנדרואיד – מתחיל מחדש אחרי שתיקה), הטקסט נשלח ל-`/recipes/text` עם `voice: true` (מקור `kind: 'voice'`). ההקלטה לא נשמרת.
 - "מתכון מקובץ" (Word, PDF, טקסט, תמונות, epub...) במסך `#/import`: הקריאה בטלפון (`web/src/lib/files.js`, בלי AI), ורק הקטעים שנבחרו נשלחים
   (`/recipes/text` עם `file: true`; PDF סרוק – כמו צילום). קובץ חדש? להוסיף קורא ב-`readRecipeFile` + בדיקה ב-`files.test.js`.
 - My Recipe Box / RecetteTek (`.rtk`), Paprika (`.paprikarecipes`), Recipe Keeper (ZIP עם `recipes.html`), Cookmate (`.mcb` / XML): `web/src/lib/importers.js` (`readImportFile` מזהה לפי התוכן), דרך הגדרות ← "ייבוא מאפליקציה אחרת". Google Keep (Takeout): `web/src/lib/keep.js` – פתקים נכנסים למסך ייבוא מווטסאפ (`#/import`) ונשלחים ל-AI כמו טקסט. מתכון בלי מצרכים
@@ -134,6 +136,7 @@
 - תיאור: `ai_maagar/README.md`. קישורים וקבצים על AI שממופים לקטגוריות לפי נושא (Claude, ברקע ב-Durable Object alarm).
 - `ai_maagar/web` → https://ai-maagar-631.pages.dev · `ai_maagar/api` → Worker `ai-maagar-api`. עלייה: `ai-maagar.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd ai_maagar/api && npm test` · `cd ai_maagar/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- **תמיד למזג לבד** את ה-PR (אחרי שהבדיקות ירוקות), לבדוק שהעלייה (`ai-maagar.yml` על main) הצליחה, ולדווח. אזור "לימוד וסקילים": `api/learn.js` (`mode: 'learn'`).
 
 ### ארץ עיר (`eretz_ir/`)
 - תיאור: `eretz_ir/README.md`. משחק לכמה שחקנים בקישור, עם שם ותמונה; 9 קטגוריות (כולל מאכל); ניקוד 10 (רק אחד) / 5 (כמה), בונוס 10 למי שסיים ראשון (עם צלצול).
@@ -218,6 +221,7 @@
 
 ### סקילים לאינסטגרם (`.claude/skills/ig-*`)
 - 13 סקילים מהחבילה `Jakeschincariol/instagram-agent-skill` (רישיון MIT, `.claude/skills/LICENSE-instagram-agent-skill`). מפעילים בצ'אט: `/ig-reel`, `/ig-caption` וכו'.
+- תוכן שיווקי על mat-kon: המסר והייחודיות ב-`.claude/instagram/mat-kon.md` – לעדכן אותו כשנוסף פיצ'ר בולט או משתנה המסר.
 - קובץ "הקול האישי" וקובצי העבודה שלהם: `.claude/instagram/` (במאגר, כדי שיישמרו בין שיחות). המאגר ציבורי – לא לשים שם מידע פרטי.
 - הסקילים לא מפרסמים כלום ולא נכנסים לאינסטגרם: רק כותבים טקסט. לכתוב למשתמש בעברית גם כשהסקיל באנגלית.
 - **לפני כל הוראה ליצירת סרטון (Flow):** קודם להציג למשתמש את הטקסט המלא של הסרטון (דיבור + טקסט על המסך) ולחכות לאישור. תסריטים: `.claude/instagram/reels-*.md`.

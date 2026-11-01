@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Link2, Paperclip, Plus } from 'lucide-react';
 
 // הדבקת קישורים / טקסט, או העלאת קבצים (גם גרירה במחשב)
-export default function AddBox({ initial = '', busy, onAdd, onFiles }) {
+export default function AddBox({ initial = '', busy, placeholder = 'הדביקו קישור, או כתבו טיפ לשמירה', onAdd, onFiles }) {
   const [value, setValue] = useState(initial);
   const [drag, setDrag] = useState(false);
   const fileRef = useRef(null);
@@ -40,7 +40,7 @@ export default function AddBox({ initial = '', busy, onAdd, onFiles }) {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit(e);
           }}
           rows={value.includes('\n') ? 3 : 1}
-          placeholder="הדביקו קישור, או כתבו טיפ לשמירה"
+          placeholder={placeholder}
           className="flex-1 resize-none bg-transparent py-2 outline-none placeholder:text-muted min-h-[2.5rem]"
         />
       </div>

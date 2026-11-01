@@ -15,7 +15,7 @@ export function communityIdentity(recipe) {
   // עותק של מתכון שמשתמש פרסם (נשמר מהקהילה): נספר על אותו מתכון במאגר
   if (src?.kind === 'community' && typeof src.identity === 'string' && /^pub:[\w:-]{3,200}$/.test(src.identity)) return src.identity;
   if (!src || typeof src.url !== 'string' || !src.url || src.text) return null;
-  if (['whatsapp', 'file', 'photo', 'manual'].includes(src.kind)) return null;
+  if (['whatsapp', 'file', 'voice', 'photo', 'manual'].includes(src.kind)) return null;
   if (typeof src.identity === 'string' && /^[a-z]+:.{3,600}$/.test(src.identity)) return src.identity;
   const yt = youtubeId(src.url);
   if (yt) return `youtube:${yt}`;
