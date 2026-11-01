@@ -1617,6 +1617,11 @@ test('admin app: overview, issues with status, security events and settings – 
   assert.equal((await (await call('GET', '/admin/overview', undefined, owner)).json()).settings.spendAlert, 0.0001);
   const pre = await worker.fetch(new Request('https://api.example/admin/overview', { method: 'OPTIONS', headers: { origin: 'https://mat-kon-admin.pages.dev' } }), env);
   assert.equal(pre.headers.get('access-control-allow-origin'), 'https://mat-kon-admin.pages.dev');
+  // תצוגה מקדימה של הפרויקט שלנו – כן; פרויקט אחר ששמו מתחיל ב-mat-kon-admin- – לא
+  const preview = await worker.fetch(new Request('https://api.example/admin/overview', { method: 'OPTIONS', headers: { origin: 'https://abc123.mat-kon-admin.pages.dev' } }), env);
+  assert.equal(preview.headers.get('access-control-allow-origin'), 'https://abc123.mat-kon-admin.pages.dev');
+  const evil = await worker.fetch(new Request('https://api.example/admin/overview', { method: 'OPTIONS', headers: { origin: 'https://mat-kon-admin-evil.pages.dev' } }), env);
+  assert.equal(evil.headers.get('access-control-allow-origin'), null);
 });
 
 test('community: publishing a personal recipe with a display name, AI check, reports, moderation and blocking', async () => {
@@ -1651,6 +1656,13 @@ test('community: publishing a personal recipe with a display name, AI check, rep
   review = { decision: 'publish', image_ok: true, reason: '' };
   const pub = await (await call('POST', `/recipes/${mine.id}/publish`, {}, dana)).json();
   assert.ok(pub.recipe.published);
+  // תמונה מאתר חיצוני לא עוברת לקהילה (הייתה חושפת לאתר את הצופים)
+  const ext = (await (await call('POST', '/recipes/manual', { title: 'פשטידה', image: 'https://tracker.example/x.jpg', ingredients: [{ title: '', items: ['ביצים'] }], steps: [{ title: '', items: ['אופים'] }] }, dana)).json()).recipe;
+  const extPub = await (await call('POST', `/recipes/${ext.id}/publish`, {}, dana)).json();
+  assert.equal(apiCalls.at(-1).messages[0].content.some?.((b) => b.type === 'image') ?? false, false);
+  assert.equal(extPub.review.imageRemoved, false);
+  const extCopy = await (await call('GET', `/community/${extPub.recipe.published}`, undefined, ron)).json();
+  assert.equal(extCopy.recipe.image, null);
   const found = (await (await call('GET', '/community?q=שמרים', undefined, ron)).json()).results;
   assert.deepEqual([found.length, found[0].credit, found[0].personal, found[0].saves], [1, 'מתכון של דנה מבשלת', true, 1]);
   assert.equal(JSON.stringify(found).includes('dana@example.com'), false);
