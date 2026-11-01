@@ -11,6 +11,10 @@ const CACHE_DAYS = 90; // מתכון במטמון המשותף מתחדש אחר
 export const MAX_RECIPES = 2000; // תקרה לספר, כדי שאי אפשר יהיה למלא את האחסון
 const STALE_JOB_MS = 5 * 60 * 1000;
 // המופע אופס באמצע (עדכון שרת וכו'): לא תקלה – העבודה חוזרת לתור ורצה שוב במופע החדש
+// עומס על ה-AI (הרבה מוסיפים בבת אחת / תקרת קצב): העבודה חוזרת לתור ומנסה שוב לבד, בהמתנה הולכת וגדלה
+export const isOverload = (e) => [429, 529].includes(Number(e?.status)) || Number(e?.status) >= 500 || /overloaded|rate.?limit/i.test(String(e?.message || ''));
+const RETRY_DELAYS = [20, 45, 90, 180].map((s) => s * 1000);
+
 export const isReset = (e) => Boolean(e?.durableObjectReset) || /Durable Object reset|code was updated/i.test(String(e?.message || ''));
 // המקור של מתכון: קישור, או מפתח (הודעת ווטסאפ, צילום...)
 const sourceKey = (r) => String(r?.source?.url || r?.source?.key || '').slice(0, 1500);
@@ -264,23 +268,34 @@ export class RecipeBook {
       } else if (job.status === 'running' && now - Date.parse(job.startedAt || job.createdAt) > STALE_JOB_MS) {
         // עבודה שנקטעה באמצע (עדכון שרת וכו'): נכשלת, והמכסה חוזרת
         await this.finishJob(key, job, { status: 'error', error: 'העבודה נקטעה. נסו שוב.', code: 502 }, true);
-      } else if (job.status === 'pending' && !next) {
+      } else if (job.status === 'pending' && !next && !(job.notBefore > now)) {
         next = [key, job];
       }
     }
     if (!next) {
       const left = [...jobs.values()].filter((j) => j.status === 'running');
-      if (left.length) await this.storage.setAlarm(now + STALE_JOB_MS);
+      // עבודה שמחכה אחרי עומס – האזעקה הבאה בזמן שלה
+      const waiting = [...jobs.values()].filter((j) => j.status === 'pending' && j.notBefore > now).map((j) => j.notBefore);
+      if (waiting.length) await this.storage.setAlarm(Math.min(...waiting));
+      else if (left.length) await this.storage.setAlarm(now + STALE_JOB_MS);
       return;
     }
     // עבודה אחת בכל פעם; האזעקה הבאה נקבעת לפני העבודה, כדי שתמשיך גם אם זו נקטעת
     const [key, job] = next;
-    await this.storage.put(key, { ...job, status: 'running', startedAt: new Date().toISOString() });
+    await this.storage.put(key, { ...job, status: 'running', startedAt: new Date().toISOString(), waiting: false });
     await this.storage.setAlarm(Date.now() + 1000);
     let done;
     try {
       done = await this.runJob(job);
     } catch (e) {
+      if (e?.retryLater) {
+        // עומס: חוזרת לתור לניסיון נוסף (המכסה נשארת תפוסה, בלי תקלה)
+        const { startedAt, ...rest } = job;
+        void startedAt;
+        await this.storage.put(key, { ...rest, status: 'pending', retries: (job.retries || 0) + 1, notBefore: Date.now() + e.retryLater, waiting: true });
+        await this.storage.setAlarm(Date.now() + 1000);
+        return;
+      }
       if (!isReset(e)) throw e;
       // חוזרת לתור; אם גם זה לא הצליח – היא תיכשל כ"נקטעה" (עם החזר מכסה) באזעקה הבאה
       await this.storage.put(key, { ...job, status: 'pending' }).catch(() => {});
@@ -315,6 +330,7 @@ export class RecipeBook {
       return { status: 'done', recipeId: data.recipe.id, title: data.recipe.title, category: data.recipe.category, updated: data.updated };
     } catch (e) {
       if (isReset(e)) throw e; // בלי החזר מכסה ובלי תקלה – העבודה תרוץ שוב
+      if (isOverload(e) && (job.retries || 0) < RETRY_DELAYS.length) throw Object.assign(new Error('retry'), { retryLater: RETRY_DELAYS[job.retries || 0] });
       await giveBack();
       await toAccounts('/errors/add', {
         where: 'job', message: String(e?.message || e).slice(0, 300), status: e?.status || null, user: job.quota?.userId || 'owner',

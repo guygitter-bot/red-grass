@@ -1337,6 +1337,32 @@ test('a job cut off by a server update goes back to the queue, without an error 
   assert.equal((await (await call('GET', '/me', undefined, session)).json()).user.added, before + 1);
 });
 
+test('AI overloaded: a background job waits in the queue and retries by itself, without an error or a refund', async () => {
+  const { session, user } = await (await register((await invite()).token)).json();
+  let n = 0;
+  deps.anthropic = () => ({ beta: { messages: { create: async (p) => {
+    apiCalls.push(p);
+    n += 1;
+    if (n === 1) throw Object.assign(new Error('529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}'), { status: 529 });
+    return reply(apiCalls.length);
+  } } } });
+  const res = await (await call('POST', '/recipes?async=1', { url: 'https://cake.example/busy' }, session)).json();
+  await new Promise((r) => setTimeout(r, 50));
+  const book = env.BOOK.objects.get(`user:${user.id}`);
+  let job = book.storage.map.get(`job:${res.job.id}`);
+  assert.deepEqual([job.status, job.waiting, job.retries], ['pending', true, 1]);
+  assert.ok(job.notBefore > Date.now());
+  assert.equal((await (await call('GET', `/jobs/${res.job.id}`, undefined, session)).json()).job.waiting, true);
+  const issues = (await (await call('GET', '/admin/errors')).json()).errors;
+  assert.equal(issues.length, 0, 'not an issue');
+  // הזמן עבר – האזעקה מריצה שוב ומצליחה
+  book.storage.map.set(`job:${res.job.id}`, { ...job, notBefore: Date.now() - 1 });
+  await book.alarm();
+  job = book.storage.map.get(`job:${res.job.id}`);
+  assert.equal(job.status, 'done');
+  assert.equal((await (await call('GET', '/me', undefined, session)).json()).user.added, 1);
+});
+
 test('an uploaded image cannot be pointed at from another recipe; replacing on refresh drops the old file', async () => {
   const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
   const a = (await (await call('POST', '/recipes/manual', { title: 'א', ingredients: [{ title: '', items: ['x'] }], image: png })).json()).recipe;
