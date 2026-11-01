@@ -6,11 +6,13 @@ import { isNative } from './native';
 const LANG = 'he-IL';
 const WebSpeech = () => (typeof window !== 'undefined' ? window.SpeechRecognition || window.webkitSpeechRecognition : null);
 
+// התוסף הוא Proxy של Capacitor: אסור להחזיר אותו ישר מפונקציה async (או await עליו) –
+// JS בודק אם יש לו then(), והתוסף זורק "SpeechRecognition.then() is not implemented". לכן עוטפים באובייקט.
 let nativePlugin;
 async function plugin() {
   if (!nativePlugin) {
     const { registerPlugin } = await import('@capacitor/core');
-    nativePlugin = registerPlugin('SpeechRecognition');
+    nativePlugin = { sr: registerPlugin('SpeechRecognition') };
   }
   return nativePlugin;
 }
@@ -18,7 +20,8 @@ async function plugin() {
 export async function voiceSupported() {
   if (isNative()) {
     try {
-      return (await (await plugin()).available()).available;
+      const { sr } = await plugin();
+      return (await sr.available()).available;
     } catch {
       return false;
     }
@@ -41,7 +44,7 @@ export async function startDictation({ onText, onError }) {
   };
 
   if (isNative()) {
-    const sr = await plugin();
+    const { sr } = await plugin();
     const perm = await sr.checkPermissions().catch(() => ({}));
     if (perm.speechRecognition !== 'granted') {
       const asked = await sr.requestPermissions().catch(() => ({}));
