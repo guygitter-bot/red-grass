@@ -134,6 +134,9 @@ export default {
       delete body.open;
       if (openSignup) {
         if (!openSignupAllowed(request, env)) return fail(403, 'כדי להירשם צריך קישור הזמנה');
+        // הרשמה פתוחה עם אימייל וסיסמה – בלי אימות שהאימייל אמיתי, וכל סקריפט יכול לזייף שהוא "האפליקציה".
+        // לכן הרשמה חדשה בלי הזמנה רק עם חשבון גוגל (אימייל מאומת), אלא אם הותר במפורש
+        if (env.OPEN_SIGNUP_PASSWORD !== 'true') return fail(403, 'הרשמה חדשה – עם חשבון גוגל (הכפתור למעלה)');
         const limited = await rate([{ key: `open-ip:${ip}`, limit: 5, window: 3600 }], 'יותר מדי הרשמות. נסו שוב מאוחר יותר.');
         if (limited) return limited;
         body.open = true;
@@ -248,6 +251,11 @@ export default {
     const aiBudget = async (cost = 1) => {
       const limit = !user ? Number(env.AI_DAILY_OWNER || 300)
         : user.plan === 'paid' ? Number(env.AI_DAILY_PAID || 100) : Number(env.AI_DAILY_FREE || 25);
+      // תקרת הוצאה יומית של כל האפליקציה (הגנה מפני ניצול): עוצרת משתמשים, לא את בעל האפליקציה
+      if (user) {
+        const spend = await (await internal(accounts, 'POST', '/spend/check', {})).json().catch(() => ({}));
+        if (spend.stopped) return fail(503, 'יש עומס חריג היום, והפעולות החכמות נעצרו זמנית. נסו שוב מחר.');
+      }
       const res = await internal(bookFor(user), 'POST', '/usage/take', { day: new Date().toISOString().slice(0, 10), limit, cost });
       return res.ok ? null : fail(429, 'הגעתם למכסה היומית של פעולות חכמות. אפשר להמשיך מחר.');
     };
@@ -758,6 +766,8 @@ export default {
         ]);
         const open = issues.issues.filter((i) => i.status !== 'fixed');
         const alerts = [];
+        const today = await (await internal(accounts, 'POST', '/spend/check', {})).json();
+        if (today.stopped) alerts.push({ level: 'serious', text: `ה-AI נעצר למשתמשים להיום: ההוצאה ($${today.usd.toFixed(2)}) הגיעה לתקרה היומית ($${today.cap}). אפשר להעלות אותה במסך "כסף".` });
         const spend = settings.settings.spendAlert;
         if (spend && costs[0].usd >= spend) alerts.push({ level: 'serious', text: `ההוצאה על AI החודש ($${costs[0].usd}) עברה את הסף שקבעת ($${spend})` });
         if (open.some((i) => i.status === 'new')) alerts.push({ level: 'warning', text: `${open.filter((i) => i.status === 'new').length} תקלות חדשות שעוד לא טופלו` });
@@ -770,7 +780,7 @@ export default {
         return reply(200, {
           stats, costs, community, backups: backups?.enabled ? { last: lastBackup || null, count: backups.days.length, ok: Boolean(backups.last) } : null,
           issues: { open: open.length, new: open.filter((i) => i.status === 'new').length, fixed: issues.issues.length - open.length },
-          settings: settings.settings, alerts, reports: { pending: reports.items.length + talk.items.length, hidden },
+          settings: settings.settings, spendToday: { usd: Math.round(today.usd * 100) / 100, cap: today.cap }, alerts, reports: { pending: reports.items.length + talk.items.length, hidden },
         });
       }
       if (url.pathname === '/admin/issues' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/admin/issues'));
@@ -879,7 +889,7 @@ export default {
       if (url.pathname === '/admin/settings' && request.method === 'PUT') {
         const { body, error } = await readJson();
         if (error) return error;
-        return pass(await internal(accounts, 'POST', '/admin/settings', Object.fromEntries(['spendAlert', 'testStart'].filter((k) => k in body).map((k) => [k, body[k]]))));
+        return pass(await internal(accounts, 'POST', '/admin/settings', Object.fromEntries(['spendAlert', 'spendStop', 'testStart'].filter((k) => k in body).map((k) => [k, body[k]]))));
       }
       if (url.pathname === '/admin/errors' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/errors'));
       return fail(404, 'Not found');

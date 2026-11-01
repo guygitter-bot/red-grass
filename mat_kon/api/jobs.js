@@ -60,8 +60,9 @@ export async function buildRecipe(env, client, { link, text, hint }, categories)
   const { more, ...shared } = recipe;
   void more;
   const { hint: ownHint, ...source } = shared.source || {};
-  void ownHint;
-  await cachePut(env, [...new Set([identity, alias])], { ...shared, source });
+  // מתכון שנבנה עם הערה של המשתמש לא נשמר לכולם: מי שמוסיף ראשון סרטון פופולרי עם הערה מטעה
+  // ("ללא גלוטן", כמויות אחרות) היה משפיע על כל מי שיוסיף אותו אחריו ("הרעלת" המטמון)
+  if (!String(ownHint || '').trim()) await cachePut(env, [...new Set([identity, alias])], { ...shared, source });
   return recipe;
 }
 
