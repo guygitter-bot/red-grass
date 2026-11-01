@@ -1,3 +1,5 @@
+> **תוכן על mat-kon (אפליקציית המתכונים):** לפני כל רילס/פוסט/קמפיין – לקרוא גם את `.claude/instagram/mat-kon.md` (המסר, הייחודיות, מה לא להגיד).
+
 # voice.md
 
 Copy this to `~/.claude/instagram/voice.md` and fill it in. Every skill in the
