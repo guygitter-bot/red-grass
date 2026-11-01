@@ -7,6 +7,12 @@ export const deps = {
 };
 
 // לקוח AI שסופר טוקנים: כל קריאה מדווחת ל-onUsage({input, output}) – למעקב עלויות לפי ספר
+// עלות בדולרים של שימוש ב-AI (מחירים לכל מיליון טוקנים / לכל חיפוש – אותם מחירים כמו במסך העלויות)
+export function usdOf(env, { input = 0, output = 0, searches = 0 } = {}) {
+  const price = { in: Number(env.AI_PRICE_IN || 5), out: Number(env.AI_PRICE_OUT || 25), search: Number(env.AI_PRICE_SEARCH || 0.01) };
+  return (input * price.in + output * price.out) / 1e6 + searches * price.search;
+}
+
 export function trackedClient(env, onUsage) {
   const client = deps.anthropic(env);
   const create = client.beta.messages.create.bind(client.beta.messages);

@@ -1,5 +1,5 @@
 import { buildRecipe, errorGroup, failure, recipeKind } from './jobs.js';
-import { trackedClient } from './deps.js';
+import { trackedClient, usdOf } from './deps.js';
 import { HIDE_AT_REPORTS, communityIdentity, communityKey, publicCopy, searchCommunity, summarize, publicTalk, talkImageKey, TALK_MAX } from './community.js';
 // ספר המתכונים: Durable Object אחד שמחזיק את כל המתכונים (כל מתכון במפתח r:<id>).
 
@@ -476,6 +476,14 @@ export class RecipeBook {
       const row = byKind[k] || (byKind[k] = { ops: 0, input: 0, output: 0, searches: 0 });
       Object.assign(row, { ops: row.ops + (first ? 1 : 0), input: row.input + input, output: row.output + output, searches: row.searches + searches });
       await this.storage.put(key, c);
+      // ההוצאה היומית של כל האפליקציה (לתקרה שעוצרת את ה-AI)
+      const accounts = this.env.ACCOUNTS?.get(this.env.ACCOUNTS.idFromName('accounts'));
+      if (accounts) {
+        await accounts.fetch(new Request('https://do/spend/add', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ day: new Date().toISOString().slice(0, 10), usd: usdOf(this.env, { input, output, searches }) }),
+        })).catch(() => {});
+      }
       return json(c);
     }
     if (url.pathname.startsWith('/costs/') && request.method === 'GET') {

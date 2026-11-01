@@ -200,6 +200,12 @@ export class Accounts {
     await this.storage.put('no-recipe', list.slice(0, 50));
   }
 
+  // תקרת ההוצאה היומית: מהגדרות הניהול, אחרת AI_DAILY_STOP_USD (ברירת מחדל $20). 0 בשניהם = בלי תקרה
+  async spendCap() {
+    const set = Number((await this.storage.get('admin-settings'))?.spendStop) || 0;
+    return set || Number(this.env.AI_DAILY_STOP_USD ?? 20) || 0;
+  }
+
   // גרסת הסוד של בעל האפליקציה: החלפת הסיסמה מנתקת את כל מכשירי הבעלים
   async ownerVersion() {
     return (await sha256(`${this.env.OWNER_PASSWORD || ''}|${this.env.OWNER_EMAIL || ''}`)).slice(0, 16);
@@ -646,6 +652,29 @@ export class Accounts {
       if (['ownerFail'].includes(body.type)) await this.security(body.type, body.detail || '');
       return json({ ok: true });
     }
+    // ---- הוצאה יומית על AI של כל האפליקציה: מעל התקרה ה-AI נעצר למשתמשים (לא לבעל האפליקציה) ----
+    if (path === '/spend/add' && request.method === 'POST') {
+      const day = /^\d{4}-\d{2}-\d{2}$/.test(body.day) ? body.day : new Date(now).toISOString().slice(0, 10);
+      const usd = Number(body.usd);
+      if (!(usd > 0) || usd > 1000) return json({ ok: true });
+      const spend = (await this.storage.get('spend')) || {};
+      if (spend.day !== day) Object.assign(spend, { day, usd: 0, stopped: false });
+      spend.usd += usd;
+      const cap = await this.spendCap();
+      if (cap && spend.usd >= cap && !spend.stopped) {
+        spend.stopped = true;
+        await this.notifyAdmin({ title: '🛑 ה-AI נעצר להיום', body: `ההוצאה היומית הגיעה ל-$${spend.usd.toFixed(2)} (התקרה: $${cap}). המשתמשים יחכו עד מחר; אפשר להעלות את התקרה באפליקציית הניהול ← כסף.`, tag: 'spend-stop', url: '#money' }, { force: true });
+      }
+      await this.storage.put('spend', spend);
+      return json({ ok: true });
+    }
+    if (path === '/spend/check' && request.method === 'POST') {
+      const spend = (await this.storage.get('spend')) || {};
+      const today = new Date(now).toISOString().slice(0, 10);
+      const usd = spend.day === today ? spend.usd : 0;
+      const cap = await this.spendCap();
+      return json({ usd, cap, stopped: Boolean(cap && usd >= cap) });
+    }
     if (path === '/admin/settings') {
       if (request.method === 'POST') {
         // רק השדות שנשלחו משתנים
@@ -653,6 +682,11 @@ export class Accounts {
         if ('spendAlert' in body) {
           const spendAlert = Number(body.spendAlert);
           next.spendAlert = Number.isFinite(spendAlert) && spendAlert > 0 ? Math.min(spendAlert, 100000) : 0;
+        }
+        // תקרת הוצאה יומית שעוצרת את ה-AI (0 = ברירת המחדל מהשרת)
+        if ('spendStop' in body) {
+          const spendStop = Number(body.spendStop);
+          next.spendStop = Number.isFinite(spendStop) && spendStop > 0 ? Math.min(spendStop, 100000) : 0;
         }
         // תחילת הבדיקה הסגורה ב-Google Play (לספירת הימים במסך הסקירה)
         if ('testStart' in body) next.testStart = /^\d{4}-\d{2}-\d{2}$/.test(String(body.testStart)) ? body.testStart : '';

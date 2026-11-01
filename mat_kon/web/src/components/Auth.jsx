@@ -102,25 +102,34 @@ export default function Auth({ mode: initialMode, token, onDone }) {
             {googleId && (
               <>
                 <GoogleButton clientId={googleId} text={signup ? 'signup_with' : 'signin_with'} onCredential={withGoogle} onError={setError} />
+                {/* הרשמה חדשה בלי הזמנה – רק עם גוגל (אימייל מאומת; הגנה מפני הרשמות מזויפות) */}
+                {mode !== 'signup' && (
                 <div className="flex items-center gap-3 text-xs text-stone-400">
                   <span className="flex-1 h-px bg-stone-200" />
                   או עם אימייל וסיסמה
                   <span className="flex-1 h-px bg-stone-200" />
                 </div>
+                )}
               </>
             )}
-            {signup && (
+            {mode === 'signup' && (
+              <p className="text-sm text-stone-600 text-center">
+                {googleId ? 'נרשמים בלחיצה עם חשבון הגוגל שלכם.' : 'אפשר להירשם כרגע רק עם קישור הזמנה.'}
+              </p>
+            )}
+            {mode !== 'signup' && signup && (
               <label className="block">
                 <span className="text-sm font-medium text-stone-700">שם</span>
                 <input value={form.name} onChange={set('name')} autoComplete="name" required className={field} />
               </label>
             )}
-            {mode !== 'owner' && (
+            {mode !== 'owner' && mode !== 'signup' && (
             <label className="block">
               <span className="text-sm font-medium text-stone-700">אימייל</span>
               <input type="email" value={form.email} onChange={set('email')} autoComplete="email" required dir="ltr" className={field} />
             </label>
             )}
+            {mode !== 'signup' && (
             <label className="block">
               <span className="text-sm font-medium text-stone-700">{mode === 'owner' ? 'סיסמת הבעלים' : 'סיסמה'}{signup ? ' (לפחות 8 תווים)' : ''}</span>
               <input
@@ -134,11 +143,14 @@ export default function Auth({ mode: initialMode, token, onDone }) {
                 className={field}
               />
             </label>
+            )}
             {error && <p className="text-red-600 text-sm">{error}</p>}
+            {mode !== 'signup' && (
             <button disabled={busy} className="w-full rounded-2xl bg-orange-500 text-white font-bold py-3 disabled:opacity-50 flex items-center justify-center gap-2">
               {busy && <Loader2 size={18} className="animate-spin" />}
               {mode === 'join' ? 'הצטרפות לספר' : mode === 'register' || mode === 'signup' ? 'הרשמה' : 'כניסה'}
             </button>
+            )}
             {mode === 'register' && (
               <p className="text-xs text-stone-500 text-center">{invite?.freeLimit ?? 10} המתכונים הראשונים בחינם.</p>
             )}

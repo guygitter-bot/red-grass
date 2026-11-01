@@ -465,6 +465,33 @@ function BisFeature({ session }) {
   );
 }
 
+// תקרה יומית שעוצרת את ה-AI למשתמשים (הגנה מפני ניצול). בעל האפליקציה ממשיך לעבוד
+function SpendStop({ d, session, reload }) {
+  const today = d.spendToday || { usd: 0, cap: 0 };
+  const [cap, setCap] = useState(d.settings.spendStop || '');
+  const [saved, setSaved] = useState(false);
+  const save = async () => {
+    await api(session, 'PUT', '/admin/settings', { spendStop: Number(cap) || 0 });
+    setSaved(true);
+    reload();
+  };
+  const stopped = today.cap > 0 && today.usd >= today.cap;
+  return (
+    <Card title="תקרה יומית שעוצרת את ה-AI">
+      <div className={`text-sm mb-2 ${stopped ? 'text-red-600 font-bold' : ''}`}>
+        היום: {usd(today.usd)} מתוך {usd(today.cap)}{stopped ? ' – ה-AI עצור למשתמשים עד מחר' : ''}
+      </div>
+      <p className="text-sm text-muted mb-2">
+        כשההוצאה של היום מגיעה לסכום הזה, הפעולות החכמות נעצרות לכל המשתמשים עד חצות (שעון עולמי), ומגיעה התראה. בעל האפליקציה ממשיך לעבוד. ריק = ברירת המחדל ($20).
+      </p>
+      <div className="flex gap-2">
+        <input type="number" min="0" inputMode="decimal" value={cap} onChange={(e) => { setCap(e.target.value); setSaved(false); }} placeholder="20" className="flex-1 rounded-xl border border-line bg-page px-3 py-2" dir="ltr" />
+        <button onClick={save} className="rounded-xl bg-brand text-white font-bold px-4">{saved ? 'נשמר ✓' : 'שמירה'}</button>
+      </div>
+    </Card>
+  );
+}
+
 function Money({ d, session, reload }) {
   const [alert, setAlert] = useState(d.settings.spendAlert || '');
   const [saved, setSaved] = useState(false);
@@ -496,6 +523,7 @@ function Money({ d, session, reload }) {
           <button onClick={save} className="rounded-xl bg-brand text-white font-bold px-4">{saved ? 'נשמר ✓' : 'שמירה'}</button>
         </div>
       </Card>
+      <SpendStop d={d} session={session} reload={reload} />
       <Card title="הכנסות"><p className="text-sm text-muted">יופיעו כאן כשנחבר תשלומים באפליקציה.</p></Card>
     </div>
   );
