@@ -1,0 +1,39 @@
+name: campaign-music
+
+# מוזיקת רקע לריילס של הקמפיין: כשרשימת הבקשות (.claude/instagram/music/prompts.json) משתנה בענף עבודה,
+# יוצרים קובצי MP3 עם ElevenLabs Music (ELEVENLABS_API_KEY) ומחזירים אותם לאותו ענף.
+on:
+  push:
+    branches-ignore: [main]
+    paths: [".claude/instagram/music/prompts.json", ".claude/instagram/music/generate.mjs", ".github/workflows/campaign-music.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: campaign-music-${{ github.ref }}
+
+jobs:
+  music:
+    # רק דחיפה של בעל המאגר (הסקריפט רץ עם המפתח, ודחיפת הבוט לא מפעילה שוב)
+    if: github.actor == github.repository_owner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Generate music (ElevenLabs)
+        env:
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY || 'none' }}
+        run: node .claude/instagram/music/generate.mjs
+      - name: Commit music
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .claude/instagram/music
+          if git diff --cached --quiet; then echo "nothing new"; exit 0; fi
+          git commit -m "campaign: background music"
+          git push
