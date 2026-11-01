@@ -19,7 +19,9 @@ export default function PendingList({ items, onRetry, onDismiss, onPaste }) {
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium truncate" dir="ltr">{hostOf(item.url)}</div>
             <div className={`text-xs ${item.error ? 'text-red-700' : 'text-stone-500'}`}>
-              {item.error || 'קוראים את הקישור ומסדרים מתכון… (בסרטון זה יכול לקחת דקה-שתיים)'}
+              {item.error || (item.waiting
+                ? 'יש עומס רגעי – המתכון בתור וימשיך לבד בעוד רגע. אפשר לסגור את האפליקציה.'
+                : 'קוראים את הקישור ומסדרים מתכון… (בסרטון זה יכול לקחת דקה-שתיים)')}
             </div>
             {item.error && isVideoLink(item.url) && (
               // סייג: לא בכל סרטון יש מתכון – לפעמים רק צילום של ההכנה, בלי מצרכים וכמויות

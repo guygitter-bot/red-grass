@@ -398,6 +398,9 @@ export default function App() {
           setPending((p) => p.filter((x) => x.key !== item.key));
           setToast(job.updated ? `"${job.title}" עודכן` : `"${job.title}" נוסף ל${job.category}`);
           if (session && !ownerDevice) getMe(session).then((me) => me.user && setUser(me.user)).catch(() => {});
+        } else if (Boolean(job.waiting) !== Boolean(item.waiting)) {
+          // עומס על ה-AI: העבודה מחכה בתור ותנסה שוב לבד
+          setPending((p) => p.map((x) => (x.key === item.key ? { ...x, waiting: Boolean(job.waiting) } : x)));
         } else if (job.status === 'error') {
           if (job.code === 402) setPaywall({ paymentUrl });
           setPending((p) => p.map((x) => (x.key === item.key ? { ...x, error: job.error } : x)));
