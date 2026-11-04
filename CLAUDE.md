@@ -216,6 +216,15 @@
 - בקשות שינוי מתוך האפליקציה: `api/fixes.js` + `budget-fix.yml` + `budget/fixbot/` (כמו ביס; ענפים `budget-fix/*`, מאשרים מהאפליקציה).
 - המשתמש ביקש: **למזג לבד** אחרי שהבדיקות ירוקות, ולבדוק שהעלייה הצליחה. לכתוב לו **רק בעברית**.
 
+### יומן סוכר – ארוחות ואינסולין (`sugar/`)
+- תיאור: `sugar/README.md`. יומן משותף (סיסמה אחת לכמה אנשים): ארוחות (מנות, סוכר לפני, אינסולין, מדידות אחרי), תפריט קבוע, מעקב ודפוסים, שיחת AI משותפת.
+- `sugar/web` → https://yoman-sukar.pages.dev · `sugar/api` → Worker `yoman-sukar-api` (Durable Object `Diary` אחד, סנכרון לפי `rev`). עלייה: `yoman-sukar.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd sugar/api && npm test` · `cd sugar/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- החישובים ב-`web/src/lib/diary.js` (פונקציות טהורות + בדיקות). שדה חדש – ברירת מחדל ב-`safeMeal` / `safeTemplate` / `safeSettings`.
+- **רעיונות שלא בוצעו:** `sugar/IDEAS.md` (נכנס כשלא מבצעים, יוצא כשבוצע).
+- המשתמשת ביקשה: **תמיד למזג לבד** את ה-PR (אחרי שהבדיקות ירוקות), לבדוק שהעלייה (`yoman-sukar.yml` על main) הצליחה, ולדווח.
+- **בטיחות:** האפליקציה וה-AI לא נותנים מינון כהוראה – רק מה שהנתונים מראים, חישוב לפי הגדרות הצוות מסומן "חישוב בלבד", ותמיד "לבדוק עם הצוות".
+
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).
 

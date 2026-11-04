@@ -1,0 +1,13 @@
+{
+  "name": "יומן סוכר",
+  "short_name": "יומן סוכר",
+  "description": "ארוחות, מדידות סוכר ואינסולין – יומן משותף",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f7fb",
+  "theme_color": "#1d5fa8",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
