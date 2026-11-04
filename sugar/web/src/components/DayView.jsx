@@ -100,9 +100,15 @@ export default function DayView({ data, date, go, openCal }) {
   const missing = missingFixed(data, date);
   const waiting = date === data.today ? waitingForCheck(data, date) : [];
 
+  // ארוחה אחת מהתפריט – נפתח ישר מסך הארוחה (ממולא מהתפריט) כדי למלא סוכר ואינסולין ולשמור.
+  // כמה ארוחות ביחד ("להוסיף את כל התפריט") – נשמרות מיד, וממלאים כל אחת אחר כך.
   const addFixed = (list) => {
-    save(list.map((t) => ({ ...mealFromTemplate(t, date), id: newId('m'), by: getMe() })));
     setPicker(false);
+    if (list.length === 1) {
+      setEditing({ ...mealFromTemplate(list[0], date), by: getMe(), fromMenu: true });
+      return;
+    }
+    save(list.map((t) => ({ ...mealFromTemplate(t, date), id: newId('m'), by: getMe() })));
   };
 
   // ציר אחד של היום: ארוחות ומדידות לפי השעה
