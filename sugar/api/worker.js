@@ -1,19 +1,13 @@
 // השרת של "יומן סוכר" (Cloudflare Worker). כל הנתונים ב-Durable Object אחד (Diary, ראו diary.js).
-//   POST /status                    -> { ready } האם כבר נקבעה סיסמה
-//   POST /setup {password}          -> { token } פעם ראשונה בלבד: קביעת הסיסמה
-//   POST /login {password}          -> { token }
 //   POST /sync {since, changes}     -> { rev, changes } שליחת השינויים מהמכשיר וקבלת מה שהשתנה מאז since
-//   POST /password {password, newPassword} -> { token } החלפת סיסמה (מנתקת את שאר המכשירים)
-//   POST /reset {password}          מחיקת כל הנתונים (בכל המכשירים)
 //   POST /ai {context, history, question} -> { answer, left } שיחה עם ה-AI (עד 60 שאלות ביום)
-//   POST /logout
-// הכניסה: authorization: Bearer <סוד> שמתקבל אחרי סיסמה.
+// בלי סיסמה: רק בקשות מהאתר של האפליקציה (ALLOWED_ORIGINS).
 import { Diary } from './diary.js';
 
 export { Diary };
 
 const MAX_BODY_BYTES = 2.5 * 1024 * 1024;
-const ROUTES = ['/status', '/setup', '/login', '/sync', '/password', '/reset', '/ai', '/logout'];
+const ROUTES = ['/sync', '/ai'];
 
 // כתובת מותרת? (* בהגדרה = כל רצף אותיות)
 export function originAllowed(origin, list) {
@@ -55,7 +49,7 @@ export default {
     if (text.length > MAX_BODY_BYTES) return reply(413, { error: 'גדול מדי' });
     const res = await stub().fetch(new Request(`https://diary${pathname}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: request.headers.get('authorization') || '', 'x-origin': new URL(request.url).origin },
+      headers: { 'content-type': 'application/json', 'x-origin': new URL(request.url).origin },
       body: text,
     }));
     return reply(res.status, await res.json());

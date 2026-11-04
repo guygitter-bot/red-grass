@@ -3,7 +3,7 @@
 // שינוי נכנס לרשימת "לשלוח" (dirty) ונשלח לשרת שנייה וחצי אחרי העריכה, בפתיחה, כשחוזרים לאפליקציה,
 // כשהרשת חוזרת ופעם בדקה. מהשרת חוזר כל מה שהשתנה מאז הפעם הקודמת (rev). העריכה המאוחרת גוברת.
 import { useSyncExternalStore } from 'react';
-import { api, getToken, setToken } from './api';
+import { api } from './api';
 
 const K_RECS = 'ys_recs';
 const K_REV = 'ys_rev';
@@ -28,7 +28,7 @@ const write = (k, v) => {
 let recs = new Map(read(K_RECS, []).map((r) => [r.id, r]));
 let rev = read(K_REV, 0);
 let dirty = new Set(read(K_DIRTY, []));
-let state = { records: [...recs.values()], status: 'idle', authed: !!getToken() };
+let state = { records: [...recs.values()], status: 'idle' };
 const listeners = new Set();
 
 function emit(patch = {}) {
@@ -73,7 +73,6 @@ export function remove(id) {
 
 let running = null;
 export function sync() {
-  if (!getToken()) return Promise.resolve();
   if (running) {
     // עוד סנכרון באמצע – ננסה שוב אחריו
     soon(500);
@@ -99,39 +98,12 @@ export function sync() {
       persist();
       emit({ status: dirty.size ? 'pending' : 'ok' });
     } catch (err) {
-      if (err.status === 401) {
-        setToken('');
-        emit({ status: 'idle', authed: false });
-      } else emit({ status: err.offline ? 'offline' : 'error' });
+      emit({ status: err.offline ? 'offline' : 'error' });
     } finally {
       running = null;
     }
   })();
   return running;
-}
-
-export async function login(path, password) {
-  const { token } = await api(path, { password });
-  setToken(token);
-  // מכשיר חדש: מקבלים הכול מההתחלה (ומה שהיה כאן עולה ומתמזג)
-  rev = 0;
-  for (const id of recs.keys()) dirty.add(id);
-  persist();
-  emit({ authed: true });
-  await sync();
-}
-
-export async function changePassword(password, newPassword) {
-  const { token } = await api('/password', { password, newPassword });
-  setToken(token);
-}
-
-// מחיקת כל הנתונים – בשרת ובכל המכשירים (צריך סיסמה). שינויים שעוד לא נשלחו מהמכשיר הזה לא יישלחו
-export async function resetAll(password) {
-  await api('/reset', { password });
-  dirty = new Set();
-  persist();
-  await sync();
 }
 
 // שאלה בשיחה עם ה-AI: השאלה והתשובה נשמרות כהודעות (ומסתנכרנות), כך שכל מי שמשתף רואה את אותה שיחה
@@ -140,17 +112,6 @@ export async function askAi(context, question, history, by) {
   const { answer, left } = await api('/ai', { context, question, history: history.slice(-12).map(({ role, text }) => ({ role, text })) });
   save({ id: newId('c'), t: 'chat', role: 'assistant', text: answer.slice(0, 10000), at: Date.now(), asked: by });
   return { answer, left };
-}
-
-// יציאה: מוחקת את הנתונים מהמכשיר הזה (בשרת הם נשארים)
-export async function logout() {
-  await api('/logout').catch(() => {});
-  setToken('');
-  recs = new Map();
-  rev = 0;
-  dirty = new Set();
-  persist();
-  emit({ authed: false, status: 'idle' });
 }
 
 let started = false;

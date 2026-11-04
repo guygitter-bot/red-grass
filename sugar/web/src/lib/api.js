@@ -1,30 +1,11 @@
-// פנייה לשרת (sugar/api). הסוד של החיבור נשמר במכשיר אחרי הכניסה בסיסמה
+// פנייה לשרת (sugar/api). בלי סיסמה – השרת מקבל רק בקשות מהאתר של האפליקציה
 const API = (import.meta.env.VITE_API_URL || 'https://yoman-sukar-api.guygitter.workers.dev').replace(/\/$/, '');
-const TOKEN = 'ys_token';
-
-export function getToken() {
-  try {
-    return localStorage.getItem(TOKEN) || '';
-  } catch {
-    return '';
-  }
-}
-
-export function setToken(token) {
-  try {
-    if (token) localStorage.setItem(TOKEN, token);
-    else localStorage.removeItem(TOKEN);
-  } catch {
-    // מצב פרטי
-  }
-}
-
 export async function api(path, body = {}) {
   let res;
   try {
     res = await fetch(`${API}${path}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${getToken()}` },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     });
   } catch {

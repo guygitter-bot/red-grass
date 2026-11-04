@@ -5,6 +5,7 @@ import { BarChart3, CalendarDays, Cloud, CloudOff, Droplet, MessageCircle, Moon,
 import { prepare, today } from './lib/diary';
 import { sync, useStore } from './lib/store';
 import { isDark, setTheme } from './lib/theme';
+import { getMe } from './lib/me';
 import Login from './components/Login';
 import DayView from './components/DayView';
 import MenuView from './components/MenuView';
@@ -45,7 +46,9 @@ function SyncIcon({ status }) {
 }
 
 export default function App() {
-  const { records, status, authed } = useStore();
+  const { records, status } = useStore();
+  // מסך פתיחה רק בפעם הראשונה במכשיר (כשעוד אין שם)
+  const [welcomed, setWelcomed] = useState(() => !!getMe());
   const [route, setRoute] = useState(parseHash);
   const [dark, setDark] = useState(isDark());
   const day = today();
@@ -62,7 +65,7 @@ export default function App() {
     };
   }, []);
 
-  if (!authed) return <Login />;
+  if (!welcomed) return <Login onDone={() => setWelcomed(true)} />;
 
   const go = (page, date) => {
     window.location.hash = page === 'day' && date && date !== day ? `#/day/${date}` : `#/${page}`;
