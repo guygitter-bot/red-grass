@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+/* מצב לילה: מחלקה dark על html (נקבעת ב-src/lib/theme.js) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* כל הצבעים במקום אחד – במצב לילה מחליפים רק אותם:
+   page = רקע המסך, card = כרטיסים, ink = טקסט, muted = טקסט משני, line = מסגרות, soft = רקע מודגש עדין
+   low = סוכר נמוך, ok = בטווח, high = גבוה, minus = אזהרה/מחיקה */
+@theme {
+  --color-page: #f4f7fb;
+  --color-card: #ffffff;
+  --color-ink: #16202c;
+  --color-muted: #637083;
+  --color-line: #e1e7ef;
+  --color-soft: #e8f0fa;
+  --color-accent: #1d5fa8;
+  --color-accent-ink: #174c87;
+  --color-low: #dc2626;
+  --color-ok: #15803d;
+  --color-high: #d97706;
+  --color-minus: #c2410c;
+  --color-bubble: #dcf3e3;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-page: #0e131a;
+  --color-card: #171f29;
+  --color-ink: #e6edf5;
+  --color-muted: #98a6b8;
+  --color-line: #29333f;
+  --color-soft: #172a40;
+  --color-accent: #4a95e6;
+  --color-accent-ink: #8cc0f5;
+  --color-low: #f87171;
+  --color-ok: #4ade80;
+  --color-high: #fbbf24;
+  --color-minus: #fb923c;
+  --color-bubble: #183526;
+}
+
+html,
+body {
+  font-family: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--color-page);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* מספרים ברוחב אחיד, כדי שעמודות יישרו */
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

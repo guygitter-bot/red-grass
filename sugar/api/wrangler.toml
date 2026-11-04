@@ -1,0 +1,17 @@
+name = "yoman-sukar-api"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[vars]
+# האתרים שמותר להם לפנות לשרת (* = כל תת-כתובת, למקרה ש-Cloudflare Pages מוסיף סיומת לשם)
+ALLOWED_ORIGINS = "https://yoman-sukar.pages.dev,https://*.yoman-sukar.pages.dev,http://localhost:5173,http://localhost:4173"
+
+# כל היומן – אובייקט אחד ("main"), משותף לכל מי שיודע את הסיסמה
+[[durable_objects.bindings]]
+name = "DIARY"
+class_name = "Diary"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Diary"]
