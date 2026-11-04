@@ -2,7 +2,7 @@
 // "להוסיף את התפריט הקבוע" ותזכורת למדוד שעתיים אחרי ארוחה.
 import { useState } from 'react';
 import { BellRing, ChevronLeft, ChevronRight, ListPlus, Plus, Syringe, Trash2 } from 'lucide-react';
-import { SLOTS, TAGS, addDays, allPoints, dayLabel, mealFromTemplate, missingFixed, nowTime, outcome, waitingForCheck } from '../lib/diary';
+import { SITES, SLOTS, TAGS, addDays, allPoints, dayLabel, mealFromTemplate, missingFixed, nowTime, outcome, waitingForCheck } from '../lib/diary';
 import { newId, remove, save } from '../lib/store';
 import { getMe } from '../lib/me';
 import { Button, Sheet } from './ui';
@@ -30,6 +30,7 @@ function MealCard({ meal, s, onOpen, onQuick }) {
           <span className={`num inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 font-bold ${meal.insulin === '' ? 'bg-soft text-muted' : 'bg-accent/15 text-accent-ink'}`}>
             <Syringe size={14} /> {meal.insulin === '' ? '—' : `${meal.insulin} יח׳`}
           </span>
+          {meal.site && <span className="text-xs text-muted">📍 {SITES[meal.site]}</span>}
           {meal.carbs !== '' && <span className="num text-xs text-muted">{meal.carbs} גר׳ פחמ׳</span>}
           {o.after.map((r, i) => (
             <Glucose key={i} value={r.value} settings={s} small label={r.time} />

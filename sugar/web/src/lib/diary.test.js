@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { DEFAULT_FOODS, calcDose, insights, itemsCarbs, monthDays, addDays, aiContext, allPoints, level, mealFromTemplate, minutesAfter, missingFixed, outcome, pattern, patternsByMeal, prepare, safeMeal, similarMeals, stats, suggestByRatio, toCsv, waitingForCheck } from './diary';
+import { lastSite, DEFAULT_FOODS, calcDose, insights, itemsCarbs, monthDays, addDays, aiContext, allPoints, level, mealFromTemplate, minutesAfter, missingFixed, outcome, pattern, patternsByMeal, prepare, safeMeal, similarMeals, stats, suggestByRatio, toCsv, waitingForCheck } from './diary';
 
 const BASE = '2026-11-04'; // יום רביעי
 const tpl = { id: 'tl', t: 'template', name: 'צהריים בבית', slot: 'lunch', time: '13:30', food: 'אורז ועוף', portion: 1, days: [] };
@@ -157,5 +157,18 @@ describe('יומן סוכר', () => {
     expect(cal.days).toHaveLength(30);
     expect(cal.offset).toBe(0); // 1.11.2026 יום ראשון
     expect(cal.days[3]).toMatchObject({ date: BASE, count: 3, low: 1, meals: 1 });
+  });
+
+  test('מיקום הזריקה: ברירת מחדל ריקה, והמיקום הקודם', () => {
+    expect(safeMeal({ id: 'a', t: 'meal' }).site).toBe('');
+    expect(safeMeal({ id: 'a', t: 'meal', site: 'xx' }).site).toBe('');
+    const data = prepare([
+      { id: 'a', t: 'meal', date: '2026-11-03', time: '13:00', site: 'armR' },
+      { id: 'b', t: 'meal', date: '2026-11-04', time: '08:00', site: 'bellyL' },
+      { id: 'c', t: 'meal', date: '2026-11-04', time: '13:00' },
+    ]);
+    expect(lastSite(data, data.meals[2])).toBe('bellyL');
+    expect(lastSite(data, data.meals[1])).toBe('armR');
+    expect(toCsv(data)).toMatch(/בטן שמאל/);
   });
 });
