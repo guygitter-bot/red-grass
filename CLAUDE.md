@@ -221,6 +221,8 @@
 - `sugar/web` → https://yoman-sukar.pages.dev · `sugar/api` → Worker `yoman-sukar-api` (Durable Object `Diary` אחד, סנכרון לפי `rev`). עלייה: `yoman-sukar.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd sugar/api && npm test` · `cd sugar/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 - החישובים ב-`web/src/lib/diary.js` (פונקציות טהורות + בדיקות). שדה חדש – ברירת מחדל ב-`safeMeal` / `safeTemplate` / `safeSettings`.
+- **רעיונות שלא בוצעו:** `sugar/IDEAS.md` (נכנס כשלא מבצעים, יוצא כשבוצע).
+- המשתמשת ביקשה: **תמיד למזג לבד** את ה-PR (אחרי שהבדיקות ירוקות), לבדוק שהעלייה (`yoman-sukar.yml` על main) הצליחה, ולדווח.
 - **בטיחות:** האפליקציה וה-AI לא נותנים מינון כהוראה – רק מה שהנתונים מראים, חישוב לפי הגדרות הצוות מסומן "חישוב בלבד", ותמיד "לבדוק עם הצוות".
 
 ### טוטו (`toto_predictor/`)
