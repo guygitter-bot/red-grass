@@ -8,7 +8,7 @@
 //              יש רשימה מובנית (DEFAULT_FOODS, מזהים food:*); עריכה נשמרת כרשומה עם אותו מזהה, ומחיקה = deleted
 //   template – ארוחה קבועה בתפריט: { t: 'template', name, slot, time: 'HH:MM', food, portion, carbs, dose, days: [0-6] (ריק = כל יום), archived }
 //   meal     – ארוחה ביום: { t: 'meal', date: 'YYYY-MM-DD', time, templateId, name, slot, food, portion, carbs,
-//              items: [{ foodId, name, qty, carbs }] (מה נבחר במחשבון),
+//              items: [{ foodId, name, qty, carbs }] (מה נבחר במחשבון), site (מיקום הזריקה, SITES),
 //              before (סוכר לפני), insulin (יחידות), readings: [{ time, value }] (מדידות אחרי), tags: [], note, by }
 //   reading  – מדידה בלי ארוחה (בוקר, לילה, ספורט): { t: 'reading', date, time, value, note, by }
 //   chat     – הודעה בשיחה עם ה-AI (משותפת לכולם): { t: 'chat', role: 'user' | 'assistant', text, at, by }
@@ -33,6 +33,16 @@ export const TAGS = {
   late: '⏰ אינסולין באיחור',
   hypo: '🍬 טיפול בהיפו',
   party: '🎉 אירוע',
+};
+
+// מיקום הזריקה
+export const SITES = {
+  bellyR: 'בטן ימין',
+  bellyL: 'בטן שמאל',
+  armR: 'יד ימין',
+  armL: 'יד שמאל',
+  legR: 'רגל ימין',
+  legL: 'רגל שמאל',
 };
 
 export const DAYS = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
@@ -132,6 +142,7 @@ export function safeMeal(r) {
     readings: safeReadingList(r.readings),
     tags: Array.isArray(r.tags) ? r.tags.filter((x) => TAGS[x]) : [],
     items: safeItems(r.items),
+    site: SITES[r.site] ? r.site : '',
     note: String(r.note || ''),
     by: String(r.by || ''),
   };
@@ -390,6 +401,12 @@ export function waitingForCheck(data, date = today(), time = nowTime()) {
   });
 }
 
+// מיקום הזריקה האחרון לפני הארוחה הזו (להחלפת מקומות)
+export function lastSite(data, meal) {
+  const prev = data.meals.filter((m) => m.id !== meal.id && m.site && (m.date < meal.date || (m.date === meal.date && minutes(m.time) <= minutes(meal.time))));
+  return prev.length ? prev[prev.length - 1].site : '';
+}
+
 const fmt = (v) => (v === '' ? '?' : String(v));
 
 // סיכום טקסט של היומן ל-AI: הגדרות, סטטיסטיקה, דפוס לכל ארוחה ופירוט מלא של הימים האחרונים
@@ -426,7 +443,7 @@ export function aiContext(data, base = today(), detailDays = 21) {
     lines.push(`${d} (${DAY_NAMES[weekday(d)]}):`);
     for (const m of meals) {
       const after = outcome(m).after.map((r) => `${r.time}=${r.value} (+${r.mins} דק׳)`).join(', ');
-      lines.push(`  ${m.time} | ${m.name}${m.food ? ` (${m.food})` : ''}${m.items.length ? ` [מחשבון: ${itemsText(m.items)}]` : ''} | ${m.portion} | ${fmt(m.carbs)} | ${fmt(m.before)} | ${fmt(m.insulin)} | ${after || 'אין'}${m.tags.length ? ` | ${m.tags.map((x) => TAGS[x]).join(' ')}` : ''}${m.note ? ` | הערה: ${m.note}` : ''}`);
+      lines.push(`  ${m.time} | ${m.name}${m.food ? ` (${m.food})` : ''}${m.items.length ? ` [מחשבון: ${itemsText(m.items)}]` : ''} | ${m.portion} | ${fmt(m.carbs)} | ${fmt(m.before)} | ${fmt(m.insulin)}${m.site ? ` (${SITES[m.site]})` : ''} | ${after || 'אין'}${m.tags.length ? ` | ${m.tags.map((x) => TAGS[x]).join(' ')}` : ''}${m.note ? ` | הערה: ${m.note}` : ''}`);
     }
     for (const r of loose) lines.push(`  ${r.time} | מדידה ${r.value}${r.note ? ` (${r.note})` : ''}`);
   }
@@ -436,13 +453,13 @@ export function aiContext(data, base = today(), detailDays = 21) {
 // ייצוא לאקסל (CSV) – לרופא/ה או לדיאטנית
 export function toCsv(data) {
   const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const rows = [['תאריך', 'שעה', 'סוג', 'ארוחה', 'מה אכל', 'מנה', 'פחמימה (גרם)', 'סוכר לפני', 'אינסולין', 'מדידות אחרי', 'אחרי שעתיים', 'שיא', 'סימונים', 'הערה', 'נרשם ע״י']];
+  const rows = [['תאריך', 'שעה', 'סוג', 'ארוחה', 'מה אכל', 'מנה', 'פחמימה (גרם)', 'סוכר לפני', 'אינסולין', 'מיקום הזריקה', 'מדידות אחרי', 'אחרי שעתיים', 'שיא', 'סימונים', 'הערה', 'נרשם ע״י']];
   const all = [...data.meals.map((m) => ({ ...m, kind: 'meal' })), ...data.readings.map((r) => ({ ...r, kind: 'reading' }))].sort(byTime);
   for (const x of all) {
-    if (x.kind === 'reading') rows.push([x.date, x.time, 'מדידה', '', '', '', '', x.value, '', '', '', '', '', x.note, x.by]);
+    if (x.kind === 'reading') rows.push([x.date, x.time, 'מדידה', '', '', '', '', x.value, '', '', '', '', '', '', x.note, x.by]);
     else {
       const o = outcome(x);
-      rows.push([x.date, x.time, 'ארוחה', x.name, x.food, x.portion, x.carbs, x.before, x.insulin, o.after.map((r) => `${r.time}: ${r.value}`).join(' · '), o.after2h, o.peak, x.tags.map((t) => TAGS[t]).join(' '), x.note, x.by]);
+      rows.push([x.date, x.time, 'ארוחה', x.name, x.food, x.portion, x.carbs, x.before, x.insulin, SITES[x.site] || '', o.after.map((r) => `${r.time}: ${r.value}`).join(' · '), o.after2h, o.peak, x.tags.map((t) => TAGS[t]).join(' '), x.note, x.by]);
     }
   }
   return `﻿${rows.map((r) => r.map(q).join(',')).join('\n')}`;

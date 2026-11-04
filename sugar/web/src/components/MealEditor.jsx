@@ -2,7 +2,7 @@
 // מתחת – הפעמים הקודמות של אותה ארוחה (כמה אינסולין ניתן ומה יצא), כדי ללמוד מה עובד.
 import { useMemo, useState } from 'react';
 import { Calculator as CalcIcon, Plus, Trash2, X } from 'lucide-react';
-import { SLOTS, TAGS, dayLabel, level, LEVEL_TEXT, minutes, nowTime, numOrEmpty, outcome, safeMeal, similarMeals, calcDose, itemsText } from '../lib/diary';
+import { SLOTS, TAGS, dayLabel, level, LEVEL_TEXT, minutes, nowTime, numOrEmpty, outcome, safeMeal, similarMeals, calcDose, itemsText, SITES, lastSite } from '../lib/diary';
 import { newId, remove, save } from '../lib/store';
 import { getMe } from '../lib/me';
 import { Button, Field, Sheet, inputCls } from './ui';
@@ -32,6 +32,7 @@ export default function MealEditor({ data, meal, onClose }) {
   const before = numOrEmpty(m.before);
   const calc = calcDose(s, numOrEmpty(m.carbs), before);
   const [calcOpen, setCalcOpen] = useState(false);
+  const prevSite = lastSite(data, { ...safeMeal(m), id: meal.id || '-' });
 
   const submit = (e) => {
     e.preventDefault();
@@ -142,6 +143,17 @@ export default function MealEditor({ data, meal, onClose }) {
           </p>
         )}
         {m.items.length > 0 && <p className="-mt-1 mb-3 text-xs text-muted">מהמחשבון: {itemsText(m.items)}</p>}
+
+        <Field label="מיקום הזריקה" hint={prevSite ? `בפעם הקודמת: ${SITES[prevSite]}` : ''}>
+          <div className="grid grid-cols-2 gap-1.5">
+            {Object.entries(SITES).map(([k, label]) => (
+              <button key={k} type="button" onClick={() => set({ site: m.site === k ? '' : k })} className={`rounded-xl border px-3 py-2 text-sm font-medium ${m.site === k ? 'border-accent bg-soft text-accent-ink' : 'border-line'}`}>
+                {label}
+                {prevSite === k && m.site !== k && <span className="text-xs font-normal text-muted"> · בפעם הקודמת</span>}
+              </button>
+            ))}
+          </div>
+        </Field>
 
         <div className="mb-3">
           <div className="mb-1 flex items-center justify-between">
