@@ -1,48 +1,19 @@
-// Durable Object אחד לכל היומן: סיסמה, מכשירים מחוברים והרשומות (ארוחות, מדידות, תפריט קבוע, הגדרות, שיחה עם ה-AI).
-// כל מי שיודע את הסיסמה (הורים, מטפלים) רואה ועורך את אותם נתונים.
+// Durable Object אחד לכל היומן: הרשומות (ארוחות, מדידות, תפריט קבוע, הגדרות, שיחה עם ה-AI).
+// בלי סיסמה (המשתמשת ביקשה): כל מי שפותח את האפליקציה רואה ועורך את אותם נתונים. רק מהאתר של האפליקציה (נבדק ב-worker).
 // סנכרון: כל רשומה נושאת updatedAt (זמן עריכה במכשיר); העריכה המאוחרת גוברת. מחיקה = deleted: true (נשמרת,
 // כדי שתעבור לכל המכשירים). כל שינוי שהתקבל מקבל מספר גרסה (rev) עולה, והמכשיר מבקש "מה השתנה מאז".
 import Anthropic from '@anthropic-ai/sdk';
 import { advise } from './ai.js';
 
-const SESSION_MS = 365 * 24 * 60 * 60 * 1000;
-const MAX_SESSIONS = 20;
-const MAX_FAILS = 10;
-const LOCK_MS = 15 * 60 * 1000;
 const MAX_RECORDS = 30000;
 const MAX_RECORD_CHARS = 12000;
 // שאלות ל-AI ביום (הגנה מעלויות)
 const AI_PER_DAY = 60;
 const MAX_CONTEXT_CHARS = 90000;
 const MAX_HISTORY = 12;
-// PBKDF2 ב-Cloudflare Workers מוגבל ל-100,000 סבבים
-const ITERATIONS = 100000;
 
 const json = (status, data) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
 const fail = (status, error) => Object.assign(new Error(error), { status });
-
-export async function sha256(s) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
-  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-export async function hashPassword(password, salt) {
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: new TextEncoder().encode(salt), iterations: ITERATIONS }, key, 256);
-  return [...new Uint8Array(bits)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-export function newSecret(bytes = 24) {
-  return btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(bytes)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-function safeEqual(a, b) {
-  a = String(a);
-  b = String(b);
-  let diff = a.length ^ b.length;
-  for (let i = 0; i < Math.max(a.length, b.length); i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
-  return diff === 0;
-}
 
 // רשומה תקינה? מזהה קצר, זמן עריכה מספרי, לא ענקית. התוכן עצמו נשמר כמו שהוא (האפליקציה יודעת לקרוא אותו)
 export function cleanRecord(r) {
@@ -66,10 +37,10 @@ export class Diary {
 
   async load() {
     if (this.d) return this.d;
-    const got = await this.storage.get(['meta', 'sessions', 'rev']);
+    const got = await this.storage.get(['rev']);
     const recs = new Map();
     for (const [k, v] of await this.storage.list({ prefix: 'r:' })) recs.set(k.slice(2), v);
-    this.d = { meta: got.get('meta') || null, sessions: got.get('sessions') || {}, rev: got.get('rev') || 0, recs };
+    this.d = { rev: got.get('rev') || 0, recs };
     return this.d;
   }
 
@@ -83,109 +54,13 @@ export class Diary {
     }
     try {
       await this.load();
-      if (path === 'status') return json(200, { ready: !!this.d.meta });
-      if (path === 'setup') return json(200, await this.setup(body));
-      if (path === 'login') return json(200, await this.login(body));
-      const session = await this.auth(request);
       if (path === 'sync') return json(200, await this.sync(body));
-      if (path === 'password') return json(200, await this.password(body));
-      if (path === 'reset') return json(200, await this.reset(body));
       if (path === 'ai') return json(200, await this.ai(body));
-      if (path === 'logout') {
-        delete this.d.sessions[session];
-        await this.storage.put('sessions', this.d.sessions);
-        return json(200, { ok: true });
-      }
       return json(404, { error: 'לא נמצא' });
     } catch (err) {
       if (!err.status) throw err;
       return json(err.status, { error: err.message });
     }
-  }
-
-  async setup({ password }) {
-    if (this.d.meta) throw fail(409, 'כבר נקבעה סיסמה');
-    if (String(password || '').length < 6) throw fail(400, 'הסיסמה צריכה להיות לפחות 6 תווים');
-    const salt = newSecret(16);
-    this.d.meta = { salt, hash: await hashPassword(String(password), salt), fails: 0, lockUntil: 0 };
-    await this.storage.put('meta', this.d.meta);
-    return { token: await this.newSession() };
-  }
-
-  async login({ password }) {
-    const meta = this.d.meta;
-    if (!meta) throw fail(409, 'עדיין לא נקבעה סיסמה');
-    if (meta.lockUntil > this.now()) throw fail(429, 'יותר מדי ניסיונות. אפשר לנסות שוב בעוד רבע שעה');
-    const ok = safeEqual(await hashPassword(String(password || ''), meta.salt), meta.hash);
-    if (!ok) {
-      meta.fails = (meta.fails || 0) + 1;
-      if (meta.fails >= MAX_FAILS) {
-        meta.fails = 0;
-        meta.lockUntil = this.now() + LOCK_MS;
-      }
-      await this.storage.put('meta', meta);
-      throw fail(401, 'הסיסמה לא נכונה');
-    }
-    if (meta.fails) {
-      meta.fails = 0;
-      await this.storage.put('meta', meta);
-    }
-    return { token: await this.newSession() };
-  }
-
-  async newSession() {
-    const token = newSecret();
-    const now = this.now();
-    const sessions = Object.fromEntries(Object.entries(this.d.sessions).filter(([, exp]) => exp > now).sort((a, b) => b[1] - a[1]).slice(0, MAX_SESSIONS - 1));
-    sessions[await sha256(token)] = now + SESSION_MS;
-    this.d.sessions = sessions;
-    await this.storage.put('sessions', sessions);
-    return token;
-  }
-
-  // מחזיר את המזהה של החיבור (טביעה של הסוד), או זורק 401
-  async auth(request) {
-    const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
-    if (!token || !this.d.meta) throw fail(401, 'צריך להיכנס מחדש');
-    const key = await sha256(token);
-    const exp = this.d.sessions[key];
-    const now = this.now();
-    if (!exp || exp < now) throw fail(401, 'צריך להיכנס מחדש');
-    // חיבור שבשימוש לא פג (מתחדש פעם ביום)
-    if (exp - now < SESSION_MS - 24 * 60 * 60 * 1000) {
-      this.d.sessions[key] = now + SESSION_MS;
-      await this.storage.put('sessions', this.d.sessions);
-    }
-    return key;
-  }
-
-  async password({ password, newPassword }) {
-    const meta = this.d.meta;
-    if (!safeEqual(await hashPassword(String(password || ''), meta.salt), meta.hash)) throw fail(401, 'הסיסמה הנוכחית לא נכונה');
-    if (String(newPassword || '').length < 6) throw fail(400, 'הסיסמה החדשה צריכה להיות לפחות 6 תווים');
-    meta.salt = newSecret(16);
-    meta.hash = await hashPassword(String(newPassword), meta.salt);
-    await this.storage.put('meta', meta);
-    this.d.sessions = {};
-    return { token: await this.newSession() };
-  }
-
-  // מחיקת כל הנתונים (אחרי סיסמה): כל רשומה הופכת ל"נמחקה", כדי שהמחיקה תעבור גם לשאר המכשירים
-  async reset({ password }) {
-    const meta = this.d.meta;
-    if (!safeEqual(await hashPassword(String(password || ''), meta.salt), meta.hash)) throw fail(401, 'הסיסמה לא נכונה');
-    const d = this.d;
-    const writes = {};
-    const now = this.now();
-    for (const r of d.recs.values()) {
-      if (r.deleted) continue;
-      d.rev += 1;
-      const gone = { id: r.id, t: r.t, deleted: true, updatedAt: Math.max(now, r.updatedAt + 1), rev: d.rev };
-      d.recs.set(r.id, gone);
-      writes[`r:${r.id}`] = gone;
-    }
-    await this.write(writes);
-    return { ok: true, rev: d.rev };
   }
 
   async write(writes) {

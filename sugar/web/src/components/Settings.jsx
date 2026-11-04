@@ -1,8 +1,8 @@
-// הגדרות: השם שלי (במכשיר), פרטים וטווח יעד, הגדרות מהצוות (לא חובה), שיתוף, מצב לילה, ייצוא, גיבוי, סיסמה ויציאה
+// הגדרות: השם שלי (במכשיר), פרטים וטווח יעד, הגדרות מהצוות (לא חובה), שיתוף, מצב לילה, ייצוא וגיבוי
 import { useRef, useState } from 'react';
 import { Share2 } from 'lucide-react';
 import { numOrEmpty, toCsv } from '../lib/diary';
-import { changePassword, logout, save } from '../lib/store';
+import { save } from '../lib/store';
 import { getMe, setMe } from '../lib/me';
 import { getTheme, setTheme } from '../lib/theme';
 import { Button, Field, Segmented, inputCls } from './ui';
@@ -30,7 +30,6 @@ export default function Settings({ data, records }) {
   const [me, setMeState] = useState(getMe());
   const [f, setF] = useState({ person: s.person, low: str(s.low), high: str(s.high), icr: str(s.icr), cf: str(s.cf), target: str(s.target), note: s.note });
   const [theme, setThemeState] = useState(getTheme());
-  const [pw, setPw] = useState({ old: '', next: '' });
   const [msg, setMsg] = useState('');
   const fileRef = useRef(null);
   const set = (patch) => setF((x) => ({ ...x, ...patch }));
@@ -47,12 +46,12 @@ export default function Settings({ data, records }) {
 
   const share = async () => {
     const url = window.location.origin + window.location.pathname;
-    const text = `יומן הסוכר${s.person ? ` של ${s.person}` : ''}: ${url}\nאת הסיסמה אשלח בנפרד.`;
+    const text = `יומן הסוכר${s.person ? ` של ${s.person}` : ''}: ${url}`;
     try {
       if (navigator.share) await navigator.share({ title: 'יומן סוכר', text });
       else {
         await navigator.clipboard.writeText(text);
-        setMsg('הקישור הועתק. את הסיסמה כדאי לשלוח בנפרד.');
+        setMsg('הקישור הועתק');
       }
     } catch {
       // ביטול השיתוף
@@ -75,17 +74,6 @@ export default function Settings({ data, records }) {
       setMsg('השחזור הושלם');
     } catch {
       setMsg('הקובץ לא נראה כמו גיבוי של יומן סוכר');
-    }
-  };
-
-  const submitPw = async (e) => {
-    e.preventDefault();
-    try {
-      await changePassword(pw.old, pw.next);
-      setPw({ old: '', next: '' });
-      setMsg('הסיסמה הוחלפה. במכשירים האחרים צריך להיכנס מחדש עם הסיסמה החדשה.');
-    } catch (err) {
-      setMsg(err.message);
     }
   };
 
@@ -114,7 +102,7 @@ export default function Settings({ data, records }) {
       </Card>
 
       <Card title="שיתוף">
-        <p className="mb-3 text-sm text-muted">כל מי שיש לו את הקישור ואת הסיסמה רואה ועורך את אותו יומן – בזמן אמת, בטלפון או במחשב.</p>
+        <p className="mb-3 text-sm text-muted">כל מי שיש לו את הקישור רואה ועורך את אותו יומן – בזמן אמת, בטלפון או במחשב.</p>
         <Button kind="ghost" onClick={share} className="flex items-center gap-2">
           <Share2 size={18} /> לשלוח קישור
         </Button>
@@ -179,25 +167,6 @@ export default function Settings({ data, records }) {
         </div>
         <p className="mt-2 text-xs text-muted">הנתונים שמורים בשרת ומסתנכרנים בין כל המכשירים. הגיבוי לקובץ – ליתר ביטחון.</p>
       </Card>
-
-      <Card title="החלפת סיסמה">
-        <form onSubmit={submitPw} className="grid gap-2 lg:grid-cols-[1fr_1fr_auto]">
-          <input type="password" className={inputCls} placeholder="הסיסמה הנוכחית" value={pw.old} onChange={(e) => setPw({ ...pw, old: e.target.value })} autoComplete="current-password" />
-          <input type="password" className={inputCls} placeholder="סיסמה חדשה (6 תווים לפחות)" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} autoComplete="new-password" />
-          <Button disabled={!pw.old || pw.next.length < 6}>החלפה</Button>
-        </form>
-        <p className="mt-2 text-xs text-muted">מנתקת את כל שאר המכשירים (למשל אם מישהו כבר לא צריך גישה).</p>
-      </Card>
-
-      <Button
-        kind="ghost"
-        className="mb-4 w-full"
-        onClick={() => {
-          if (confirm('לצאת מהמכשיר הזה? הנתונים נשארים בשרת, וכדי לחזור צריך את הסיסמה.')) logout();
-        }}
-      >
-        יציאה מהמכשיר הזה
-      </Button>
     </div>
   );
 }
