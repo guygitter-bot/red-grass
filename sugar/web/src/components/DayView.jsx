@@ -1,9 +1,9 @@
 // מסך היום: גרף הסוכר של היום, הארוחות (כרטיס לכל ארוחה עם לפני / אינסולין / מדידות אחרי), מדידות בלי ארוחה,
 // "להוסיף את התפריט הקבוע" ותזכורת למדוד שעתיים אחרי ארוחה.
 import { useState } from 'react';
-import { BellRing, ChevronLeft, ChevronRight, ListPlus, Plus, Syringe } from 'lucide-react';
+import { BellRing, ChevronLeft, ChevronRight, ListPlus, Plus, Syringe, Trash2 } from 'lucide-react';
 import { SLOTS, TAGS, addDays, allPoints, dayLabel, mealFromTemplate, missingFixed, nowTime, outcome, waitingForCheck } from '../lib/diary';
-import { newId, save } from '../lib/store';
+import { newId, remove, save } from '../lib/store';
 import { getMe } from '../lib/me';
 import { Button, Sheet } from './ui';
 import { DayChart, Glucose } from './bits';
@@ -48,6 +48,16 @@ function MealCard({ meal, s, onOpen, onQuick }) {
           <Plus size={16} /> מדידה אחרי
         </button>
         {meal.by && <span className="mr-auto text-xs text-muted">{meal.by}</span>}
+        {/* מחיקה ישירות מהכרטיס (למשל ארוחה שנכנסה פעמיים בטעות) */}
+        <button
+          onClick={() => {
+            if (confirm(`למחוק את "${meal.name}" (${meal.time})?`)) remove(meal.id);
+          }}
+          className={`flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-muted hover:bg-soft hover:text-minus ${meal.by ? '' : 'mr-auto'}`}
+          aria-label={`מחיקת ${meal.name}`}
+        >
+          <Trash2 size={16} /> מחיקה
+        </button>
       </div>
     </article>
   );
