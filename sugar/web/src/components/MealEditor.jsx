@@ -43,6 +43,7 @@ export default function MealEditor({ data, meal, onClose }) {
     }
     save({
       ...m,
+      fromMenu: undefined,
       id,
       t: 'meal',
       templateId,
@@ -64,7 +65,7 @@ export default function MealEditor({ data, meal, onClose }) {
   const setReading = (i, patch) => set({ readings: m.readings.map((r, j) => (i === j ? { ...r, ...patch } : r)) });
 
   return (
-    <Sheet title={isNew ? 'ארוחה חדשה' : m.name} onClose={onClose}>
+    <Sheet title={isNew && !meal.name ? 'ארוחה חדשה' : m.name} onClose={onClose}>
       <form onSubmit={submit}>
         <div className="grid grid-cols-[1fr_auto] gap-3">
           <Field label="שם הארוחה">
@@ -120,7 +121,7 @@ export default function MealEditor({ data, meal, onClose }) {
 
         <div className="grid grid-cols-3 gap-3">
           <Field label="סוכר לפני">
-            <input className={`${inputCls} num`} inputMode="numeric" value={m.before} onChange={(e) => set({ before: e.target.value })} placeholder="mg/dL" />
+            <input className={`${inputCls} num`} inputMode="numeric" value={m.before} onChange={(e) => set({ before: e.target.value })} placeholder="mg/dL" autoFocus={!!meal.fromMenu} />
           </Field>
           <Field label="אינסולין (יח׳)">
             <input className={`${inputCls} num`} inputMode="decimal" value={m.insulin} onChange={(e) => set({ insulin: e.target.value })} placeholder="יחידות" />
