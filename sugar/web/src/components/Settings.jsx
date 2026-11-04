@@ -114,17 +114,17 @@ export default function Settings({ data, records }) {
             <input className={inputCls} value={f.person} onChange={(e) => set({ person: e.target.value })} />
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="טווח יעד – מ־ (mg/dL)">
+            <Field label="טווח תקין לפני ארוחה – מ־ (mg/dL)">
               <input className={`${inputCls} num`} inputMode="numeric" value={f.low} onChange={(e) => set({ low: e.target.value })} />
             </Field>
             <Field label="עד">
               <input className={`${inputCls} num`} inputMode="numeric" value={f.high} onChange={(e) => set({ high: e.target.value })} />
             </Field>
           </div>
-          <p className="mb-3 text-xs text-muted">ברירת המחדל 70-180. מתחת לטווח – אדום, מעליו – כתום.</p>
+          <p className="mb-3 text-xs text-muted">ברירת המחדל 70-110. מתחת לטווח – אדום, מעליו – כתום. המחשבון מוסיף תיקון רק מעל הטווח.</p>
         </Card>
-        <Card title="מה שהצוות הרפואי נתן (לא חובה)">
-          <p className="mb-3 text-sm text-muted">אם הצוות נתן יחס פחמימות ופקטור תיקון – האפליקציה תציג חישוב לפיהם בכל ארוחה, וה-AI ישתמש בהם. בלי זה פשוט לא מוצג חישוב.</p>
+        <Card title="נתונים למחשבון">
+          <p className="mb-3 text-sm text-muted">יחס פחמימות: כמה גרם פחמימה מכסה יחידת אינסולין אחת (ברירת מחדל 15). פקטור תיקון ויעד – רק אם הצוות נתן; בלי פקטור תיקון המחשבון לא מוסיף תיקון כשהסוכר גבוה.</p>
           <div className="grid grid-cols-3 gap-3">
             <Field label="יחס פחמימות" hint="גרם ליחידה">
               <input className={`${inputCls} num`} inputMode="decimal" value={f.icr} onChange={(e) => set({ icr: e.target.value })} />
