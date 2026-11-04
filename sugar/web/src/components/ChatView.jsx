@@ -15,11 +15,21 @@ const QUICK = [
   'מה כדאי לרשום כדי שנבין טוב יותר?',
 ];
 
+// שאלה מוכנה ממסך אחר (למשל "ניתוח מעמיק" במעקב) – ממלאת את התיבה, והשליחה בלחיצה (כדי שלא תצא שאלה בטעות)
+let pending = '';
+export function askLater(q) {
+  pending = q;
+}
+
 const timeOf = (at) => new Date(at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
 const dateOf = (at) => new Date(at).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
 
 export default function ChatView({ data }) {
-  const [text, setText] = useState('');
+  const [text, setText] = useState(() => {
+    const q = pending;
+    pending = '';
+    return q;
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const endRef = useRef(null);
@@ -115,7 +125,7 @@ export default function ChatView({ data }) {
       >
         <textarea
           className="max-h-40 min-h-12 flex-1 resize-none rounded-3xl border border-line bg-card px-4 py-3 outline-none focus:border-accent"
-          rows={1}
+          rows={text.length > 60 ? 4 : 1}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {

@@ -1,9 +1,18 @@
 // מעקב ודפוסים: ממוצע, אחוז בטווח, נמוכים וגבוהים לתקופה; לפי שעות היום; לכל ארוחה – מה יצא אחרי;
 // וממוצע לכל יום (לחיצה פותחת את היום).
 import { useState } from 'react';
-import { addDays, allPoints, byDayPart, dayLabel, level, patternsByMeal, stats } from '../lib/diary';
-import { Segmented } from './ui';
+import { Sparkles } from 'lucide-react';
+import { addDays, allPoints, byDayPart, dayLabel, insights, level, patternsByMeal, stats } from '../lib/diary';
+import { askLater } from './ChatView';
+import { Button, Segmented } from './ui';
 import { Glucose } from './bits';
+
+const KIND = {
+  low: ['⚠️', 'border-low/40'],
+  high: ['📈', 'border-high/40'],
+  info: ['💡', 'border-line'],
+  good: ['✅', 'border-ok/40'],
+};
 
 const BAR = { low: 'bg-low/60', ok: 'bg-ok/60', high: 'bg-high/60', veryHigh: 'bg-low/60' };
 const TEXT = { low: 'text-low', ok: 'text-ok', high: 'text-high', veryHigh: 'text-low' };
@@ -18,12 +27,13 @@ function Tile({ label, value, hint, cls = '' }) {
   );
 }
 
-export default function StatsView({ data, openDay }) {
+export default function StatsView({ data, openDay, openChat }) {
   const [days, setDays] = useState(14);
   const s = data.settings;
   const st = stats(data, days, data.today);
   const parts = byDayPart(data, days, data.today);
   const pats = patternsByMeal(data, days, data.today);
+  const tips = insights(data, Math.max(days, 14), data.today);
   const maxPart = Math.max(s.high + 40, ...parts.map((p) => p.mean || 0));
 
   // ממוצע לכל יום
@@ -37,6 +47,36 @@ export default function StatsView({ data, openDay }) {
   return (
     <div className="mx-auto max-w-4xl">
       <h1 className="mb-3 text-2xl font-bold">מעקב ודפוסים</h1>
+
+      {/* תובנות והמלצות מהנתונים (בלי AI), ולניתוח מעמיק – שאלה מוכנה ל-AI */}
+      <section className="mb-4 rounded-2xl bg-card p-4 shadow-sm">
+        <h2 className="mb-1 font-bold">מה הנתונים מראים</h2>
+        <p className="mb-3 text-xs text-muted">ממצאים שחוזרים על עצמם ב-{Math.max(days, 14)} הימים האחרונים. להביא לצוות – לא לשנות מינון לבד.</p>
+        {tips.length ? (
+          <ul className="space-y-2">
+            {tips.map((t, i) => (
+              <li key={i} className={`rounded-xl border p-3 text-sm ${KIND[t.kind][1]}`}>
+                <span className="font-medium">
+                  {KIND[t.kind][0]} {t.text}
+                </span>
+                {t.hint && <span className="block text-muted">{t.hint}</span>}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted">עוד אין מספיק נתונים. אחרי כמה ימים של ארוחות עם מדידה לפני ושעתיים אחרי, יופיעו כאן ממצאים.</p>
+        )}
+        <Button
+          kind="ghost"
+          className="mt-3 flex items-center gap-2"
+          onClick={() => {
+            askLater(`תעשה/י ניתוח מקיף של ${days} הימים האחרונים: מה עובד, איפה יש בעיה (ארוחות, שעות, נמוכים וגבוהים), האם יחס הפחמימות נראה מתאים לכל ארוחה, ומה כדאי לשאול את הצוות.`);
+            openChat();
+          }}
+        >
+          <Sparkles size={18} /> ניתוח מעמיק עם AI
+        </Button>
+      </section>
       <div className="mb-4 max-w-md">
         <Segmented value={days} onChange={setDays} options={[[7, 'שבוע'], [14, 'שבועיים'], [30, 'חודש'], [90, '3 חודשים']]} />
       </div>

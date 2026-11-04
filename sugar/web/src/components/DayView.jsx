@@ -78,7 +78,7 @@ function QuickReading({ meal, s, onClose }) {
   );
 }
 
-export default function DayView({ data, date, go }) {
+export default function DayView({ data, date, go, openCal }) {
   const s = data.settings;
   const [editing, setEditing] = useState(null);
   const [quick, setQuick] = useState(null);
@@ -105,7 +105,9 @@ export default function DayView({ data, date, go }) {
           <ChevronRight />
         </button>
         <div className="text-center">
-          <h1 className="text-xl font-bold">{dayLabel(date, data.today)}</h1>
+          <button onClick={() => openCal(date.slice(0, 7))} className="text-xl font-bold hover:text-accent-ink" title="לוח שנה">
+            {dayLabel(date, data.today)} 📅
+          </button>
           {date !== data.today && (
             <button onClick={() => go(data.today)} className="text-sm text-accent-ink">
               חזרה להיום

@@ -1,12 +1,13 @@
 // עריכת ארוחה: מה אכל, כמה מנות, סוכר לפני, כמה אינסולין, ומדידות אחרי (שעה + ערך).
 // מתחת – הפעמים הקודמות של אותה ארוחה (כמה אינסולין ניתן ומה יצא), כדי ללמוד מה עובד.
 import { useMemo, useState } from 'react';
-import { Plus, Trash2, X } from 'lucide-react';
-import { SLOTS, TAGS, dayLabel, level, LEVEL_TEXT, minutes, nowTime, numOrEmpty, outcome, safeMeal, similarMeals, suggestByRatio } from '../lib/diary';
+import { Calculator as CalcIcon, Plus, Trash2, X } from 'lucide-react';
+import { SLOTS, TAGS, dayLabel, level, LEVEL_TEXT, minutes, nowTime, numOrEmpty, outcome, safeMeal, similarMeals, calcDose, itemsText } from '../lib/diary';
 import { newId, remove, save } from '../lib/store';
 import { getMe } from '../lib/me';
 import { Button, Field, Sheet, inputCls } from './ui';
 import { Glucose } from './bits';
+import Calculator from './Calculator';
 
 const PORTIONS = [0.5, 1, 1.5, 2, 3];
 
@@ -29,7 +30,8 @@ export default function MealEditor({ data, meal, onClose }) {
 
   const previous = useMemo(() => similarMeals(data, { ...safeMeal(m), id: meal.id || '-' }, 6), [data, m, meal.id]);
   const before = numOrEmpty(m.before);
-  const calc = suggestByRatio(s, numOrEmpty(m.carbs), before);
+  const calc = calcDose(s, numOrEmpty(m.carbs), before);
+  const [calcOpen, setCalcOpen] = useState(false);
 
   const submit = (e) => {
     e.preventDefault();
@@ -99,6 +101,23 @@ export default function MealEditor({ data, meal, onClose }) {
           </div>
         </Field>
 
+        <button type="button" onClick={() => setCalcOpen(!calcOpen)} className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border border-accent bg-soft px-3 py-2 font-medium text-accent-ink">
+          <CalcIcon size={18} /> {calcOpen ? 'לסגור את המחשבון' : 'מחשבון: פחמימות ואינסולין לפי מה שאוכלים'}
+        </button>
+        {calcOpen && (
+          <div className="mb-3 rounded-2xl border border-line p-3">
+            <Calculator
+              data={data}
+              inline
+              initial={{ items: m.items, before: m.before }}
+              onApply={(x) => {
+                set({ items: x.items, carbs: String(x.carbs), before: x.before === '' ? m.before : String(x.before), insulin: x.insulin === '' ? m.insulin : String(x.insulin), food: m.food || itemsText(x.items) });
+                setCalcOpen(false);
+              }}
+            />
+          </div>
+        )}
+
         <div className="grid grid-cols-3 gap-3">
           <Field label="סוכר לפני">
             <input className={`${inputCls} num`} inputMode="numeric" value={m.before} onChange={(e) => set({ before: e.target.value })} placeholder="mg/dL" />
@@ -115,11 +134,13 @@ export default function MealEditor({ data, meal, onClose }) {
             {level(before, s) === 'low' ? `סוכר נמוך (${before}) – קודם לטפל בנמוך ולמדוד שוב אחרי 15 דקות.` : `הסוכר לפני ${LEVEL_TEXT[level(before, s)]} (${before}).`}
           </p>
         )}
-        {calc && (
+        {calc && numOrEmpty(m.carbs) !== '' && (
           <p className="-mt-1 mb-3 rounded-xl bg-soft p-2 text-sm">
-            לפי ההגדרות שלכם: {calc.food} יח׳ לאוכל{calc.correction ? ` + ${calc.correction} תיקון` : ''} = <b className="num">{calc.total} יח׳</b>. חישוב בלבד – ההחלטה שלכם ושל הצוות.
+            לפי ההגדרות: {calc.food} יח׳ לאוכל{calc.correction ? ` + ${calc.correction} תיקון` : ''} = <b className="num">{calc.rounded} יח׳</b>
+            {calc.needsCf && ' (בלי תיקון – לא הוזן פקטור תיקון)'}. חישוב בלבד – ההחלטה שלכם ושל הצוות.
           </p>
         )}
+        {m.items.length > 0 && <p className="-mt-1 mb-3 text-xs text-muted">מהמחשבון: {itemsText(m.items)}</p>}
 
         <div className="mb-3">
           <div className="mb-1 flex items-center justify-between">

@@ -2,9 +2,13 @@
 //
 // רשומות (כולן עם id ו-updatedAt, ומסתנכרנות בין כל המכשירים של כל מי שמשתף):
 //   settings – { id: 'settings', t: 'settings', person, low, high, icr, cf, target }
-//              טווח יעד (mg/dL), ואם הצוות נתן: יחס פחמימות (גרם ליחידה), פקטור תיקון (כמה יחידה מורידה) ויעד לתיקון
+//              טווח יעד לפני ארוחה (mg/dL, ברירת מחדל 70-110), יחס פחמימות (גרם ליחידה, ברירת מחדל 15),
+//              ואם הצוות נתן: פקטור תיקון (כמה יחידה מורידה) ויעד לתיקון
+//   food     – פריט בטבלת הפחמימות של המחשבון: { t: 'food', name, unit, carbs (גרם לכל יחידה) }
+//              יש רשימה מובנית (DEFAULT_FOODS, מזהים food:*); עריכה נשמרת כרשומה עם אותו מזהה, ומחיקה = deleted
 //   template – ארוחה קבועה בתפריט: { t: 'template', name, slot, time: 'HH:MM', food, portion, carbs, dose, days: [0-6] (ריק = כל יום), archived }
 //   meal     – ארוחה ביום: { t: 'meal', date: 'YYYY-MM-DD', time, templateId, name, slot, food, portion, carbs,
+//              items: [{ foodId, name, qty, carbs }] (מה נבחר במחשבון),
 //              before (סוכר לפני), insulin (יחידות), readings: [{ time, value }] (מדידות אחרי), tags: [], note, by }
 //   reading  – מדידה בלי ארוחה (בוקר, לילה, ספורט): { t: 'reading', date, time, value, note, by }
 //   chat     – הודעה בשיחה עם ה-AI (משותפת לכולם): { t: 'chat', role: 'user' | 'assistant', text, at, by }
@@ -80,8 +84,9 @@ export function safeSettings(r = {}) {
     t: 'settings',
     person: typeof r.person === 'string' ? r.person : '',
     low: low === '' ? 70 : low,
-    high: high === '' ? 180 : high,
-    icr: numOrEmpty(r.icr),
+    high: high === '' ? 110 : high,
+    // יחס פחמימות: 15 גרם ליחידה אם לא נקבע אחרת (שדה שנמחק בכוונה נשאר ריק)
+    icr: r.icr === undefined ? 15 : numOrEmpty(r.icr),
     cf: numOrEmpty(r.cf),
     target: numOrEmpty(r.target),
     note: typeof r.note === 'string' ? r.note : '',
@@ -126,9 +131,42 @@ export function safeMeal(r) {
     insulin: numOrEmpty(r.insulin),
     readings: safeReadingList(r.readings),
     tags: Array.isArray(r.tags) ? r.tags.filter((x) => TAGS[x]) : [],
+    items: safeItems(r.items),
     note: String(r.note || ''),
     by: String(r.by || ''),
   };
+}
+
+export function safeItems(list) {
+  return (Array.isArray(list) ? list : [])
+    .map((x) => ({ foodId: String(x?.foodId || ''), name: String(x?.name || ''), qty: numOrEmpty(x?.qty), carbs: numOrEmpty(x?.carbs) }))
+    .filter((x) => x.name && x.qty !== '' && x.qty > 0);
+}
+
+// טבלת הפחמימות המובנית (מה שהמשתמשת נתנה). כל פריט: כמה גרם פחמימה ביחידה אחת
+export const DEFAULT_FOODS = [
+  { id: 'food:rice', name: 'אורז', unit: 'כוס חד פעמית', carbs: 30 },
+  { id: 'food:pasta', name: 'פסטה', unit: 'כוס חד פעמית', carbs: 30 },
+  { id: 'food:couscous', name: 'קוסקוס', unit: 'כוס חד פעמית', carbs: 30 },
+  { id: 'food:ptitim', name: 'פתיתים', unit: 'כוס חד פעמית', carbs: 40 },
+  { id: 'food:schnitzel', name: 'שניצלונים', unit: '3-4 יחידות', carbs: 30 },
+  { id: 'food:chicken', name: 'עוף', unit: 'מנה', carbs: 0 },
+  { id: 'food:meatballs', name: 'קציצות', unit: 'מנה', carbs: 0 },
+  { id: 'food:shawarma', name: 'שווארמה', unit: 'מנה', carbs: 0 },
+].map((f) => ({ ...f, t: 'food' }));
+
+export function safeFood(r) {
+  const carbs = numOrEmpty(r.carbs);
+  return { ...r, t: 'food', name: String(r.name || 'מאכל'), unit: String(r.unit || 'מנה'), carbs: carbs === '' || carbs < 0 ? 0 : carbs };
+}
+
+// הרשימה המובנית + מה שנוסף/נערך, בלי מה שנמחק
+export function foodsOf(records) {
+  const deleted = new Set(records.filter((r) => r?.t === 'food' && r.deleted).map((r) => r.id));
+  const mine = new Map(records.filter((r) => r?.t === 'food' && !r.deleted).map((r) => [r.id, r]));
+  const list = DEFAULT_FOODS.filter((f) => !deleted.has(f.id)).map((f) => safeFood({ ...f, ...mine.get(f.id) }));
+  for (const [id, r] of mine) if (!id.startsWith('food:') || !DEFAULT_FOODS.some((f) => f.id === id)) list.push(safeFood(r));
+  return list;
 }
 
 export function safeReading(r) {
@@ -152,7 +190,7 @@ export function prepare(records) {
     .filter((r) => r.value !== '')
     .sort(byTime);
   const chats = live.filter((r) => r.t === 'chat' && r.text).sort((a, b) => (a.at || 0) - (b.at || 0));
-  return { settings, templates, meals, readings, chats };
+  return { settings, templates, meals, readings, chats, foods: foodsOf(records) };
 }
 
 // רמת הסוכר: low (מתחת לטווח), ok, high (מעל), veryHigh (מעל 250)
@@ -315,14 +353,32 @@ export function mealFromTemplate(t, date) {
   return { t: 'meal', date, time: t.time, templateId: t.id, name: t.name, slot: t.slot, food: t.food, portion: t.portion, carbs: t.carbs, before: '', insulin: '', readings: [], tags: [], note: '' };
 }
 
-// חישוב לפי ההגדרות שהצוות נתן (יחס פחמימות + פקטור תיקון). רק כשיש את הנתונים – ומוצג כ"חישוב", לא הוראה
-export function suggestByRatio(settings, carbs, before) {
-  if (settings.icr === '' || !(settings.icr > 0) || carbs === '' || carbs < 0) return null;
+// מחשבון אינסולין לפי ההגדרות: פחמימות ÷ יחס פחמימות, ותיקון אם הסוכר לפני מעל הטווח (רק אם הוזן פקטור תיקון).
+// התיקון מוריד עד היעד לתיקון, ואם לא נקבע – עד הגבול העליון של הטווח. מתחת לטווח – בלי תוספת, עם אזהרה.
+// זה חישוב בלבד – ההחלטה של המשפחה ושל הצוות.
+export const roundHalf = (v) => Math.round(v * 2) / 2;
+
+export function calcDose(settings, carbs, before) {
+  if (settings.icr === '' || !(settings.icr > 0) || carbs === '' || !(carbs >= 0)) return null;
   const food = carbs / settings.icr;
+  const status = before === '' ? '' : before < settings.low ? 'low' : before > settings.high ? 'high' : 'ok';
+  const target = settings.target !== '' ? settings.target : settings.high;
   let correction = 0;
-  if (settings.cf > 0 && settings.target !== '' && before !== '' && before > settings.target) correction = (before - settings.target) / settings.cf;
-  return { food: round(food, 1), correction: round(correction, 1), total: round(food + correction, 1) };
+  const canCorrect = settings.cf > 0;
+  if (status === 'high' && canCorrect && before > target) correction = (before - target) / settings.cf;
+  const total = food + correction;
+  return { carbs: round(carbs, 1), food: round(food, 1), correction: round(correction, 1), total: round(total, 1), rounded: roundHalf(total), status, needsCf: status === 'high' && !canCorrect, target };
 }
+
+// תאימות לשם הישן
+export function suggestByRatio(settings, carbs, before) {
+  const r = calcDose(settings, carbs, before);
+  return r && { food: r.food, correction: r.correction, total: r.total };
+}
+
+// סה"כ פחמימות ממה שנבחר במחשבון
+export const itemsCarbs = (items) => round(items.reduce((a, x) => a + (Number(x.qty) || 0) * (Number(x.carbs) || 0), 0), 1);
+export const itemsText = (items) => items.map((x) => `${x.name} ×${x.qty}`).join(', ');
 
 // ארוחות של היום שקיבלו אינסולין ועבר זמן – אבל אין מדידה שעתיים אחרי (תזכורת במסך)
 export function waitingForCheck(data, date = today(), time = nowTime()) {
@@ -341,7 +397,7 @@ export function aiContext(data, base = today(), detailDays = 21) {
   const s = data.settings;
   const lines = [];
   lines.push(`היום: ${base} (${dayLabel(base, base)})`);
-  lines.push(`הגדרות: ${s.person ? `שם: ${s.person}. ` : ''}טווח יעד ${s.low}-${s.high} mg/dL.` + (s.icr !== '' ? ` יחס פחמימות (לפי הצוות): ${s.icr} גרם ליחידה.` : '') + (s.cf !== '' ? ` פקטור תיקון: יחידה מורידה ${s.cf}.` : '') + (s.target !== '' ? ` יעד לתיקון: ${s.target}.` : ''));
+  lines.push(`הגדרות: ${s.person ? `שם: ${s.person}. ` : ''}טווח תקין לפני ארוחה ${s.low}-${s.high} mg/dL.` + (s.icr !== '' ? ` יחס פחמימות (שהמשפחה הזינה): יחידה לכל ${s.icr} גרם.` : '') + (s.cf !== '' ? ` פקטור תיקון: יחידה מורידה ${s.cf}.` : '') + (s.target !== '' ? ` יעד לתיקון: ${s.target}.` : ''));
   if (s.note) lines.push(`הערות קבועות: ${s.note}`);
   for (const d of [7, 30]) {
     const st = stats(data, d, base);
@@ -353,6 +409,9 @@ export function aiContext(data, base = today(), detailDays = 21) {
     lines.push('\nהתפריט הקבוע:');
     for (const t of data.templates.filter((x) => !x.archived)) lines.push(`- ${t.name} (${SLOTS[t.slot]}, ${t.time}): ${t.food || 'בלי פירוט'}; מנה רגילה ${t.portion}${t.carbs !== '' ? `, ${t.carbs} גרם פחמימה` : ''}${t.dose !== '' ? `, בדרך כלל ${t.dose} יחידות` : ''}`);
   }
+  if (data.foods?.length) lines.push(`טבלת הפחמימות של המשפחה: ${data.foods.map((f) => `${f.name} (${f.unit}) = ${f.carbs} גר׳`).join('; ')}`);
+  const auto = insights(data, 30, base);
+  if (auto.length) lines.push(`ממצאים אוטומטיים (30 יום): ${auto.map((x) => x.text).join(' | ')}`);
   const pats = patternsByMeal(data, 60, base);
   if (pats.length) {
     lines.push('\nדפוס לכל ארוחה (60 יום):');
@@ -367,7 +426,7 @@ export function aiContext(data, base = today(), detailDays = 21) {
     lines.push(`${d} (${DAY_NAMES[weekday(d)]}):`);
     for (const m of meals) {
       const after = outcome(m).after.map((r) => `${r.time}=${r.value} (+${r.mins} דק׳)`).join(', ');
-      lines.push(`  ${m.time} | ${m.name}${m.food ? ` (${m.food})` : ''} | ${m.portion} | ${fmt(m.carbs)} | ${fmt(m.before)} | ${fmt(m.insulin)} | ${after || 'אין'}${m.tags.length ? ` | ${m.tags.map((x) => TAGS[x]).join(' ')}` : ''}${m.note ? ` | הערה: ${m.note}` : ''}`);
+      lines.push(`  ${m.time} | ${m.name}${m.food ? ` (${m.food})` : ''}${m.items.length ? ` [מחשבון: ${itemsText(m.items)}]` : ''} | ${m.portion} | ${fmt(m.carbs)} | ${fmt(m.before)} | ${fmt(m.insulin)} | ${after || 'אין'}${m.tags.length ? ` | ${m.tags.map((x) => TAGS[x]).join(' ')}` : ''}${m.note ? ` | הערה: ${m.note}` : ''}`);
     }
     for (const r of loose) lines.push(`  ${r.time} | מדידה ${r.value}${r.note ? ` (${r.note})` : ''}`);
   }
@@ -388,3 +447,75 @@ export function toCsv(data) {
   }
   return `﻿${rows.map((r) => r.map(q).join(',')).join('\n')}`;
 }
+
+// תובנות אוטומטיות מהנתונים (בלי AI): מה חוזר על עצמו בכל ארוחה ובכל שעה. רק כשיש מספיק פעמים (3+).
+// הניסוח: מה הנתונים מראים + "לבדוק עם הצוות" – לא הוראה לשנות מינון.
+export function insights(data, days = 30, base = today()) {
+  const s = data.settings;
+  const out = [];
+  const pats = patternsByMeal(data, days, base);
+  for (const p of pats) {
+    if (p.measured < 3) continue;
+    const rows = p.list.map((m) => outcome(m)).filter((o) => o.after2h !== '');
+    const highs = rows.filter((o) => o.after2h > s.high).length;
+    if (p.lows >= 2) out.push({ kind: 'low', text: `${p.name}: ${p.lows} פעמים הסוכר ירד מתחת ל-${s.low} אחרי הארוחה.`, hint: 'חשוב להראות לצוות – ייתכן שהאינסולין לארוחה הזו גבוה מדי.' });
+    if (highs / rows.length >= 0.6) out.push({ kind: 'high', text: `${p.name}: שעתיים אחרי הסוכר היה מעל ${s.high} ב-${highs} מתוך ${rows.length} פעמים (ממוצע ${p.after2h}).`, hint: 'כדאי לבדוק עם הצוות את היחס לארוחה הזו, או לתת את האינסולין קצת לפני האוכל.' });
+    else if (p.inRange / p.measured >= 0.7 && p.lows === 0) out.push({ kind: 'good', text: `${p.name}: ${p.inRange} מתוך ${p.measured} פעמים הסתיים בטווח – מה שעושים עובד.`, hint: '' });
+  }
+  // כמה גרם פחמימה "עבדו" ליחידה בארוחות שהסתיימו טוב
+  const worked = data.meals
+    .filter((m) => m.date >= addDays(base, -days + 1) && m.date <= base && m.carbs > 0 && m.insulin > 0 && level(m.before, s) === 'ok')
+    .filter((m) => {
+      const o = outcome(m);
+      return o.after2h !== '' && level(o.after2h, s) === 'ok' && !(o.lowest !== '' && o.lowest < s.low);
+    });
+  if (worked.length >= 3 && s.icr > 0) {
+    const ratio = round(worked.reduce((a, m) => a + m.carbs / m.insulin, 0) / worked.length);
+    if (Math.abs(ratio - s.icr) >= 2) out.push({ kind: 'info', text: `בארוחות שהסתיימו בטווח (${worked.length}) יצא בממוצע יחידה לכל ${ratio} גרם פחמימה, וההגדרה היא ${s.icr}.`, hint: 'זה נתון להביא לצוות – לא לשנות לבד.' });
+  }
+  const parts = byDayPart(data, days, base);
+  for (const p of parts) if (p.low >= 2) out.push({ kind: 'low', text: `${p.low} ערכים נמוכים ב${p.label.replace(/ \(.*/, '')}.`, hint: 'שווה לשים לב לשעות האלה ולספר לצוות.' });
+  const recent = data.meals.filter((m) => m.date >= addDays(base, -days + 1) && m.date <= base);
+  const withBefore = recent.filter((m) => m.before !== '');
+  const highBefore = withBefore.filter((m) => m.before > s.high).length;
+  if (withBefore.length >= 5 && highBefore / withBefore.length >= 0.5) out.push({ kind: 'high', text: `ב-${highBefore} מתוך ${withBefore.length} ארוחות הסוכר כבר לפני האוכל היה מעל ${s.high}.`, hint: 'ייתכן שהבעיה בין הארוחות (או בלילה) ולא בארוחה עצמה.' });
+  const dosed = recent.filter((m) => m.insulin !== '');
+  const unmeasured = dosed.filter((m) => outcome(m).after2h === '').length;
+  if (dosed.length >= 4 && unmeasured / dosed.length >= 0.5) out.push({ kind: 'info', text: `ב-${unmeasured} מתוך ${dosed.length} ארוחות לא נמדד סוכר שעתיים אחרי.`, hint: 'מדידה שעתיים אחרי היא מה שמלמד אם הכמות התאימה.' });
+  const order = { low: 0, high: 1, info: 2, good: 3 };
+  return out.sort((a, b) => order[a.kind] - order[b.kind]);
+}
+
+// לוח שנה: לכל יום בחודש – ממוצע, כמה מדידות, נמוכים, גבוהים וארוחות
+export function monthDays(data, month) {
+  const [y, m] = month.split('-').map(Number);
+  const first = `${month}-01`;
+  const count = new Date(y, m, 0).getDate();
+  const last = `${month}-${String(count).padStart(2, '0')}`;
+  const pts = allPoints(data, first, last);
+  const s = data.settings;
+  const days = [];
+  for (let d = 1; d <= count; d++) {
+    const date = `${month}-${String(d).padStart(2, '0')}`;
+    const vals = pts.filter((p) => p.date === date).map((p) => p.value);
+    days.push({
+      date,
+      day: d,
+      count: vals.length,
+      mean: vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : '',
+      low: vals.filter((v) => v < s.low).length,
+      high: vals.filter((v) => v > s.high).length,
+      meals: data.meals.filter((x) => x.date === date).length,
+    });
+  }
+  return { first, offset: weekday(first), days };
+}
+
+export function addMonths(month, n) {
+  const [y, m] = month.split('-').map(Number);
+  const i = y * 12 + (m - 1) + n;
+  return `${Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`;
+}
+
+const MONTH_NAMES = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+export const monthName = (month) => `${MONTH_NAMES[Number(month.slice(5)) - 1]} ${month.slice(0, 4)}`;

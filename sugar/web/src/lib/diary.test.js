@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { addDays, aiContext, allPoints, level, mealFromTemplate, minutesAfter, missingFixed, outcome, pattern, patternsByMeal, prepare, safeMeal, similarMeals, stats, suggestByRatio, toCsv, waitingForCheck } from './diary';
+import { DEFAULT_FOODS, calcDose, insights, itemsCarbs, monthDays, addDays, aiContext, allPoints, level, mealFromTemplate, minutesAfter, missingFixed, outcome, pattern, patternsByMeal, prepare, safeMeal, similarMeals, stats, suggestByRatio, toCsv, waitingForCheck } from './diary';
 
 const BASE = '2026-11-04'; // יום רביעי
 const tpl = { id: 'tl', t: 'template', name: 'צהריים בבית', slot: 'lunch', time: '13:30', food: 'אורז ועוף', portion: 1, days: [] };
@@ -31,11 +31,12 @@ describe('יומן סוכר', () => {
     const data = prepare(records);
     expect(data.meals).toHaveLength(3);
     expect(data.settings.low).toBe(70);
-    expect(prepare([]).settings).toMatchObject({ low: 70, high: 180, icr: '' });
+    expect(prepare([]).settings).toMatchObject({ low: 70, high: 110, icr: 15 });
+    expect(prepare([{ id: 'settings', t: 'settings', icr: '' }]).settings.icr).toBe('');
   });
 
   test('רמות סוכר', () => {
-    const s = prepare([]).settings;
+    const s = prepare([{ id: 'settings', t: 'settings', high: 180 }]).settings;
     expect(level(60, s)).toBe('low');
     expect(level(120, s)).toBe('ok');
     expect(level(200, s)).toBe('high');
@@ -94,7 +95,7 @@ describe('יומן סוכר', () => {
     const s = prepare(records).settings;
     expect(suggestByRatio(s, 45, 220)).toEqual({ food: 3, correction: 2, total: 5 });
     expect(suggestByRatio(s, 45, 100)).toEqual({ food: 3, correction: 0, total: 3 });
-    expect(suggestByRatio(prepare([]).settings, 45, 100)).toBeNull();
+    expect(suggestByRatio(prepare([{ id: 'settings', t: 'settings', icr: '' }]).settings, 45, 100)).toBeNull();
   });
 
   test('תזכורת למדידה שעתיים אחרי', () => {
@@ -106,11 +107,55 @@ describe('יומן סוכר', () => {
   test('סיכום ל-AI וייצוא', () => {
     const data = prepare(records);
     const ctx = aiContext(data, BASE);
-    expect(ctx).toMatch(/טווח יעד 70-180/);
+    expect(ctx).toMatch(/טווח תקין לפני ארוחה 70-180/);
+    expect(ctx).toMatch(/פתיתים \(כוס חד פעמית\) = 40/);
     expect(ctx).toMatch(/צהריים בבית: 3 פעמים/);
     expect(ctx).toMatch(/15:30=60/);
     expect(ctx).toMatch(/03:00 \| מדידה 95/);
     expect(toCsv(data).split('\n')).toHaveLength(5);
     expect(addDays(BASE, 1)).toBe('2026-11-05');
+  });
+
+  test('מחשבון: 15 גרם ליחידה, תיקון רק עם פקטור, אזהרה בנמוך', () => {
+    const s = prepare([]).settings; // 70-110, יחס 15, בלי פקטור תיקון
+    expect(calcDose(s, 45, 100)).toMatchObject({ food: 3, correction: 0, total: 3, rounded: 3, status: 'ok' });
+    expect(calcDose(s, 40, 200)).toMatchObject({ food: 2.7, rounded: 2.5, status: 'high', needsCf: true, correction: 0 });
+    expect(calcDose(s, 30, 60)).toMatchObject({ total: 2, status: 'low' });
+    const withCf = prepare([{ id: 'settings', t: 'settings', cf: 50 }]).settings;
+    // תיקון עד הגבול העליון (110): (210-110)/50 = 2
+    expect(calcDose(withCf, 30, 210)).toMatchObject({ food: 2, correction: 2, total: 4, target: 110 });
+    expect(calcDose(s, '', 100)).toBeNull();
+  });
+
+  test('טבלת הפחמימות: מובנית, עריכה ומחיקה, ופריט חדש', () => {
+    expect(prepare([]).foods.find((f) => f.name === 'פתיתים').carbs).toBe(40);
+    const foods = prepare([
+      { id: 'food:rice', t: 'food', name: 'אורז', unit: 'כוס חד פעמית', carbs: 35 },
+      { id: 'food:shawarma', t: 'food', deleted: true },
+      { id: 'fx1', t: 'food', name: 'פיתה', unit: 'יחידה', carbs: 45 },
+    ]).foods;
+    expect(foods.find((f) => f.id === 'food:rice').carbs).toBe(35);
+    expect(foods.some((f) => f.id === 'food:shawarma')).toBe(false);
+    expect(foods.at(-1).name).toBe('פיתה');
+    expect(foods).toHaveLength(DEFAULT_FOODS.length);
+    expect(itemsCarbs([{ qty: 1.5, carbs: 30 }, { qty: 1, carbs: 40 }, { qty: 2, carbs: 0 }])).toBe(85);
+  });
+
+  test('תובנות אוטומטיות מהנתונים', () => {
+    const list = [];
+    for (let i = 1; i <= 4; i++) list.push({ id: `l${i}`, t: 'meal', date: addDays(BASE, -i), time: '13:00', templateId: 'tl', name: 'צהריים בבית', insulin: 2, carbs: 30, before: 100, readings: [{ time: '15:00', value: 250 }] });
+    for (let i = 1; i <= 3; i++) list.push({ id: `b${i}`, t: 'meal', date: addDays(BASE, -i), time: '07:30', name: 'בוקר', insulin: 2, carbs: 30, before: 90, readings: [{ time: '09:30', value: 100 }] });
+    const out = insights(prepare([tpl, ...list]), 30, BASE);
+    expect(out[0]).toMatchObject({ kind: 'high' });
+    expect(out[0].text).toMatch(/צהריים בבית.*4 מתוך 4/);
+    expect(out.some((x) => x.kind === 'good' && /בוקר/.test(x.text))).toBe(true);
+    expect(insights(prepare([]), 30, BASE)).toEqual([]);
+  });
+
+  test('לוח שנה: ממוצע ונמוכים לכל יום', () => {
+    const cal = monthDays(prepare(records), '2026-11');
+    expect(cal.days).toHaveLength(30);
+    expect(cal.offset).toBe(0); // 1.11.2026 יום ראשון
+    expect(cal.days[3]).toMatchObject({ date: BASE, count: 3, low: 1, meals: 1 });
   });
 });
