@@ -11,6 +11,8 @@
 //              items: [{ foodId, name, qty, carbs }] (מה נבחר במחשבון), site (מיקום הזריקה, SITES),
 //              before (סוכר לפני), insulin (יחידות), readings: [{ time, value }] (מדידות אחרי), tags: [], note, by }
 //   reading  – מדידה בלי ארוחה (בוקר, לילה, ספורט): { t: 'reading', date, time, value, note, by }
+//   cgm      – מדידות החיישן ליום אחד (מיובא מקובץ CareLink, ראו carelink.js): { id: 'cgm:YYYY-MM-DD', t: 'cgm', date,
+//              points: [[דקה ביום, ערך], ...] } – רשומה אחת ליום (כ-288 מדידות), כדי שלא יהיו עשרות אלפי רשומות
 //   chat     – הודעה בשיחה עם ה-AI (משותפת לכולם): { t: 'chat', role: 'user' | 'assistant', text, at, by }
 // רשומה ישנה בלי שדה מסוים מקבלת ברירת מחדל (safeMeal, safeTemplate, safeSettings).
 
@@ -201,7 +203,47 @@ export function prepare(records) {
     .filter((r) => r.value !== '')
     .sort(byTime);
   const chats = live.filter((r) => r.t === 'chat' && r.text).sort((a, b) => (a.at || 0) - (b.at || 0));
-  return { settings, templates, meals, readings, chats, foods: foodsOf(records) };
+  return { settings, templates, meals, readings, chats, foods: foodsOf(records), cgm: cgmOf(live) };
+}
+
+// מדידות החיישן: מפה מתאריך לרשימת [דקה, ערך] ממוינת
+export function cgmOf(records) {
+  const map = new Map();
+  for (const r of records) {
+    if (r.t !== 'cgm' || !isDate(r.date) || !Array.isArray(r.points)) continue;
+    const pts = r.points.filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]) && p[0] >= 0 && p[0] < 1440 && p[1] > 0).sort((a, b) => a[0] - b[0]);
+    if (pts.length) map.set(r.date, pts);
+  }
+  return map;
+}
+
+const hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+// ערך החיישן הקרוב לשעה מסוימת (עד tol דקות), כולל מעבר לחצות (דקה 1440+ = היום הבא)
+export function cgmAt(data, date, minute, tol = 10) {
+  if (!data?.cgm?.size) return '';
+  let d = date;
+  let m = minute;
+  if (m >= 1440) {
+    d = addDays(date, 1);
+    m -= 1440;
+  }
+  const pts = data.cgm.get(d);
+  if (!pts) return '';
+  let best = null;
+  for (const p of pts) if (Math.abs(p[0] - m) <= tol && (!best || Math.abs(p[0] - m) < Math.abs(best[0] - m))) best = p;
+  return best ? best[1] : '';
+}
+
+// כל מדידות החיישן בין שתי נקודות זמן (דקות מתחילת היום של date, אפשר מעבר לחצות)
+function cgmRange(data, date, from, to) {
+  const out = [];
+  for (const [d, base] of [[date, 0], [addDays(date, 1), 1440]]) {
+    const pts = data?.cgm?.get(d);
+    if (!pts) continue;
+    for (const [m, v] of pts) if (m + base > from && m + base <= to) out.push({ mins: m + base, value: v });
+  }
+  return out;
 }
 
 // רמת הסוכר: low (מתחת לטווח), ok, high (מעל), veryHigh (מעל 250)
@@ -222,21 +264,36 @@ export function minutesAfter(mealTime, readingTime) {
   return diff;
 }
 
-// מה קרה אחרי הארוחה: המדידה הקרובה ל-2 שעות (בין 90 ל-180 דקות), השיא, הנמוך, ושינוי מלפני
-export function outcome(meal) {
+// מה קרה אחרי הארוחה: המדידה הקרובה ל-2 שעות (בין 90 ל-180 דקות), השיא, הנמוך, ושינוי מלפני.
+// כשיש נתוני חיישן (data.cgm) – הם משלימים: סוכר לפני (אם לא הוזן), שעה/שעתיים/שלוש אחרי, ושיא ונמוך מכל 4 השעות.
+// מדידה ידנית קודמת לחיישן.
+export function outcome(meal, data) {
+  const start = minutes(meal.time);
   const after = meal.readings.map((r) => ({ ...r, mins: minutesAfter(meal.time, r.time) })).filter((r) => r.mins > 0 && r.mins <= 6 * 60);
+  const sensor = data ? cgmRange(data, meal.date, start, start + 240) : [];
+  if (sensor.length) {
+    for (const off of [60, 120, 180]) {
+      if (after.some((r) => Math.abs(r.mins - off) <= 20)) continue;
+      const v = cgmAt(data, meal.date, start + off);
+      if (v !== '') after.push({ time: hhmm((start + off) % 1440), value: v, mins: off, cgm: true });
+    }
+  }
   const near2h = after.filter((r) => r.mins >= 90 && r.mins <= 180).sort((a, b) => Math.abs(a.mins - 120) - Math.abs(b.mins - 120))[0];
-  const peak = after.length ? after.reduce((a, b) => (b.value > a.value ? b : a)) : null;
-  const lowest = after.length ? after.reduce((a, b) => (b.value < a.value ? b : a)) : null;
+  const all = [...after, ...sensor];
+  const peak = all.length ? all.reduce((a, b) => (b.value > a.value ? b : a)) : null;
+  const lowest = all.length ? all.reduce((a, b) => (b.value < a.value ? b : a)) : null;
   const last = after.length ? after.reduce((a, b) => (b.mins > a.mins ? b : a)) : null;
   const after2h = near2h ? near2h.value : '';
+  const before = meal.before !== '' ? meal.before : data ? cgmAt(data, meal.date, start, 15) : '';
   return {
     after: after.sort((a, b) => a.mins - b.mins),
     after2h,
+    before,
+    beforeCgm: meal.before === '' && before !== '',
     peak: peak ? peak.value : '',
     lowest: lowest ? lowest.value : '',
     last: last ? last.value : '',
-    rise: after2h !== '' && meal.before !== '' ? after2h - meal.before : '',
+    rise: after2h !== '' && before !== '' ? after2h - before : '',
   };
 }
 
@@ -256,7 +313,7 @@ const round = (v, d = 0) => (v === '' ? '' : Math.round(v * 10 ** d) / 10 ** d);
 // דפוס לכל ארוחה: כמה פעמים, ממוצע מנה/אינסולין/לפני/אחרי שעתיים, כמה הסתיימו בטווח, ומה עבד הכי טוב
 export function pattern(data, list) {
   const s = data.settings;
-  const rows = list.map((m) => ({ m, o: outcome(m) }));
+  const rows = list.map((m) => ({ m, o: outcome(m, data) }));
   const withAfter = rows.filter((r) => r.o.after2h !== '');
   const inRange = withAfter.filter((r) => level(r.o.after2h, s) === 'ok');
   const lows = rows.filter((r) => r.o.lowest !== '' && r.o.lowest < s.low);
@@ -272,7 +329,7 @@ export function pattern(data, list) {
     portion: round(avg(rows.map((r) => r.m.portion)), 1),
     dose: round(avg(doses), 1),
     dosePerPortion: round(avg(perPortion), 1),
-    before: round(avg(rows.map((r) => r.m.before).filter((x) => x !== ''))),
+    before: round(avg(rows.map((r) => r.o.before).filter((x) => x !== ''))),
     after2h: round(avg(withAfter.map((r) => r.o.after2h))),
     rise: round(avg(withAfter.map((r) => r.o.rise).filter((x) => x !== ''))),
     good,
@@ -297,8 +354,20 @@ export function patternsByMeal(data, days = 30, base = today()) {
     .sort((a, b) => b.count - a.count);
 }
 
-// כל המדידות (לפני ארוחה, אחרי ארוחה, ובנפרד) – לגרף היומי ולסטטיסטיקה
+// המדידות לסטטיסטיקה: ביום שיש בו נתוני חיישן – מדידות החיישן (מדויקות ורציפות), ובשאר הימים – המדידות הידניות
 export function allPoints(data, from = '0000-00-00', to = '9999-99-99') {
+  const manual = manualPoints(data, from, to).filter((p) => !data.cgm?.has(p.date));
+  return [...manual, ...cgmPoints(data, from, to)].sort(byTime);
+}
+
+export function cgmPoints(data, from = '0000-00-00', to = '9999-99-99') {
+  const out = [];
+  for (const [date, pts] of data.cgm || []) if (date >= from && date <= to) for (const [m, v] of pts) out.push({ date, time: hhmm(m), value: v, kind: 'cgm' });
+  return out.sort(byTime);
+}
+
+// המדידות הידניות (לפני ארוחה, אחרי ארוחה, ובנפרד) – לגרף היומי
+export function manualPoints(data, from = '0000-00-00', to = '9999-99-99') {
   const pts = [];
   for (const m of data.meals) {
     if (m.date < from || m.date > to) continue;
@@ -412,6 +481,22 @@ export function lastSite(data, meal) {
   return prev.length ? prev[prev.length - 1].site : '';
 }
 
+// סיכום יומי של החיישן (ל-AI): ממוצע, אחוז בטווח, מינימום ומקסימום
+export function cgmDaySummary(data, date) {
+  const pts = data.cgm?.get(date);
+  if (!pts?.length) return null;
+  const vals = pts.map((p) => p[1]);
+  const s = data.settings;
+  return {
+    count: vals.length,
+    mean: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length),
+    inRange: Math.round((vals.filter((v) => v >= s.low && v <= s.high).length / vals.length) * 100),
+    low: vals.filter((v) => v < s.low).length,
+    min: Math.min(...vals),
+    max: Math.max(...vals),
+  };
+}
+
 const fmt = (v) => (v === '' ? '?' : String(v));
 
 // סיכום טקסט של היומן ל-AI: הגדרות, סטטיסטיקה, דפוס לכל ארוחה ופירוט מלא של הימים האחרונים
@@ -444,13 +529,16 @@ export function aiContext(data, base = today(), detailDays = 21) {
   for (let d = from; d <= base; d = addDays(d, 1)) {
     const meals = data.meals.filter((m) => m.date === d);
     const loose = data.readings.filter((r) => r.date === d);
-    if (!meals.length && !loose.length) continue;
+    if (!meals.length && !loose.length && !data.cgm?.has(d)) continue;
     lines.push(`${d} (${DAY_NAMES[weekday(d)]}):`);
     for (const m of meals) {
-      const after = outcome(m).after.map((r) => `${r.time}=${r.value} (+${r.mins} דק׳)`).join(', ');
-      lines.push(`  ${m.time} | ${m.name}${m.food ? ` (${m.food})` : ''}${m.items.length ? ` [מחשבון: ${itemsText(m.items)}]` : ''} | ${m.portion} | ${fmt(m.carbs)} | ${fmt(m.before)} | ${fmt(m.insulin)}${m.site ? ` (${SITES[m.site]})` : ''} | ${after || 'אין'}${m.tags.length ? ` | ${m.tags.map((x) => TAGS[x]).join(' ')}` : ''}${m.note ? ` | הערה: ${m.note}` : ''}`);
+      const o = outcome(m, data);
+      const after = o.after.map((r) => `${r.time}=${r.value}${r.cgm ? ' (חיישן)' : ''} (+${r.mins} דק׳)`).join(', ');
+      lines.push(`  ${m.time} | ${m.name}${m.food ? ` (${m.food})` : ''}${m.items.length ? ` [מחשבון: ${itemsText(m.items)}]` : ''} | ${m.portion} | ${fmt(m.carbs)} | ${m.before !== '' ? m.before : o.before !== '' ? `${o.before} (חיישן)` : '?'} | ${fmt(m.insulin)}${m.site ? ` (${SITES[m.site]})` : ''} | ${after || 'אין'}${m.tags.length ? ` | ${m.tags.map((x) => TAGS[x]).join(' ')}` : ''}${m.note ? ` | הערה: ${m.note}` : ''}`);
     }
     for (const r of loose) lines.push(`  ${r.time} | מדידה ${r.value}${r.note ? ` (${r.note})` : ''}`);
+    const c = cgmDaySummary(data, d);
+    if (c) lines.push(`  חיישן: ${c.count} מדידות, ממוצע ${c.mean}, בטווח ${c.inRange}%, ${c.low} מדידות נמוכות, טווח ${c.min}-${c.max}`);
   }
   return lines.join('\n');
 }
@@ -463,7 +551,7 @@ export function toCsv(data) {
   for (const x of all) {
     if (x.kind === 'reading') rows.push([x.date, x.time, 'מדידה', '', '', '', '', x.value, '', '', '', '', '', '', x.note, x.by]);
     else {
-      const o = outcome(x);
+      const o = outcome(x, data);
       rows.push([x.date, x.time, 'ארוחה', x.name, x.food, x.portion, x.carbs, x.before, x.insulin, SITES[x.site] || '', o.after.map((r) => `${r.time}: ${r.value}`).join(' · '), o.after2h, o.peak, x.tags.map((t) => TAGS[t]).join(' '), x.note, x.by]);
     }
   }
@@ -478,7 +566,7 @@ export function insights(data, days = 30, base = today()) {
   const pats = patternsByMeal(data, days, base);
   for (const p of pats) {
     if (p.measured < 3) continue;
-    const rows = p.list.map((m) => outcome(m)).filter((o) => o.after2h !== '');
+    const rows = p.list.map((m) => outcome(m, data)).filter((o) => o.after2h !== '');
     const highs = rows.filter((o) => o.after2h > s.high).length;
     if (p.lows >= 2) out.push({ kind: 'low', text: `${p.name}: ${p.lows} פעמים הסוכר ירד מתחת ל-${s.low} אחרי הארוחה.`, hint: 'חשוב להראות לצוות – ייתכן שהאינסולין לארוחה הזו גבוה מדי.' });
     if (highs / rows.length >= 0.6) out.push({ kind: 'high', text: `${p.name}: שעתיים אחרי הסוכר היה מעל ${s.high} ב-${highs} מתוך ${rows.length} פעמים (ממוצע ${p.after2h}).`, hint: 'כדאי לבדוק עם הצוות את היחס לארוחה הזו, או לתת את האינסולין קצת לפני האוכל.' });
@@ -486,10 +574,10 @@ export function insights(data, days = 30, base = today()) {
   }
   // כמה גרם פחמימה "עבדו" ליחידה בארוחות שהסתיימו טוב
   const worked = data.meals
-    .filter((m) => m.date >= addDays(base, -days + 1) && m.date <= base && m.carbs > 0 && m.insulin > 0 && level(m.before, s) === 'ok')
+    .filter((m) => m.date >= addDays(base, -days + 1) && m.date <= base && m.carbs > 0 && m.insulin > 0)
     .filter((m) => {
-      const o = outcome(m);
-      return o.after2h !== '' && level(o.after2h, s) === 'ok' && !(o.lowest !== '' && o.lowest < s.low);
+      const o = outcome(m, data);
+      return level(o.before, s) === 'ok' && o.after2h !== '' && level(o.after2h, s) === 'ok' && !(o.lowest !== '' && o.lowest < s.low);
     });
   if (worked.length >= 3 && s.icr > 0) {
     const ratio = round(worked.reduce((a, m) => a + m.carbs / m.insulin, 0) / worked.length);
@@ -498,11 +586,12 @@ export function insights(data, days = 30, base = today()) {
   const parts = byDayPart(data, days, base);
   for (const p of parts) if (p.low >= 2) out.push({ kind: 'low', text: `${p.low} ערכים נמוכים ב${p.label.replace(/ \(.*/, '')}.`, hint: 'שווה לשים לב לשעות האלה ולספר לצוות.' });
   const recent = data.meals.filter((m) => m.date >= addDays(base, -days + 1) && m.date <= base);
-  const withBefore = recent.filter((m) => m.before !== '');
-  const highBefore = withBefore.filter((m) => m.before > s.high).length;
+  const befores = recent.map((m) => outcome(m, data).before).filter((x) => x !== '');
+  const withBefore = befores;
+  const highBefore = befores.filter((v) => v > s.high).length;
   if (withBefore.length >= 5 && highBefore / withBefore.length >= 0.5) out.push({ kind: 'high', text: `ב-${highBefore} מתוך ${withBefore.length} ארוחות הסוכר כבר לפני האוכל היה מעל ${s.high}.`, hint: 'ייתכן שהבעיה בין הארוחות (או בלילה) ולא בארוחה עצמה.' });
   const dosed = recent.filter((m) => m.insulin !== '');
-  const unmeasured = dosed.filter((m) => outcome(m).after2h === '').length;
+  const unmeasured = dosed.filter((m) => outcome(m, data).after2h === '').length;
   if (dosed.length >= 4 && unmeasured / dosed.length >= 0.5) out.push({ kind: 'info', text: `ב-${unmeasured} מתוך ${dosed.length} ארוחות לא נמדד סוכר שעתיים אחרי.`, hint: 'מדידה שעתיים אחרי היא מה שמלמד אם הכמות התאימה.' });
   const order = { low: 0, high: 1, info: 2, good: 3 };
   return out.sort((a, b) => order[a.kind] - order[b.kind]);

@@ -220,12 +220,12 @@ export default function MealEditor({ data, meal, onClose }) {
               </thead>
               <tbody>
                 {previous.map((p) => {
-                  const o = outcome(p);
+                  const o = outcome(p, data);
                   return (
                     <tr key={p.id} className="border-t border-line text-center">
                       <td className="py-1.5 text-right">{dayLabel(p.date, data.today)}</td>
                       <td>{p.portion}</td>
-                      <td>{p.before === '' ? '—' : <Glucose value={p.before} settings={s} small />}</td>
+                      <td>{o.before === '' ? '—' : <Glucose value={o.before} settings={s} small />}</td>
                       <td className="font-bold">{p.insulin === '' ? '—' : p.insulin}</td>
                       <td>{o.after2h === '' ? (o.peak === '' ? '—' : <Glucose value={o.peak} settings={s} small label="שיא" />) : <Glucose value={o.after2h} settings={s} small />}</td>
                     </tr>
