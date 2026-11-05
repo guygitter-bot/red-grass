@@ -2,7 +2,7 @@
 // "להוסיף את התפריט הקבוע" ותזכורת למדוד שעתיים אחרי ארוחה.
 import { useState } from 'react';
 import { BellRing, ChevronLeft, ChevronRight, ListPlus, Plus, Syringe, Trash2 } from 'lucide-react';
-import { SITES, SLOTS, TAGS, addDays, allPoints, dayLabel, mealFromTemplate, missingFixed, nowTime, outcome, waitingForCheck } from '../lib/diary';
+import { templateFromMeal, SITES, SLOTS, TAGS, addDays, allPoints, dayLabel, mealFromTemplate, missingFixed, nowTime, outcome, waitingForCheck } from '../lib/diary';
 import { newId, remove, save } from '../lib/store';
 import { getMe } from '../lib/me';
 import { Button, Sheet } from './ui';
@@ -48,6 +48,18 @@ function MealCard({ meal, s, onOpen, onQuick }) {
         <button onClick={onQuick} className="flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-accent-ink hover:bg-soft">
           <Plus size={16} /> מדידה אחרי
         </button>
+        {/* ארוחה שלא מהתפריט – אפשר להוסיף אותה לתפריט הקבוע בלחיצה */}
+        {!meal.templateId && (
+          <button
+            onClick={() => {
+              const templateId = newId('t');
+              save({ id: templateId, ...templateFromMeal(meal) }, { id: meal.id, templateId });
+            }}
+            className="flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-accent-ink hover:bg-soft"
+          >
+            ⭐ לתפריט
+          </button>
+        )}
         {meal.by && <span className="mr-auto text-xs text-muted">{meal.by}</span>}
         {/* מחיקה ישירות מהכרטיס (למשל ארוחה שנכנסה פעמיים בטעות) */}
         <button

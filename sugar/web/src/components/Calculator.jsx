@@ -71,6 +71,19 @@ export default function Calculator({ data, initial = {}, onApply, inline = false
   const [extra, setExtra] = useState('');
   const [before, setBefore] = useState(initial.before === '' || initial.before == null ? '' : String(initial.before));
   const [editFood, setEditFood] = useState(null);
+  // מאכל חדש לטבלה – טופס קטן בתוך המסך (עובד גם בתוך מסך הארוחה)
+  const [adding, setAdding] = useState(null);
+  const addFood = () => {
+    const c = numOrEmpty(adding.carbs);
+    if (!adding.name.trim() || c === '' || c < 0) return;
+    const id = newId('f');
+    save({ id, t: 'food', name: adding.name.trim(), unit: adding.unit.trim() || 'מנה', carbs: c });
+    // המאכל החדש נבחר מיד (יחידה אחת)
+    setQty((q) => ({ ...q, [id]: 1 }));
+    // אם הפחמימות הנוספות הפכו למאכל – לא לספור אותן פעמיים
+    if (numOrEmpty(extra) === c) setExtra('');
+    setAdding(null);
+  };
   const [meal, setMeal] = useState(null);
 
   const items = data.foods.filter((f) => qty[f.id] > 0).map((f) => ({ foodId: f.id, name: f.name, qty: qty[f.id], carbs: f.carbs }));
@@ -152,12 +165,30 @@ export default function Calculator({ data, initial = {}, onApply, inline = false
               <input className={`${inputCls} num`} inputMode="decimal" value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="0" />
             </Field>
           </div>
-          {!inline && (
-            <Button type="button" kind="ghost" className="mb-3 flex items-center gap-1" onClick={() => setEditFood({})}>
+          {!adding && (
+            <Button type="button" kind="ghost" className="mb-3 flex items-center gap-1" onClick={() => setAdding({ name: '', unit: 'כוס חד פעמית', carbs: extra })}>
               <Plus size={16} /> מאכל לטבלה
             </Button>
           )}
         </div>
+        {adding && (
+          <div className="rounded-2xl border border-accent p-3">
+            <div className="mb-2 text-sm font-bold">מאכל חדש בטבלה</div>
+            <div className="grid grid-cols-2 gap-2">
+              <input className={`${inputCls} col-span-2`} value={adding.name} onChange={(e) => setAdding({ ...adding, name: e.target.value })} placeholder="שם, למשל: פיתה" aria-label="שם המאכל" autoFocus />
+              <input className={inputCls} value={adding.unit} onChange={(e) => setAdding({ ...adding, unit: e.target.value })} placeholder="יחידה (כוס / יחידה / מנה)" aria-label="יחידה" />
+              <input className={`${inputCls} num`} inputMode="decimal" value={adding.carbs} onChange={(e) => setAdding({ ...adding, carbs: e.target.value })} placeholder="גרם פחמימה ליחידה" aria-label="גרם פחמימה ליחידה" />
+            </div>
+            <div className="mt-2 flex gap-2">
+              <Button type="button" className="flex-1" disabled={!adding.name.trim() || numOrEmpty(adding.carbs) === ''} onClick={addFood}>
+                להוסיף לטבלה
+              </Button>
+              <Button type="button" kind="ghost" onClick={() => setAdding(null)}>
+                ביטול
+              </Button>
+            </div>
+          </div>
+        )}
       </section>
 
       <section className={`${inline ? 'mb-3 border border-line' : 'mb-4 shadow-sm'} rounded-2xl bg-card p-4`} aria-live="polite">
