@@ -102,6 +102,14 @@ describe('יומן סוכר', () => {
     const data = prepare([...records, { id: 'mx', t: 'meal', date: BASE, time: '18:00', insulin: 3 }]);
     expect(waitingForCheck(data, BASE, '20:10').map((m) => m.id)).toEqual(['mx']);
     expect(waitingForCheck(data, BASE, '19:00')).toHaveLength(0);
+    // "מדידה בלי ארוחה" שעתיים אחרי – התזכורת נעלמת, והמדידה נחשבת "אחרי" בארוחה
+    const withLoose = prepare([...records, { id: 'mx', t: 'meal', date: BASE, time: '18:00', insulin: 3 }, { id: 'rx', t: 'reading', date: BASE, time: '20:05', value: 140 }]);
+    expect(waitingForCheck(withLoose, BASE, '20:10')).toHaveLength(0);
+    const mx = withLoose.meals.find((m) => m.id === 'mx');
+    expect(outcome(mx, withLoose)).toMatchObject({ after2h: 140 });
+    // מדידה אחרי הארוחה הבאה לא שייכת לארוחה הקודמת
+    const two = prepare([{ id: 'a', t: 'meal', date: BASE, time: '08:00' }, { id: 'b', t: 'meal', date: BASE, time: '09:00' }, { id: 'r', t: 'reading', date: BASE, time: '10:00', value: 150 }]);
+    expect(outcome(two.meals[0], two).after).toHaveLength(0);
   });
 
   test('סיכום ל-AI וייצוא', () => {

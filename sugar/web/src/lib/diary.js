@@ -275,6 +275,8 @@ export function minutesAfter(mealTime, readingTime) {
 export function outcome(meal, data) {
   const start = minutes(meal.time);
   const after = meal.readings.map((r) => ({ ...r, mins: minutesAfter(meal.time, r.time) })).filter((r) => r.mins > 0 && r.mins <= 6 * 60);
+  // מדידות שנרשמו כ"מדידה בלי ארוחה" אחרי הארוחה (עד 4 שעות, ולפני הארוחה הבאה באותו יום) – גם הן "אחרי"
+  if (data) for (const r of looseAfter(data, meal)) after.push(r);
   const sensor = data ? cgmRange(data, meal.date, start, start + 240) : [];
   if (sensor.length) {
     for (const off of [60, 120, 180]) {
@@ -470,13 +472,27 @@ export function suggestByRatio(settings, carbs, before) {
 export const itemsCarbs = (items) => round(items.reduce((a, x) => a + (Number(x.qty) || 0) * (Number(x.carbs) || 0), 0), 1);
 export const itemsText = (items) => items.map((x) => `${x.name} ×${x.qty}`).join(', ');
 
-// ארוחות של היום שקיבלו אינסולין ועבר זמן – אבל אין מדידה שעתיים אחרי (תזכורת במסך)
+// מדידות נפרדות (t: 'reading') שאחרי הארוחה: באותו יום, עד 4 שעות, ולפני הארוחה הבאה
+export function looseAfter(data, meal) {
+  const start = minutes(meal.time);
+  const next = data.meals.filter((m) => m.id !== meal.id && m.date === meal.date && minutes(m.time) > start).map((m) => minutes(m.time));
+  const end = Math.min(start + 240, ...next);
+  return (data.readings || [])
+    .filter((r) => r.date === meal.date && minutes(r.time) > start && minutes(r.time) <= end)
+    .map((r) => ({ time: r.time, value: r.value, mins: minutes(r.time) - start, loose: true }));
+}
+
+// ארוחות של היום שקיבלו אינסולין ועבר זמן – אבל אין מדידה שעתיים אחרי (תזכורת במסך).
+// נחשבת כל מדידה מ-90 דקות אחרי: בתוך הארוחה, "מדידה בלי ארוחה", או מהחיישן
 export function waitingForCheck(data, date = today(), time = nowTime()) {
   return data.meals.filter((m) => {
     if (m.date !== date || m.insulin === '') return false;
     const passed = minutes(time) - minutes(m.time);
     if (passed < 110 || passed > 5 * 60) return false;
-    return !m.readings.some((r) => minutesAfter(m.time, r.time) >= 90);
+    if (m.readings.some((r) => minutesAfter(m.time, r.time) >= 90)) return false;
+    if (looseAfter(data, m).some((r) => r.mins >= 90)) return false;
+    if (cgmAt(data, m.date, minutes(m.time) + 120, 30) !== '') return false;
+    return true;
   });
 }
 
