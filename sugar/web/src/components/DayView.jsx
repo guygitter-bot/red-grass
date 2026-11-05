@@ -26,7 +26,7 @@ function MealCard({ meal, s, data, onOpen, onQuick }) {
           <span className="num shrink-0 text-sm text-muted">{meal.portion} {meal.portion === 1 ? 'מנה' : 'מנות'}</span>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <Glucose value={o.before} settings={s} small label={o.beforeCgm ? 'לפני 📡' : 'לפני'} />
+          <Glucose value={o.before} settings={s} small before label={o.beforeCgm ? 'לפני 📡' : 'לפני'} />
           <span className={`num inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 font-bold ${meal.insulin === '' ? 'bg-soft text-muted' : 'bg-accent/15 text-accent-ink'}`}>
             <Syringe size={14} /> {meal.insulin === '' ? '—' : `${meal.insulin} יח׳`}
           </span>

@@ -114,7 +114,7 @@ function TemplateCard({ t, data, onEdit }) {
             </span>
             {p.before !== '' && (
               <span className="flex items-center gap-1">
-                לפני <Glucose value={p.before} settings={s} small />
+                לפני <Glucose value={p.before} settings={s} small before />
               </span>
             )}
             {p.after2h !== '' && (

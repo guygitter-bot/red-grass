@@ -10,8 +10,8 @@ export const LEVEL_CLS = {
 };
 
 // ערך סוכר בצבע לפי הטווח (אדום נמוך, ירוק בטווח, כתום גבוה)
-export function Glucose({ value, settings, small = false, label }) {
-  const lv = level(value, settings);
+export function Glucose({ value, settings, small = false, label, before = false }) {
+  const lv = level(value, settings, before);
   return (
     <span className={`num inline-flex items-center gap-1 rounded-lg font-bold ${small ? 'px-1.5 py-0.5 text-sm' : 'px-2 py-1'} ${LEVEL_CLS[lv]}`}>
       {label && <span className="text-xs font-normal opacity-80">{label}</span>}
@@ -34,8 +34,8 @@ export function DayChart({ points, meals, settings, cgm = [] }) {
   const color = (v) => ({ low: 'var(--color-low)', ok: 'var(--color-ok)', high: 'var(--color-high)', veryHigh: 'var(--color-low)' })[level(v, settings)];
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" dir="ltr" role="img" aria-label="גרף הסוכר היום">
-      <rect x={P.l} width={W - P.l - P.r} y={y(settings.high)} height={y(settings.low) - y(settings.high)} fill="var(--color-ok)" opacity="0.12" />
-      {[settings.low, settings.high, 250].map((v) => (
+      <rect x={P.l} width={W - P.l - P.r} y={y(settings.dayHigh)} height={y(settings.low) - y(settings.dayHigh)} fill="var(--color-ok)" opacity="0.12" />
+      {[...new Set([settings.low, settings.high, settings.dayHigh, 250])].map((v) => (
         <g key={v}>
           <line x1={P.l} x2={W - P.r} y1={y(v)} y2={y(v)} stroke="var(--color-line)" />
           <text x={P.l - 4} y={y(v) + 4} textAnchor="end" fontSize="11" fill="var(--color-muted)">
