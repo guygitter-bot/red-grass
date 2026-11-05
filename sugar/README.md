@@ -62,7 +62,8 @@
 
 ## מבנה הרשומות (`web/src/lib/diary.js`)
 
-- `settings` (מזהה `settings`): `person`, `low` (70), `high` (110), `icr` (15), `cf`, `target`, `note`.
+- `settings` (מזהה `settings`): `person`, `low` (70), `high` (110 – לפני ארוחה), `dayHigh` (180 – לאורך היום: אחרי ארוחה, חיישן,
+  אחוז בטווח; `level(v, s, true)` = מול הטווח לפני ארוחה), `icr` (15), `cf`, `target`, `note`.
 - `food`: `name`, `unit`, `carbs` (מזהים `food:*` לרשימה המובנית; מחיקה = `deleted`).
 - `template`: `name`, `slot`, `time`, `food`, `portion`, `carbs`, `dose`, `days` (0=ראשון; ריק = כל יום), `archived`.
 - `meal`: `date`, `time`, `templateId`, `name`, `slot`, `food`, `portion`, `carbs`, `before`, `insulin`,

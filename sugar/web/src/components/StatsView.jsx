@@ -34,7 +34,7 @@ export default function StatsView({ data, openDay, openChat }) {
   const parts = byDayPart(data, days, data.today);
   const pats = patternsByMeal(data, days, data.today);
   const tips = insights(data, Math.max(days, 14), data.today);
-  const maxPart = Math.max(s.high + 40, ...parts.map((p) => p.mean || 0));
+  const maxPart = Math.max(s.dayHigh + 40, ...parts.map((p) => p.mean || 0));
 
   // ממוצע לכל יום
   const daily = [];
@@ -86,7 +86,7 @@ export default function StatsView({ data, openDay, openChat }) {
       ) : (
         <>
           <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
-            <Tile label="בטווח" value={`${st.inRange}%`} hint={`${s.low}-${s.high} · ${st.count} מדידות`} cls={st.inRange >= 70 ? 'text-ok' : st.inRange >= 50 ? 'text-high' : 'text-low'} />
+            <Tile label="בטווח" value={`${st.inRange}%`} hint={`${s.low}-${s.dayHigh} · ${st.count} מדידות`} cls={st.inRange >= 70 ? 'text-ok' : st.inRange >= 50 ? 'text-high' : 'text-low'} />
             <Tile label="ממוצע" value={st.mean} hint={`סטיית תקן ${st.sd}`} cls={TEXT[level(st.mean, s)]} />
             <Tile label="נמוכים" value={st.low} hint={`מתחת ל-${s.low}`} cls={st.low ? 'text-low' : 'text-ok'} />
             <Tile label="גבוהים" value={st.high} hint={`${st.veryHigh} מעל 250`} cls={st.high ? 'text-high' : 'text-ok'} />
@@ -135,7 +135,7 @@ export default function StatsView({ data, openDay, openChat }) {
                         <td>{p.count}</td>
                         <td>{p.portion}</td>
                         <td className="font-bold">{p.dose === '' ? '—' : p.dose}</td>
-                        <td>{p.before === '' ? '—' : <Glucose value={p.before} settings={s} small />}</td>
+                        <td>{p.before === '' ? '—' : <Glucose value={p.before} settings={s} small before />}</td>
                         <td>{p.after2h === '' ? '—' : <Glucose value={p.after2h} settings={s} small />}</td>
                         <td>{p.measured ? `${p.inRange}/${p.measured}` : '—'}</td>
                         <td className={p.lows ? 'font-bold text-low' : ''}>{p.lows}</td>

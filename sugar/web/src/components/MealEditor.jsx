@@ -131,9 +131,9 @@ export default function MealEditor({ data, meal, onClose }) {
             <input className={`${inputCls} num`} inputMode="numeric" value={m.carbs} onChange={(e) => set({ carbs: e.target.value })} placeholder="לא חובה" />
           </Field>
         </div>
-        {before !== '' && level(before, s) !== 'ok' && (
-          <p className={`-mt-1 mb-3 rounded-xl p-2 text-sm ${level(before, s) === 'low' ? 'bg-low/15 text-low' : 'bg-high/15 text-high'}`}>
-            {level(before, s) === 'low' ? `סוכר נמוך (${before}) – קודם לטפל בנמוך ולמדוד שוב אחרי 15 דקות.` : `הסוכר לפני ${LEVEL_TEXT[level(before, s)]} (${before}).`}
+        {before !== '' && level(before, s, true) !== 'ok' && (
+          <p className={`-mt-1 mb-3 rounded-xl p-2 text-sm ${level(before, s, true) === 'low' ? 'bg-low/15 text-low' : 'bg-high/15 text-high'}`}>
+            {level(before, s, true) === 'low' ? `סוכר נמוך (${before}) – קודם לטפל בנמוך ולמדוד שוב אחרי 15 דקות.` : `הסוכר לפני ${LEVEL_TEXT[level(before, s, true)]} (${before}).`}
           </p>
         )}
         {calc && numOrEmpty(m.carbs) !== '' && (
@@ -225,7 +225,7 @@ export default function MealEditor({ data, meal, onClose }) {
                     <tr key={p.id} className="border-t border-line text-center">
                       <td className="py-1.5 text-right">{dayLabel(p.date, data.today)}</td>
                       <td>{p.portion}</td>
-                      <td>{o.before === '' ? '—' : <Glucose value={o.before} settings={s} small />}</td>
+                      <td>{o.before === '' ? '—' : <Glucose value={o.before} settings={s} small before />}</td>
                       <td className="font-bold">{p.insulin === '' ? '—' : p.insulin}</td>
                       <td>{o.after2h === '' ? (o.peak === '' ? '—' : <Glucose value={o.peak} settings={s} small label="שיא" />) : <Glucose value={o.after2h} settings={s} small />}</td>
                     </tr>

@@ -176,4 +176,13 @@ describe('יומן סוכר', () => {
     const m = safeMeal({ id: 'a', t: 'meal', name: 'פסטה', slot: 'lunch', time: '13:15', food: 'פסטה ועוף', portion: '1.5', carbs: '45', insulin: '3' });
     expect(templateFromMeal(m)).toEqual({ t: 'template', name: 'פסטה', slot: 'lunch', time: '13:15', food: 'פסטה ועוף', portion: 1.5, carbs: 45, dose: 3, days: [] });
   });
+
+  test('שני טווחים: לפני ארוחה (70-110) ולאורך היום (עד 180)', () => {
+    const s = prepare([]).settings;
+    expect(s).toMatchObject({ low: 70, high: 110, dayHigh: 180 });
+    expect(level(150, s)).toBe('ok');
+    expect(level(150, s, true)).toBe('high');
+    expect(level(60, s)).toBe('low');
+    expect(prepare([{ id: 'settings', t: 'settings', dayHigh: 160 }]).settings.dayHigh).toBe(160);
+  });
 });

@@ -125,7 +125,7 @@ export default function Calculator({ data, initial = {}, onApply, inline = false
         <Field label="סוכר לפני האוכל">
           <div className="flex items-center gap-2">
             <input className={`${inputCls} num text-lg`} inputMode="numeric" value={before} onChange={(e) => setBefore(e.target.value)} placeholder="mg/dL" />
-            {b !== '' && <Glucose value={b} settings={s} />}
+            {b !== '' && <Glucose value={b} settings={s} before />}
           </div>
         </Field>
 
@@ -226,7 +226,7 @@ export default function Calculator({ data, initial = {}, onApply, inline = false
                 הסוכר מעל {s.high} – בחישוב <b>לא</b> נכלל תיקון. כדי שהמחשבון יחשב גם תיקון, צריך להזין בהגדרות &quot;פקטור תיקון&quot; שהצוות נתן.
               </p>
             )}
-            {r.status === 'ok' && level(b, s) === 'ok' && <p className="mt-3 text-sm text-ok">הסוכר בטווח – בלי תיקון.</p>}
+            {r.status === 'ok' && level(b, s, true) === 'ok' && <p className="mt-3 text-sm text-ok">הסוכר בטווח – בלי תיקון.</p>}
             {r.status === '' && <p className="mt-3 text-sm text-muted">לא הוזן סוכר לפני – החישוב רק לפי האוכל.</p>}
             <p className="mt-3 text-xs text-muted">חישוב לפי ההגדרות שהזנתם – לא הוראה רפואית. אם משהו לא נראה הגיוני, לבדוק עם הצוות.</p>
           </>

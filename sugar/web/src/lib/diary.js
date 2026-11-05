@@ -2,7 +2,8 @@
 //
 // רשומות (כולן עם id ו-updatedAt, ומסתנכרנות בין כל המכשירים של כל מי שמשתף):
 //   settings – { id: 'settings', t: 'settings', person, low, high, icr, cf, target }
-//              טווח יעד לפני ארוחה (mg/dL, ברירת מחדל 70-110), יחס פחמימות (גרם ליחידה, ברירת מחדל 15),
+//              טווח יעד לפני ארוחה (mg/dL, ברירת מחדל 70-110), dayHigh – גבול עליון לאורך היום (אחרי ארוחה, חיישן, מעקב;
+//              ברירת מחדל 180; הגבול התחתון – low), יחס פחמימות (גרם ליחידה, ברירת מחדל 15),
 //              ואם הצוות נתן: פקטור תיקון (כמה יחידה מורידה) ויעד לתיקון
 //   food     – פריט בטבלת הפחמימות של המחשבון: { t: 'food', name, unit, carbs (גרם לכל יחידה) }
 //              יש רשימה מובנית (DEFAULT_FOODS, מזהים food:*); עריכה נשמרת כרשומה עם אותו מזהה, ומחיקה = deleted
@@ -97,6 +98,8 @@ export function safeSettings(r = {}) {
     person: typeof r.person === 'string' ? r.person : '',
     low: low === '' ? 70 : low,
     high: high === '' ? 110 : high,
+    // לאורך היום (אחרי אוכל, חיישן, אחוז בטווח) – עד 180 אם לא נקבע אחרת
+    dayHigh: numOrEmpty(r.dayHigh) === '' ? Math.max(180, high === '' ? 110 : high) : numOrEmpty(r.dayHigh),
     // יחס פחמימות: 15 גרם ליחידה אם לא נקבע אחרת (שדה שנמחק בכוונה נשאר ריק)
     icr: r.icr === undefined ? 15 : numOrEmpty(r.icr),
     cf: numOrEmpty(r.cf),
@@ -247,11 +250,13 @@ function cgmRange(data, date, from, to) {
 }
 
 // רמת הסוכר: low (מתחת לטווח), ok, high (מעל), veryHigh (מעל 250)
-export function level(value, settings) {
+// before = ערך לפני ארוחה (נבדק מול הטווח לפני ארוחה); אחרת – מול הטווח לאורך היום
+export function level(value, settings, before = false) {
   if (value === '' || value == null) return '';
   if (value < settings.low) return 'low';
-  if (value > 250 && settings.high < 250) return 'veryHigh';
-  if (value > settings.high) return 'high';
+  const high = before ? settings.high : settings.dayHigh ?? settings.high;
+  if (value > 250 && high < 250) return 'veryHigh';
+  if (value > high) return 'high';
   return 'ok';
 }
 
@@ -490,7 +495,7 @@ export function cgmDaySummary(data, date) {
   return {
     count: vals.length,
     mean: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length),
-    inRange: Math.round((vals.filter((v) => v >= s.low && v <= s.high).length / vals.length) * 100),
+    inRange: Math.round((vals.filter((v) => v >= s.low && v <= s.dayHigh).length / vals.length) * 100),
     low: vals.filter((v) => v < s.low).length,
     min: Math.min(...vals),
     max: Math.max(...vals),
@@ -504,7 +509,7 @@ export function aiContext(data, base = today(), detailDays = 21) {
   const s = data.settings;
   const lines = [];
   lines.push(`היום: ${base} (${dayLabel(base, base)})`);
-  lines.push(`הגדרות: ${s.person ? `שם: ${s.person}. ` : ''}טווח תקין לפני ארוחה ${s.low}-${s.high} mg/dL.` + (s.icr !== '' ? ` יחס פחמימות (שהמשפחה הזינה): יחידה לכל ${s.icr} גרם.` : '') + (s.cf !== '' ? ` פקטור תיקון: יחידה מורידה ${s.cf}.` : '') + (s.target !== '' ? ` יעד לתיקון: ${s.target}.` : ''));
+  lines.push(`הגדרות: ${s.person ? `שם: ${s.person}. ` : ''}טווח תקין לפני ארוחה ${s.low}-${s.high} mg/dL, ולאורך היום (אחרי אוכל, חיישן, אחוז בטווח) ${s.low}-${s.dayHigh}.` + (s.icr !== '' ? ` יחס פחמימות (שהמשפחה הזינה): יחידה לכל ${s.icr} גרם.` : '') + (s.cf !== '' ? ` פקטור תיקון: יחידה מורידה ${s.cf}.` : '') + (s.target !== '' ? ` יעד לתיקון: ${s.target}.` : ''));
   if (s.note) lines.push(`הערות קבועות: ${s.note}`);
   for (const d of [7, 30]) {
     const st = stats(data, d, base);
@@ -567,9 +572,9 @@ export function insights(data, days = 30, base = today()) {
   for (const p of pats) {
     if (p.measured < 3) continue;
     const rows = p.list.map((m) => outcome(m, data)).filter((o) => o.after2h !== '');
-    const highs = rows.filter((o) => o.after2h > s.high).length;
+    const highs = rows.filter((o) => o.after2h > s.dayHigh).length;
     if (p.lows >= 2) out.push({ kind: 'low', text: `${p.name}: ${p.lows} פעמים הסוכר ירד מתחת ל-${s.low} אחרי הארוחה.`, hint: 'חשוב להראות לצוות – ייתכן שהאינסולין לארוחה הזו גבוה מדי.' });
-    if (highs / rows.length >= 0.6) out.push({ kind: 'high', text: `${p.name}: שעתיים אחרי הסוכר היה מעל ${s.high} ב-${highs} מתוך ${rows.length} פעמים (ממוצע ${p.after2h}).`, hint: 'כדאי לבדוק עם הצוות את היחס לארוחה הזו, או לתת את האינסולין קצת לפני האוכל.' });
+    if (highs / rows.length >= 0.6) out.push({ kind: 'high', text: `${p.name}: שעתיים אחרי הסוכר היה מעל ${s.dayHigh} ב-${highs} מתוך ${rows.length} פעמים (ממוצע ${p.after2h}).`, hint: 'כדאי לבדוק עם הצוות את היחס לארוחה הזו, או לתת את האינסולין קצת לפני האוכל.' });
     else if (p.inRange / p.measured >= 0.7 && p.lows === 0) out.push({ kind: 'good', text: `${p.name}: ${p.inRange} מתוך ${p.measured} פעמים הסתיים בטווח – מה שעושים עובד.`, hint: '' });
   }
   // כמה גרם פחמימה "עבדו" ליחידה בארוחות שהסתיימו טוב
@@ -577,7 +582,7 @@ export function insights(data, days = 30, base = today()) {
     .filter((m) => m.date >= addDays(base, -days + 1) && m.date <= base && m.carbs > 0 && m.insulin > 0)
     .filter((m) => {
       const o = outcome(m, data);
-      return level(o.before, s) === 'ok' && o.after2h !== '' && level(o.after2h, s) === 'ok' && !(o.lowest !== '' && o.lowest < s.low);
+      return level(o.before, s, true) === 'ok' && o.after2h !== '' && level(o.after2h, s) === 'ok' && !(o.lowest !== '' && o.lowest < s.low);
     });
   if (worked.length >= 3 && s.icr > 0) {
     const ratio = round(worked.reduce((a, m) => a + m.carbs / m.insulin, 0) / worked.length);
@@ -615,7 +620,7 @@ export function monthDays(data, month) {
       count: vals.length,
       mean: vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : '',
       low: vals.filter((v) => v < s.low).length,
-      high: vals.filter((v) => v > s.high).length,
+      high: vals.filter((v) => v > s.dayHigh).length,
       meals: data.meals.filter((x) => x.date === date).length,
     });
   }
