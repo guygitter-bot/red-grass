@@ -4,6 +4,7 @@
 // כדי שתעבור לכל המכשירים). כל שינוי שהתקבל מקבל מספר גרסה (rev) עולה, והמכשיר מבקש "מה השתנה מאז".
 import Anthropic from '@anthropic-ai/sdk';
 import { advise } from './ai.js';
+import { createVapidKeys, sendPush, validSubscription } from './push.js';
 
 const MAX_RECORDS = 30000;
 const MAX_RECORD_CHARS = 12000;
@@ -11,6 +12,30 @@ const MAX_RECORD_CHARS = 12000;
 const AI_PER_DAY = 60;
 const MAX_CONTEXT_CHARS = 90000;
 const MAX_HISTORY = 12;
+
+// תזכורת שבועית: יום ראשון 9:30 שעון ישראל – להוריד מ-CareLink את הקובץ של השבוע ולהעלות ליומן
+const TZ = 'Asia/Jerusalem';
+const WEEKLY = { day: 0, hour: 9, minute: 30 };
+export const WEEKLY_PUSH = { title: '📡 נתוני החיישן של השבוע', body: 'הגיע הזמן להוריד מ-CareLink את הקובץ של השבוע האחרון ולהעלות אותו ליומן (הגדרות ← נתוני החיישן).', url: '#/settings', tag: 'weekly' };
+
+// ההפרש בדקות בין שעון ישראל ל-UTC ברגע מסוים (קיץ/חורף)
+function tzOffset(ms, tz = TZ) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(ms)).map((x) => [x.type, x.value]));
+  return (Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - Math.floor(ms / 1000) * 1000) / 60000;
+}
+
+// הפעם הבאה (אחרי now) של יום ראשון 9:30 שעון ישראל, ב-UTC
+export function nextWeekly(now, tz = TZ) {
+  const local = new Date(now + tzOffset(now, tz) * 60000);
+  for (let i = 0; i <= 7; i++) {
+    const d = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate() + i, WEEKLY.hour, WEEKLY.minute));
+    if (d.getUTCDay() !== WEEKLY.day) continue;
+    let t = d.getTime() - tzOffset(d.getTime(), tz) * 60000;
+    t = d.getTime() - tzOffset(t, tz) * 60000;
+    if (t > now) return t;
+  }
+  return now + 7 * 24 * 3600000;
+}
 
 const json = (status, data) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
 const fail = (status, error) => Object.assign(new Error(error), { status });
@@ -56,11 +81,72 @@ export class Diary {
       await this.load();
       if (path === 'sync') return json(200, await this.sync(body));
       if (path === 'ai') return json(200, await this.ai(body));
+      if (path === 'push/key') return json(200, { publicKey: (await this.vapid()).publicKey });
+      if (path === 'push/subscribe') {
+        if (!validSubscription(body.sub)) return json(400, { error: 'ההרשמה להתראות לא תקינה' });
+        const subs = ((await this.storage.get('subs')) || []).filter((x) => x.endpoint !== body.sub.endpoint);
+        subs.push({ endpoint: body.sub.endpoint, keys: { p256dh: body.sub.keys.p256dh, auth: body.sub.keys.auth } });
+        await this.storage.put('subs', subs.slice(-20));
+        await this.ensureAlarm();
+        return json(200, { ok: true });
+      }
+      if (path === 'push/unsubscribe') {
+        const subs = ((await this.storage.get('subs')) || []).filter((x) => x.endpoint !== String(body.endpoint || ''));
+        await this.storage.put('subs', subs);
+        return json(200, { ok: true });
+      }
+      if (path === 'push/test') return json(200, { sent: await this.push({ title: '🔔 ההתראות עובדות!', body: 'בכל יום ראשון ב-9:30 תגיע כאן תזכורת להעלות את נתוני החיישן.', url: '#/settings', tag: 'test' }) });
       return json(404, { error: 'לא נמצא' });
     } catch (err) {
       if (!err.status) throw err;
       return json(err.status, { error: err.message });
     }
+  }
+
+  // מפתחות VAPID של השרת (נוצרים פעם אחת)
+  async vapid() {
+    let vapid = await this.storage.get('vapid');
+    if (!vapid) {
+      vapid = await createVapidKeys();
+      await this.storage.put('vapid', vapid);
+    }
+    return vapid;
+  }
+
+  // שליחה לכל המכשירים שנרשמו; מכשיר שביטל – נמחק
+  async push(payload) {
+    const subs = (await this.storage.get('subs')) || [];
+    if (!subs.length) return 0;
+    const vapid = await this.vapid();
+    const fetchFn = this.env.PUSH_FETCH || ((...a) => fetch(...a));
+    let sent = 0;
+    const keep = [];
+    for (const sub of subs) {
+      try {
+        const result = await sendPush(sub, payload, vapid, 'mailto:yoman-sukar@example.com', fetchFn);
+        if (result !== 'gone') keep.push(sub);
+        if (result === 'ok') sent++;
+      } catch (e) {
+        keep.push(sub);
+        console.log('push failed', e?.message || e);
+      }
+    }
+    if (keep.length !== subs.length) await this.storage.put('subs', keep);
+    return sent;
+  }
+
+  async ensureAlarm() {
+    if (this.storage.getAlarm && !(await this.storage.getAlarm())) await this.storage.setAlarm(nextWeekly(this.now()));
+  }
+
+  // התזכורת השבועית (Durable Object alarm) – ומיד קובעים את הבאה
+  async alarm() {
+    try {
+      await this.push(WEEKLY_PUSH);
+    } catch (e) {
+      console.log('weekly push failed', e?.message || e);
+    }
+    await this.storage.setAlarm(nextWeekly(this.now() + 60000));
   }
 
   async write(writes) {

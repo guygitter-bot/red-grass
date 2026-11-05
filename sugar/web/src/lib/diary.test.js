@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { templateFromMeal, lastSite, DEFAULT_FOODS, calcDose, insights, itemsCarbs, monthDays, addDays, aiContext, allPoints, level, mealFromTemplate, minutesAfter, missingFixed, outcome, pattern, patternsByMeal, prepare, safeMeal, similarMeals, stats, suggestByRatio, toCsv, waitingForCheck } from './diary';
+import { sensorUploadDue, templateFromMeal, lastSite, DEFAULT_FOODS, calcDose, insights, itemsCarbs, monthDays, addDays, aiContext, allPoints, level, mealFromTemplate, minutesAfter, missingFixed, outcome, pattern, patternsByMeal, prepare, safeMeal, similarMeals, stats, suggestByRatio, toCsv, waitingForCheck } from './diary';
 
 const BASE = '2026-11-04'; // יום רביעי
 const tpl = { id: 'tl', t: 'template', name: 'צהריים בבית', slot: 'lunch', time: '13:30', food: 'אורז ועוף', portion: 1, days: [] };
@@ -192,5 +192,14 @@ describe('יומן סוכר', () => {
     expect(level(150, s, true)).toBe('high');
     expect(level(60, s)).toBe('low');
     expect(prepare([{ id: 'settings', t: 'settings', dayHigh: 160 }]).settings.dayHigh).toBe(160);
+  });
+
+  test('תזכורת להעלות את נתוני החיישן – יום ראשון מ-9:30', () => {
+    const sunday = '2026-11-08';
+    expect(sensorUploadDue(prepare([]), sunday, '09:00')).toBe(false);
+    expect(sensorUploadDue(prepare([]), sunday, '09:30')).toBe(true);
+    expect(sensorUploadDue(prepare([]), '2026-11-09', '10:00')).toBe(false);
+    const uploaded = prepare([{ id: 'cgm:2026-11-07', t: 'cgm', date: '2026-11-07', points: [[600, 100]] }]);
+    expect(sensorUploadDue(uploaded, sunday, '10:00')).toBe(false);
   });
 });

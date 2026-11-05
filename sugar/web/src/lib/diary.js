@@ -496,6 +496,13 @@ export function waitingForCheck(data, date = today(), time = nowTime()) {
   });
 }
 
+// תזכורת במסך (בנוסף להתראה לטלפון): ביום ראשון מ-9:30 – אם נתוני החיישן ביומן לא מגיעים עד אתמול
+export function sensorUploadDue(data, date = today(), time = nowTime()) {
+  if (weekday(date) !== 0 || minutes(time) < 9 * 60 + 30) return false;
+  const last = [...(data.cgm?.keys() || [])].sort().at(-1) || '';
+  return last < addDays(date, -1);
+}
+
 // מיקום הזריקה האחרון לפני הארוחה הזו (להחלפת מקומות)
 export function lastSite(data, meal) {
   const prev = data.meals.filter((m) => m.id !== meal.id && m.site && (m.date < meal.date || (m.date === meal.date && minutes(m.time) <= minutes(meal.time))));
