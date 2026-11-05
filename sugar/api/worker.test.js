@@ -22,6 +22,13 @@ function fakeStorage() {
     async delete(k) {
       for (const kk of [k].flat()) map.delete(kk);
     },
+    alarm: null,
+    async getAlarm() {
+      return this.alarm;
+    },
+    async setAlarm(t) {
+      this.alarm = t;
+    },
     async list({ prefix }) {
       return new Map([...map].filter(([k]) => k.startsWith(prefix)).map(([k, v]) => [k, clone(v)]));
     },
@@ -38,6 +45,8 @@ function fakeEnv(extra = {}) {
     idFromName: (n) => n,
     get: () => ({ fetch: (req) => (obj ||= new Diary({ storage }, { NOW: () => env.time, ...extra })).fetch(req) }),
   };
+  env.storageRef = () => storage;
+  env.alarmAt = () => storage.alarm;
   env.restart = () => {
     obj = null;
   };
@@ -152,4 +161,41 @@ test('בניית השיחה ל-AI: הודעות רצופות מאותו צד מ�
   assert.equal(m.length, 1);
   assert.match(m[0].content, /א\n\nב/);
   assert.match(m[0].content, /נתונים[\s\S]*ג$/);
+});
+
+test('תזכורת שבועית: יום ראשון 9:30 שעון ישראל (קיץ וחורף)', async () => {
+  const { nextWeekly } = await import('./diary.js');
+  // חמישי 5.11.2026 (חורף, UTC+2) → ראשון 8.11 9:30 = 07:30 UTC
+  assert.equal(new Date(nextWeekly(Date.UTC(2026, 10, 5, 12))).toISOString(), '2026-11-08T07:30:00.000Z');
+  // ראשון 8.11 בדיוק אחרי 9:30 → השבוע הבא
+  assert.equal(new Date(nextWeekly(Date.UTC(2026, 10, 8, 7, 31))).toISOString(), '2026-11-15T07:30:00.000Z');
+  // ראשון 8.11 לפני 9:30 → היום
+  assert.equal(new Date(nextWeekly(Date.UTC(2026, 10, 8, 6))).toISOString(), '2026-11-08T07:30:00.000Z');
+  // קיץ (UTC+3): ראשון 5.7.2026 9:30 = 06:30 UTC
+  assert.equal(new Date(nextWeekly(Date.UTC(2026, 6, 1, 12))).toISOString(), '2026-07-05T06:30:00.000Z');
+});
+
+test('התראות: הרשמה, ההתראה השבועית נשלחת, ומכשיר שבוטל נמחק', async () => {
+  const sent = [];
+  const PUSH_FETCH = async (url) => {
+    sent.push(url);
+    return new Response(null, { status: url.includes('gone') ? 410 : 201 });
+  };
+  const env = fakeEnv({ PUSH_FETCH });
+  const { publicKey } = (await call(env, '/push/key')).data;
+  assert.ok(publicKey.length > 40);
+  // מפתחות מכשיר אמיתיים (נוצרים כאן) כדי שההצפנה תעבוד
+  const pair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+  const p256dh = Buffer.from(await crypto.subtle.exportKey('raw', pair.publicKey)).toString('base64url');
+  const auth = Buffer.from(crypto.getRandomValues(new Uint8Array(16))).toString('base64url');
+  assert.equal((await call(env, '/push/subscribe', { sub: { endpoint: 'https://evil.com/x', keys: { p256dh, auth } } })).status, 400);
+  assert.equal((await call(env, '/push/subscribe', { sub: { endpoint: 'https://fcm.googleapis.com/fcm/send/a', keys: { p256dh, auth } } })).status, 200);
+  assert.equal((await call(env, '/push/subscribe', { sub: { endpoint: 'https://fcm.googleapis.com/fcm/send/gone', keys: { p256dh, auth } } })).status, 200);
+  assert.equal((await call(env, '/push/test')).data.sent, 1);
+  // התזכורת השבועית
+  const obj = new Diary({ storage: env.storageRef() }, { NOW: () => env.time, PUSH_FETCH });
+  sent.length = 0;
+  await obj.alarm();
+  assert.deepEqual(sent, ['https://fcm.googleapis.com/fcm/send/a']);
+  assert.ok(env.alarmAt() > env.time);
 });

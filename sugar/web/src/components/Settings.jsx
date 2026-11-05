@@ -7,6 +7,7 @@ import { getMe, setMe } from '../lib/me';
 import { getTheme, setTheme } from '../lib/theme';
 import { Button, Field, Segmented, inputCls } from './ui';
 import SensorImport from './SensorImport';
+import WeeklyReminder from './WeeklyReminder';
 
 function download(name, text, type) {
   const url = URL.createObjectURL(new Blob([text], { type }));
@@ -169,6 +170,10 @@ export default function Settings({ data, records }) {
             window.scrollTo(0, 0);
           }}
         />
+      </Card>
+
+      <Card title="🔔 תזכורת שבועית (יום ראשון 9:30)">
+        <WeeklyReminder />
       </Card>
 
       <Card title="ייצוא וגיבוי">

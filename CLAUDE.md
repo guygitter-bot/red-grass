@@ -218,7 +218,7 @@
 
 ### יומן סוכר – ארוחות ואינסולין (`sugar/`)
 - תיאור: `sugar/README.md`. יומן משותף לכמה אנשים, **בלי סיסמה** (המשתמשת ביקשה): ארוחות (מנות, סוכר לפני, אינסולין, מדידות אחרי), תפריט קבוע, מעקב ודפוסים, שיחת AI משותפת.
-- `sugar/web` → https://yoman-sukar.pages.dev · `sugar/api` → Worker `yoman-sukar-api` (Durable Object `Diary` אחד, סנכרון לפי `rev`). עלייה: `yoman-sukar.yml` אחרי מיזוג ל-main.
+- `sugar/web` → https://yoman-sukar.pages.dev · `sugar/api` → Worker `yoman-sukar-api` (Durable Object `Diary` אחד, סנכרון לפי `rev`; alarm לתזכורת השבועית ב-Web Push). עלייה: `yoman-sukar.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd sugar/api && npm test` · `cd sugar/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 - החישובים ב-`web/src/lib/diary.js` (פונקציות טהורות + בדיקות). שדה חדש – ברירת מחדל ב-`safeMeal` / `safeTemplate` / `safeSettings`.
 - **רעיונות שלא בוצעו:** `sugar/IDEAS.md` (נכנס כשלא מבצעים, יוצא כשבוצע).

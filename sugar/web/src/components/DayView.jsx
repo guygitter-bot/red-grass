@@ -2,7 +2,7 @@
 // "להוסיף את התפריט הקבוע" ותזכורת למדוד שעתיים אחרי ארוחה.
 import { useState } from 'react';
 import { BellRing, ChevronLeft, ChevronRight, ListPlus, Plus, Syringe, Trash2 } from 'lucide-react';
-import { templateFromMeal, SITES, SLOTS, TAGS, addDays, manualPoints, dayLabel, mealFromTemplate, missingFixed, nowTime, outcome, waitingForCheck } from '../lib/diary';
+import { templateFromMeal, SITES, SLOTS, TAGS, addDays, manualPoints, dayLabel, mealFromTemplate, missingFixed, nowTime, outcome, sensorUploadDue, waitingForCheck } from '../lib/diary';
 import { newId, remove, save } from '../lib/store';
 import { getMe } from '../lib/me';
 import { Button, Sheet } from './ui';
@@ -149,6 +149,11 @@ export default function DayView({ data, date, go, openCal }) {
         </button>
       </div>
 
+      {date === data.today && sensorUploadDue(data) && (
+        <a href="#/settings" className="mb-3 flex w-full items-center gap-3 rounded-2xl bg-soft p-3 text-right text-sm font-medium">
+          📡 יום ראשון – הגיע הזמן להוריד מ-CareLink את הקובץ של השבוע ולהעלות ליומן
+        </a>
+      )}
       {waiting.map((m) => (
         <button key={m.id} onClick={() => setQuick(m)} className="mb-3 flex w-full items-center gap-3 rounded-2xl bg-high/15 p-3 text-right text-sm font-medium">
           <BellRing size={20} className="text-high" />
