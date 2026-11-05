@@ -20,12 +20,14 @@ export function Glucose({ value, settings, small = false, label }) {
   );
 }
 
-// גרף היום: כל המדידות לאורך 24 שעות, פס ירוק לטווח היעד וקווים מקווקווים לשעות הארוחות (SVG בלי ספרייה)
-export function DayChart({ points, meals, settings }) {
+// גרף היום: כל המדידות לאורך 24 שעות, פס ירוק לטווח היעד וקווים מקווקווים לשעות הארוחות (SVG בלי ספרייה).
+// cgm – מדידות החיישן ([דקה, ערך]): קו רציף בצבע לפי הטווח; המדידות הידניות – נקודות
+export function DayChart({ points, meals, settings, cgm = [] }) {
   const W = 600;
   const H = 170;
   const P = { l: 34, r: 8, t: 10, b: 22 };
-  const maxV = Math.max(300, ...points.map((p) => p.value)) + 10;
+  const maxV = Math.max(300, ...points.map((p) => p.value), ...cgm.map((p) => p[1])) + 10;
+  const xm = (m) => P.l + (m / 1440) * (W - P.l - P.r);
   const x = (t) => P.l + ((Number(t.slice(0, 2)) * 60 + Number(t.slice(3))) / 1440) * (W - P.l - P.r);
   const y = (v) => P.t + (1 - v / maxV) * (H - P.t - P.b);
   const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(p.time).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
@@ -54,7 +56,13 @@ export function DayChart({ points, meals, settings }) {
           </text>
         </g>
       ))}
-      {points.length > 1 && <path d={line} fill="none" stroke="var(--color-muted)" strokeWidth="1.5" opacity="0.6" />}
+      {cgm.slice(1).map((p, i) => {
+        const prev = cgm[i];
+        // רווח של יותר מרבע שעה (החיישן התנתק) – בלי קו
+        if (p[0] - prev[0] > 15) return null;
+        return <line key={p[0]} x1={xm(prev[0])} y1={y(prev[1])} x2={xm(p[0])} y2={y(p[1])} stroke={color(p[1])} strokeWidth="2.5" strokeLinecap="round" />;
+      })}
+      {!cgm.length && points.length > 1 && <path d={line} fill="none" stroke="var(--color-muted)" strokeWidth="1.5" opacity="0.6" />}
       {points.map((p, i) => (
         <circle key={i} cx={x(p.time)} cy={y(p.value)} r="5" fill={color(p.value)} stroke="var(--color-card)" strokeWidth="1.5" />
       ))}

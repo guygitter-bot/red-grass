@@ -6,6 +6,7 @@ import { save } from '../lib/store';
 import { getMe, setMe } from '../lib/me';
 import { getTheme, setTheme } from '../lib/theme';
 import { Button, Field, Segmented, inputCls } from './ui';
+import SensorImport from './SensorImport';
 
 function download(name, text, type) {
   const url = URL.createObjectURL(new Blob([text], { type }));
@@ -151,6 +152,16 @@ export default function Settings({ data, records }) {
             setThemeState(t);
           }}
           options={[['auto', 'אוטומטי'], ['light', 'יום'], ['dark', 'לילה']]}
+        />
+      </Card>
+
+      <Card title="📡 נתוני החיישן (Simplera / CareLink)">
+        <SensorImport
+          data={data}
+          onDone={(m) => {
+            setMsg(m);
+            window.scrollTo(0, 0);
+          }}
         />
       </Card>
 

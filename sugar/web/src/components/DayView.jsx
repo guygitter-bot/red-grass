@@ -2,7 +2,7 @@
 // "להוסיף את התפריט הקבוע" ותזכורת למדוד שעתיים אחרי ארוחה.
 import { useState } from 'react';
 import { BellRing, ChevronLeft, ChevronRight, ListPlus, Plus, Syringe, Trash2 } from 'lucide-react';
-import { templateFromMeal, SITES, SLOTS, TAGS, addDays, allPoints, dayLabel, mealFromTemplate, missingFixed, nowTime, outcome, waitingForCheck } from '../lib/diary';
+import { templateFromMeal, SITES, SLOTS, TAGS, addDays, manualPoints, dayLabel, mealFromTemplate, missingFixed, nowTime, outcome, waitingForCheck } from '../lib/diary';
 import { newId, remove, save } from '../lib/store';
 import { getMe } from '../lib/me';
 import { Button, Sheet } from './ui';
@@ -10,8 +10,8 @@ import { DayChart, Glucose } from './bits';
 import MealEditor from './MealEditor';
 import ReadingEditor from './ReadingEditor';
 
-function MealCard({ meal, s, onOpen, onQuick }) {
-  const o = outcome(meal);
+function MealCard({ meal, s, data, onOpen, onQuick }) {
+  const o = outcome(meal, data);
   return (
     <article className="rounded-2xl bg-card p-4 shadow-sm">
       <button onClick={onOpen} className="block w-full text-right">
@@ -26,14 +26,14 @@ function MealCard({ meal, s, onOpen, onQuick }) {
           <span className="num shrink-0 text-sm text-muted">{meal.portion} {meal.portion === 1 ? 'מנה' : 'מנות'}</span>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <Glucose value={meal.before} settings={s} small label="לפני" />
+          <Glucose value={o.before} settings={s} small label={o.beforeCgm ? 'לפני 📡' : 'לפני'} />
           <span className={`num inline-flex items-center gap-1 rounded-lg px-1.5 py-0.5 font-bold ${meal.insulin === '' ? 'bg-soft text-muted' : 'bg-accent/15 text-accent-ink'}`}>
             <Syringe size={14} /> {meal.insulin === '' ? '—' : `${meal.insulin} יח׳`}
           </span>
           {meal.site && <span className="text-xs text-muted">📍 {SITES[meal.site]}</span>}
           {meal.carbs !== '' && <span className="num text-xs text-muted">{meal.carbs} גר׳ פחמ׳</span>}
           {o.after.map((r, i) => (
-            <Glucose key={i} value={r.value} settings={s} small label={r.time} />
+            <Glucose key={i} value={r.value} settings={s} small label={r.cgm ? `📡 ${r.time}` : r.time} />
           ))}
         </div>
         {(meal.tags.length > 0 || meal.note) && (
@@ -109,7 +109,8 @@ export default function DayView({ data, date, go, openCal }) {
   const [picker, setPicker] = useState(false);
   const meals = data.meals.filter((m) => m.date === date);
   const loose = data.readings.filter((r) => r.date === date);
-  const points = allPoints(data, date, date);
+  const points = manualPoints(data, date, date);
+  const cgm = data.cgm.get(date) || [];
   const missing = missingFixed(data, date);
   const waiting = date === data.today ? waitingForCheck(data, date) : [];
 
@@ -156,7 +157,8 @@ export default function DayView({ data, date, go, openCal }) {
       ))}
 
       <section className="mb-4 rounded-2xl bg-card p-3 shadow-sm">
-        {points.length ? <DayChart points={points} meals={meals} settings={s} /> : <p className="p-4 text-center text-sm text-muted">עוד אין מדידות ביום הזה</p>}
+        {points.length || cgm.length ? <DayChart points={points} meals={meals} settings={s} cgm={cgm} /> : <p className="p-4 text-center text-sm text-muted">עוד אין מדידות ביום הזה</p>}
+        {cgm.length > 0 && <p className="mt-1 text-center text-xs text-muted">📡 {cgm.length} מדידות חיישן (CareLink)</p>}
       </section>
 
       <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-3">
@@ -188,7 +190,7 @@ export default function DayView({ data, date, go, openCal }) {
       <div className="grid gap-3 lg:grid-cols-2">
         {timeline.map((x) =>
           x.kind === 'meal' ? (
-            <MealCard key={x.m.id} meal={x.m} s={s} onOpen={() => setEditing(x.m)} onQuick={() => setQuick(x.m)} />
+            <MealCard key={x.m.id} meal={x.m} s={s} data={data} onOpen={() => setEditing(x.m)} onQuick={() => setQuick(x.m)} />
           ) : (
             <button key={x.r.id} onClick={() => setReading(x.r)} className="flex items-center gap-3 rounded-2xl bg-card p-4 text-right shadow-sm">
               <span className="num rounded-lg bg-soft px-2 py-0.5 text-sm font-bold text-accent-ink">{x.r.time}</span>
