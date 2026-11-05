@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { lastSite, DEFAULT_FOODS, calcDose, insights, itemsCarbs, monthDays, addDays, aiContext, allPoints, level, mealFromTemplate, minutesAfter, missingFixed, outcome, pattern, patternsByMeal, prepare, safeMeal, similarMeals, stats, suggestByRatio, toCsv, waitingForCheck } from './diary';
+import { templateFromMeal, lastSite, DEFAULT_FOODS, calcDose, insights, itemsCarbs, monthDays, addDays, aiContext, allPoints, level, mealFromTemplate, minutesAfter, missingFixed, outcome, pattern, patternsByMeal, prepare, safeMeal, similarMeals, stats, suggestByRatio, toCsv, waitingForCheck } from './diary';
 
 const BASE = '2026-11-04'; // יום רביעי
 const tpl = { id: 'tl', t: 'template', name: 'צהריים בבית', slot: 'lunch', time: '13:30', food: 'אורז ועוף', portion: 1, days: [] };
@@ -170,5 +170,10 @@ describe('יומן סוכר', () => {
     expect(lastSite(data, data.meals[2])).toBe('bellyL');
     expect(lastSite(data, data.meals[1])).toBe('armR');
     expect(toCsv(data)).toMatch(/בטן שמאל/);
+  });
+
+  test('ארוחה שנרשמה → ארוחה קבועה', () => {
+    const m = safeMeal({ id: 'a', t: 'meal', name: 'פסטה', slot: 'lunch', time: '13:15', food: 'פסטה ועוף', portion: '1.5', carbs: '45', insulin: '3' });
+    expect(templateFromMeal(m)).toEqual({ t: 'template', name: 'פסטה', slot: 'lunch', time: '13:15', food: 'פסטה ועוף', portion: 1.5, carbs: 45, dose: 3, days: [] });
   });
 });

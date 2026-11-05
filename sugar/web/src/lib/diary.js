@@ -359,6 +359,11 @@ export function missingFixed(data, date) {
   return data.templates.filter((t) => !t.archived && (!t.days.length || t.days.includes(wd)) && !have.has(t.id));
 }
 
+// ארוחה קבועה חדשה מארוחה שנרשמה ("להוסיף לתפריט הקבוע")
+export function templateFromMeal(m) {
+  return { t: 'template', name: m.name, slot: m.slot, time: m.time, food: m.food, portion: numOrEmpty(m.portion) || 1, carbs: numOrEmpty(m.carbs), dose: numOrEmpty(m.insulin), days: [] };
+}
+
 // ארוחה חדשה מארוחה קבועה
 export function mealFromTemplate(t, date) {
   return { t: 'meal', date, time: t.time, templateId: t.id, name: t.name, slot: t.slot, food: t.food, portion: t.portion, carbs: t.carbs, before: '', insulin: '', readings: [], tags: [], note: '' };

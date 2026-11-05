@@ -2,7 +2,7 @@
 // מתחת – הפעמים הקודמות של אותה ארוחה (כמה אינסולין ניתן ומה יצא), כדי ללמוד מה עובד.
 import { useMemo, useState } from 'react';
 import { Calculator as CalcIcon, Plus, Trash2, X } from 'lucide-react';
-import { SLOTS, TAGS, dayLabel, level, LEVEL_TEXT, minutes, nowTime, numOrEmpty, outcome, safeMeal, similarMeals, calcDose, itemsText, SITES, lastSite } from '../lib/diary';
+import { SLOTS, TAGS, dayLabel, level, LEVEL_TEXT, minutes, nowTime, numOrEmpty, outcome, safeMeal, similarMeals, templateFromMeal, calcDose, itemsText, SITES, lastSite } from '../lib/diary';
 import { newId, remove, save } from '../lib/store';
 import { getMe } from '../lib/me';
 import { Button, Field, Sheet, inputCls } from './ui';
@@ -40,7 +40,7 @@ export default function MealEditor({ data, meal, onClose }) {
     let templateId = m.templateId;
     if (asFixed && !templateId) {
       templateId = newId('t');
-      save({ id: templateId, t: 'template', name: m.name, slot: m.slot, time: m.time, food: m.food, portion: numOrEmpty(m.portion) || 1, carbs: numOrEmpty(m.carbs), dose: numOrEmpty(m.insulin), days: [] });
+      save({ id: templateId, ...templateFromMeal(m) });
     }
     save({
       ...m,
@@ -194,11 +194,16 @@ export default function MealEditor({ data, meal, onClose }) {
           <input className={inputCls} value={m.note} onChange={(e) => set({ note: e.target.value })} placeholder="למשל: הזריקה 10 דקות לפני האוכל" />
         </Field>
         {!m.templateId && (
-          <label className="mb-3 flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={asFixed} onChange={(e) => setAsFixed(e.target.checked)} className="size-4 accent-[var(--color-accent)]" />
-            להוסיף לתפריט הקבוע
-          </label>
+          <button
+            type="button"
+            onClick={() => setAsFixed(!asFixed)}
+            aria-pressed={asFixed}
+            className={`mb-3 flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2.5 font-medium ${asFixed ? 'border-accent bg-soft text-accent-ink' : 'border-line'}`}
+          >
+            {asFixed ? '✓ תתווסף לתפריט הקבוע בשמירה' : '⭐ להוסיף את הארוחה לתפריט הקבוע'}
+          </button>
         )}
+        {m.templateId && <p className="mb-3 text-center text-xs text-muted">⭐ הארוחה הזו בתפריט הקבוע</p>}
 
         {previous.length > 0 && (
           <div className="mb-4 rounded-2xl border border-line p-3">
