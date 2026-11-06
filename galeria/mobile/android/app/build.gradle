@@ -10,6 +10,8 @@ android {
         // מספר גרסה עולה בכל בנייה (מספר ההרצה ב-GitHub Actions, galeria.yml)
         versionCode Integer.parseInt(System.getenv("VERSION_CODE") ?: "1")
         versionName System.getenv("VERSION_NAME") ?: "1.0"
+        // רק טלפונים (ARM) – בלי ספריות של אמולטורים, כדי שהקובץ יהיה קטן מספיק להורדה מהאתר (עד 25MB)
+        ndk { abiFilters 'arm64-v8a', 'armeabi-v7a' }
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
