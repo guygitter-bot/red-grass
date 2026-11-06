@@ -86,4 +86,5 @@ jobs:
           command: pages deploy dist --project-name=galeria-app --branch=main --commit-dirty=true
       - name: Summary
         if: github.event_name != 'pull_request'
-        run: echo "Published: https://galeria-app.pages.dev (APK: https://galeria-app.pages.dev/galeria.apk)" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo "Published https://galeria-app.pages.dev - APK https://galeria-app.pages.dev/galeria.apk" >> "$GITHUB_STEP_SUMMARY"
