@@ -1,0 +1,8 @@
+/*
+  Content-Security-Policy: default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+
+/galeria.apk
+  Content-Type: application/vnd.android.package-archive
+  Content-Disposition: attachment; filename="galeria.apk"

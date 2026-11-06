@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+/* מצב לילה: מחלקה dark על html (נקבעת ב-src/lib/theme.js) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* כל הצבעים במקום אחד – במצב לילה מחליפים רק אותם */
+@theme {
+  --color-page: #f3f6f5;
+  --color-card: #ffffff;
+  --color-ink: #13201e;
+  --color-muted: #5a6b68;
+  --color-line: #d6e0de;
+  --color-soft: #e2efec;
+  --color-accent: #0f766e;
+  --color-accent-ink: #ffffff;
+  --color-good: #15803d;
+  --color-good-soft: #dcfce7;
+  --color-bad: #b42318;
+  --color-bad-soft: #fde4e1;
+  --font-sans: system-ui, -apple-system, "Segoe UI", "Rubik", "Assistant", sans-serif;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-page: #0c1312;
+  --color-card: #16201f;
+  --color-ink: #e8f1ef;
+  --color-muted: #9fb3af;
+  --color-line: #2a3836;
+  --color-soft: #1d2d2b;
+  --color-accent: #2dd4bf;
+  --color-accent-ink: #062a26;
+  --color-good: #4ade80;
+  --color-good-soft: #14301f;
+  --color-bad: #ff8a7a;
+  --color-bad-soft: #3a1915;
+}
+
+html,
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-page);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  cursor: pointer;
+}

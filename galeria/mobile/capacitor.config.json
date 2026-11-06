@@ -1,0 +1,11 @@
+{
+  "appId": "app.galeria",
+  "appName": "גלריה מסודרת",
+  "webDir": "../web/dist",
+  "android": {
+    "allowMixedContent": false
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}
