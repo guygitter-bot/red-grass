@@ -73,7 +73,7 @@
 - `meal`: `date`, `time`, `templateId`, `name`, `slot`, `food`, `portion`, `carbs`, `before`, `insulin`,
   `readings: [{time, value}]`, `items: [{foodId, name, qty, carbs}]`, `site` (מיקום הזריקה: `SITES` – בטן/יד/רגל ימין/שמאל), `tags`, `note`, `by`. מדידה אחרי חצות של ארוחת ערב נחשבת ליום הבא.
 - `cgm` (מזהה `cgm:<תאריך>`): `date`, `points: [[דקה ביום, ערך]]` – מדידות החיישן של יום אחד.
-- `reading`: `date`, `time`, `value`, `note`, `by`. `chat`: `role`, `text`, `at`, `by`.
+- `reading`: `date`, `time`, `value`, `insulin` (תיקון, לא חובה), `site` (מיקום הזריקה), `note`, `by`. "בפעם הקודמת" (`lastSite`) – מכל הזריקות, בארוחות ובמדידות. `chat`: `role`, `text`, `at`, `by`.
 - שדה חדש – חייב ברירת מחדל ב-`safeMeal` / `safeTemplate` / `safeSettings` (רשומות ישנות מסתנכרנות בלי אותו שדה).
 
 ## רעיונות להמשך

@@ -6,7 +6,7 @@ import { SLOTS, TAGS, dayLabel, level, LEVEL_TEXT, minutes, nowTime, numOrEmpty,
 import { newId, remove, save } from '../lib/store';
 import { getMe } from '../lib/me';
 import { Button, Field, Sheet, inputCls } from './ui';
-import { Glucose } from './bits';
+import { Glucose, SitePicker } from './bits';
 import Calculator from './Calculator';
 
 const PORTIONS = [0.5, 1, 1.5, 2, 3];
@@ -145,14 +145,7 @@ export default function MealEditor({ data, meal, onClose }) {
         {m.items.length > 0 && <p className="-mt-1 mb-3 text-xs text-muted">מהמחשבון: {itemsText(m.items)}</p>}
 
         <Field label="מיקום הזריקה" hint={prevSite ? `בפעם הקודמת: ${SITES[prevSite]}` : ''}>
-          <div className="grid grid-cols-2 gap-1.5">
-            {Object.entries(SITES).map(([k, label]) => (
-              <button key={k} type="button" onClick={() => set({ site: m.site === k ? '' : k })} className={`rounded-xl border px-3 py-2 text-sm font-medium ${m.site === k ? 'border-accent bg-soft text-accent-ink' : 'border-line'}`}>
-                {label}
-                {prevSite === k && m.site !== k && <span className="text-xs font-normal text-muted"> · בפעם הקודמת</span>}
-              </button>
-            ))}
-          </div>
+          <SitePicker value={m.site} prev={prevSite} onChange={(site) => set({ site })} />
         </Field>
 
         <div className="mb-3">

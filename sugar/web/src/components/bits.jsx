@@ -1,5 +1,5 @@
 // רכיבים קטנים של יומן הסוכר: ערך סוכר צבעוני, גרף יומי, מספר בשדה
-import { level } from '../lib/diary';
+import { SITES, level } from '../lib/diary';
 
 export const LEVEL_CLS = {
   low: 'bg-low/15 text-low',
@@ -67,5 +67,19 @@ export function DayChart({ points, meals, settings, cgm = [] }) {
         <circle key={i} cx={x(p.time)} cy={y(p.value)} r="5" fill={color(p.value)} stroke="var(--color-card)" strokeWidth="1.5" />
       ))}
     </svg>
+  );
+}
+
+// בחירת מיקום הזריקה (בארוחה ובמדידה), עם סימון של המקום הקודם – כדי להחליף מקום בכל זריקה
+export function SitePicker({ value, prev, onChange }) {
+  return (
+    <div className="grid grid-cols-2 gap-1.5">
+      {Object.entries(SITES).map(([k, label]) => (
+        <button key={k} type="button" onClick={() => onChange(value === k ? '' : k)} className={`rounded-xl border px-3 py-2 text-sm font-medium ${value === k ? 'border-accent bg-soft text-accent-ink' : 'border-line'}`}>
+          {label}
+          {prev === k && value !== k && <span className="text-xs font-normal text-muted"> · בפעם הקודמת</span>}
+        </button>
+      ))}
+    </div>
   );
 }

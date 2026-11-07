@@ -202,4 +202,16 @@ describe('יומן סוכר', () => {
     const uploaded = prepare([{ id: 'cgm:2026-11-07', t: 'cgm', date: '2026-11-07', points: [[600, 100]] }]);
     expect(sensorUploadDue(uploaded, sunday, '10:00')).toBe(false);
   });
+
+  test('מדידה עם זריקה: מיקום ואינסולין, ונחשבת ל"בפעם הקודמת"', () => {
+    const data = prepare([
+      { id: 'a', t: 'meal', date: '2026-11-04', time: '08:00', site: 'armR' },
+      { id: 'r', t: 'reading', date: '2026-11-04', time: '10:00', value: 250, insulin: '1,5', site: 'legL' },
+      { id: 'c', t: 'meal', date: '2026-11-04', time: '13:00' },
+    ]);
+    expect(data.readings[0]).toMatchObject({ insulin: 1.5, site: 'legL' });
+    expect(safeMeal({ id: 'x', t: 'meal' }).site).toBe('');
+    expect(lastSite(data, data.meals[1])).toBe('legL');
+    expect(toCsv(data)).toMatch(/רגל שמאל/);
+  });
 });

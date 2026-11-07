@@ -11,7 +11,7 @@
 //   meal     – ארוחה ביום: { t: 'meal', date: 'YYYY-MM-DD', time, templateId, name, slot, food, portion, carbs,
 //              items: [{ foodId, name, qty, carbs }] (מה נבחר במחשבון), site (מיקום הזריקה, SITES),
 //              before (סוכר לפני), insulin (יחידות), readings: [{ time, value }] (מדידות אחרי), tags: [], note, by }
-//   reading  – מדידה בלי ארוחה (בוקר, לילה, ספורט): { t: 'reading', date, time, value, note, by }
+//   reading  – מדידה בלי ארוחה (בוקר, לילה, ספורט): { t: 'reading', date, time, value, insulin (תיקון, לא חובה), site, note, by }
 //   cgm      – מדידות החיישן ליום אחד (מיובא מקובץ CareLink, ראו carelink.js): { id: 'cgm:YYYY-MM-DD', t: 'cgm', date,
 //              points: [[דקה ביום, ערך], ...] } – רשומה אחת ליום (כ-288 מדידות), כדי שלא יהיו עשרות אלפי רשומות
 //   chat     – הודעה בשיחה עם ה-AI (משותפת לכולם): { t: 'chat', role: 'user' | 'assistant', text, at, by }
@@ -186,7 +186,7 @@ export function foodsOf(records) {
 }
 
 export function safeReading(r) {
-  return { ...r, date: isDate(r.date) ? r.date : today(), time: isTime(r.time) ? r.time : '00:00', value: numOrEmpty(r.value), note: String(r.note || ''), by: String(r.by || '') };
+  return { ...r, date: isDate(r.date) ? r.date : today(), time: isTime(r.time) ? r.time : '00:00', value: numOrEmpty(r.value), insulin: numOrEmpty(r.insulin), site: SITES[r.site] ? r.site : '', note: String(r.note || ''), by: String(r.by || '') };
 }
 
 const byTime = (a, b) => (a.date === b.date ? minutes(a.time) - minutes(b.time) : a.date < b.date ? -1 : 1);
@@ -503,9 +503,11 @@ export function sensorUploadDue(data, date = today(), time = nowTime()) {
   return last < addDays(date, -1);
 }
 
-// מיקום הזריקה האחרון לפני הארוחה הזו (להחלפת מקומות)
-export function lastSite(data, meal) {
-  const prev = data.meals.filter((m) => m.id !== meal.id && m.site && (m.date < meal.date || (m.date === meal.date && minutes(m.time) <= minutes(meal.time))));
+// מיקום הזריקה האחרון לפני הארוחה / המדידה הזו (להחלפת מקומות) – מכל הזריקות: בארוחות ובמדידות
+export function lastSite(data, item) {
+  const prev = [...data.meals, ...data.readings]
+    .filter((x) => x.id !== item.id && x.site && (x.date < item.date || (x.date === item.date && minutes(x.time) <= minutes(item.time))))
+    .sort(byTime);
   return prev.length ? prev[prev.length - 1].site : '';
 }
 
@@ -564,7 +566,7 @@ export function aiContext(data, base = today(), detailDays = 21) {
       const after = o.after.map((r) => `${r.time}=${r.value}${r.cgm ? ' (חיישן)' : ''} (+${r.mins} דק׳)`).join(', ');
       lines.push(`  ${m.time} | ${m.name}${m.food ? ` (${m.food})` : ''}${m.items.length ? ` [מחשבון: ${itemsText(m.items)}]` : ''} | ${m.portion} | ${fmt(m.carbs)} | ${m.before !== '' ? m.before : o.before !== '' ? `${o.before} (חיישן)` : '?'} | ${fmt(m.insulin)}${m.site ? ` (${SITES[m.site]})` : ''} | ${after || 'אין'}${m.tags.length ? ` | ${m.tags.map((x) => TAGS[x]).join(' ')}` : ''}${m.note ? ` | הערה: ${m.note}` : ''}`);
     }
-    for (const r of loose) lines.push(`  ${r.time} | מדידה ${r.value}${r.note ? ` (${r.note})` : ''}`);
+    for (const r of loose) lines.push(`  ${r.time} | מדידה ${r.value}${r.insulin !== '' ? ` | אינסולין (תיקון) ${r.insulin}${r.site ? ` (${SITES[r.site]})` : ''}` : r.site ? ` | זריקה ב${SITES[r.site]}` : ''}${r.note ? ` (${r.note})` : ''}`);
     const c = cgmDaySummary(data, d);
     if (c) lines.push(`  חיישן: ${c.count} מדידות, ממוצע ${c.mean}, בטווח ${c.inRange}%, ${c.low} מדידות נמוכות, טווח ${c.min}-${c.max}`);
   }
@@ -577,7 +579,7 @@ export function toCsv(data) {
   const rows = [['תאריך', 'שעה', 'סוג', 'ארוחה', 'מה אכל', 'מנה', 'פחמימה (גרם)', 'סוכר לפני', 'אינסולין', 'מיקום הזריקה', 'מדידות אחרי', 'אחרי שעתיים', 'שיא', 'סימונים', 'הערה', 'נרשם ע״י']];
   const all = [...data.meals.map((m) => ({ ...m, kind: 'meal' })), ...data.readings.map((r) => ({ ...r, kind: 'reading' }))].sort(byTime);
   for (const x of all) {
-    if (x.kind === 'reading') rows.push([x.date, x.time, 'מדידה', '', '', '', '', x.value, '', '', '', '', '', '', x.note, x.by]);
+    if (x.kind === 'reading') rows.push([x.date, x.time, 'מדידה', '', '', '', '', x.value, x.insulin, SITES[x.site] || '', '', '', '', '', x.note, x.by]);
     else {
       const o = outcome(x, data);
       rows.push([x.date, x.time, 'ארוחה', x.name, x.food, x.portion, x.carbs, x.before, x.insulin, SITES[x.site] || '', o.after.map((r) => `${r.time}: ${r.value}`).join(' · '), o.after2h, o.peak, x.tags.map((t) => TAGS[t]).join(' '), x.note, x.by]);
