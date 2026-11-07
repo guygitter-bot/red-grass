@@ -244,3 +244,7 @@
 - קובץ "הקול האישי" וקובצי העבודה שלהם: `.claude/instagram/` (במאגר, כדי שיישמרו בין שיחות). המאגר ציבורי – לא לשים שם מידע פרטי.
 - הסקילים לא מפרסמים כלום ולא נכנסים לאינסטגרם: רק כותבים טקסט. לכתוב למשתמש בעברית גם כשהסקיל באנגלית.
 - **לפני כל הוראה ליצירת סרטון (Flow):** קודם להציג למשתמש את הטקסט המלא של הסרטון (דיבור + טקסט על המסך) ולחכות לאישור. תסריטים: `.claude/instagram/reels-*.md`.
+
+### כלי עריכת וידאו (`.claude/skills/` – `color-grade`, `beats-and-cuts`, `before-and-after`, `hand-drawn`, `motion-graphics`)
+- מצרפים סרטון בצ'אט וכותבים `/color-grade` וכו'. הסבר בעברית: `.claude/skills/video-tools/README.md`; קוד משותף: `video-tools/lib.py` (ffmpeg + Pillow).
+- טקסט בעברית: רק דרך `text_png` / `pill_png` (Pillow עם raqm) או Chromium – `drawtext` של ffmpeg הופך עברית. הגופן: `video-tools/fonts/Rubik.ttf` (OFL).

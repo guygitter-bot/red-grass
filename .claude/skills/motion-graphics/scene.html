@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  body { font-family: Rubik, sans-serif; }
+  #stage { position: relative; overflow: hidden; }
+  .abs { position: absolute; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+// הגדרות מגיעות מהסקריפט (window.__CONFIG); המצב: overlay (שקוף) או bg (רקע טכנולוגי אטום)
+const C = window.__CONFIG;
+const U = C.W / 1080;                 // יחידת קנה מידה
+const ACC = C.accent;
+const stage = document.getElementById('stage');
+stage.style.width = C.W + 'px'; stage.style.height = C.H + 'px';
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const easeOutCubic = x => 1 - Math.pow(1 - x, 3);
+const easeOutBack = x => { const c1 = 1.5, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+const easeInOut = x => x < .5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
+const hasHeb = s => /[֐-׿]/.test(s);
+const rgba = (a) => { const h = ACC.replace('#', ''); const n = parseInt(h, 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+
+function el(tag, css, parent, text) {
+  const e = document.createElement(tag);
+  e.style.cssText = css || '';
+  if (text !== undefined) e.textContent = text;
+  (parent || stage).appendChild(e);
+  return e;
+}
+
+if (C.mode === 'bg') {
+  // רקע: גרדיאנט כהה, רשת זוהרת, כדורי אור ונקודות
+  stage.style.background = `radial-gradient(120% 80% at 50% 30%, #0c1d3a 0%, #060d1c 55%, #03060e 100%)`;
+  el('div', `left:0;top:0;width:100%;height:100%;background-image:linear-gradient(${rgba(.10)} 1px,transparent 1px),linear-gradient(90deg,${rgba(.10)} 1px,transparent 1px);background-size:${90 * U}px ${90 * U}px;-webkit-mask-image:radial-gradient(70% 55% at 50% 45%,#000 20%,transparent 100%);mask-image:radial-gradient(70% 55% at 50% 45%,#000 20%,transparent 100%)`).classList.add('abs');
+  el('div', `width:${900 * U}px;height:${900 * U}px;left:${-250 * U}px;top:${-150 * U}px;border-radius:50%;background:radial-gradient(circle,${rgba(.35)},transparent 65%);filter:blur(${40 * U}px)`).classList.add('abs');
+  el('div', `width:${1000 * U}px;height:${1000 * U}px;right:${-350 * U}px;bottom:${-200 * U}px;border-radius:50%;background:radial-gradient(circle,${rgba(.28)},transparent 65%);filter:blur(${50 * U}px)`).classList.add('abs');
+  let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 70; i++) {
+    const s = (2 + rnd() * 4) * U;
+    el('div', `left:${rnd() * 100}%;top:${rnd() * 100}%;width:${s}px;height:${s}px;border-radius:50%;background:${rgba(.3 + rnd() * .6)};box-shadow:0 0 ${s * 3}px ${rgba(.8)}`).classList.add('abs');
+  }
+  window.seek = () => '';
+} else {
+  const N = C.scenes.length, S = C.sceneSeconds, X = C.xfade;
+  const starts = C.scenes.map((_, i) => i * (S - X));
+  const D = C.duration;
+  const scenes = C.scenes.map((sc, i) => {
+    const [titleRaw, subRaw] = (sc.text || '').split('|').map(s => s.trim());
+    const g = el('div', 'left:0;top:0;width:100%;height:100%', stage); g.classList.add('abs');
+    const scrim = sc.hasClip ? el('div', `left:0;bottom:0;width:100%;height:68%;background:linear-gradient(to top,rgba(3,7,16,.88),rgba(3,7,16,.45) 55%,rgba(3,7,16,0))`, g) : null;
+    if (scrim) scrim.classList.add('abs');
+    const wrap = el('div', `left:${60 * U}px;right:${60 * U}px;top:${sc.hasClip ? 68 : 46}%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center`, g);
+    wrap.classList.add('abs');
+    const len = titleRaw.length;
+    const fs = clamp(150 - Math.max(0, len - 10) * 4.2, 74, 150) * U;
+    const row = el('div', `display:flex;flex-wrap:wrap;justify-content:center;gap:${0.05 * fs}px ${0.26 * fs}px;font-weight:900;font-size:${fs}px;line-height:1.08;color:#fff;text-align:center;direction:${hasHeb(titleRaw) ? 'rtl' : 'ltr'}`, wrap);
+    const words = titleRaw.split(/\s+/);
+    let keyIdx = 0; words.forEach((w, k) => { if (w.length > words[keyIdx].length) keyIdx = k; });
+    const wordEls = words.map((w, k) => {
+      const e = el('span', `display:inline-block;will-change:transform;${k === keyIdx ? `color:${ACC};text-shadow:0 0 ${34 * U}px ${rgba(.75)}, 0 0 ${8 * U}px ${rgba(.5)}` : `text-shadow:0 ${4 * U}px ${24 * U}px rgba(0,0,0,.6)`}`, row, w);
+      return e;
+    });
+    const bar = el('div', `margin-top:${34 * U}px;height:${10 * U}px;width:0;border-radius:${10 * U}px;background:${ACC};box-shadow:0 0 ${22 * U}px ${rgba(.9)}`, wrap);
+    let sub = null;
+    if (subRaw) {
+      sub = el('div', `margin-top:${34 * U}px;padding:${14 * U}px ${34 * U}px;border-radius:${60 * U}px;background:${rgba(.16)};border:${2 * U}px solid ${rgba(.7)};color:#e8f4ff;font-weight:500;font-size:${48 * U}px;direction:${hasHeb(subRaw) ? 'rtl' : 'ltr'};backdrop-filter:blur(6px)`, wrap, subRaw);
+    }
+    return { g, scrim, wordEls, bar, sub, barW: (len ? Math.min(420, 120 + len * 14) : 0) * U };
+  });
+
+  // HUD: קווי התקדמות למעלה, מונה סצנות, סוגריים בפינות
+  const hud = el('div', 'left:0;top:0;width:100%;height:100%', stage); hud.classList.add('abs');
+  const segs = [];
+  const segW = (C.W - 120 * U - (N - 1) * 10 * U) / N;
+  for (let i = 0; i < N; i++) {
+    const s = el('div', `left:${60 * U + i * (segW + 10 * U)}px;top:${96 * U}px;width:${segW}px;height:${6 * U}px;border-radius:${6 * U}px;background:rgba(255,255,255,.22);overflow:hidden`, hud); s.classList.add('abs');
+    const f = el('div', `height:100%;width:0;background:${ACC};box-shadow:0 0 ${12 * U}px ${ACC}`, s); segs.push(f);
+  }
+  const counter = el('div', `right:${60 * U}px;top:${122 * U}px;direction:ltr;font-weight:500;font-size:${30 * U}px;letter-spacing:${6 * U}px;color:${rgba(1)};text-shadow:0 0 ${14 * U}px ${rgba(.8)}`, hud, ''); counter.classList.add('abs');
+  [['left', 'top'], ['right', 'top'], ['left', 'bottom'], ['right', 'bottom']].forEach(([x, y]) => {
+    const m = 54 * U, sz = 70 * U, th = 5 * U;
+    const b = el('div', `${x}:${m}px;${y}:${(y === 'top' ? 190 : 150) * U}px;width:${sz}px;height:${sz}px;border-${x}:${th}px solid ${rgba(.85)};border-${y}:${th}px solid ${rgba(.85)};filter:drop-shadow(0 0 ${10 * U}px ${ACC})`, hud); b.classList.add('abs');
+  });
+
+  window.seek = (t) => {
+    scenes.forEach((s, i) => {
+      const lt = t - starts[i];
+      const last = i === N - 1;
+      const endT = last ? D - starts[i] : S - X;               // מתי הטקסט מתחיל לצאת
+      const vis = lt > -0.001 && lt < S + 0.001;
+      s.g.style.display = vis ? 'block' : 'none';
+      if (!vis) return;
+      const outP = easeInOut(clamp((lt - (endT - 0.4)) / 0.4));
+      const inP = easeOutCubic(clamp(lt / 0.5));
+      if (s.scrim) s.scrim.style.opacity = (Math.min(inP, 1 - outP * (last ? 0 : 1))).toFixed(3);
+      s.wordEls.forEach((e, k) => {
+        const p = clamp((lt - (0.18 + k * 0.1)) / 0.6);
+        const b = easeOutBack(p);
+        const o = clamp(p * 1.6) * (1 - outP);
+        e.style.opacity = o.toFixed(3);
+        e.style.transform = `translateY(${((1 - b) * 90 - outP * 40) * U}px) scale(${(0.8 + 0.2 * b).toFixed(3)})`;
+        e.style.filter = `blur(${((1 - clamp(p * 1.4)) * 14 * U).toFixed(1)}px)`;
+      });
+      const bp = easeOutCubic(clamp((lt - 0.55) / 0.5));
+      s.bar.style.width = (s.barW * bp).toFixed(1) + 'px';
+      s.bar.style.opacity = (1 - outP).toFixed(3);
+      if (s.sub) {
+        const sp = easeOutBack(clamp((lt - 0.8) / 0.55));
+        s.sub.style.opacity = (clamp(sp * 1.5) * (1 - outP)).toFixed(3);
+        s.sub.style.transform = `translateX(${((1 - sp) * 260 + outP * 120) * U}px)`;   // נכנס מימין (כיוון קריאה)
+      }
+    });
+    segs.forEach((f, i) => { f.style.width = (clamp((t - starts[i]) / (i === N - 1 ? D - starts[i] : S - X)) * 100).toFixed(1) + '%'; });
+    const cur = Math.min(N - 1, Math.max(0, starts.findIndex((s, i) => t < (i === N - 1 ? 1e9 : starts[i + 1] + 0.0001))));
+    counter.textContent = String(cur + 1).padStart(2, '0') + ' / ' + String(N).padStart(2, '0');
+    return stage.innerHTML;
+  };
+}
+</script>
+</body>
+</html>
