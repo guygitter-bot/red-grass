@@ -1,21 +1,22 @@
-// מדידה בלי ארוחה (בבוקר, בלילה, לפני/אחרי ספורט, טיפול בנמוך)
+// מדידה בלי ארוחה (בבוקר, בלילה, לפני/אחרי ספורט, טיפול בנמוך), ואם ניתן אינסולין (תיקון) – כמה ואיפה הוזרק
 import { useState } from 'react';
 import { Trash2 } from 'lucide-react';
-import { level, numOrEmpty } from '../lib/diary';
+import { SITES, lastSite, level, numOrEmpty } from '../lib/diary';
 import { newId, remove, save } from '../lib/store';
 import { getMe } from '../lib/me';
 import { Button, Field, Sheet, inputCls } from './ui';
-import { Glucose } from './bits';
+import { Glucose, SitePicker } from './bits';
 
 const NOTES = ['בוקר בצום', 'לילה', 'לפני ספורט', 'אחרי ספורט', 'אחרי טיפול בנמוך', 'לפני שינה'];
 
 export default function ReadingEditor({ data, reading, onClose }) {
-  const [r, setR] = useState({ ...reading, value: String(reading.value ?? ''), note: reading.note || '' });
+  const [r, setR] = useState({ ...reading, value: String(reading.value ?? ''), insulin: String(reading.insulin ?? ''), site: SITES[reading.site] ? reading.site : '', note: reading.note || '' });
+  const prevSite = lastSite(data, { id: reading.id || '-', date: r.date, time: r.time });
   const v = numOrEmpty(r.value);
   const submit = (e) => {
     e.preventDefault();
     if (!(v > 0)) return;
-    save({ ...r, id: reading.id || newId('r'), t: 'reading', value: v, by: reading.by || getMe() });
+    save({ ...r, id: reading.id || newId('r'), t: 'reading', value: v, insulin: numOrEmpty(r.insulin), by: reading.by || getMe() });
     onClose();
   };
   return (
@@ -42,6 +43,12 @@ export default function ReadingEditor({ data, reading, onClose }) {
             </button>
           ))}
         </div>
+        <Field label="אינסולין (תיקון, לא חובה)">
+          <input className={`${inputCls} num`} inputMode="decimal" value={r.insulin} onChange={(e) => setR({ ...r, insulin: e.target.value })} placeholder="יחידות" />
+        </Field>
+        <Field label="מיקום הזריקה" hint={prevSite ? `בפעם הקודמת: ${SITES[prevSite]}` : ''}>
+          <SitePicker value={r.site} prev={prevSite} onChange={(site) => setR({ ...r, site })} />
+        </Field>
         <Field label="הערה">
           <input className={inputCls} value={r.note} onChange={(e) => setR({ ...r, note: e.target.value })} />
         </Field>

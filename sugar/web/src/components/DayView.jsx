@@ -199,7 +199,15 @@ export default function DayView({ data, date, go, openCal }) {
           ) : (
             <button key={x.r.id} onClick={() => setReading(x.r)} className="flex items-center gap-3 rounded-2xl bg-card p-4 text-right shadow-sm">
               <span className="num rounded-lg bg-soft px-2 py-0.5 text-sm font-bold text-accent-ink">{x.r.time}</span>
-              <span className="flex-1">מדידה{x.r.note ? ` · ${x.r.note}` : ''}</span>
+              <span className="flex-1">
+                מדידה{x.r.note ? ` · ${x.r.note}` : ''}
+                {(x.r.insulin !== '' || x.r.site) && (
+                  <span className="block text-xs text-muted">
+                    {x.r.insulin !== '' && `💉 ${x.r.insulin} יח׳ `}
+                    {x.r.site && `📍 ${SITES[x.r.site]}`}
+                  </span>
+                )}
+              </span>
               <Glucose value={x.r.value} settings={s} />
             </button>
           ),
