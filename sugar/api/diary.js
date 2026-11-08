@@ -12,6 +12,8 @@ const MAX_RECORD_CHARS = 12000;
 const AI_PER_DAY = 60;
 const MAX_CONTEXT_CHARS = 90000;
 const MAX_HISTORY = 12;
+// תמונת החיישן (base64) – עד כ-1.5MB
+const MAX_PHOTO_CHARS = 2_000_000;
 
 // תזכורת שבועית: יום ראשון 9:30 שעון ישראל – להוריד מ-CareLink את הקובץ של השבוע ולהעלות ליומן
 const TZ = 'Asia/Jerusalem';
@@ -95,12 +97,31 @@ export class Diary {
         await this.storage.put('subs', subs);
         return json(200, { ok: true });
       }
+      if (path === 'sensor/photo') return json(200, await this.sensorPhoto(body));
+      if (path === 'sensor/get') return json(200, (await this.storage.get('sensor-photo')) || { data: '' });
       if (path === 'push/test') return json(200, { sent: await this.push({ title: '🔔 ההתראות עובדות!', body: 'בכל יום ראשון ב-9:30 תגיע כאן תזכורת להעלות את נתוני החיישן.', url: '#/settings', tag: 'test' }) });
       return json(404, { error: 'לא נמצא' });
     } catch (err) {
       if (!err.status) throw err;
       return json(err.status, { error: err.message });
     }
+  }
+
+  // תמונה אחת של החיישן הנוכחי (מדבקה עם הפרטים): כל העלאה מחליפה את הקודמת. התמונה עצמה לא בסנכרון (גדולה מדי) –
+  // נשמרת בנפרד, ורשומה קטנה 'sensor' (מתי ומי) מסתנכרנת כדי שכל המכשירים יידעו שיש תמונה חדשה
+  async sensorPhoto({ data, by }) {
+    data = String(data || '');
+    if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(data)) throw fail(400, 'התמונה לא תקינה');
+    if (data.length > MAX_PHOTO_CHARS) throw fail(413, 'התמונה גדולה מדי');
+    const at = this.now();
+    by = String(by || '').slice(0, 30);
+    await this.storage.put('sensor-photo', { data, at, by });
+    const d = this.d;
+    d.rev += 1;
+    const rec = { id: 'sensor', t: 'sensor', at, by, updatedAt: Math.max(at, (d.recs.get('sensor')?.updatedAt || 0) + 1), rev: d.rev };
+    d.recs.set('sensor', rec);
+    await this.write({ 'r:sensor': rec });
+    return { ok: true, at };
   }
 
   // מפתחות VAPID של השרת (נוצרים פעם אחת)
