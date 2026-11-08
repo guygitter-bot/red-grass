@@ -1,5 +1,7 @@
 // תמונת החיישן: הקטנה בטלפון (כדי שתעלה מהר ותישאר קריאה), העלאה לשרת וקבלה ממנו
 import { api } from './api';
+import { save } from './store';
+import { today } from './diary';
 
 // קובץ תמונה → JPEG מוקטן (data URL). הצד הארוך עד 2000 פיקסלים – מספיק לקרוא את המדבקה
 export async function shrinkImage(file, maxSide = 2000, quality = 0.85) {
@@ -43,5 +45,7 @@ export async function getSensorPhoto(at) {
 export async function uploadSensorPhoto(data, by) {
   const r = await api('/sensor/photo', { data, by });
   cache = { at: r.at, data, by };
+  // גם במכשיר: רשומת החיישן עם זמן התמונה החדשה, ותאריך ההחלפה = היום (אפשר לשנות אחר כך)
+  save({ id: 'sensor', t: 'sensor', at: r.at, by, changed: today() });
   return cache;
 }
