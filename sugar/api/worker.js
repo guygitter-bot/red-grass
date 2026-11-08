@@ -1,6 +1,7 @@
 // השרת של "יומן סוכר" (Cloudflare Worker). כל הנתונים ב-Durable Object אחד (Diary, ראו diary.js).
 //   POST /sync {since, changes}     -> { rev, changes } שליחת השינויים מהמכשיר וקבלת מה שהשתנה מאז since
 //   POST /ai {context, history, question} -> { answer, left } שיחה עם ה-AI (עד 60 שאלות ביום)
+//   POST /sensor/photo {data, by} | /sensor/get – תמונת החיישן הנוכחי (העלאה חדשה מחליפה את הקודמת)
 //   POST /push/key | /push/subscribe {sub} | /push/unsubscribe {endpoint} | /push/test – התראות לטלפון
 //        (תזכורת שבועית ביום ראשון 9:30 להעלות את נתוני החיישן; Durable Object alarm, ראו diary.js)
 // בלי סיסמה: רק בקשות מהאתר של האפליקציה (ALLOWED_ORIGINS).
@@ -9,7 +10,7 @@ import { Diary } from './diary.js';
 export { Diary };
 
 const MAX_BODY_BYTES = 2.5 * 1024 * 1024;
-const ROUTES = ['/sync', '/ai', '/push/key', '/push/subscribe', '/push/unsubscribe', '/push/test'];
+const ROUTES = ['/sync', '/ai', '/sensor/photo', '/sensor/get', '/push/key', '/push/subscribe', '/push/unsubscribe', '/push/test'];
 
 // כתובת מותרת? (* בהגדרה = כל רצף אותיות)
 export function originAllowed(origin, list) {

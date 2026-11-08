@@ -14,6 +14,7 @@
 //   reading  – מדידה בלי ארוחה (בוקר, לילה, ספורט): { t: 'reading', date, time, value, insulin (תיקון, לא חובה), site, note, by }
 //   cgm      – מדידות החיישן ליום אחד (מיובא מקובץ CareLink, ראו carelink.js): { id: 'cgm:YYYY-MM-DD', t: 'cgm', date,
 //              points: [[דקה ביום, ערך], ...] } – רשומה אחת ליום (כ-288 מדידות), כדי שלא יהיו עשרות אלפי רשומות
+//   sensor   – { id: 'sensor', t: 'sensor', at, by } – מתי הועלתה תמונת החיישן הנוכחי (התמונה עצמה בשרת, /sensor/get)
 //   chat     – הודעה בשיחה עם ה-AI (משותפת לכולם): { t: 'chat', role: 'user' | 'assistant', text, at, by }
 // רשומה ישנה בלי שדה מסוים מקבלת ברירת מחדל (safeMeal, safeTemplate, safeSettings).
 
@@ -206,7 +207,8 @@ export function prepare(records) {
     .filter((r) => r.value !== '')
     .sort(byTime);
   const chats = live.filter((r) => r.t === 'chat' && r.text).sort((a, b) => (a.at || 0) - (b.at || 0));
-  return { settings, templates, meals, readings, chats, foods: foodsOf(records), cgm: cgmOf(live) };
+  const sensor = live.find((r) => r.t === 'sensor') || null;
+  return { settings, templates, meals, readings, chats, foods: foodsOf(records), cgm: cgmOf(live), sensor };
 }
 
 // מדידות החיישן: מפה מתאריך לרשימת [דקה, ערך] ממוינת

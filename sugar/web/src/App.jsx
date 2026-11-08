@@ -1,7 +1,7 @@
 // יומן סוכר: מסך יום (ארוחות, מדידות, גרף), מחשבון אינסולין, לוח שנה, תפריט קבוע, מעקב ודפוסים, שיחה עם AI והגדרות.
 // ניווט לפי כתובת (#/day/2026-11-04, #/calc, #/cal/2026-11, #/menu, #/stats, #/chat, #/settings, #/more) כדי שכפתור "חזרה" יעבוד.
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, Calculator as CalcIcon, CalendarDays, CalendarRange, ChevronLeft, Cloud, CloudOff, Droplet, Menu, MessageCircle, Moon, RefreshCw, Settings as Gear, Sun, UtensilsCrossed } from 'lucide-react';
+import { BarChart3, Camera, Calculator as CalcIcon, CalendarDays, CalendarRange, ChevronLeft, Cloud, CloudOff, Droplet, Menu, MessageCircle, Moon, RefreshCw, Settings as Gear, Sun, UtensilsCrossed } from 'lucide-react';
 import { prepare, today } from './lib/diary';
 import { sync, useStore } from './lib/store';
 import { isDark, setTheme } from './lib/theme';
@@ -14,8 +14,9 @@ import ChatView from './components/ChatView';
 import Settings from './components/Settings';
 import Calculator from './components/Calculator';
 import CalendarView from './components/CalendarView';
+import SensorView from './components/SensorView';
 
-const PAGES = ['day', 'calc', 'cal', 'menu', 'stats', 'chat', 'settings', 'more'];
+const PAGES = ['day', 'calc', 'cal', 'menu', 'sensor', 'stats', 'chat', 'settings', 'more'];
 
 function parseHash() {
   const [, page = 'day', arg] = window.location.hash.replace(/^#/, '').split('/');
@@ -30,6 +31,7 @@ const NAV = [
   ['stats', 'מעקב', BarChart3],
   ['chat', 'שאלות ל-AI', MessageCircle],
   ['menu', 'תפריט קבוע', UtensilsCrossed],
+  ['sensor', 'החיישן', Camera],
   ['settings', 'הגדרות', Gear],
 ];
 // הסרגל התחתון בטלפון – והשאר תחת "עוד"
@@ -41,7 +43,7 @@ const TABS = [
   ['chat', 'AI', MessageCircle],
   ['more', 'עוד', Menu],
 ];
-const MORE = ['menu', 'settings'];
+const MORE = ['menu', 'sensor', 'settings'];
 
 function MoreView({ go }) {
   return (
@@ -159,6 +161,7 @@ export default function App() {
           {route.page === 'menu' && <MenuView data={data} />}
           {route.page === 'stats' && <StatsView data={data} openDay={(d) => go('day', d)} openChat={() => go('chat')} />}
           {route.page === 'chat' && <ChatView data={data} />}
+          {route.page === 'sensor' && <SensorView data={data} />}
           {route.page === 'settings' && <Settings data={data} records={records} />}
         </main>
       </div>

@@ -199,3 +199,19 @@ test('התראות: הרשמה, ההתראה השבועית נשלחת, ומכש
   assert.deepEqual(sent, ['https://fcm.googleapis.com/fcm/send/a']);
   assert.ok(env.alarmAt() > env.time);
 });
+
+test('תמונת החיישן: העלאה מחליפה את הקודמת, ומסתנכרנת שיש חדשה', async () => {
+  const env = fakeEnv();
+  assert.equal((await call(env, '/sensor/get')).data.data, '');
+  assert.equal((await call(env, '/sensor/photo', { data: 'not an image' })).status, 400);
+  assert.equal((await call(env, '/sensor/photo', { data: `data:image/jpeg;base64,${'A'.repeat(2_000_001)}` })).status, 413);
+  await call(env, '/sensor/photo', { data: 'data:image/jpeg;base64,AAAA', by: 'אמא' });
+  env.time += 1000;
+  await call(env, '/sensor/photo', { data: 'data:image/jpeg;base64,BBBB', by: 'אבא' });
+  const got = (await call(env, '/sensor/get')).data;
+  assert.equal(got.data, 'data:image/jpeg;base64,BBBB');
+  assert.equal(got.by, 'אבא');
+  const rec = (await call(env, '/sync', { since: 0 })).data.changes.find((r) => r.id === 'sensor');
+  assert.equal(rec.at, env.time);
+  assert.ok(!('data' in rec));
+});
