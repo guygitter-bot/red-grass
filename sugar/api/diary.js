@@ -118,7 +118,9 @@ export class Diary {
     await this.storage.put('sensor-photo', { data, at, by });
     const d = this.d;
     d.rev += 1;
-    const rec = { id: 'sensor', t: 'sensor', at, by, updatedAt: Math.max(at, (d.recs.get('sensor')?.updatedAt || 0) + 1), rev: d.rev };
+    // שדות אחרים ברשומה (למשל תאריך ההחלפה) נשמרים
+    const { rev: _r, ...old } = d.recs.get('sensor') || {};
+    const rec = { ...old, id: 'sensor', t: 'sensor', at, by, updatedAt: Math.max(at, (d.recs.get('sensor')?.updatedAt || 0) + 1), rev: d.rev };
     d.recs.set('sensor', rec);
     await this.write({ 'r:sensor': rec });
     return { ok: true, at };

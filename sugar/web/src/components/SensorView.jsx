@@ -1,21 +1,27 @@
 // החיישן: תמונה אחת של החיישן הנוכחי (המדבקה עם הפרטים), כדי לראות את הפרטים כשצריך.
 // כל העלאה מחליפה את התמונה הקודמת. התמונה משותפת לכל מי שמשתמש ביומן.
+// תאריך החלפת החיישן – נקבע להיום כשמעלים תמונה, ואפשר לשנות (גם לאחור).
 import { useEffect, useRef, useState } from 'react';
-import { Camera, X } from 'lucide-react';
+import { Camera, Image as ImageIcon, X } from 'lucide-react';
 import { getSensorPhoto, shrinkImage, uploadSensorPhoto } from '../lib/photo';
-import { sync } from '../lib/store';
+import { save, sync } from '../lib/store';
+import { addDays, today } from '../lib/diary';
 import { getMe } from '../lib/me';
-import { Button } from './ui';
+import { Button, Field, inputCls } from './ui';
 
 const when = (at) => new Date(at).toLocaleString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 export default function SensorView({ data }) {
-  const ref = useRef(null);
+  const camRef = useRef(null);
+  const galRef = useRef(null);
   const [photo, setPhoto] = useState(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [big, setBig] = useState(false);
   const at = data.sensor?.at || 0;
+  const changed = data.sensor?.changed || '';
+  let daysAgo = 0;
+  if (changed) while (daysAgo < 400 && addDays(changed, daysAgo) < today()) daysAgo++;
 
   useEffect(() => {
     let alive = true;
@@ -61,10 +67,31 @@ export default function SensorView({ data }) {
       <h1 className="mb-1 text-2xl font-bold">החיישן</h1>
       <p className="mb-4 text-sm text-muted">תמונה של החיישן הנוכחי והפרטים שלו. כל תמונה חדשה מחליפה את הקודמת.</p>
 
-      <Button onClick={() => ref.current?.click()} disabled={!!busy} className="mb-4 flex w-full items-center justify-center gap-2 lg:w-auto">
-        <Camera size={20} /> {busy || 'צילום חיישן חדש'}
-      </Button>
-      <input ref={ref} type="file" accept="image/*" className="hidden" onChange={pick} />
+      <div className="mb-4 grid grid-cols-2 gap-2 lg:flex">
+        <Button onClick={() => camRef.current?.click()} disabled={!!busy} className="flex items-center justify-center gap-2">
+          <Camera size={20} /> {busy || 'לצלם עכשיו'}
+        </Button>
+        <Button kind="ghost" onClick={() => galRef.current?.click()} disabled={!!busy} className="flex items-center justify-center gap-2">
+          <ImageIcon size={20} /> מהגלריה
+        </Button>
+      </div>
+      {/* capture – פותח ישר את המצלמה האחורית בטלפון; בלי – בחירה מהגלריה */}
+      <input ref={camRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={pick} />
+      <input ref={galRef} type="file" accept="image/*" className="hidden" onChange={pick} />
+
+      <section className="mb-4 rounded-2xl bg-card p-4 shadow-sm">
+        <Field label="תאריך החלפת החיישן" hint={changed ? `${daysAgo === 0 ? 'הוחלף היום' : daysAgo === 1 ? 'הוחלף אתמול' : `הוחלף לפני ${daysAgo} ימים`}` : 'נקבע לבד כשמעלים תמונה – ואפשר לשנות, גם לתאריך קודם'}>
+          <input
+            type="date"
+            className={`${inputCls} num`}
+            value={changed}
+            max={today()}
+            onChange={(e) => {
+              if (/^\d{4}-\d{2}-\d{2}$/.test(e.target.value)) save({ id: 'sensor', t: 'sensor', changed: e.target.value });
+            }}
+          />
+        </Field>
+      </section>
       {error && <p className="mb-4 rounded-xl bg-low/15 p-3 text-sm text-low">{error}</p>}
 
       <section className="rounded-2xl bg-card p-3 shadow-sm">

@@ -14,7 +14,8 @@
 //   reading  – מדידה בלי ארוחה (בוקר, לילה, ספורט): { t: 'reading', date, time, value, insulin (תיקון, לא חובה), site, note, by }
 //   cgm      – מדידות החיישן ליום אחד (מיובא מקובץ CareLink, ראו carelink.js): { id: 'cgm:YYYY-MM-DD', t: 'cgm', date,
 //              points: [[דקה ביום, ערך], ...] } – רשומה אחת ליום (כ-288 מדידות), כדי שלא יהיו עשרות אלפי רשומות
-//   sensor   – { id: 'sensor', t: 'sensor', at, by } – מתי הועלתה תמונת החיישן הנוכחי (התמונה עצמה בשרת, /sensor/get)
+//   sensor   – { id: 'sensor', t: 'sensor', at, by, changed: 'YYYY-MM-DD' } – מתי הועלתה תמונת החיישן הנוכחי (התמונה עצמה
+//              בשרת, /sensor/get), ותאריך החלפת החיישן (אפשר לעדכן, גם לאחור)
 //   chat     – הודעה בשיחה עם ה-AI (משותפת לכולם): { t: 'chat', role: 'user' | 'assistant', text, at, by }
 // רשומה ישנה בלי שדה מסוים מקבלת ברירת מחדל (safeMeal, safeTemplate, safeSettings).
 
@@ -538,6 +539,7 @@ export function aiContext(data, base = today(), detailDays = 21) {
   lines.push(`היום: ${base} (${dayLabel(base, base)})`);
   lines.push(`הגדרות: ${s.person ? `שם: ${s.person}. ` : ''}טווח תקין לפני ארוחה ${s.low}-${s.high} mg/dL, ולאורך היום (אחרי אוכל, חיישן, אחוז בטווח) ${s.low}-${s.dayHigh}.` + (s.icr !== '' ? ` יחס פחמימות (שהמשפחה הזינה): יחידה לכל ${s.icr} גרם.` : '') + (s.cf !== '' ? ` פקטור תיקון: יחידה מורידה ${s.cf}.` : '') + (s.target !== '' ? ` יעד לתיקון: ${s.target}.` : ''));
   if (s.note) lines.push(`הערות קבועות: ${s.note}`);
+  if (isDate(data.sensor?.changed)) lines.push(`החיישן הנוכחי הוחלף ב-${data.sensor.changed} (יום ראשון של חיישן יכול להיות פחות מדויק).`);
   for (const d of [7, 30]) {
     const st = stats(data, d, base);
     if (st.count) lines.push(`${d} ימים אחרונים: ${st.count} מדידות, ממוצע ${st.mean}, סטיית תקן ${st.sd}, בטווח ${st.inRange}%, נמוכים ${st.low}, גבוהים ${st.high} (מעל 250: ${st.veryHigh}), טווח ${st.min}-${st.max}.`);
