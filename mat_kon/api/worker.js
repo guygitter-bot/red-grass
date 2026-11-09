@@ -297,6 +297,19 @@ export default {
     }
 
 
+    // מדידת מהירות אצל משתמשים אמיתיים (פעם אחת בכל פתיחה): כמה זמן עד שהמתכונים על המסך, וכמה לקח לשרת לענות
+    if (url.pathname === '/client-metrics' && request.method === 'POST') {
+      const limited = await rate([{ key: `metrics:${ip}`, limit: 30, window: 3600 }]);
+      if (limited) return limited;
+      const { body } = await readJson();
+      const ms = (v) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Math.min(Math.round(Number(v)), 120000) : null);
+      await internal(accounts, 'POST', '/metrics/add', {
+        ready: ms(body?.ready), api: ms(body?.api), native: Boolean(body?.native),
+        net: /^(slow-2g|2g|3g|4g)$/.test(String(body?.net)) ? body.net : '',
+      });
+      return reply(200, { ok: true });
+    }
+
     // בדיקה (רק לבעל האפליקציה): מה השרת מצליח לקרוא מקישור (בלי AI). משמש את .github/workflows/mat-kon-probe.yml
     if (url.pathname === '/debug/source' && request.method === 'GET') {
       if (user) return fail(403, 'רק לבעל האפליקציה');
@@ -768,6 +781,7 @@ export default {
         const open = issues.issues.filter((i) => i.status !== 'fixed');
         const alerts = [];
         const today = await (await internal(accounts, 'POST', '/spend/check', {})).json();
+        const speed = await (await internal(accounts, 'GET', '/metrics')).json();
         if (today.stopped) alerts.push({ level: 'serious', text: `ה-AI נעצר למשתמשים להיום: ההוצאה ($${today.usd.toFixed(2)}) הגיעה לתקרה היומית ($${today.cap}). אפשר להעלות אותה במסך "כסף".` });
         const spend = settings.settings.spendAlert;
         if (spend && costs[0].usd >= spend) alerts.push({ level: 'serious', text: `ההוצאה על AI החודש ($${costs[0].usd}) עברה את הסף שקבעת ($${spend})` });
@@ -781,7 +795,7 @@ export default {
         return reply(200, {
           stats, costs, community, backups: backups?.enabled ? { last: lastBackup || null, count: backups.days.length, ok: Boolean(backups.last) } : null,
           issues: { open: open.length, new: open.filter((i) => i.status === 'new').length, fixed: issues.issues.length - open.length },
-          settings: settings.settings, spendToday: { usd: Math.round(today.usd * 100) / 100, cap: today.cap }, alerts, reports: { pending: reports.items.length + talk.items.length, hidden },
+          settings: settings.settings, spendToday: { usd: Math.round(today.usd * 100) / 100, cap: today.cap }, speed, alerts, reports: { pending: reports.items.length + talk.items.length, hidden },
         });
       }
       if (url.pathname === '/admin/issues' && request.method === 'GET') return pass(await internal(accounts, 'GET', '/admin/issues'));

@@ -1,16 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FileUp, Globe, Mic, Heart, Loader2, LogOut, PenLine, Search, Settings, X } from 'lucide-react';
-import SearchView from './components/SearchView';
 import DietFilter from './components/DietFilter';
-import SettingsView from './components/SettingsView';
 import { shoppingName } from './lib/shopping';
 import Auth from './components/Auth';
 import AddLink from './components/AddLink';
-import ImportView from './components/ImportView';
-import NewRecipeView from './components/NewRecipeView';
-import ShoppingView from './components/ShoppingView';
-import PlanView from './components/PlanView';
-import InventoryView from './components/InventoryView';
 import BottomNav from './components/BottomNav';
 import { prunePlan } from './lib/plan';
 import { scaleSections } from './lib/scale';
@@ -22,27 +15,55 @@ import useIdbState from './hooks/useIdbState';
 
 // מתכונים מהמכשיר עוברים את אותה בדיקה כמו מהשרת (נתון פגום לא יפיל את האפליקציה)
 const cleanRecipes = (list) => (Array.isArray(list) ? list.filter((r) => r && typeof r === 'object' && r.id).map(safeRecipe) : []);
-import InvitesView from './components/InvitesView';
-import ShareView from './components/ShareView';
-import SharedRecipe from './components/SharedRecipe';
 import UpdateBanner from './components/UpdateBanner';
 import AppInvite from './components/AppInvite';
-import PrivacyView from './components/PrivacyView';
-import AdminView from './components/AdminView';
-import HelpView from './components/HelpView';
-import CategoriesView from './components/CategoriesView';
 import Paywall from './components/Paywall';
 import PendingList from './components/PendingList';
 import RecipeCard from './components/RecipeCard';
+import { CardsSkeleton } from './components/Skeleton';
 import RecipeView from './components/RecipeView';
 import { CATEGORIES } from './lib/categories';
 import { isNative } from './lib/native';
 import {
-  addCategory, setCategoryPrefs, addRecipeAsync, addTextRecipe, getJob, getRecipe, deleteRecipe, removeCategory, getMe, getPlan, getShopping, listRecipes, logout as apiLogout, refreshRecipe,
+  addCategory, setCategoryPrefs, addRecipeAsync, addTextRecipe, getJob, getRecipe, deleteRecipe, removeCategory, getMe, getPlan, getShopping, listRecipes, reportMetrics, logout as apiLogout, refreshRecipe,
   updateRecipe, categorizeRecipe, estimateNutrition, getProfile, setProfile, publishRecipe, unpublishRecipe, safeRecipe, searchCommunity, substituteIngredient, talkApi, getPantry, shoppingOps, pantryOps, planOps, shareRecipe, recipeShareLink,
 } from './lib/api';
 import { SORTS, categoriesOf, countByCategory, emojiOf, filterRecipes, freeLeft, linkFromShare, orderCategories, parseAuthHash, parseShareLink, sortRecipes } from './lib/recipes';
 import { usePersistentState } from './lib/storage';
+
+// מסכים שלא צריך בפתיחה – נטענים בנפרד (הקובץ הראשון קטן יותר והאפליקציה עולה מהר),
+// ומיד אחרי הפתיחה נטענים ברקע, כך שהמעבר אליהם מיידי
+const SCREENS = {
+  SearchView: () => import('./components/SearchView'),
+  SettingsView: () => import('./components/SettingsView'),
+  ImportView: () => import('./components/ImportView'),
+  NewRecipeView: () => import('./components/NewRecipeView'),
+  ShoppingView: () => import('./components/ShoppingView'),
+  PlanView: () => import('./components/PlanView'),
+  InventoryView: () => import('./components/InventoryView'),
+  InvitesView: () => import('./components/InvitesView'),
+  ShareView: () => import('./components/ShareView'),
+  SharedRecipe: () => import('./components/SharedRecipe'),
+  PrivacyView: () => import('./components/PrivacyView'),
+  AdminView: () => import('./components/AdminView'),
+  HelpView: () => import('./components/HelpView'),
+  CategoriesView: () => import('./components/CategoriesView'),
+};
+const SearchView = lazy(SCREENS.SearchView);
+const SettingsView = lazy(SCREENS.SettingsView);
+const ImportView = lazy(SCREENS.ImportView);
+const NewRecipeView = lazy(SCREENS.NewRecipeView);
+const ShoppingView = lazy(SCREENS.ShoppingView);
+const PlanView = lazy(SCREENS.PlanView);
+const InventoryView = lazy(SCREENS.InventoryView);
+const InvitesView = lazy(SCREENS.InvitesView);
+const ShareView = lazy(SCREENS.ShareView);
+const SharedRecipe = lazy(SCREENS.SharedRecipe);
+const PrivacyView = lazy(SCREENS.PrivacyView);
+const AdminView = lazy(SCREENS.AdminView);
+const HelpView = lazy(SCREENS.HelpView);
+const CategoriesView = lazy(SCREENS.CategoriesView);
+const prefetchScreens = () => Object.values(SCREENS).forEach((load) => load().catch(() => {}));
 
 // קישור הזמנה (#invite=...) או כניסה (#login). נלקח מהכתובת ונמחק ממנה מיד.
 function takeAuthLink() {
@@ -149,6 +170,14 @@ export default function App() {
   // סדר הקטגוריות ומועדפות (נשמר בשרת לכל הספר)
   const [categoryPrefs, setCategoryPrefsState] = usePersistentState('matkon_category_prefs', { order: [], favorites: [] });
   const [loadError, setLoadError] = useState('');
+  const [loaded, setLoaded] = useState(false); // המתכונים הגיעו מהשרת לפחות פעם אחת בפתיחה הזו
+  const [shown, setShown] = useState(60);
+  const metricsSent = useRef(false);
+  // אחרי שהמסך הראשי עלה – טוענים ברקע את שאר המסכים, כדי שהמעבר אליהם יהיה מיידי
+  useEffect(() => {
+    const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1500));
+    idle(prefetchScreens);
+  }, []); // ברשימה ארוכה מציירים רק את מה שקרוב למסך, ועוד בגלילה
   // מתכון מהקהילה שנפתח מתוך החיפוש
   const [communityOpen, setCommunityOpen] = useState(null);
   // מתכון ששלחו לי בקישור: נשמר במכשיר עד שמחליטים, כדי שיחכה גם אחרי הרשמה (login: המשתמש ביקש להיכנס)
@@ -265,6 +294,10 @@ export default function App() {
   const reload = useCallback(async () => {
     if (auth) return;
     try {
+      // הפרטים והמתכונים במקביל (לא אחד אחרי השני)
+      const askedAt = performance.now();
+      const recipesP = listRecipes(session);
+      recipesP.catch(() => {});
       const me = await getMe(session);
       if (session && !ownerDevice) {
         setUser(me.user);
@@ -272,7 +305,14 @@ export default function App() {
       }
       setCustom((me.categories || []).filter((c) => !CATEGORIES.includes(c)));
       if (me.categoryPrefs) setCategoryPrefsState(me.categoryPrefs);
-      setRecipes(await listRecipes(session));
+      setRecipes(await recipesP);
+      setLoaded(true);
+      // מדידה אמיתית אצל המשתמש: כמה זמן מפתיחת האפליקציה עד שהמתכונים מהשרת על המסך, וכמה לקח לשרת
+      if (!metricsSent.current) {
+        metricsSent.current = true;
+        const api = performance.now() - askedAt;
+        requestAnimationFrame(() => reportMetrics({ ready: performance.now(), api, native: isNative(), net: navigator.connection?.effectiveType || '' }));
+      }
       const started = Date.now();
       getShopping(session).then((v) => shoppingSync.loaded(v, started)).catch(() => {});
       getPlan(session).then((v) => planSync.loaded(v, started)).catch(() => {});
@@ -1020,7 +1060,9 @@ export default function App() {
           </>
         )}
 
-        {recipes.length === 0 && !pending.length && !loadError && <Empty session={session} onOpenCommunity={setCommunityOpen} />}
+        {/* פתיחה ראשונה במכשיר (אין עדיין מתכונים שמורים בו): שלד במקום מסך ריק */}
+        {recipes.length === 0 && !loaded && !loadError && <CardsSkeleton />}
+        {recipes.length === 0 && loaded && !pending.length && !loadError && <Empty session={session} onOpenCommunity={setCommunityOpen} />}
 
         {recipes.length > 0 && visible.length === 0 && (
           <p className="text-center text-stone-500 mt-10">
@@ -1030,7 +1072,7 @@ export default function App() {
         )}
 
         <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {visible.map((r) => (
+          {visible.slice(0, shown).map((r) => (
             <RecipeCard
               key={r.id}
               recipe={r}
@@ -1041,12 +1083,33 @@ export default function App() {
             />
           ))}
         </div>
+        {visible.length > shown && <MoreOnScroll onMore={() => setShown((n) => n + 60)} />}
       </main>
 
       {toast && <Toast text={toast} />}
       <BottomNav view="home" shoppingCount={openShopping} onPhotos={takePhotos} />
     </div>
   );
+}
+
+// סימן בסוף הרשימה: כשהוא מתקרב למסך – מציירים עוד מתכונים
+function MoreOnScroll({ onMore }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !('IntersectionObserver' in window)) {
+      onMore();
+      return undefined;
+    }
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) onMore();
+    }, { rootMargin: '800px' });
+    io.observe(el);
+    return () => {
+      io.disconnect();
+    };
+  }, [onMore]);
+  return <div ref={ref} className="h-10" />;
 }
 
 function Toast({ text }) {

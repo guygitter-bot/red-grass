@@ -209,6 +209,28 @@ function PlayTest({ start, session }) {
   );
 }
 
+// מהירות אצל משתמשים אמיתיים בשבוע האחרון: זמן עד שהמתכונים על המסך וזמן תשובת השרת (חציון ו-90% האיטיים)
+const sec = (ms) => (ms === null || ms === undefined ? '—' : `${(ms / 1000).toFixed(1)} שנ׳`);
+function Speed({ speed }) {
+  const all = speed?.all;
+  if (!all?.count) return <Card title="מהירות אצל משתמשים"><p className="text-sm text-muted">עוד אין מדידות. הן יתחילו להגיע כשמשתמשים יפתחו את הגרסה החדשה.</p></Card>;
+  const slow = speed.slowNet;
+  const verdict = all.readySlow <= 3000 ? ['🟢 מהיר', 'text-emerald-600'] : all.readySlow <= 6000 ? ['🟡 סביר', 'text-amber-600'] : ['🔴 איטי', 'text-red-600'];
+  return (
+    <Card title="מהירות אצל משתמשים (שבוע)">
+      <div className={`font-bold ${verdict[1]}`}>{verdict[0]}</div>
+      <Rows rows={[
+        ['עד שהמתכונים על המסך – רוב המשתמשים', sec(all.readyMedian)],
+        ['עד שהמתכונים על המסך – 10% האיטיים', sec(all.readySlow)],
+        ['תשובת השרת – רוב המשתמשים', sec(all.apiMedian)],
+        ['תשובת השרת – 10% האיטיים', sec(all.apiSlow)],
+        ...(slow?.count ? [['ברשת חלשה (3G ומטה)', sec(slow.readyMedian)]] : []),
+      ]} />
+      <p className="text-xs text-muted mt-1">{all.count} פתיחות נמדדו</p>
+    </Card>
+  );
+}
+
 function Overview({ d, go, session }) {
   const s = d.stats;
   return (
@@ -229,6 +251,7 @@ function Overview({ d, go, session }) {
 
       <PushCard session={session} />
       <PlayTest start={d.settings.testStart || PLAY_TEST_START} session={session} />
+      <Speed speed={d.speed} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
         <Stat label="משתמשים" value={s.users} sub={`+${s.today} היום · +${s.week} השבוע`} onClick={() => go('users')} />

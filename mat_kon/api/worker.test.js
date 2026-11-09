@@ -2049,3 +2049,17 @@ test('daily AI spend cap: over the cap, AI stops for users (not the owner) and t
   await call('PUT', '/admin/settings', { spendStop: 100 });
   assert.equal((await call('POST', '/recipes/text', { text: 'עוגה רביעית: ביצה, קמח, אופים' }, session)).status, 200);
 });
+
+test('speed from real users: measurements are kept and summarized for the owner', async () => {
+  const { session } = await (await register((await invite()).token)).json();
+  for (const [ready, api] of [[800, 200], [1200, 300], [5000, 900]]) {
+    assert.equal((await call('POST', '/client-metrics', { ready, api, native: true, net: '4g' }, session)).status, 200);
+  }
+  await call('POST', '/client-metrics', { ready: 9000, api: 2000, net: '3g' }, session);
+  await call('POST', '/client-metrics', { ready: 'x', api: -1, net: '<script>' }, session);
+  const { speed } = await (await call('GET', '/admin/overview')).json();
+  assert.equal(speed.all.count, 4);
+  assert.equal(speed.all.readyMedian, 1200);
+  assert.equal(speed.all.readySlow, 5000);
+  assert.equal(speed.slowNet.count, 1);
+});

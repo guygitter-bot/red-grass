@@ -246,6 +246,8 @@ export const getAdminUsage = (month) => api(own(), 'GET', `/admin/usage${month ?
 export const getAdminErrors = () => api(own(), 'GET', '/admin/errors');
 export const getBackups = () => api(own(), 'GET', '/admin/backups');
 export const linkGoogle = (s, credential) => api(s, 'POST', '/google', { credential, link: true }).then((d) => d.user);
+// מהירות אצל המשתמש (פעם אחת בפתיחה): זמן עד שהמתכונים על המסך, וזמן התשובה של השרת
+export const reportMetrics = (m) => api(loadJson('matkon_session', ''), 'POST', '/client-metrics', m).catch(() => {});
 export const reportClientError = (where, message) => api(loadJson('matkon_session', ''), 'POST', '/client-error', { where, message }).catch(() => {});
 // שגיאה שהיא באג אצלנו (לא תשובה מהשרת): נרשמת גם במסך התקלות של בעל האפליקציה, ולמשתמש – הודעה בעברית
 export function bugMessage(where, e) {
