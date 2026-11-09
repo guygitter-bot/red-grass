@@ -8,7 +8,8 @@ import { deps } from './deps.js';
 const cacheOf = (env) => env.BOOK?.get(env.BOOK.idFromName('recipe-cache'));
 // v2: מתכונים שנשמרו לפני שסומן אם הם משוערים (basis) לא נלקחים מהמטמון
 // v3: מתכונים שנקראו רק מהנתונים המובנים של הדף (לפעמים חלקיים) נקראים שוב, עם טקסט הדף
-const cacheKey = async (k) => 'v3:' + btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(k)))));
+// v4: מתכונים מנתונים מובנים בלי כמויות (רק שמות מצרכים) נקראים שוב
+const cacheKey = async (k) => 'v4:' + btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(k)))));
 async function cacheCall(env, path, body) {
   const stub = cacheOf(env);
   if (!stub) return null;
@@ -43,14 +44,15 @@ export function recipeKind({ link, text } = {}) {
   }
 }
 
-export async function buildRecipe(env, client, { link, text, hint }, categories) {
+// fresh: "לקרוא שוב מהמקור" – בלי המטמון (קוראים מחדש, והתוצאה החדשה מחליפה את מה ששמור לכולם)
+export async function buildRecipe(env, client, { link, text, hint, fresh = false }, categories) {
   if (text) return extractRecipe(client, text, { categories });
   const alias = `url:${link}`;
-  const quick = await cacheGet(env, [alias]);
+  const quick = !fresh && (await cacheGet(env, [alias]));
   if (quick) return fromCache(quick, categories, hint);
   const src = await gatherSource(link, deps.fetch, { hint, igDocId: env.IG_DOC_ID });
   const identity = sourceIdentity(src);
-  const known = identity !== alias && (await cacheGet(env, [identity]));
+  const known = !fresh && identity !== alias && (await cacheGet(env, [identity]));
   if (known) {
     await cachePut(env, [alias], known);
     return fromCache(known, categories, hint);

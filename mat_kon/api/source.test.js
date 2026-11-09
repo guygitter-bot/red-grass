@@ -86,6 +86,15 @@ test('structured data with only part of the ingredients: the page text around th
   assert.equal(recipeWindow('בלי שום מצרך כאן', { ingredients: ['2 בצלים'] }), '');
 });
 
+test('structured ingredients without amounts are not "complete"; url-escaped characters are fixed', () => {
+  const r = compactRecipe({ name: 'עוגיות', recipeIngredient: ['שיבולת שועל', 'שוקולד צ%60יפס', 'ביצה'], recipeInstructions: ['אופים'] });
+  assert.equal(r.ingredients[1], "שוקולד צ'יפס");
+  assert.equal(looksComplete({ recipes: [r] }), false);
+  const full = compactRecipe({ name: 'עוגה', recipeIngredient: ['2 כוסות קמח', 'כוס סוכר', 'ביצה'], recipeInstructions: ['אופים'] });
+  assert.equal(looksComplete({ recipes: [full] }), true);
+  assert.equal(compactRecipe({ recipeIngredient: ['100% מיץ'] }).ingredients[0], '100% מיץ');
+});
+
 test('a blocked page is a warning, not a crash', async () => {
   const src = await gatherSource('https://blocked.example/r', async () => new Response('no', { status: 403 }));
   assert.equal(src.kind, 'page');

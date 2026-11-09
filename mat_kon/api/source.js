@@ -104,7 +104,14 @@ export function findJsonLdRecipes(html) {
   return out;
 }
 
-const asText = (v) => (typeof v === 'string' ? decodeEntities(v).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() : '');
+// תווים שהאתר שמר בקידוד של כתובת (למשל "צ%60יפס" = צ`יפס – אחרת ה-AI קורא "60%"), וגרש הפוך בעברית -> גרש
+const unescapeUrlChars = (s) => s.replace(/%([0-9A-Fa-f]{2})/g, (m, h) => {
+  const c = String.fromCharCode(parseInt(h, 16));
+  return /[`'"&()\-/ ]/.test(c) ? c : m;
+});
+const asText = (v) => (typeof v === 'string'
+  ? unescapeUrlChars(decodeEntities(v)).replace(/<[^>]+>/g, ' ').replace(/([\u05d0-\u05ea])`/g, "$1'").replace(/\s+/g, ' ').trim()
+  : '');
 
 function imageOf(v) {
   if (!v) return null;
@@ -491,6 +498,11 @@ async function followLinks(fetchFn, out) {
 }
 
 // האם יש מספיק חומר כדי לבנות מתכון בלי חיפוש ברשת
+// מצרך עם כמות (מספר, שבר, או מילת כמות) – מתכון מובנה שבו רוב המצרכים בלי כמויות (רק שמות) אינו מלא
+const AMOUNT = /\d|[½¼¾⅓⅔⅛]|חצי|רבע|שליש|כוס|כף|כפית|כפות|גרם|ק"ג|קילו|מ"ל|ליטר|יחידה|יחידות|קורט|קמצוץ|חבילה|שן|שיני|צרור|\b(cup|tbsp|tsp|g|kg|ml|oz|lb|pinch)\b/i;
+export const hasAmounts = (ingredients) => ingredients.filter((i) => AMOUNT.test(i)).length >= Math.ceil(ingredients.length / 2);
+
 export function looksComplete(src) {
-  return [...src.recipes, ...(src.linked || []).flatMap((l) => l.recipes)].some((r) => r.ingredients.length >= 2 && r.instructions.length >= 1);
+  return [...src.recipes, ...(src.linked || []).flatMap((l) => l.recipes)]
+    .some((r) => r.ingredients.length >= 2 && r.instructions.length >= 1 && hasAmounts(r.ingredients));
 }
