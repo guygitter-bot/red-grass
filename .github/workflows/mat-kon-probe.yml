@@ -52,6 +52,10 @@ jobs:
             console.log(JSON.stringify({ kind: s.kind, author: s.author, image: !!s.image, caption: s.description.slice(0, 700),
               comments: s.comments.length, firstComments: s.comments.slice(0, 5), linked: s.linked.map((l) => l.url),
               warnings: s.warnings, debug: s.debug }, null, 1));
+            // המתכון המובנה כפי שנקרא, וקטע מטקסט הדף – כדי לראות מה ה-AI מקבל
+            console.log(JSON.stringify(s.recipes.map((r) => ({ name: r.name, ingredients: r.ingredients, instructions: r.instructions })), null, 1).slice(0, 4000));
+            console.log('--- page text (' + s.text.length + ') ---');
+            console.log(s.text.slice(0, 3000));
           "
       - name: Raw Instagram pages from the GitHub runner (diagnostics)
         if: contains(inputs.url, 'instagram.com')
