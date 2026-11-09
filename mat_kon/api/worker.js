@@ -1032,7 +1032,7 @@ export default {
       }
       let recipe;
       try {
-        recipe = await buildRecipe(env, ai(recipeKind({ link, text })), { link, text, hint }, categories);
+        recipe = await buildRecipe(env, ai(recipeKind({ link, text })), { link, text, hint, fresh: isRefresh }, categories);
       } catch (e) {
         await giveBack();
         await recordError('extract', e, link ? errorGroup(link, e) : e instanceof NoRecipeError ? 'NoRecipeError:' : '');

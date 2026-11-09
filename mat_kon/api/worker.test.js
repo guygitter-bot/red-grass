@@ -2063,3 +2063,16 @@ test('speed from real users: measurements are kept and summarized for the owner'
   assert.equal(speed.all.readySlow, 5000);
   assert.equal(speed.slowNet.count, 1);
 });
+
+test('"read again from the source" skips the shared cache and replaces it', async () => {
+  const first = (await (await call('POST', '/recipes', { url: 'https://cake.example/again' })).json()).recipe;
+  const calls = apiCalls.length;
+  reply = () => ({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'submit_recipe', input: { ...recipeInput, title: 'גרסה מתוקנת' } }] });
+  const refreshed = (await (await call('POST', `/recipes/${first.id}/refresh`)).json()).recipe;
+  assert.equal(apiCalls.length, calls + 1);
+  assert.equal(refreshed.title, 'גרסה מתוקנת');
+  // מי שמוסיף את הקישור אחר כך מקבל את הגרסה המתוקנת
+  const { session } = await (await register((await invite()).token)).json();
+  assert.equal((await (await call('POST', '/recipes', { url: 'https://cake.example/again' }, session)).json()).recipe.title, 'גרסה מתוקנת');
+  assert.equal(apiCalls.length, calls + 1);
+});

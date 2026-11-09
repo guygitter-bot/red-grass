@@ -218,7 +218,7 @@ different recipes (each usually with its own heading) – return each one separa
   }
   if (src.text) {
     parts.push(src.recipes.length
-      ? `Page text around the recipe (the structured data above is sometimes partial – e.g. only the first ingredient group, or missing steps. Compare: if the page text has more ingredients, groups or steps, use the full version from the page text):\n${src.text}`
+      ? `Page text around the recipe (the structured data above is sometimes partial – e.g. only the first ingredient group, ingredient names WITHOUT amounts, or missing steps. Compare: if the page text has more ingredients, groups, amounts or steps, use the full version from the page text – take every amount exactly as written there):\n${src.text}`
       : `Page text:\n${src.text}`);
   }
   if (src.warnings.length) parts.push(`Could not read everything: ${src.warnings.join('; ')}`);
