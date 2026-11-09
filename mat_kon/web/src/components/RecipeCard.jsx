@@ -7,7 +7,7 @@ export default function RecipeCard({ recipe, onOpen, removeFrom = null, onRemove
       <button onClick={onOpen} className="flex-1 text-right bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition flex flex-col">
         <div className="relative aspect-[4/3] bg-orange-100 flex items-center justify-center">
           {recipe.image ? (
-            <img src={recipe.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="absolute inset-0 w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            <img src={recipe.image} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" className="absolute inset-0 w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
           ) : null}
           <span className="text-4xl">{emojiOf(recipe.category)}</span>
           {isVideo(recipe) && (

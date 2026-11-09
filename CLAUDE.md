@@ -92,6 +92,9 @@
 - שיחה על מתכון בקהילה (טיפים, תשובות, "הכנתי!" עם תמונה): `talk:<key>` במופע community, תמונות ב-`/img/community/<id>`; כל טקסט/תמונה עוברים `moderateTalk`, דיווח ×3 מסתיר, ניהול ב-`/admin/talk`. בלי authorId ללקוח (`publicTalk`).
 - "חסר לי?" ליד כל מצרך: `POST /recipes/:id/substitute` (`suggestSubstitutes`, רק מצרך שבמתכון, לפי הסינון שבחר המשתמש), התשובה נשמרת ב-`sub:<id>:<hash>` בספר.
 - ה-service worker לא שומר קובצי `.mp4` (סרטוני ההדרכה עוברים ישר לרשת).
+- **מהירות:** מסכים משניים נטענים בנפרד (`SCREENS` + `lazy` ב-`App.jsx`, נטענים ברקע אחרי הפתיחה) – מסך חדש להוסיף לשם. שלד בטעינה (`components/Skeleton.jsx`),
+  רשימה ארוכה מצוירת בהדרגה (`MoreOnScroll`), תמונות `loading="lazy"`, צילומים נשמרים ב-WebP (`lib/image.js`, עם נפילה ל-JPEG).
+  מהירות אצל משתמשים אמיתיים: `/client-metrics` → אפליקציית הניהול ← סקירה ← "מהירות אצל משתמשים".
 
 #### בדיקה לפני שליחה
 - `cd mat_kon/api && npm test` · `cd mat_kon/web && npx vitest run src && npm run build`

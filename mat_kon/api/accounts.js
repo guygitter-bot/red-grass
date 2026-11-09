@@ -652,6 +652,24 @@ export class Accounts {
       if (['ownerFail'].includes(body.type)) await this.security(body.type, body.detail || '');
       return json({ ok: true });
     }
+    // ---- מהירות אצל משתמשים: 500 המדידות האחרונות, ומסכם (חציון / 90% האיטיים) לשבוע האחרון ----
+    if (path === '/metrics/add' && request.method === 'POST') {
+      if (body.ready === null && body.api === null) return json({ ok: true });
+      const list = (await this.storage.get('metrics')) || [];
+      list.push({ at: Date.now(), ready: body.ready, api: body.api, native: Boolean(body.native), net: String(body.net || '') });
+      await this.storage.put('metrics', list.slice(-500));
+      return json({ ok: true });
+    }
+    if (path === '/metrics' && request.method === 'GET') {
+      const week = ((await this.storage.get('metrics')) || []).filter((m) => Date.now() - m.at < 7 * 86400000);
+      const pct = (vals, p) => {
+        const v = vals.filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
+        return v.length ? v[Math.min(v.length - 1, Math.floor((v.length - 1) * p))] : null;
+      };
+      const sum = (rows) => ({ count: rows.length, readyMedian: pct(rows.map((m) => m.ready), 0.5), readySlow: pct(rows.map((m) => m.ready), 0.9), apiMedian: pct(rows.map((m) => m.api), 0.5), apiSlow: pct(rows.map((m) => m.api), 0.9) });
+      return json({ all: sum(week), slowNet: sum(week.filter((m) => /2g|3g/.test(m.net))) });
+    }
+
     // ---- הוצאה יומית על AI של כל האפליקציה: מעל התקרה ה-AI נעצר למשתמשים (לא לבעל האפליקציה) ----
     if (path === '/spend/add' && request.method === 'POST') {
       const day = /^\d{4}-\d{2}-\d{2}$/.test(body.day) ? body.day : new Date(now).toISOString().slice(0, 10);
