@@ -2,7 +2,7 @@ import { isNative } from '../lib/source.js';
 
 export default function Start({ denied, onStart }) {
   return (
-    <div className="min-h-screen grid place-items-center p-6">
+    <div className="min-h-screen grid place-items-center p-6 pt-[calc(1.5rem+var(--safe-top))]">
       <div className="max-w-md w-full bg-card border border-line rounded-3xl p-6 text-center flex flex-col gap-4 shadow-sm">
         <img src="icon.svg" alt="" className="w-20 h-20 mx-auto" />
         <h1 className="text-2xl font-bold">גלריה מסודרת</h1>

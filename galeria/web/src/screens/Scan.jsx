@@ -5,7 +5,7 @@ export default function Scan({ done, total, stage }) {
   // בערך 15 תמונות בשנייה בטלפון ממוצע
   const left = total ? Math.ceil((total - done) / 15 / 60) : 0;
   return (
-    <div className="min-h-screen grid place-items-center p-6">
+    <div className="min-h-screen grid place-items-center p-6 pt-[calc(1.5rem+var(--safe-top))]">
       <div className="max-w-md w-full bg-card border border-line rounded-3xl p-6 text-center flex flex-col gap-4">
         <div className="text-5xl" aria-hidden>
           🔎

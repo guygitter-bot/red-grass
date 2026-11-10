@@ -2,10 +2,16 @@ import { useEffect } from 'react';
 import Thumb from './Thumb.jsx';
 import { bytes, date } from '../lib/format.js';
 import { isNative, open } from '../lib/source.js';
+import { onBack } from '../lib/back.js';
 
 // תמונה בגדול, עם מעבר לקודמת/הבאה וסימון למחיקה
 export default function Viewer({ ids, index, photo, selected, onToggle, onMove, onClose }) {
   const id = ids[index];
+
+  // כפתור אחורה של הטלפון סוגר את התמונה
+  useEffect(() => {
+    return onBack(onClose);
+  }, [onClose]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -22,7 +28,7 @@ export default function Viewer({ ids, index, photo, selected, onToggle, onMove, 
   if (!id) return null;
   return (
     <div className="fixed inset-0 z-50 bg-black/95 text-white flex flex-col" role="dialog" aria-modal="true">
-      <div className="flex items-center justify-between p-3 gap-2">
+      <div className="flex items-center justify-between p-3 pt-[calc(0.75rem+var(--safe-top))] gap-2">
         <button type="button" onClick={onClose} className="px-3 py-2 rounded-lg bg-white/10">
           ✕ סגירה
         </button>

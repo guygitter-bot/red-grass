@@ -234,6 +234,8 @@
   עלייה: `galeria.yml` אחרי מיזוג ל-main → https://galeria-app.pages.dev (גלריה לדוגמה) + `galeria.apk` להורדה.
 - **הכול בתוך הטלפון** (ML Kit בלי אינטרנט) – תמונות לא נשלחות לשרת. שום דבר לא נמחק בלי סימון + אישור של אנדרואיד; מועדפות לא מוצעות.
 - בדיקה: `cd galeria/web && npm test && npm run build`; קוד האנדרואיד נבדק רק בבנייה ב-Actions. טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- **למזג לבד** אחרי שהבנייה ב-`galeria.yml` ירוקה, ולבדוק שהעלייה הצליחה. אחרי עלייה – להוריד ולהתקין מחדש את `galeria.apk` מהאתר.
+- כפתור "אחורה" של אנדרואיד: `web/src/lib/back.js` (חלון פתוח נרשם ב-`onBack`). מרווח לשורת המצב: `--safe-top` / `--safe-bottom` ב-`index.css`.
 
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).
