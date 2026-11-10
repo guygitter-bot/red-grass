@@ -80,7 +80,8 @@ export function sync() {
     return running;
   }
   running = (async () => {
-    const sent = [...dirty].map((id) => recs.get(id)).filter(Boolean);
+    // עד 1000 רשומות בכל שליחה (ייבוא גדול נשלח בכמה חלקים)
+    const sent = [...dirty].map((id) => recs.get(id)).filter(Boolean).slice(0, 1000);
     emit({ status: 'syncing' });
     try {
       const res = await api('/sync', { since: rev, changes: sent });
@@ -88,6 +89,7 @@ export function sync() {
         // אם נערך שוב בזמן הסנכרון – נשאר לשליחה
         if (recs.get(s.id)?.updatedAt === s.updatedAt) dirty.delete(s.id);
       }
+      if (dirty.size) soon(300);
       for (const r of res.changes) {
         const mine = recs.get(r.id);
         if (mine && dirty.has(r.id) && mine.updatedAt > r.updatedAt) continue;

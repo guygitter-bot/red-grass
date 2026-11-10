@@ -9,7 +9,7 @@ const SESSION_MS = 365 * 24 * 60 * 60 * 1000;
 const MAX_SESSIONS = 20;
 const MAX_FAILS = 10;
 const LOCK_MS = 15 * 60 * 1000;
-const MAX_RECORDS = 8000;
+const MAX_RECORDS = 40000;
 const MAX_RECORD_CHARS = 12000;
 // שאלות ל-AI ביום (הגנה מעלויות)
 const AI_PER_DAY = 40;
@@ -229,7 +229,7 @@ export class Budget {
   async sync({ since, changes }) {
     const d = this.d;
     const writes = {};
-    for (const raw of Array.isArray(changes) ? changes.slice(0, 2000) : []) {
+    for (const raw of Array.isArray(changes) ? changes.slice(0, 1000) : []) {
       const rec = cleanRecord(raw);
       if (!rec) continue;
       const old = d.recs.get(rec.id);
