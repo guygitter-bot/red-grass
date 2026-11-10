@@ -3,7 +3,7 @@ import { bytes, count } from '../lib/format.js';
 // פס תחתון קבוע: כמה תמונות מסומנות ומה יתפנה
 export default function TrashBar({ n, size, busy, onTrash }) {
   return (
-    <div className="fixed bottom-0 inset-x-0 z-40 bg-card border-t border-line p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+    <div className="fixed bottom-0 inset-x-0 z-40 bg-card border-t border-line p-3 pb-[calc(0.75rem+var(--safe-bottom))]">
       <div className="max-w-5xl mx-auto flex items-center gap-3">
         <div className="flex-1 text-sm">
           {n ? (

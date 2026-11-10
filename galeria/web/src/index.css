@@ -36,6 +36,12 @@
   --color-bad-soft: #3a1915;
 }
 
+:root {
+  /* מרווח לשורת המצב של הטלפון (שעה, סוללה). Capacitor 8 מעביר אותו כמשתנה; בדפדפן – env() */
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
+}
+
 html,
 body {
   margin: 0;
