@@ -1,0 +1,15 @@
+{
+  "name": "חנוכה לילדים",
+  "short_name": "חנוכה",
+  "description": "חנוכה לילדים – סיפור, מנהגים, חידון, משחקים ועוד",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#14224d",
+  "theme_color": "#14224d",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

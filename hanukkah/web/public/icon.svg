@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#14224d"/>
+  <g fill="#ffc23e">
+    <rect x="236" y="330" width="40" height="70" rx="6"/>
+    <rect x="96" y="380" width="320" height="22" rx="11"/>
+    <rect x="200" y="402" width="112" height="30" rx="8"/>
+    <path d="M96 402 V320 Q96 300 116 300 H128 V402 Z"/>
+    <path d="M416 402 V320 Q416 300 396 300 H384 V402 Z"/>
+  </g>
+  <g fill="#fff3d6">
+    <rect x="108" y="250" width="16" height="60" rx="4"/>
+    <rect x="148" y="250" width="16" height="60" rx="4"/>
+    <rect x="188" y="250" width="16" height="60" rx="4"/>
+    <rect x="228" y="250" width="16" height="60" rx="4"/>
+    <rect x="268" y="250" width="16" height="60" rx="4"/>
+    <rect x="308" y="250" width="16" height="60" rx="4"/>
+    <rect x="348" y="250" width="16" height="60" rx="4"/>
+    <rect x="388" y="250" width="16" height="60" rx="4"/>
+    <rect x="248" y="200" width="16" height="130" rx="4"/>
+  </g>
+  <g fill="#ff9a2e">
+    <path d="M116 200 q14 22 0 42 q-14 -20 0 -42z"/>
+    <path d="M156 200 q14 22 0 42 q-14 -20 0 -42z"/>
+    <path d="M196 200 q14 22 0 42 q-14 -20 0 -42z"/>
+    <path d="M236 200 q14 22 0 42 q-14 -20 0 -42z"/>
+    <path d="M276 200 q14 22 0 42 q-14 -20 0 -42z"/>
+    <path d="M316 200 q14 22 0 42 q-14 -20 0 -42z"/>
+    <path d="M356 200 q14 22 0 42 q-14 -20 0 -42z"/>
+    <path d="M396 200 q14 22 0 42 q-14 -20 0 -42z"/>
+    <path d="M256 150 q14 22 0 42 q-14 -20 0 -42z"/>
+  </g>
+</svg>
