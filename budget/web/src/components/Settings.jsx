@@ -113,6 +113,9 @@ export default function Settings({ data, records }) {
       <Card title="אקסל וגיבוי">
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => xlRef.current?.click()}>ייבוא מקובץ אקסל</Button>
+          <Button kind="ghost" onClick={() => (window.location.hash = '#/transactions')}>
+            ייבוא תנועות מהבנק / מהאשראי
+          </Button>
           <input
             ref={xlRef}
             type="file"

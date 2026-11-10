@@ -1,8 +1,8 @@
 // תקציב הבית: מסך חודש, דוח חודשי (כמו האקסל), שנה קדימה, גרפים, תובנות AI, כרטיסי אשראי, כל הרשומות והגדרות.
-// ניווט לפי כתובת (#/month/2027-03, #/report/2027-03, #/year, #/charts, #/ai, #/cards, #/items, #/settings, #/fixes, #/more)
+// ניווט לפי כתובת (#/month/2027-03, #/report/2027-03, #/year, #/charts, #/ai, #/cards, #/items, #/settings, #/fixes, #/transactions, #/more)
 // כדי שכפתור "חזרה" יעבוד.
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, CalendarDays, ChevronLeft, Cloud, CloudOff, CreditCard, FileText, ListChecks, Menu, Moon, RefreshCw, Settings as Gear, Sparkles, Sun, TrendingUp, Wallet, Wrench } from 'lucide-react';
+import { BarChart3, CalendarDays, ChevronLeft, Cloud, CloudOff, CreditCard, FileSpreadsheet, FileText, ListChecks, Menu, Moon, RefreshCw, Settings as Gear, Sparkles, Sun, TrendingUp, Wallet, Wrench } from 'lucide-react';
 import { prepare, thisMonth } from './lib/budget';
 import { sync, useStore } from './lib/store';
 import { isDark, setTheme } from './lib/theme';
@@ -16,6 +16,7 @@ import ChartsView from './components/ChartsView';
 import InsightsView from './components/InsightsView';
 import CardsView from './components/CardsView';
 import FixesView from './components/FixesView';
+import TransactionsView from './components/TransactionsView';
 
 function parseHash() {
   const [, page = 'month', arg] = window.location.hash.replace(/^#/, '').split('/');
@@ -23,7 +24,7 @@ function parseHash() {
   return { page: PAGES.includes(page) ? page : 'month', month };
 }
 
-const PAGES = ['month', 'report', 'year', 'charts', 'ai', 'cards', 'items', 'settings', 'fixes', 'more'];
+const PAGES = ['month', 'report', 'year', 'charts', 'ai', 'cards', 'items', 'settings', 'fixes', 'transactions', 'more'];
 
 // תפריט הצד במחשב – הכול
 const NAV = [
@@ -32,6 +33,7 @@ const NAV = [
   ['year', 'שנה קדימה', TrendingUp],
   ['charts', 'גרפים', BarChart3],
   ['ai', 'תובנות AI', Sparkles],
+  ['transactions', 'ייבוא תנועות', FileSpreadsheet],
   ['cards', 'כרטיסי אשראי', CreditCard],
   ['items', 'הכול', ListChecks],
   ['settings', 'הגדרות', Gear],
@@ -45,7 +47,7 @@ const TABS = [
   ['ai', 'תובנות', Sparkles],
   ['more', 'עוד', Menu],
 ];
-const MORE = ['year', 'cards', 'items', 'settings', 'fixes'];
+const MORE = ['transactions', 'year', 'cards', 'items', 'settings', 'fixes'];
 
 function MoreView({ go }) {
   return (
@@ -158,6 +160,7 @@ export default function App() {
           {route.page === 'items' && <ItemsView data={data} />}
           {route.page === 'settings' && <Settings data={data} records={records} />}
           {route.page === 'fixes' && <FixesView />}
+          {route.page === 'transactions' && <TransactionsView data={data} />}
           {route.page === 'more' && <MoreView go={go} />}
         </main>
       </div>
