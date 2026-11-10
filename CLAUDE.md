@@ -197,6 +197,12 @@
 - **תמיד למזג לבד** את ה-PR (אחרי שהבדיקות ירוקות) ולעקוב שהעלייה (`music-teacher.yml` על main) הצליחה – ולדווח עם הקישור.
 - המורה מודול נפרד (`src/three/teacher.js`) כדי שאפשר יהיה להחליף בדמות קנויה. זיהוי צליל בטיונר: `src/lib/pitch.js` (פונקציה טהורה + בדיקות).
 
+### חנוכה לילדים (`hanukkah/`)
+- תיאור: `hanukkah/README.md`. אפליקציה בעברית לילדים בני 9-11: סיפור החג, מנהגים, חידון, 5 משחקים ותוספות. בלי שרת, ההתקדמות ב-localStorage.
+- `hanukkah/web` → https://chanuka-yeladim.pages.dev. עלייה: `hanukkah.yml` אחרי מיזוג ל-main (בודק ובונה גם ב-PR).
+- בדיקה: `cd hanukkah/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה (`bg-card` / `bg-page`), `useEffect` עם סוגריים.
+- התוכן ב-`web/src/data/`; שירים: רק טקסטים מסורתיים או בנחלת הכלל (בלי מילים של שירים מודרניים). תאריכי החג ב-`web/src/lib/dates.js` – להוסיף שנים.
+
 ### מילים באנגלית (`english_words/`)
 - תיאור: `english_words/README.md`. תרגול 35 מילים לילדים: קוראים בקול (מיקרופון) ובוחרים תרגום מ-4; 80% כדי לעבור לשלב משפטים; כל 7 סעיפי המבחן + מבחן לדוגמה (`web/public/exam.js`). סוג תרגול חדש – להוסיף גם ל-`MODES` ב-`api/stats.js` ול-`STAGES` ב-`admin/public/view.js`.
 - `english_words/web/public` (HTML+JS בלי בנייה) → https://milim-beanglit.pages.dev · ניהול להורים `admin/public` → Pages `milim-admin`
