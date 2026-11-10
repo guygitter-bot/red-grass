@@ -1,0 +1,15 @@
+{
+  "name": "video-studio",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "סטודיו – עורך וידאו מקומי בדפדפן, עם API ו-MCP",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@huggingface/transformers": "^3.7.0"
+  }
+}

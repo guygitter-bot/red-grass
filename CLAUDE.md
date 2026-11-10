@@ -245,6 +245,12 @@
 - **למזג לבד** אחרי שהבנייה ב-`galeria.yml` ירוקה, ולבדוק שהעלייה הצליחה. אחרי עלייה – להוריד ולהתקין מחדש את `galeria.apk` מהאתר.
 - כפתור "אחורה" של אנדרואיד: `web/src/lib/back.js` (חלון פתוח נרשם ב-`onBack`). מרווח לשורת המצב: `--safe-top` / `--safe-bottom` ב-`index.css`.
 
+### סטודיו – עריכת וידאו מקומית (`video_studio/`)
+- תיאור: `video_studio/README.md`. עורך וידאו בדפדפן שרץ במחשב של המשתמש (localhost, בלי ענן ובלי עלייה לאוויר): `cd video_studio && npm install && npm start` → http://localhost:4747. דורש ffmpeg.
+- שרת Node בלי בנייה (`server/`), ממשק ב-`web/` (JS רגיל). כל פעולה מוגדרת פעם אחת ב-`server/actions.js` – משם ה-API (`/api/<פעולה>`), ה-MCP (`/mcp`) והממשק.
+- טקסט וכתוביות מצוירים פעמיים – `web/player.js` (תצוגה) ו-`server/ass.js` (ייצוא) – לשנות בשניהם. עברית בייצוא רק דרך ASS/libass, לא `drawtext`.
+- בדיקה: `cd video_studio && npm test`; מסכים – Playwright עם `STUDIO_PROXY=webm`. התמלול (Whisper) מוריד מודל מ-huggingface.co בפעם הראשונה.
+
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).
 
