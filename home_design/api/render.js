@@ -38,6 +38,7 @@ export function pickModel(models) {
 export function imageMessage(status, text) {
   const t = String(text || '').toLowerCase();
   if (status === 400 && /api key|api_key/.test(t)) return 'מפתח Google לא תקין. צריך לעדכן את GEMINI_API_KEY בסודות של GitHub.';
+  if (status === 402 || /credits are depleted|prepay/.test(t)) return 'נגמר הקרדיט בחשבון Google. צריך לטעון קרדיט ב-AI Studio (ai.studio/projects ← Billing) ואז לנסות שוב.';
   if (status === 401 || status === 403) return 'מפתח Google לא תקין או שאין לו הרשאה ליצירת תמונות.';
   if (status === 429 && /billing|free.?tier|quota/.test(t)) return 'יצירת תמונות דורשת חשבון Google עם חיוב פעיל, או שנגמרה המכסה (aistudio.google.com ← Billing).';
   if (status === 429 || status >= 500) return 'יש עומס אצל מחולל התמונות. נסו שוב בעוד דקה.';

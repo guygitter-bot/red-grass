@@ -117,6 +117,7 @@ test('הדמיה: סירוב ושגיאות – הודעה בעברית', async 
   assert.equal(badKey.detail, '400 img-1: API key not valid');
   assert.match(imageMessage(429, 'quota exceeded, check billing'), /חיוב/);
   assert.match(imageMessage(503, ''), /עומס/);
+  assert.match(imageMessage(402, 'Your prepayment credits are depleted'), /קרדיט/);
 });
 
 test('בחירת מודל: תמונות בלבד, עדיף רגיל על lite ועל pro, והחדש קודם', () => {
