@@ -59,7 +59,7 @@ test('הדמיה: שולח ל-Google את התמונה והבקשה ומחזיר
   globalThis.fetch = async (u, init) => { url = u; sent = JSON.parse(init.body); headers = init.headers; return json(googleImage); };
   const r = await worker.fetch(post('/render', { image: IMG, request: 'קיר ירוק זית' }), env);
   assert.equal(r.status, 200);
-  assert.deepEqual(await r.json(), { image: { media_type: 'image/png', data: 'UE5H' } });
+  assert.deepEqual(await r.json(), { image: { media_type: 'image/png', data: 'UE5H' }, model: 'img-1' });
   assert.match(url, /models\/img-1:generateContent$/);
   assert.equal(headers['x-goog-api-key'], 'g');
   assert.deepEqual(sent.contents[0].parts[0], { inlineData: { mimeType: 'image/jpeg', data: 'QUJD' } });
@@ -89,14 +89,32 @@ test('הדמיה: המודל שבהגדרות לא קיים -> מוצא מודל
   assert.match(calls[0], /new-banana-3/);
 });
 
+test('הדמיה: אין מודל ברשימה -> מנסה שמות מוכרים, ובסוף מחזיר מה ש-Google ענה', async () => {
+  const calls = [];
+  globalThis.fetch = async (u) => {
+    calls.push(String(u));
+    if (/\/models\?/.test(u)) return json({ models: [] });
+    return json({ error: { message: 'model is not found for API version v1beta' } }, 404);
+  };
+  const r = await worker.fetch(post('/render', { image: IMG, request: 'טפט' }), env);
+  assert.equal(r.status, 502);
+  assert.equal(calls.filter((c) => /generateContent/.test(c)).length, 3);
+  assert.equal(calls.filter((c) => /\/models\?/.test(c)).length, 1);
+  assert.match((await r.json()).detail, /^404 .*not found/);
+});
+
 test('הדמיה: סירוב ושגיאות – הודעה בעברית', async () => {
   globalThis.fetch = async () => json({ candidates: [{ finishReason: 'IMAGE_SAFETY' }] });
   let r = await worker.fetch(post('/render', { image: IMG, request: 'x' }), env);
   assert.equal(r.status, 502);
-  assert.match((await r.json()).error, /סירב/);
+  const refused = await r.json();
+  assert.match(refused.error, /סירב/);
+  assert.match(refused.detail, /img-1: IMAGE_SAFETY/);
   globalThis.fetch = async () => json({ error: { message: 'API key not valid' } }, 400);
   r = await worker.fetch(post('/render', { image: IMG, request: 'x' }), env);
-  assert.match((await r.json()).error, /מפתח Google/);
+  const badKey = await r.json();
+  assert.match(badKey.error, /מפתח Google/);
+  assert.equal(badKey.detail, '400 img-1: API key not valid');
   assert.match(imageMessage(429, 'quota exceeded, check billing'), /חיוב/);
   assert.match(imageMessage(503, ''), /עומס/);
 });

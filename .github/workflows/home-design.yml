@@ -36,6 +36,23 @@ jobs:
           npm test
           npm run build
 
+  # בדיקה אמיתית מול Google: אילו מודלי תמונות קיימים + הדמיה אחת קטנה (עולה כמה אגורות).
+  # רצה רק ב-PR ובהפעלה ידנית, לא בכל עלייה.
+  probe:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Real render against Google
+        working-directory: home_design/api
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          IMAGE_MODEL="$(sed -n 's/^IMAGE_MODEL = "\(.*\)"/\1/p' wrangler.toml)" node probe.mjs
+
   api:
     needs: test
     if: github.event_name != 'pull_request'
