@@ -1,0 +1,15 @@
+{
+  "name": "מעצב הבית",
+  "short_name": "מעצב הבית",
+  "description": "מצלמים קיר או חדר ורואים איך הוא ייראה אחרי השינוי",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f1ea",
+  "theme_color": "#2f4a3c",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

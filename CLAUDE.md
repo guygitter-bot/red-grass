@@ -246,6 +246,12 @@
 - **למזג לבד** אחרי שהבנייה ב-`galeria.yml` ירוקה, ולבדוק שהעלייה הצליחה. אחרי עלייה – להוריד ולהתקין מחדש את `galeria.apk` מהאתר.
 - כפתור "אחורה" של אנדרואיד: `web/src/lib/back.js` (חלון פתוח נרשם ב-`onBack`). מרווח לשורת המצב: `--safe-top` / `--safe-bottom` ב-`index.css`.
 
+### מעצב הבית – הדמיית קיר / חדר אחרי שינוי (`home_design/`)
+- תיאור: `home_design/README.md`. מצלמים קיר, כותבים שינוי או מבקשים רעיונות מהמעצב (Claude), ומחולל התמונות של Google מחזיר את אותו חדר אחרי השינוי; השוואת לפני / אחרי.
+- `home_design/web` → https://meatzev-habayit.pages.dev · `home_design/api` → Worker `meatzev-habayit-api` (בלי שמירה; התמונות רק במכשיר, IndexedDB). עלייה: `home-design.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd home_design/api && npm test` · `cd home_design/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- **בלי סיסמה ובלי תקרת הוצאה** (המשתמש ביקש, אפליקציה אישית). סודות: `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`. שם מודל התמונות: `IMAGE_MODEL` ב-`api/wrangler.toml`.
+
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).
 
