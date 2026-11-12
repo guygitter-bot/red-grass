@@ -1,0 +1,14 @@
+name = "meatzev-habayit-api"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[vars]
+# האתרים שמותר להם לפנות לשרת: האפליקציה ב-Cloudflare Pages (כולל כתובות תצוגה מקדימה) ופיתוח מקומי
+ALLOWED_ORIGIN_RE = "^https://([a-z0-9-]+\\.)?meatzev-habayit(-[a-z0-9]+)?\\.pages\\.dev$|^http://localhost:[0-9]+$"
+# מחולל התמונות של Google (Gemini API). אם השם כבר לא קיים – השרת מוצא לבד מודל תמונות אחר ברשימת המודלים
+IMAGE_MODEL = "gemini-nano-banana-2.1"
+
+# סודות, לא כאן (נקבעים אוטומטית מ-GitHub, ראו .github/workflows/home-design.yml):
+#   ANTHROPIC_API_KEY – המפתח של Claude (המעצב: מסתכל על החדר ומציע רעיונות)
+#   GEMINI_API_KEY    – המפתח של Google AI Studio (מחולל התמונות: מצייר את ההדמיה)
