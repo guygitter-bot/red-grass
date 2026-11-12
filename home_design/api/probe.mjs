@@ -64,7 +64,7 @@ if (process.env.ANTHROPIC_API_KEY) {
     }
     console.log(`products with a verified link: ${shop.items.filter((i) => i.product).length}`);
   } catch (e) {
-    console.log('SHOP FAILED:', e.message);
+    console.log('SHOP FAILED:', e.detail || e.message);
     process.exit(1);
   }
 }

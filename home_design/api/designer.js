@@ -91,7 +91,14 @@ async function ask(env, body) {
     throw new Error('אין חיבור למעצב כרגע. נסו שוב.');
   }
   const raw = await res.text();
-  if (!res.ok) throw new Error(aiMessage(res.status, raw));
+  if (!res.ok) {
+    // detail = ההודעה של Anthropic עצמה, לאבחון
+    const e = new Error(aiMessage(res.status, raw));
+    let msg = '';
+    try { msg = JSON.parse(raw)?.error?.message || ''; } catch { msg = ''; }
+    e.detail = `${res.status} ${MODEL}: ${String(msg || raw).replace(/\s+/g, ' ').slice(0, 300)}`;
+    throw e;
+  }
   let data;
   try { data = JSON.parse(raw); } catch { throw new Error('המעצב לא הצליח לענות. נסו שוב.'); }
   if (data.stop_reason === 'refusal') throw new Error('המעצב לא יכול לעבוד עם התמונה הזאת. נסו תמונה אחרת.');
