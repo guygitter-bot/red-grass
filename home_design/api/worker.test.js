@@ -2,6 +2,7 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import worker, { cleanImage, cleanText } from './worker.js';
 import { readIdeas, IDEAS_TOOL, MODEL } from './designer.js';
+import { readShop, SHOP_TOOL } from './shop.js';
 import { pickModel, readImage, editPrompt, imageMessage, forgetModel } from './render.js';
 
 const ORIGIN = 'https://meatzev-habayit.pages.dev';
@@ -160,8 +161,43 @@ test('רעיונות: סירוב / בלי הצעות – 502 עם הודעה', a
   globalThis.fetch = async () => json({ stop_reason: 'refusal', content: [] });
   let r = await worker.fetch(post('/ideas', { image: IMG }), env);
   assert.equal(r.status, 502);
-  assert.equal(readIdeas({ content: [{ type: 'text', text: 'hi' }] }), null);
+  assert.equal(readIdeas(null), null);
+  assert.equal(readIdeas({ ideas: [] }), null);
   globalThis.fetch = async () => json({ error: { message: 'Your credit balance is too low' } }, 400);
   r = await worker.fetch(post('/ideas', { image: IMG }), env);
   assert.match((await r.json()).error, /קרדיט/);
+});
+
+test('קניות: שולח לפני + אחרי ל-Claude ומחזיר רשימה נקייה', async () => {
+  let sent;
+  globalThis.fetch = async (u, init) => {
+    sent = JSON.parse(init.body);
+    return json({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: SHOP_TOOL.name, input: {
+      summary: 'חיפוי עץ וספה', tips: 'למדוד לפני',
+      items: [
+        { name: 'פסי עץ אלון', details: 'אנכיים', quantity: 'כ-8 מ״ר', price_min: 2400, price_max: 1600, stores: ['הום סנטר', '', 'נגר', 'a', 'b'], search: '' },
+        { name: '', details: '', quantity: '', price_min: 1, price_max: 2, stores: [], search: '' },
+      ],
+      labor: { needed: true, description: 'נגר להתקנה', price_min: 800, price_max: 1500 },
+    } }] });
+  };
+  const AFTER = { media_type: 'image/png', data: 'UE5H' };
+  const r = await worker.fetch(post('/shop', { before: IMG, after: AFTER, request: 'חיפוי עץ' }), env);
+  assert.equal(r.status, 200);
+  assert.deepEqual(await r.json(), {
+    summary: 'חיפוי עץ וספה', tips: 'למדוד לפני',
+    items: [{ name: 'פסי עץ אלון', details: 'אנכיים', quantity: 'כ-8 מ״ר', min: 1600, max: 2400, stores: ['הום סנטר', 'נגר', 'a'], search: 'פסי עץ אלון' }],
+    labor: { description: 'נגר להתקנה', min: 800, max: 1500 },
+  });
+  const images = sent.messages[0].content.filter((b) => b.type === 'image').map((b) => b.source.data);
+  assert.deepEqual(images, ['QUJD', 'UE5H']);
+  assert.match(sent.messages[0].content.at(-1).text, /חיפוי עץ/);
+});
+
+test('קניות: חסרה תמונה – 400; בלי עבודה מקצועית – labor ריק', async () => {
+  assert.equal((await worker.fetch(post('/shop', { before: IMG }), env)).status, 400);
+  const out = readShop({ items: [{ name: 'צבע', price_min: 0, price_max: 300 }], labor: { needed: false, description: '', price_min: 0, price_max: 0 } });
+  assert.equal(out.labor, null);
+  assert.deepEqual([out.items[0].min, out.items[0].max, out.items[0].stores], [0, 300, []]);
+  assert.equal(readShop({ items: [] }), null);
 });

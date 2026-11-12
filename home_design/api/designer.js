@@ -61,10 +61,8 @@ export function aiMessage(status, text) {
   return 'המעצב לא הצליח לענות. נסו שוב.';
 }
 
-// התשובה של Claude -> { room, ideas } נקי, או null אם אין בה הצעות
-export function readIdeas(data) {
-  const block = (data?.content || []).find((b) => b.type === 'tool_use' && b.name === IDEAS_TOOL.name);
-  const input = block?.input;
+// הקלט של הכלי -> { room, ideas } נקי, או null אם אין בו הצעות
+export function readIdeas(input) {
   if (!input || !Array.isArray(input.ideas)) return null;
   const ideas = input.ideas
     .map((i) => ({ title: clean(i?.title), why: clean(i?.why), prompt: clean(i?.prompt) }))
@@ -73,12 +71,11 @@ export function readIdeas(data) {
   return ideas.length ? { room: clean(input.room), ideas } : null;
 }
 
-// image: { media_type, data } (base64). note: מה חשוב למשתמש (לא חובה)
-// מחזיר { room, ideas } או זורק Error עם הודעה בעברית
-export async function suggestIdeas(env, image, note) {
-  const text = note
-    ? `Here is the photo. The owner's note: ${note}`
-    : 'Here is the photo. The owner left no note - propose what you think would improve this room most.';
+export const imageBlock = (image) => ({ type: 'image', source: { type: 'base64', media_type: image.media_type, data: image.data } });
+
+// קריאה אחת ל-Claude שמסתיימת בכלי אחד (strict). מחזיר את הקלט של הכלי, או null אם Claude לא קרא לו.
+// זורק Error עם הודעה בעברית כשהקריאה עצמה נכשלה.
+export async function callTool(env, { system, tool, content }) {
   let res;
   try {
     res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -94,15 +91,9 @@ export async function suggestIdeas(env, image, note) {
         model: MODEL,
         max_tokens: 8000,
         fallbacks: 'default',
-        system: SYSTEM,
-        tools: [IDEAS_TOOL],
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: image.media_type, data: image.data } },
-            { type: 'text', text },
-          ],
-        }],
+        system,
+        tools: [tool],
+        messages: [{ role: 'user', content }],
       }),
     });
   } catch {
@@ -113,7 +104,17 @@ export async function suggestIdeas(env, image, note) {
   let data;
   try { data = JSON.parse(raw); } catch { throw new Error('המעצב לא הצליח לענות. נסו שוב.'); }
   if (data.stop_reason === 'refusal') throw new Error('המעצב לא יכול לעבוד עם התמונה הזאת. נסו תמונה אחרת.');
-  const out = readIdeas(data);
+  return (data.content || []).find((b) => b.type === 'tool_use' && b.name === tool.name)?.input || null;
+}
+
+// image: { media_type, data } (base64). note: מה חשוב למשתמש (לא חובה)
+// מחזיר { room, ideas } או זורק Error עם הודעה בעברית
+export async function suggestIdeas(env, image, note) {
+  const text = note
+    ? `Here is the photo. The owner's note: ${note}`
+    : 'Here is the photo. The owner left no note - propose what you think would improve this room most.';
+  const input = await callTool(env, { system: SYSTEM, tool: IDEAS_TOOL, content: [imageBlock(image), { type: 'text', text }] });
+  const out = readIdeas(input);
   if (!out) throw new Error('המעצב לא החזיר הצעות. נסו שוב.');
   return out;
 }

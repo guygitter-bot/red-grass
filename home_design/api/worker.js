@@ -1,13 +1,15 @@
 // השרת של "מעצב הבית" (Cloudflare Worker, בלי שמירת נתונים – התמונות נשמרות רק במכשיר):
 //   GET  /health -> { ok, designer, images } (אילו מפתחות מוגדרים)
 //   POST /ideas  { image: {media_type, data}, note? }     -> { room, ideas: [{title, why, prompt}] }   (Claude)
+//   POST /shop   { before, after: {media_type, data}, request? } -> { summary, items, labor, tips }       (Claude)
 //   POST /render { image: {media_type, data}, request }   -> { image: {media_type, data}, model }      (Google)
 // בשגיאה: { error (עברית), detail? (מה ש-Google ענה, לאבחון) }
 // בלי סיסמה (אפליקציה אישית, לבקשת המשתמש). הדפדפן מורשה רק מכתובת האפליקציה (ALLOWED_ORIGIN_RE).
 import { suggestIdeas } from './designer.js';
 import { renderImage } from './render.js';
+import { shoppingList } from './shop.js';
 
-const MAX_BODY = 9 * 1024 * 1024;
+const MAX_BODY = 15 * 1024 * 1024; // עד שתי תמונות (לפני + אחרי)
 const MAX_IMAGE_B64 = 7 * 1024 * 1024;
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const MAX_TEXT = 2000;
@@ -42,18 +44,26 @@ export default {
     if (pathname === '/' || pathname === '/health') {
       return reply(200, { ok: true, designer: Boolean(env.ANTHROPIC_API_KEY), images: Boolean(env.GEMINI_API_KEY) });
     }
-    if (request.method !== 'POST' || (pathname !== '/ideas' && pathname !== '/render')) return reply(404, { error: 'לא נמצא' });
+    if (request.method !== 'POST' || !['/ideas', '/render', '/shop'].includes(pathname)) return reply(404, { error: 'לא נמצא' });
 
     const raw = await request.text();
     if (raw.length > MAX_BODY) return reply(413, { error: 'התמונה גדולה מדי' });
     let body;
     try { body = JSON.parse(raw); } catch { return reply(400, { error: 'בקשה לא תקינה' }); }
-    const image = cleanImage(body?.image);
-    if (!image) return reply(400, { error: 'חסרה תמונה תקינה' });
+    const noKey = () => reply(503, { error: 'המעצב עוד לא מחובר (חסר מפתח Claude בשרת).', code: 'no_key' });
 
     try {
+      if (pathname === '/shop') {
+        const before = cleanImage(body?.before);
+        const after = cleanImage(body?.after);
+        if (!before || !after) return reply(400, { error: 'חסרה תמונה תקינה' });
+        if (!env.ANTHROPIC_API_KEY) return noKey();
+        return reply(200, await shoppingList(env, before, after, cleanText(body.request)));
+      }
+      const image = cleanImage(body?.image);
+      if (!image) return reply(400, { error: 'חסרה תמונה תקינה' });
       if (pathname === '/ideas') {
-        if (!env.ANTHROPIC_API_KEY) return reply(503, { error: 'המעצב עוד לא מחובר (חסר מפתח Claude בשרת).', code: 'no_key' });
+        if (!env.ANTHROPIC_API_KEY) return noKey();
         return reply(200, await suggestIdeas(env, image, cleanText(body.note)));
       }
       const req = cleanText(body.request);

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import Compare from './Compare';
-import { getIdeas, render } from '../lib/api';
+import Shopping from './Shopping';
+import { getIdeas, getShop, render } from '../lib/api';
+import { safeShop, shopText } from '../lib/shop';
 import { dataUrl, download, makeThumb, share } from '../lib/image';
 import { addVersion, getImage, newId, removeProject, removeVersion, saveProject } from '../lib/store';
 import { COLORS, QUICK, STYLES, addToRequest, colorText, shortTitle, styleText } from '../lib/design';
@@ -11,7 +13,7 @@ export default function Project({ project, onChange, onBack }) {
   const [sel, setSel] = useState(project.versions[project.versions.length - 1]?.id || project.id);
   const [request, setRequest] = useState('');
   const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(''); // 'render' | 'ideas' | ''
+  const [busy, setBusy] = useState(''); // 'render' | 'ideas' | 'shop' | ''
   const [error, setError] = useState('');
   const [detail, setDetail] = useState(''); // הפרטים הטכניים של השגיאה האחרונה
   const [name, setName] = useState(project.name);
@@ -71,6 +73,34 @@ export default function Project({ project, onChange, onBack }) {
       setDetail(e?.detail || '');
     } finally {
       setBusy('');
+    }
+  }
+
+  // רשימת קניות להדמיה שמוצגת: נשמרת עם ההדמיה, כדי שלא יהיה צריך לבקש שוב
+  async function askShop() {
+    if (!version || !original || !shown || busy) return;
+    setBusy('shop');
+    setError('');
+    setDetail('');
+    try {
+      const shop = await getShop(original, shown, version.request);
+      await saveProject({ ...project, versions: project.versions.map((v) => (v.id === version.id ? { ...v, shop } : v)) });
+      await onChange();
+    } catch (e) {
+      setError(e?.message || 'משהו השתבש. נסו שוב.');
+      setDetail(e?.detail || '');
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function shareShop() {
+    const text = shopText(safeShop(version.shop), fileName);
+    try {
+      if (navigator.share) await navigator.share({ text });
+      else await navigator.clipboard.writeText(text);
+    } catch {
+      // המשתמש סגר את חלון השיתוף
     }
   }
 
@@ -147,6 +177,10 @@ export default function Project({ project, onChange, onBack }) {
               <p className="m-0">{error}</p>
               {detail && <p className="m-0 mt-1 break-words text-xs opacity-80" dir="ltr">{detail}</p>}
             </div>
+          )}
+
+          {version && (
+            <Shopping shop={safeShop(version.shop)} busy={busy === 'shop'} disabled={!original || !shown || Boolean(busy)} onAsk={askShop} onShare={shareShop} />
           )}
 
           <div className="rounded-2xl border border-line bg-card p-4">
