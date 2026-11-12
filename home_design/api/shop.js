@@ -54,7 +54,8 @@ export const SHOP_TOOL = {
 
 export const SEARCHES = 5;
 // החיפוש ברשת של Anthropic. הגרסה הפשוטה: תוצאות החיפוש חוזרות כבלוקים, וכך אפשר לוודא שכל קישור באמת הופיע בהן
-export const SEARCH_TOOL = { type: 'web_search_20250305', name: 'web_search', max_uses: SEARCHES + 2, user_location: { type: 'approximate', country: 'IL', timezone: 'Asia/Jerusalem' } };
+// בלי user_location: Anthropic לא תומך בקוד המדינה IL (400). ההנחיות מבקשות חיפוש בעברית ובחנויות בישראל
+export const SEARCH_TOOL = { type: 'web_search_20250305', name: 'web_search', max_uses: SEARCHES + 2 };
 
 export const SYSTEM = `You are an experienced interior designer in Israel helping a home owner carry out a design. You get \
 two images: the first is the real photo of their room today, the second is a simulation of the same room after the \
