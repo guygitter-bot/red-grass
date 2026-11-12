@@ -52,13 +52,17 @@ try {
   process.exit(1);
 }
 
-// רשימת קניות אמיתית מול Claude (בודק גם שהסכמה של הכלי מתקבלת)
+// רשימת קניות אמיתית מול Claude, כולל חיפוש ברשת (בודק גם שהסכמה של הכלי מתקבלת)
 if (process.env.ANTHROPIC_API_KEY) {
   try {
     const shop = await shoppingList({ ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY }, before, { media_type: after.media_type, data: after.data }, change);
     const sum = shop.items.reduce((t, i) => [t[0] + i.min, t[1] + i.max], [0, 0]);
     console.log(`SHOP OK: ${shop.items.length} items, ${sum[0]}-${sum[1]} ILS, labor: ${shop.labor ? 'yes' : 'no'}`);
-    for (const i of shop.items) console.log(`   ${i.name} | ${i.quantity} | ${i.min}-${i.max} | ${i.stores.join(', ')} | ${i.search}`);
+    for (const i of shop.items) {
+      console.log(`   ${i.name} | ${i.quantity} | ${i.min}-${i.max} | ${i.stores.join(', ')} | ${i.search}`);
+      if (i.product) console.log(`      FOUND: ${i.product.title} | ${i.product.store} | ${i.product.price} ILS | ${i.product.url}`);
+    }
+    console.log(`products with a verified link: ${shop.items.filter((i) => i.product).length}`);
   } catch (e) {
     console.log('SHOP FAILED:', e.message);
     process.exit(1);

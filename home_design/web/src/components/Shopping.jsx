@@ -1,4 +1,4 @@
-import { priceText, searchLinks, totals } from '../lib/shop';
+import { priceText, productText, safeUrl, searchLinks, totals } from '../lib/shop';
 
 // רשימת הקניות של ההדמיה שמוצגת: מה לקנות, איפה, וכמה זה עולה בערך
 export default function Shopping({ shop, busy, disabled, onAsk, onShare }) {
@@ -6,9 +6,9 @@ export default function Shopping({ shop, busy, disabled, onAsk, onShare }) {
     return (
       <div className="rounded-2xl border border-line bg-card p-4">
         <h2 className="m-0 text-lg font-bold">מה לקנות וכמה זה עולה</h2>
-        <p className="m-0 mb-3 text-sm text-muted">המעצב משווה את ההדמיה לצילום ומכין רשימת קניות עם הערכת מחיר ואיפה קונים.</p>
+        <p className="m-0 mb-3 text-sm text-muted">המעצב משווה את ההדמיה לצילום, מחפש ברשת מוצרים אמיתיים שמתאימים, ומכין רשימה עם מחירים וקישורים.</p>
         <button className="btn btn-main w-full" disabled={disabled} onClick={onAsk}>
-          {busy ? 'המעצב מכין רשימה… כחצי דקה' : '🛒 להכין רשימת קניות'}
+          {busy ? 'המעצב מחפש מוצרים ברשת… עד שתי דקות' : '🛒 להכין רשימת קניות'}
         </button>
       </div>
     );
@@ -40,6 +40,16 @@ export default function Shopping({ shop, busy, disabled, onAsk, onShare }) {
               <p className="m-0 text-sm text-muted">{[item.quantity, item.details].filter(Boolean).join(' · ')}</p>
             )}
             {item.stores?.length > 0 && <p className="m-0 mt-1 text-sm">איפה קונים: {item.stores.join(', ')}</p>}
+            {item.product && safeUrl(item.product.url) && (
+              <a
+                href={safeUrl(item.product.url)} target="_blank" rel="noopener noreferrer"
+                className="mt-2 block rounded-xl bg-soft p-3 text-ink no-underline"
+              >
+                <span className="block text-xs text-muted">מוצר שנמצא ברשת</span>
+                <span className="block font-semibold">{productText(item.product)}</span>
+                <span className="block text-sm underline">לדף המוצר ↗</span>
+              </a>
+            )}
             <div className="mt-2 flex flex-wrap gap-2">
               {searchLinks(item.search).map((l) => (
                 <a key={l.label} href={l.url} target="_blank" rel="noopener noreferrer" className="chip inline-flex items-center no-underline">
@@ -62,11 +72,12 @@ export default function Shopping({ shop, busy, disabled, onAsk, onShare }) {
 
       {shop.tips && <p className="m-0 mt-3 text-sm">💡 {shop.tips}</p>}
       <p className="m-0 mt-3 text-xs text-muted">
-        המחירים הם הערכה של המעצב לפי התמונה, לא הצעת מחיר. המחיר האמיתי תלוי במידות המדויקות ובחנות – כדאי לבדוק בקישורים.
+        טווחי המחיר והכמויות הם הערכה של המעצב לפי התמונה, לא הצעת מחיר. מוצר שנמצא ברשת מוצג עם המחיר שהופיע בחיפוש –
+        מחיר ומלאי יכולים להשתנות, אז כדאי לבדוק בדף המוצר.
       </p>
       <div className="mt-3 flex gap-2">
         <button className="btn flex-1" onClick={onShare}>שיתוף הרשימה</button>
-        <button className="btn flex-1" disabled={disabled} onClick={onAsk}>{busy ? 'מכין…' : 'להכין מחדש'}</button>
+        <button className="btn flex-1" disabled={disabled} onClick={onAsk}>{busy ? 'מחפש…' : 'להכין מחדש'}</button>
       </div>
     </div>
   );

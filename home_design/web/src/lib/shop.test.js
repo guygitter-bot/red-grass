@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { priceText, safeShop, searchLinks, shopText, totals } from './shop';
+import { priceText, productText, safeShop, safeUrl, searchLinks, shopText, totals } from './shop';
 
 const shop = {
   summary: 'חיפוי וספה', tips: '',
@@ -33,5 +33,14 @@ describe('רשימת קניות', () => {
     expect(text).toContain('סך הכול בערך: 5,400 עד 6,900 ₪');
     expect(safeShop(undefined)).toBe(null);
     expect(safeShop({ items: [] }).labor).toBe(null);
+  });
+  it('מוצר שנמצא ברשת', () => {
+    const product = { title: 'פאנל אלון 240', store: 'חנות', price: 289, url: 'https://a.co.il/p' };
+    expect(productText(product)).toBe('פאנל אלון 240 – 289 ₪ (חנות)');
+    expect(productText({ title: 'ספה', store: '', price: 0 })).toBe('ספה');
+    expect(safeUrl('https://a.co.il/p')).toBe('https://a.co.il/p');
+    expect(safeUrl('javascript:alert(1)')).toBe('');
+    const text = shopText({ ...shop, items: [{ ...shop.items[0], product }] }, 'סלון');
+    expect(text).toContain('פאנל אלון 240 – 289 ₪ (חנות): https://a.co.il/p');
   });
 });

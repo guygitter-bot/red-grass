@@ -1,7 +1,8 @@
 // השרת של "מעצב הבית" (Cloudflare Worker, בלי שמירת נתונים – התמונות נשמרות רק במכשיר):
 //   GET  /health -> { ok, designer, images } (אילו מפתחות מוגדרים)
 //   POST /ideas  { image: {media_type, data}, note? }     -> { room, ideas: [{title, why, prompt}] }   (Claude)
-//   POST /shop   { before, after: {media_type, data}, request? } -> { summary, items, labor, tips }       (Claude)
+//   POST /shop   { before, after: {media_type, data}, request? } -> { summary, items, labor, tips }       (Claude + חיפוש ברשת;
+//                 לוקח עד כמה דקות, ולכן התשובה תמיד 200 ושגיאה חוזרת כ-{ error })
 //   POST /render { image: {media_type, data}, request }   -> { image: {media_type, data}, model }      (Google)
 // בשגיאה: { error (עברית), detail? (מה ש-Google ענה, לאבחון) }
 // בלי סיסמה (אפליקציה אישית, לבקשת המשתמש). הדפדפן מורשה רק מכתובת האפליקציה (ALLOWED_ORIGIN_RE).
@@ -33,6 +34,21 @@ export function cleanImage(im) {
   return { media_type: im.media_type, data: im.data };
 }
 
+// תשובה לפעולה ארוכה (חיפוש ברשת יכול לקחת כמה דקות): שולחים רווח כל כמה שניות כדי שהחיבור לא ייסגר,
+// ובסוף את ה-JSON (רווחים לפני JSON תקינים). הסטטוס כבר נשלח, ולכן שגיאה חוזרת כ-{ error } עם 200.
+export function slowReply(cors, work, everyMs = 8000) {
+  const enc = new TextEncoder();
+  const { readable, writable } = new TransformStream();
+  const writer = writable.getWriter();
+  const beat = setInterval(() => { writer.write(enc.encode(' ')).catch(() => {}); }, everyMs);
+  work
+    .then((data) => data, (e) => ({ error: e?.message || 'משהו השתבש. נסו שוב.', detail: e?.detail || '' }))
+    .then((data) => { clearInterval(beat); return writer.write(enc.encode(JSON.stringify(data))); })
+    .then(() => writer.close())
+    .catch(() => { clearInterval(beat); });
+  return new Response(readable, { status: 200, headers: { ...cors, 'content-type': 'application/json' } });
+}
+
 export const cleanText = (s) => (typeof s === 'string' ? s.trim().slice(0, MAX_TEXT) : '');
 
 export default {
@@ -58,7 +74,7 @@ export default {
         const after = cleanImage(body?.after);
         if (!before || !after) return reply(400, { error: 'חסרה תמונה תקינה' });
         if (!env.ANTHROPIC_API_KEY) return noKey();
-        return reply(200, await shoppingList(env, before, after, cleanText(body.request)));
+        return slowReply(cors, shoppingList(env, before, after, cleanText(body.request)));
       }
       const image = cleanImage(body?.image);
       if (!image) return reply(400, { error: 'חסרה תמונה תקינה' });

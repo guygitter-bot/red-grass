@@ -1,5 +1,6 @@
 // רשימת הקניות של הדמיה: סכומים, תצוגת מחיר וקישורי חיפוש למחירים אמיתיים.
-//   shop = { summary, items: [{ name, details, quantity, min, max, stores, search }], labor: { description, min, max } | null, tips }
+//   shop = { summary, items: [{ name, details, quantity, min, max, stores, search, product? }], labor: { description, min, max } | null, tips }
+//   product = מוצר אמיתי שנמצא בחיפוש ברשת: { title, store, price, url } (אין בכל פריט, ואין ברשימות ישנות)
 
 // רשימה ישנה או חלקית ממשיכה לעבוד
 export function safeShop(shop) {
@@ -24,6 +25,16 @@ export function priceText(min, max) {
   return `${Math.round(min).toLocaleString('he-IL')} עד ${nis(max)}`;
 }
 
+// "שם המוצר – 289 ₪ ב-חנות" למוצר שנמצא ברשת
+export function productText(product) {
+  const price = product.price ? ` – ${nis(product.price)}` : '';
+  const store = product.store ? ` (${product.store})` : '';
+  return `${product.title}${price}${store}`;
+}
+
+// רק קישור רגיל לאתר (לא javascript: וכדומה)
+export const safeUrl = (url) => (/^https?:\/\//i.test(String(url || '')) ? url : '');
+
 // קישורים לחיפוש המוצר באתרים עם מחירים אמיתיים
 export function searchLinks(search) {
   const q = encodeURIComponent(String(search || '').trim());
@@ -40,6 +51,7 @@ export function shopText(shop, title) {
   for (const i of shop.items) {
     lines.push(`• ${i.name}${i.quantity ? ` (${i.quantity})` : ''} – ${priceText(i.min, i.max)}`);
     if (i.stores?.length) lines.push(`  איפה: ${i.stores.join(', ')}`);
+    if (i.product?.url) lines.push(`  ${productText(i.product)}: ${i.product.url}`);
   }
   if (shop.labor) lines.push(`• עבודה: ${shop.labor.description} – ${priceText(shop.labor.min, shop.labor.max)}`);
   lines.push('', `סך הכול בערך: ${priceText(t.all.min, t.all.max)}`, '(הערכה בלבד)');

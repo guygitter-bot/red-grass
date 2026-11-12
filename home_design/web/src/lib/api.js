@@ -13,7 +13,8 @@ export async function api(path, body = {}) {
     throw new Error('אין חיבור לאינטרנט');
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
+  // פעולה ארוכה (רשימת קניות) מחזירה 200 גם בשגיאה, עם error בגוף
+  if (!res.ok || data.error) {
     // detail = מה שענה השירות החיצוני (באנגלית), מוצג בקטן כדי שאפשר יהיה לאבחן
     const err = new Error(data.error || 'תקלה בשרת');
     err.detail = data.detail || '';
