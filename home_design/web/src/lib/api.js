@@ -13,7 +13,12 @@ export async function api(path, body = {}) {
     throw new Error('אין חיבור לאינטרנט');
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'תקלה בשרת');
+  if (!res.ok) {
+    // detail = מה שענה השירות החיצוני (באנגלית), מוצג בקטן כדי שאפשר יהיה לאבחן
+    const err = new Error(data.error || 'תקלה בשרת');
+    err.detail = data.detail || '';
+    throw err;
+  }
   return data;
 }
 

@@ -1,7 +1,8 @@
 // השרת של "מעצב הבית" (Cloudflare Worker, בלי שמירת נתונים – התמונות נשמרות רק במכשיר):
 //   GET  /health -> { ok, designer, images } (אילו מפתחות מוגדרים)
 //   POST /ideas  { image: {media_type, data}, note? }     -> { room, ideas: [{title, why, prompt}] }   (Claude)
-//   POST /render { image: {media_type, data}, request }   -> { image: {media_type, data} }             (Google)
+//   POST /render { image: {media_type, data}, request }   -> { image: {media_type, data}, model }      (Google)
+// בשגיאה: { error (עברית), detail? (מה ש-Google ענה, לאבחון) }
 // בלי סיסמה (אפליקציה אישית, לבקשת המשתמש). הדפדפן מורשה רק מכתובת האפליקציה (ALLOWED_ORIGIN_RE).
 import { suggestIdeas } from './designer.js';
 import { renderImage } from './render.js';
@@ -58,9 +59,10 @@ export default {
       const req = cleanText(body.request);
       if (!req) return reply(400, { error: 'צריך לכתוב מה לשנות' });
       if (!env.GEMINI_API_KEY) return reply(503, { error: 'מחולל התמונות עוד לא מחובר (חסר מפתח Google בשרת).', code: 'no_key' });
-      return reply(200, { image: await renderImage(env, image, req) });
+      const { model, ...out } = await renderImage(env, image, req);
+      return reply(200, { image: out, model });
     } catch (e) {
-      return reply(502, { error: e?.message || 'משהו השתבש. נסו שוב.' });
+      return reply(502, { error: e?.message || 'משהו השתבש. נסו שוב.', detail: e?.detail || '' });
     }
   },
 };

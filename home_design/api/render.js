@@ -38,6 +38,7 @@ export function pickModel(models) {
 export function imageMessage(status, text) {
   const t = String(text || '').toLowerCase();
   if (status === 400 && /api key|api_key/.test(t)) return 'מפתח Google לא תקין. צריך לעדכן את GEMINI_API_KEY בסודות של GitHub.';
+  if (status === 402 || /credits are depleted|prepay/.test(t)) return 'נגמר הקרדיט בחשבון Google. צריך לטעון קרדיט ב-AI Studio (ai.studio/projects ← Billing) ואז לנסות שוב.';
   if (status === 401 || status === 403) return 'מפתח Google לא תקין או שאין לו הרשאה ליצירת תמונות.';
   if (status === 429 && /billing|free.?tier|quota/.test(t)) return 'יצירת תמונות דורשת חשבון Google עם חיוב פעיל, או שנגמרה המכסה (aistudio.google.com ← Billing).';
   if (status === 429 || status >= 500) return 'יש עומס אצל מחולל התמונות. נסו שוב בעוד דקה.';
@@ -76,32 +77,57 @@ function generate(env, model, image, request) {
   });
 }
 
+// שמות שהיו נכונים בעבר – מנסים אותם אם גם השם שבהגדרות וגם הרשימה של Google לא עזרו
+const KNOWN = ['gemini-2.5-flash-image', 'gemini-3-pro-image-preview'];
+
+// ההודעה של Google עצמה (באנגלית), קצרה – מוצגת למשתמש באותיות קטנות כדי שאפשר יהיה לאבחן תקלה
+function googleDetail(status, model, raw) {
+  let msg = '';
+  try { msg = JSON.parse(raw)?.error?.message || ''; } catch { msg = ''; }
+  return `${status} ${model}: ${String(msg || raw || '').replace(/\s+/g, ' ').slice(0, 300)}`;
+}
+
+function fail(message, detail) {
+  const e = new Error(message);
+  e.detail = detail || '';
+  return e;
+}
+
 // image: { media_type, data } (base64). request: מה לשנות (עברית או אנגלית)
-// מחזיר { media_type, data } או זורק Error עם הודעה בעברית
+// מחזיר { media_type, data, model } או זורק Error עם הודעה בעברית (ו-detail: מה Google ענה)
 export async function renderImage(env, image, request) {
-  let model = found || env.IMAGE_MODEL;
-  let res;
+  const queue = [...new Set([found, env.IMAGE_MODEL, ...KNOWN].filter(Boolean))];
+  const tried = new Set();
+  let listed = false;
+  let res, raw, model;
   try {
-    res = await generate(env, model, image, request);
-    // השם שבהגדרות כבר לא קיים אצל Google -> מחפשים מודל תמונות ברשימה ומנסים שוב
-    if (res.status === 404 || (res.status === 400 && /not found|not supported/i.test(await res.clone().text()))) {
-      const other = await listModels(env);
-      if (other && other !== model) {
-        model = other;
-        res = await generate(env, model, image, request);
-        if (res.ok) found = model;
+    while (queue.length) {
+      model = queue.shift();
+      if (tried.has(model)) continue;
+      tried.add(model);
+      res = await generate(env, model, image, request);
+      raw = await res.text();
+      if (res.ok) break;
+      // רק כשהבעיה היא המודל עצמו (לא קיים / לא מייצר תמונות) ממשיכים למודל הבא
+      if (!(res.status === 404 || (res.status === 400 && /model|not found|not supported|modalit/i.test(raw)))) break;
+      if (!listed) {
+        listed = true;
+        const other = await listModels(env);
+        if (other) queue.unshift(other);
       }
     }
   } catch {
-    throw new Error('אין חיבור למחולל התמונות כרגע. נסו שוב.');
+    throw fail('אין חיבור למחולל התמונות כרגע. נסו שוב.');
   }
-  const raw = await res.text();
-  if (!res.ok) throw new Error(imageMessage(res.status, raw));
+  if (!res.ok) throw fail(imageMessage(res.status, raw), googleDetail(res.status, model, raw));
+  found = model;
   let data;
-  try { data = JSON.parse(raw); } catch { throw new Error('לא הצלחנו ליצור את ההדמיה. נסו שוב.'); }
+  try { data = JSON.parse(raw); } catch { throw fail('לא הצלחנו ליצור את ההדמיה. נסו שוב.', `${model}: bad JSON`); }
   const out = readImage(data);
-  if (out) return out;
+  if (out) return { ...out, model };
   const reason = data?.promptFeedback?.blockReason || data?.candidates?.[0]?.finishReason || '';
-  if (/SAFETY|PROHIBITED|BLOCK/i.test(reason)) throw new Error('מחולל התמונות סירב לתמונה או לבקשה הזאת. נסו לנסח אחרת, או לצלם בלי אנשים.');
-  throw new Error('מחולל התמונות לא החזיר תמונה. נסו שוב, או נסחו את הבקשה אחרת.');
+  const said = (data?.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join(' ').replace(/\s+/g, ' ').slice(0, 200);
+  const detail = `${model}: ${reason || 'no image'}${said ? ` - ${said}` : ''}`;
+  if (/SAFETY|PROHIBITED|BLOCK/i.test(reason)) throw fail('מחולל התמונות סירב לתמונה או לבקשה הזאת. נסו לנסח אחרת, או לצלם בלי אנשים.', detail);
+  throw fail('מחולל התמונות לא החזיר תמונה. נסו שוב, או נסחו את הבקשה אחרת.', detail);
 }

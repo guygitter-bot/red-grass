@@ -13,6 +13,7 @@ export default function Project({ project, onChange, onBack }) {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(''); // 'render' | 'ideas' | ''
   const [error, setError] = useState('');
+  const [detail, setDetail] = useState(''); // הפרטים הטכניים של השגיאה האחרונה
   const [name, setName] = useState(project.name);
 
   // טוען את הצילום המקורי ואת הגרסה שמוצגת (רק מה שעוד לא נטען)
@@ -39,6 +40,7 @@ export default function Project({ project, onChange, onBack }) {
     if (!req || !base || busy) return;
     setBusy('render');
     setError('');
+    setDetail('');
     try {
       const image = await render(base, req);
       const v = { id: newId(), request: label, title, thumb: await makeThumb(image), createdAt: Date.now() };
@@ -49,6 +51,7 @@ export default function Project({ project, onChange, onBack }) {
       await onChange();
     } catch (e) {
       setError(e?.message || 'משהו השתבש. נסו שוב.');
+      setDetail(e?.detail || '');
     } finally {
       setBusy('');
     }
@@ -58,12 +61,14 @@ export default function Project({ project, onChange, onBack }) {
     if (!original || busy) return;
     setBusy('ideas');
     setError('');
+    setDetail('');
     try {
       const { room, ideas } = await getIdeas(original, note.trim());
       await saveProject({ ...project, room, ideas });
       await onChange();
     } catch (e) {
       setError(e?.message || 'משהו השתבש. נסו שוב.');
+      setDetail(e?.detail || '');
     } finally {
       setBusy('');
     }
@@ -137,7 +142,12 @@ export default function Project({ project, onChange, onBack }) {
         </section>
 
         <section className="mt-6 flex flex-col gap-4 lg:mt-0">
-          {error && <p className="m-0 rounded-xl bg-bad-soft p-3 text-sm text-bad" role="alert">{error}</p>}
+          {error && (
+            <div className="rounded-xl bg-bad-soft p-3 text-sm text-bad" role="alert">
+              <p className="m-0">{error}</p>
+              {detail && <p className="m-0 mt-1 break-words text-xs opacity-80" dir="ltr">{detail}</p>}
+            </div>
+          )}
 
           <div className="rounded-2xl border border-line bg-card p-4">
             <h2 className="m-0 text-lg font-bold">מה לשנות?</h2>
