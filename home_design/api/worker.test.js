@@ -1,8 +1,8 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import worker, { cleanImage, cleanText } from './worker.js';
+import worker, { cleanImage, cleanText, slowReply } from './worker.js';
 import { readIdeas, IDEAS_TOOL, MODEL } from './designer.js';
-import { readShop, SHOP_TOOL } from './shop.js';
+import { readShop, foundUrls, SHOP_TOOL } from './shop.js';
 import { pickModel, readImage, editPrompt, imageMessage, forgetModel } from './render.js';
 
 const ORIGIN = 'https://meatzev-habayit.pages.dev';
@@ -168,15 +168,25 @@ test('רעיונות: סירוב / בלי הצעות – 502 עם הודעה', a
   assert.match((await r.json()).error, /קרדיט/);
 });
 
-test('קניות: שולח לפני + אחרי ל-Claude ומחזיר רשימה נקייה', async () => {
-  let sent;
+const P = { product_title: '', product_store: '', product_price: 0, product_url: '' };
+
+test('קניות: מחפש ברשת, ממשיך אחרי עצירה, ומקשר רק לכתובות שהופיעו בחיפוש', async () => {
+  const sent = [];
+  const searchBlocks = [
+    { type: 'server_tool_use', id: 's1', name: 'web_search', input: { query: 'חיפוי עץ' } },
+    { type: 'web_search_tool_result', tool_use_id: 's1', content: [{ type: 'web_search_result', url: 'https://shop.example.co.il/oak-slats/', title: 'פסי אלון' }] },
+  ];
   globalThis.fetch = async (u, init) => {
-    sent = JSON.parse(init.body);
+    sent.push(JSON.parse(init.body));
+    if (sent.length === 1) return json({ stop_reason: 'pause_turn', content: searchBlocks });
     return json({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: SHOP_TOOL.name, input: {
       summary: 'חיפוי עץ וספה', tips: 'למדוד לפני',
       items: [
-        { name: 'פסי עץ אלון', details: 'אנכיים', quantity: 'כ-8 מ״ר', price_min: 2400, price_max: 1600, stores: ['הום סנטר', '', 'נגר', 'a', 'b'], search: '' },
-        { name: '', details: '', quantity: '', price_min: 1, price_max: 2, stores: [], search: '' },
+        { name: 'פסי עץ אלון', details: 'אנכיים', quantity: 'כ-8 מ״ר', price_min: 2400, price_max: 1600, stores: ['הום סנטר', '', 'נגר', 'a', 'b'], search: '',
+          product_title: 'פאנל אלון 240', product_store: 'חנות לדוגמה', product_price: 289, product_url: 'https://shop.example.co.il/oak-slats' },
+        { name: 'ספה', details: '', quantity: '', price_min: 3000, price_max: 5000, stores: [], search: 'ספה אפורה',
+          product_title: 'ספה שלא נמצאה', product_store: 'x', product_price: 1, product_url: 'https://invented.example/sofa' },
+        { ...P, name: '', details: '', quantity: '', price_min: 1, price_max: 2, stores: [], search: '' },
       ],
       labor: { needed: true, description: 'נגר להתקנה', price_min: 800, price_max: 1500 },
     } }] });
@@ -186,18 +196,46 @@ test('קניות: שולח לפני + אחרי ל-Claude ומחזיר רשימה
   assert.equal(r.status, 200);
   assert.deepEqual(await r.json(), {
     summary: 'חיפוי עץ וספה', tips: 'למדוד לפני',
-    items: [{ name: 'פסי עץ אלון', details: 'אנכיים', quantity: 'כ-8 מ״ר', min: 1600, max: 2400, stores: ['הום סנטר', 'נגר', 'a'], search: 'פסי עץ אלון' }],
+    items: [
+      { name: 'פסי עץ אלון', details: 'אנכיים', quantity: 'כ-8 מ״ר', min: 1600, max: 2400, stores: ['הום סנטר', 'נגר', 'a'], search: 'פסי עץ אלון',
+        product: { title: 'פאנל אלון 240', store: 'חנות לדוגמה', price: 289, url: 'https://shop.example.co.il/oak-slats' } },
+      { name: 'ספה', details: '', quantity: '', min: 3000, max: 5000, stores: [], search: 'ספה אפורה', product: null },
+    ],
     labor: { description: 'נגר להתקנה', min: 800, max: 1500 },
   });
-  const images = sent.messages[0].content.filter((b) => b.type === 'image').map((b) => b.source.data);
+  assert.equal(sent.length, 2);
+  assert.equal(sent[0].tools[0].name, 'web_search');
+  assert.equal(sent[0].tools[1].strict, true);
+  const images = sent[0].messages[0].content.filter((b) => b.type === 'image').map((b) => b.source.data);
   assert.deepEqual(images, ['QUJD', 'UE5H']);
-  assert.match(sent.messages[0].content.at(-1).text, /חיפוי עץ/);
+  assert.match(sent[0].messages[0].content.at(-1).text, /חיפוי עץ/);
+  // אחרי עצירה: התשובה חוזרת כמו שהיא, בלי הודעת משתמש נוספת
+  assert.deepEqual(sent[1].messages[1], { role: 'assistant', content: searchBlocks });
+  assert.equal(sent[1].messages.length, 2);
 });
 
-test('קניות: חסרה תמונה – 400; בלי עבודה מקצועית – labor ריק', async () => {
+test('קניות: Claude ענה בטקסט -> מבקשים פעם אחת לקרוא לכלי; שגיאה חוזרת כ-error', async () => {
+  let n = 0;
+  globalThis.fetch = async () => { n++; return json({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'הנה הרשימה' }] }); };
+  const r = await worker.fetch(post('/shop', { before: IMG, after: IMG }), env);
+  assert.equal(r.status, 200);
+  assert.match((await r.json()).error, /רשימת קניות/);
+  assert.equal(n, 2);
+});
+
+test('תשובה ארוכה: רווחים בזמן ההמתנה ואז JSON תקין', async () => {
+  const r = slowReply({}, new Promise((ok) => setTimeout(() => ok({ a: 1 }), 40)), 10);
+  const text = await r.text();
+  assert.match(text, /^ +\{"a":1\}$/);
+  assert.deepEqual(JSON.parse(text), { a: 1 });
+});
+
+test('קניות: חסרה תמונה – 400; בלי עבודה מקצועית – labor ריק; כתובות לא תקינות נזרקות', async () => {
   assert.equal((await worker.fetch(post('/shop', { before: IMG }), env)).status, 400);
   const out = readShop({ items: [{ name: 'צבע', price_min: 0, price_max: 300 }], labor: { needed: false, description: '', price_min: 0, price_max: 0 } });
   assert.equal(out.labor, null);
-  assert.deepEqual([out.items[0].min, out.items[0].max, out.items[0].stores], [0, 300, []]);
+  assert.deepEqual([out.items[0].min, out.items[0].max, out.items[0].stores, out.items[0].product], [0, 300, [], null]);
   assert.equal(readShop({ items: [] }), null);
+  const urls = foundUrls([{ type: 'web_search_tool_result', content: [{ url: 'javascript:alert(1)' }, { url: 'https://a.co.il/p#x' }] }, { type: 'web_search_tool_result', content: { error_code: 'max_uses_exceeded' } }]);
+  assert.deepEqual([...urls], ['https://a.co.il/p']);
 });

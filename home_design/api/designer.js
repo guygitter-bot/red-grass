@@ -73,9 +73,7 @@ export function readIdeas(input) {
 
 export const imageBlock = (image) => ({ type: 'image', source: { type: 'base64', media_type: image.media_type, data: image.data } });
 
-// קריאה אחת ל-Claude שמסתיימת בכלי אחד (strict). מחזיר את הקלט של הכלי, או null אם Claude לא קרא לו.
-// זורק Error עם הודעה בעברית כשהקריאה עצמה נכשלה.
-export async function callTool(env, { system, tool, content }) {
+async function ask(env, body) {
   let res;
   try {
     res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -87,24 +85,53 @@ export async function callTool(env, { system, tool, content }) {
         // אם המודל מסרב – השרת של Anthropic מנסה לבד מודל אחר
         'anthropic-beta': 'server-side-fallback-2026-07-01',
       },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 8000,
-        fallbacks: 'default',
-        system,
-        tools: [tool],
-        messages: [{ role: 'user', content }],
-      }),
+      body: JSON.stringify({ model: MODEL, fallbacks: 'default', ...body }),
     });
   } catch {
     throw new Error('אין חיבור למעצב כרגע. נסו שוב.');
   }
   const raw = await res.text();
-  if (!res.ok) throw new Error(aiMessage(res.status, raw));
+  if (!res.ok) {
+    // detail = ההודעה של Anthropic עצמה, לאבחון
+    const e = new Error(aiMessage(res.status, raw));
+    let msg = '';
+    try { msg = JSON.parse(raw)?.error?.message || ''; } catch { msg = ''; }
+    e.detail = `${res.status} ${MODEL}: ${String(msg || raw).replace(/\s+/g, ' ').slice(0, 300)}`;
+    throw e;
+  }
   let data;
   try { data = JSON.parse(raw); } catch { throw new Error('המעצב לא הצליח לענות. נסו שוב.'); }
   if (data.stop_reason === 'refusal') throw new Error('המעצב לא יכול לעבוד עם התמונה הזאת. נסו תמונה אחרת.');
-  return (data.content || []).find((b) => b.type === 'tool_use' && b.name === tool.name)?.input || null;
+  return data;
+}
+
+// שיחה עם Claude שמסתיימת בכלי אחד (strict). serverTools = כלים שרצים אצל Anthropic (חיפוש ברשת).
+// מחזיר { input, blocks }: הקלט של הכלי (או null אם Claude לא קרא לו) וכל הבלוקים שחזרו בדרך (כולל תוצאות החיפוש).
+// זורק Error עם הודעה בעברית כשהקריאה עצמה נכשלה.
+export async function callTool(env, { system, tool, content, serverTools = [], maxTokens = 8000 }) {
+  const messages = [{ role: 'user', content }];
+  const blocks = [];
+  let nudged = false;
+  for (let step = 0; step < 6; step++) {
+    const data = await ask(env, { max_tokens: maxTokens, system, tools: [...serverTools, tool], messages });
+    const got = data.content || [];
+    blocks.push(...got);
+    const use = got.find((b) => b.type === 'tool_use' && b.name === tool.name);
+    if (use) return { input: use.input || null, blocks };
+    // חיפוש ארוך נעצר באמצע: שולחים את התשובה חזרה כמו שהיא, והשרת ממשיך מאותה נקודה
+    if (data.stop_reason === 'pause_turn') {
+      messages.push({ role: 'assistant', content: got });
+      continue;
+    }
+    // Claude ענה בטקסט בלי לקרוא לכלי – מבקשים פעם אחת
+    if (data.stop_reason === 'end_turn' && !nudged && got.length) {
+      nudged = true;
+      messages.push({ role: 'assistant', content: got }, { role: 'user', content: `Now call ${tool.name} with your final answer.` });
+      continue;
+    }
+    break;
+  }
+  return { input: null, blocks };
 }
 
 // image: { media_type, data } (base64). note: מה חשוב למשתמש (לא חובה)
@@ -113,7 +140,7 @@ export async function suggestIdeas(env, image, note) {
   const text = note
     ? `Here is the photo. The owner's note: ${note}`
     : 'Here is the photo. The owner left no note - propose what you think would improve this room most.';
-  const input = await callTool(env, { system: SYSTEM, tool: IDEAS_TOOL, content: [imageBlock(image), { type: 'text', text }] });
+  const { input } = await callTool(env, { system: SYSTEM, tool: IDEAS_TOOL, content: [imageBlock(image), { type: 'text', text }] });
   const out = readIdeas(input);
   if (!out) throw new Error('המעצב לא החזיר הצעות. נסו שוב.');
   return out;
