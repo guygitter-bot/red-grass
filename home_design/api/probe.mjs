@@ -2,6 +2,7 @@
 // מדפיס רק שמות מודלים, סטטוס והודעות שגיאה – לא את המפתח ולא תמונות.
 import zlib from 'node:zlib';
 import { renderImage, pickModel } from './render.js';
+import { shoppingList } from './shop.js';
 
 const env = { GEMINI_API_KEY: process.env.GEMINI_API_KEY, IMAGE_MODEL: process.env.IMAGE_MODEL };
 if (!env.GEMINI_API_KEY) { console.log('GEMINI_API_KEY is not set - nothing to probe'); process.exit(0); }
@@ -40,10 +41,26 @@ for (const m of all) {
 }
 console.log('configured:', env.IMAGE_MODEL, '| picked from list:', pickModel(all));
 
+const before = { media_type: 'image/png', data: testPng().toString('base64') };
+const change = 'לצבוע את הקיר בצבע ירוק זית';
+let after;
 try {
-  const out = await renderImage(env, { media_type: 'image/png', data: testPng().toString('base64') }, 'לצבוע את הקיר בצבע ירוק זית');
-  console.log(`RENDER OK with ${out.model}: ${out.media_type}, ${Math.round(out.data.length * 0.75 / 1024)} KB`);
+  after = await renderImage(env, before, change);
+  console.log(`RENDER OK with ${after.model}: ${after.media_type}, ${Math.round(after.data.length * 0.75 / 1024)} KB`);
 } catch (e) {
   console.log('RENDER FAILED:', e.detail || e.message);
   process.exit(1);
+}
+
+// רשימת קניות אמיתית מול Claude (בודק גם שהסכמה של הכלי מתקבלת)
+if (process.env.ANTHROPIC_API_KEY) {
+  try {
+    const shop = await shoppingList({ ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY }, before, { media_type: after.media_type, data: after.data }, change);
+    const sum = shop.items.reduce((t, i) => [t[0] + i.min, t[1] + i.max], [0, 0]);
+    console.log(`SHOP OK: ${shop.items.length} items, ${sum[0]}-${sum[1]} ILS, labor: ${shop.labor ? 'yes' : 'no'}`);
+    for (const i of shop.items) console.log(`   ${i.name} | ${i.quantity} | ${i.min}-${i.max} | ${i.stores.join(', ')} | ${i.search}`);
+  } catch (e) {
+    console.log('SHOP FAILED:', e.message);
+    process.exit(1);
+  }
 }

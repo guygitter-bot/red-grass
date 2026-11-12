@@ -92,6 +92,7 @@ button:disabled {
   background: var(--color-card);
   font-size: 14px;
   white-space: nowrap;
+  color: var(--color-ink);
 }
 .field {
   width: 100%;

@@ -26,3 +26,5 @@ export async function api(path, body = {}) {
 export const getIdeas = (image, note) => api('/ideas', { image, note });
 // הדמיה: אותה תמונה אחרי השינוי
 export const render = (image, request) => api('/render', { image, request }).then((d) => d.image);
+// רשימת קניות להדמיה: מה לקנות, איפה, וכמה זה עולה בערך
+export const getShop = (before, after, request) => api('/shop', { before, after, request });
