@@ -189,3 +189,61 @@ test('שיתוף: ספר ריק נדחה, ויש תקרה יומית', async () 
   for (let i = 0; i < 2; i++) assert.equal((await worker.fetch(post('/share', { book: SHARED }), env)).status, 200);
   assert.equal((await worker.fetch(post('/share', { book: SHARED }), env)).status, 429);
 });
+
+// ---- רומן למבוגרים ----
+const ROMANCE = { occasion: 'romance', name: 'מאיה ואורי', adult: true, length: 'short', style: 'real', answers: [{ q: 'סיפור המסגרת', a: 'מלון קטן בגליל, בחורף' }] };
+
+test('רומן למבוגרים: בלי אישור גיל השרת לא כותב', async (t) => {
+  const calls = t.mock.method(globalThis, 'fetch', async () => tool('plan_book', OUTLINE));
+  const no = await worker.fetch(post('/outline', { brief: { ...ROMANCE, adult: false } }), env);
+  assert.equal(no.status, 403);
+  assert.equal((await worker.fetch(post('/outline', { brief: { ...ROMANCE, adult: 'yes' } }), env)).status, 403);
+  assert.equal((await worker.fetch(post('/chapter', { brief: { ...ROMANCE, adult: false }, outline: OUTLINE, index: 0 }), env)).status, 403);
+  assert.equal(calls.mock.callCount(), 0);
+  assert.equal((await (await worker.fetch(post('/outline', { brief: ROMANCE }), env)).json()).title, 'דנה והקפה');
+});
+
+test('רומן למבוגרים: ההוראות לסופר – מרומז בלבד, בגירים, דמויות בדויות', () => {
+  const b = cleanBrief(ROMANCE);
+  for (const sys of [outlineSystem(b), chapterSystem(b)]) {
+    assert.match(sys, /Never describe sex acts/);
+    assert.match(sys, /18 or older/);
+    assert.match(sys, /never real, named public figures/);
+    assert.match(sys, /REFUSED/);
+    assert.match(sys, /everyone clothed/);
+  }
+  assert.match(outlineSystem(b), /exactly 6 chapters/);
+  assert.doesNotMatch(outlineSystem(cleanBrief(BRIEF)), /sensual/); // ספר מתנה רגיל לא מושפע
+  const t = briefText(b);
+  assert.match(t, /fictional adults\): מאיה ואורי/);
+  assert.match(t, /מלון קטן בגליל/);
+  assert.doesNotMatch(t, /male - write about him/);
+});
+
+test('רומן למבוגרים: סירוב של הסופר חוזר כהודעה ברורה', async (t) => {
+  t.mock.method(globalThis, 'fetch', async (url, init) => (JSON.parse(init.body).tools[0].name === 'plan_book'
+    ? tool('plan_book', { ...OUTLINE, title: 'REFUSED', chapters: [] })
+    : tool('write_chapter', { text: 'REFUSED', scene: '' })));
+  const plan = await (await worker.fetch(post('/outline', { brief: ROMANCE }), env)).json();
+  assert.match(plan.error, /בדויות ובגירות/);
+  const chapter = await (await worker.fetch(post('/chapter', { brief: ROMANCE, outline: OUTLINE, index: 0 }), env)).json();
+  assert.match(chapter.error, /בדויות ובגירות/);
+});
+
+test('רומן למבוגרים: איור מרומז בלבד, ותמונה של אדם לא נשלחת למאייר', async (t) => {
+  let sent;
+  t.mock.method(globalThis, 'fetch', async (url, init) => { sent = JSON.parse(init.body); return json({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: 'UE5H' } }] } }] }); });
+  await worker.fetch(post('/image', { scene: 'two people on a balcony', style: 'real', occasion: 'romance', photo: IMG }), env);
+  assert.equal(sent.contents[0].parts.length, 1); // רק ההוראה, בלי התמונה
+  const text = sent.contents[0].parts[0].text;
+  assert.match(text, /suggestive only/);
+  assert.match(text, /No nudity/);
+  assert.match(text, /not a likeness of any real person/);
+  assert.doesNotMatch(text, /attached photo/);
+  assert.doesNotMatch(artPrompt({ scene: 'a', style: 'b' }), /suggestive/);
+});
+
+test('רומן למבוגרים: ספר ששותף מסומן למבוגרים', () => {
+  assert.equal(cleanSharedBook({ ...SHARED, adult: true }).adult, true);
+  assert.equal(cleanSharedBook(SHARED).adult, false);
+});

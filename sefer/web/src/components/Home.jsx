@@ -58,7 +58,7 @@ export default function Home() {
                     <Cover small title={b.title} src={b.thumb} />
                     <span className="min-w-0 flex-1">
                       <span className="block book-title text-lg truncate">{b.title}</span>
-                      <span className="block text-sm text-muted truncate">ל{b.brief.name}</span>
+                      <span className="block text-sm text-muted truncate">{b.brief.occasion === 'romance' ? `רומן · ${b.brief.name}` : `ל${b.brief.name}`}</span>
                       <span className="block text-sm mt-1">
                         {b.stage === 'outline' ? 'מחכה לאישור המתווה' : p.done ? 'מוכן לקריאה' : `נכתבו ${p.written} מתוך ${p.total} פרקים`}
                       </span>

@@ -32,6 +32,7 @@ export function LocalReader({ id }) {
 export function SharedReader({ id }) {
   const [view, setView] = useState(null);
   const [error, setError] = useState('');
+  const [adultOk, setAdultOk] = useState(false);
 
   useEffect(() => {
     readShared(id)
@@ -41,6 +42,16 @@ export function SharedReader({ id }) {
 
   if (error) return <main className="max-w-md mx-auto p-6 grid gap-4"><ErrorBox error={error} /><button type="button" className="btn" onClick={() => go('')}>לאפליקציה</button></main>;
   if (!view) return <main className="p-10 flex justify-center"><div className="spinner" /></main>;
+  // רומן למבוגרים: מי שקיבל את הקישור מאשר קודם שהוא מעל 18
+  if (view.adult && !adultOk) {
+    return (
+      <main className="min-h-screen max-w-md mx-auto p-6 flex flex-col justify-center gap-4 text-center">
+        <h1 className="book-title text-3xl m-0">{view.title}</h1>
+        <p className="text-muted m-0">זה רומן רומנטי שמיועד למבוגרים בלבד.</p>
+        <button type="button" className="btn btn-main" onClick={() => setAdultOk(true)}>אני מעל גיל 18 – לפתוח את הספר</button>
+      </main>
+    );
+  }
   return <Reader view={view} gift />;
 }
 
@@ -107,7 +118,7 @@ function Reader({ view, onClose, gift }) {
         {page.type === 'cover' ? (
           <div className="max-w-sm mx-auto">
             <Cover title={view.title} subtitle={view.subtitle} src={view.coverSrc} />
-            {view.from ? <p className="text-center text-muted mt-4">ספר ל{view.name}, מאת {view.from}</p> : null}
+            {view.from && !view.adult ? <p className="text-center text-muted mt-4">ספר ל{view.name}, מאת {view.from}</p> : null}
           </div>
         ) : null}
 
@@ -158,7 +169,7 @@ function Reader({ view, onClose, gift }) {
           <article className="bg-card border border-line rounded-2xl px-6 py-14 text-center min-h-[40vh] flex flex-col justify-center items-center gap-3">
             <div className="text-gold text-2xl" aria-hidden="true">❦</div>
             <div className="book-title text-3xl">סוף</div>
-            {view.from ? <p className="text-muted m-0">נכתב באהבה ל{view.name}, מאת {view.from}</p> : null}
+            {view.from && !view.adult ? <p className="text-muted m-0">נכתב באהבה ל{view.name}, מאת {view.from}</p> : null}
             <button type="button" className="btn mt-3" onClick={() => turn(0)}>לקרוא שוב מההתחלה</button>
             {gift ? <button type="button" className="btn btn-main" onClick={() => go('')}>ליצור ספר כזה למישהו</button> : null}
           </article>

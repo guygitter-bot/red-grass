@@ -2,7 +2,8 @@
 //   GET  /health -> { ok, writer, images } (אילו מפתחות מוגדרים)
 //   POST /outline { brief }                               -> { title, subtitle, dedication, chapters, look, cover }   (Claude)
 //   POST /chapter { brief, outline, index, before?, note? } -> { text, scene }                                         (Claude)
-//   POST /image   { scene, style, look?, cover?, photo? }  -> { image: {media_type, data} }                            (Google)
+//   POST /image   { scene, style, look?, cover?, photo?, occasion? } -> { image: {media_type, data} }                 (Google)
+//                 occasion 'romance' (רומן למבוגרים): איור מרומז בלבד, והתמונה המצורפת לא נשלחת למאייר
 //   POST /share   { book, images, id?, secret? }           -> { id, secret }  שיתוף ספר בקישור (או עדכון קישור קיים)
 //   POST /unshare { id, secret }                           ביטול הקישור
 //   GET  /book/<id>             -> { book, images: [מפתחות] }   הספר לקריאה (מי שקיבל את הקישור)
@@ -10,7 +11,7 @@
 // שלוש פעולות ה-AI לוקחות עד דקה, ולכן התשובה תמיד 200 ושגיאה חוזרת כ-{ error (עברית), detail? }.
 // בלי סיסמה; הדפדפן מורשה רק מכתובת האפליקציה (ALLOWED_ORIGIN_RE), ויש תקרה יומית לקריאות AI (ראו shelf.js).
 // הספרים עצמם נשמרים במכשיר של מי שיצר אותם; בשרת נשמר רק ספר ששותף בקישור.
-import { cleanBrief, STYLES } from './brief.js';
+import { cleanBrief, isRomance, STYLES } from './brief.js';
 import { planBook, writeChapter, cleanOutline } from './writer.js';
 import { drawImage, artPrompt } from './illustrate.js';
 import { Shelf } from './shelf.js';
@@ -108,14 +109,17 @@ export default {
         if (!scene) return reply(400, { error: 'חסר תיאור לאיור' });
         if (!env.GEMINI_API_KEY) return reply(503, { error: 'המאייר עוד לא מחובר (חסר מפתח Google בשרת).', code: 'no_key' });
         if (!(await allowed('images'))) return reply(429, { error: 'נוצרו היום הרבה איורים. נסו שוב מחר.', code: 'limit' });
-        const photo = cleanImage(body.photo);
+        const romance = body.occasion === 'romance';
+        // ברומן למבוגרים לא מציירים לפי תמונה של אדם אמיתי
+        const photo = romance ? null : cleanImage(body.photo);
         const style = STYLES[body.style] || STYLES.watercolor;
-        const prompt = artPrompt({ scene, style, look: cleanText(body.look, 800), cover: Boolean(body.cover), photo: Boolean(photo) });
+        const prompt = artPrompt({ scene, style, look: cleanText(body.look, 800), cover: Boolean(body.cover), photo: Boolean(photo), romance });
         return slowReply(cors, drawImage(env, prompt, photo).then(({ model, ...image }) => ({ image, model })));
       }
 
       const brief = cleanBrief(body?.brief);
       if (!brief) return reply(400, { error: 'צריך לכתוב על מי הספר' });
+      if (isRomance(brief) && !brief.adult) return reply(403, { error: 'הקטגוריה הזאת מיועדת לבני 18 ומעלה', code: 'adult' });
       if (!env.ANTHROPIC_API_KEY) return reply(503, { error: 'הסופר עוד לא מחובר (חסר מפתח Claude בשרת).', code: 'no_key' });
 
       if (pathname === '/outline') {

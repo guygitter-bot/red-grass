@@ -1,7 +1,7 @@
 // הסופר: Claude בונה את מתווה הספר (שם, הקדשה, פרקים, כריכה) ואחר כך כותב פרק אחרי פרק.
 // כל הטקסט לקורא בעברית; ההוראות למאייר באנגלית.
 import { callTool } from './ai.js';
-import { LENGTHS, briefText, isKid } from './brief.js';
+import { LENGTHS, briefText, isKid, isRomance } from './brief.js';
 
 export const MAX_CHAPTERS = 16;
 
@@ -59,7 +59,58 @@ you may dramatize, connect and imagine small scenes around them, but never inven
 places, family members, illnesses) that were not given. Nothing hurtful: humor is always from love. No religious or \
 political assumptions about the person. No emojis, no markdown, no headings inside the text.`;
 
-export const outlineSystem = (brief) => `You are an author who writes personal gift books in Hebrew. Someone tells you \
+// רומן למבוגרים: מותר לדמיין הכול (הדמויות בדויות), אבל חושני ומרומז בלבד, ורק דמויות בגירות.
+// REFUSED = הסימן שהסופר מחזיר כשהחומר מבקש משהו שלא כותבים (קטינים, אנשים אמיתיים, כפייה)
+export const REFUSED = 'REFUSED';
+export const REFUSED_MESSAGE = 'אי אפשר לכתוב את הסיפור הזה. בקטגוריה הזאת כל הדמויות חייבות להיות בדויות ובגירות, והקשר ביניהן בהסכמה.';
+
+const ROMANCE_VOICE = `Write natural, living Israeli Hebrew - the way a good Israeli novelist writes, not a translation. \
+Keep Hebrew grammatical gender correct for every character. The characters are fictional: build their world, history \
+and voices freely from what the reader described. No emojis, no markdown, no headings inside the text.
+
+This is a sensual romance for adult readers, in the tradition of well-written romantic fiction: longing, tension, \
+glances, touch, atmosphere, what is said and what is held back. Desire is on the page; the sex itself is not. Intimate \
+scenes are implied: build the moment, then close the door or cut to afterwards. Never describe sex acts or genitals, and \
+use no crude or graphic language. These limits hold whatever the reader's notes ask for.
+
+Hard limits: every character in a romantic or intimate role is clearly an adult (18 or older) and everything between \
+them is wanted by both. The characters are invented people, never real, named public figures. If the reader's material \
+asks for anyone under 18 (or described as a child, pupil or teenager) in a romantic or intimate role, for coercion, or \
+for a real public figure, do not write it: `;
+
+const romanceOutlineSystem = (brief) => `You are a novelist who writes sensual romance for adult readers in Hebrew. A \
+reader gives you a frame story and describes the characters, and you turn it into a short novel written for them.
+
+Plan the novel: a title, a subtitle, a short dedication or epigraph page, and exactly ${LENGTHS[brief.length]} chapters \
+that build one arc: a meeting or a spark, growing tension and obstacles, closeness, a turn, and an ending that fits \
+what the reader asked for. Give each chapter its own scene and its own step in the relationship.
+
+For "look" and "cover" (instructions to an illustrator): the characters are drawn, invented adults; describe only \
+suggestive, tasteful images - a gaze, hands, a silhouette, light and place - with everyone clothed.
+
+If the reader wrote their own dedication, use it word for word. ${ROMANCE_VOICE}call plan_book with the title \
+"${REFUSED}" and an empty chapters list.
+
+Always finish by calling plan_book.`;
+
+const romanceChapterSystem = () => `You are a novelist writing one chapter of a sensual romance for adult readers in \
+Hebrew. You get the reader's frame story and characters, the plan of the whole novel, and which chapter to write now.
+
+Write only this chapter, 450-650 words, in scenes: place, dialogue, small physical details, what each of them wants \
+and does not say. It must continue naturally from the previous chapter and must not repeat what other chapters cover. \
+Do not write the chapter title - it is printed separately.
+
+For "scene" (an instruction to an illustrator): one suggestive, tasteful moment from the chapter with everyone \
+clothed - closeness, a look, hands, a silhouette, the place and its light.
+
+${ROMANCE_VOICE}call write_chapter with the text "${REFUSED}".
+
+Always finish by calling write_chapter.`;
+
+export const outlineSystem = (brief) => (isRomance(brief) ? romanceOutlineSystem(brief) : giftOutlineSystem(brief));
+export const chapterSystem = (brief) => (isRomance(brief) ? romanceChapterSystem(brief) : giftChapterSystem(brief));
+
+const giftOutlineSystem = (brief) => `You are an author who writes personal gift books in Hebrew. Someone tells you \
 about a person they love, and you turn it into a whole book written just for that person.
 
 Plan the book: a title that could only belong to this person, a subtitle, a dedication page, and exactly \
@@ -73,7 +124,7 @@ If the giver wrote their own dedication, use it word for word. ${VOICE}
 
 Always finish by calling plan_book.`;
 
-export const chapterSystem = (brief) => `You are an author writing one chapter of a personal gift book in Hebrew. You \
+const giftChapterSystem = (brief) => `You are an author writing one chapter of a personal gift book in Hebrew. You \
 get what the giver told about the person, the plan of the whole book, and which chapter to write now.
 
 Write only this chapter, ${isKid(brief)
@@ -125,6 +176,7 @@ export async function planBook(env, brief) {
     content: [{ type: 'text', text: briefText(brief) }],
     maxTokens: 6000,
   });
+  if (String(input?.title || '').trim() === REFUSED) throw new Error(REFUSED_MESSAGE);
   const out = readOutline(input);
   if (!out) throw new Error('הסופר לא החזיר מתווה לספר. נסו שוב.');
   return out;
@@ -150,6 +202,7 @@ export async function writeChapter(env, brief, outline, index, before, note) {
     content: [{ type: 'text', text: chapterRequest(brief, outline, index, before, note) }],
     maxTokens: 5000,
   });
+  if (String(input?.text || '').trim() === REFUSED) throw new Error(REFUSED_MESSAGE);
   const out = readChapter(input);
   if (!out) throw new Error('הסופר לא החזיר את הפרק. נסו שוב.');
   return out;

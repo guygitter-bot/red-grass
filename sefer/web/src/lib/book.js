@@ -8,7 +8,7 @@
 //     chapters: [{ id, title, summary, text, scene, hasImage }],
 //     stage: 'outline' (מאשרים את המתווה) | 'book' (נכתב / מוכן),
 //     share: { id, secret } | null }
-import { isKid } from './brief.js';
+import { isKid, isRomance } from './brief.js';
 
 export const newId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 
@@ -27,6 +27,7 @@ export function safeBook(b) {
 
 // ספר חדש מהמתווה שהסופר החזיר
 export function makeBook(brief, outline, { photos = 0, coverKind = 'art', usePhoto = false, art = true } = {}) {
+  if (isRomance(brief)) photos = 0; // ברומן למבוגרים אין תמונות של אנשים
   return safeBook({
     id: newId(),
     createdAt: Date.now(),
@@ -97,6 +98,7 @@ export function toShared(book) {
     name: book.brief.name || '',
     from: book.brief.from || '',
     kid: isKid(book.brief),
+    adult: isRomance(book.brief),
     cover: coverKey(book),
     photos: photoKeys(book),
     chapters: book.chapters.filter((c) => c.text).map((c) => ({ title: c.title, text: c.text, image: c.hasImage ? chapterKey(c) : '' })),
