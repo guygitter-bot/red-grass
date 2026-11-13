@@ -252,6 +252,14 @@
 - בדיקה: `cd home_design/api && npm test` · `cd home_design/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 - **בלי סיסמה ובלי תקרת הוצאה** (המשתמש ביקש, אפליקציה אישית). סודות: `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`. שם מודל התמונות: `IMAGE_MODEL` ב-`api/wrangler.toml`.
 
+### ספר אישי – ספר דיגיטלי במתנה (`sefer/`)
+- תיאור: `sefer/README.md`. שאלון על מישהו אהוב → Claude כותב ספר שלם (מתווה שמאשרים, ואז פרק אחרי פרק), Google מאייר כריכה ופרקים; קריאה על המסך ושיתוף בקישור. בלי הדפסה.
+- `sefer/web` → https://sefer-ishi.pages.dev · `sefer/api` → Worker `sefer-ishi-api` (Durable Object `Shelf`: ספרים ששותפו + תקרה יומית). עלייה: `sefer-ishi.yml` אחרי מיזוג ל-main. (לא להתבלבל עם `seder/`.)
+- בדיקה: `cd sefer/api && npm test` · `cd sefer/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- הספרים נשמרים במכשיר (IndexedDB); לשרת עולה רק ספר ששותף, ובלי מה שנכתב בשאלון (`toShared`). שדה חדש בספר – ברירת מחדל ב-`safeBook`.
+- מזהי האירוע / טון / סגנון / אורך כפולים ב-`api/brief.js` וב-`web/src/lib/brief.js` – לשנות בשניהם (בדיקה מוודאת).
+- בלי סיסמה; תקרה יומית ב-`api/wrangler.toml` (`DAILY_TEXT`, `DAILY_IMAGES`, `DAILY_SHARES`). הסופר לא ממציא עובדות על האדם.
+
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).
 

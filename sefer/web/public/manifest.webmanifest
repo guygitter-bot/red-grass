@@ -1,0 +1,15 @@
+{
+  "name": "ספר אישי",
+  "short_name": "ספר אישי",
+  "description": "ספר דיגיטלי שנכתב ואויר במיוחד בשביל מישהו אהוב",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f1e7",
+  "theme_color": "#7a2e3b",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

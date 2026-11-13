@@ -1,0 +1,128 @@
+name: sefer-ishi
+
+# ספר אישי (sefer/):
+#   api -> Cloudflare Worker "sefer-ishi-api" (Claude כותב את הספר, Google מאייר; ספרים ששותפו נשמרים ב-Durable Object)
+#   web -> Cloudflare Pages "sefer-ishi" -> https://sefer-ishi.pages.dev
+on:
+  push:
+    branches: [main]
+    paths: ["sefer/**", ".github/workflows/sefer-ishi.yml"]
+  pull_request:
+    paths: ["sefer/**", ".github/workflows/sefer-ishi.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sefer-ishi-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Server tests
+        working-directory: sefer/api
+        run: npm test
+      - name: App tests and build
+        working-directory: sefer/web
+        run: |
+          npm ci
+          npm test
+          npm run build
+
+  api:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # GEMINI_API_KEY לא חובה כדי לעלות: בלי המפתח האפליקציה עולה, והספרים נכתבים בלי איורים
+      - name: Check secrets
+        id: secrets
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          missing=""
+          [ -n "$CF_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -n "$CF_ACCOUNT" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          [ -n "$API_KEY" ] || missing="$missing ANTHROPIC_API_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing (see sefer/README.md)"
+            exit 1
+          fi
+          {
+            echo "list<<EOF"
+            echo "ANTHROPIC_API_KEY"
+            if [ -n "$GEMINI" ]; then echo "GEMINI_API_KEY"; fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          if [ -z "$GEMINI" ]; then
+            echo "::warning::GEMINI_API_KEY is not set - the app deploys, but books are written without illustrations"
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Deploy worker
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: sefer/api
+          wranglerVersion: "4.146.0"
+          secrets: ${{ steps.secrets.outputs.list }}
+      - name: Summary
+        env:
+          URL: ${{ steps.deploy.outputs.deployment-url }}
+        run: |
+          echo "Worker: $URL" >> "$GITHUB_STEP_SUMMARY"
+
+  web:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build
+        working-directory: sefer/web
+        run: |
+          npm ci
+          npm run build
+      - name: Create the Pages project (first run only)
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: sefer/web
+          wranglerVersion: "4.146.0"
+          command: pages project create sefer-ishi --production-branch=main
+      - name: Publish
+        id: publish
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: sefer/web
+          wranglerVersion: "4.146.0"
+          command: pages deploy dist --project-name=sefer-ishi --branch=main --commit-dirty=true
+      - name: Summary
+        env:
+          URL: ${{ steps.publish.outputs.deployment-url }}
+        run: |
+          echo "Published: https://sefer-ishi.pages.dev ($URL)" >> "$GITHUB_STEP_SUMMARY"
