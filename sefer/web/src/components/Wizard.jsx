@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { go } from '../lib/nav';
-import { OCCASIONS, TONES, STYLES, LENGTHS, MAX_PHOTOS, questionsFor, emptyBrief, defaultsFor, answered, briefProblem } from '../lib/brief';
+import { OCCASIONS, TONES, STYLES, LENGTHS, MAX_PHOTOS, questionsFor, emptyBrief, defaultsFor, answered, briefProblem, isRomance } from '../lib/brief';
 import { getOutline } from '../lib/api';
 import { makeBook } from '../lib/book';
 import { saveBook, saveImage } from '../lib/store';
@@ -35,6 +35,7 @@ export default function Wizard() {
   const fileRef = useRef(null);
 
   const questions = questionsFor(brief.occasion, brief.name.trim());
+  const romance = isRomance(brief);
   const set = (patch) => setBrief((b) => ({ ...b, ...patch }));
 
   useEffect(() => {
@@ -43,7 +44,7 @@ export default function Wizard() {
 
   const full = { ...brief, answers: answered(questions, texts) };
   // מה חסר בצעד הנוכחי (מונע מעבר הלאה)
-  const missing = step === 0 ? (brief.occasion ? '' : 'בחרו אירוע') : step === 1 ? (brief.name.trim() ? '' : 'כתבו על מי הספר') : step >= 2 ? briefProblem(full) : '';
+  const missing = step === 0 ? (brief.occasion ? '' : 'בחרו אירוע') : step === 1 ? (!brief.name.trim() ? (romance ? 'כתבו את שמות הדמויות' : 'כתבו על מי הספר') : romance && !brief.adult ? 'צריך לאשר שאתם מעל גיל 18' : '') : step >= 2 ? briefProblem(full) : '';
 
   async function addPhotos(files) {
     setError(null);
@@ -62,7 +63,7 @@ export default function Wizard() {
     try {
       const outline = await getOutline(full);
       const book = makeBook(full, outline, { photos: photos.length, coverKind, usePhoto, art });
-      for (let i = 0; i < photos.length; i++) await saveImage(book.id, `p${i}`, { media_type: photos[i].media_type, data: photos[i].data });
+      for (let i = 0; i < book.photos; i++) await saveImage(book.id, `p${i}`, { media_type: photos[i].media_type, data: photos[i].data });
       await saveBook(book);
       try { localStorage.removeItem(DRAFT); } catch { /* לא נורא */ }
       run(book.id); // הכריכה מצוירת ברקע
@@ -77,7 +78,7 @@ export default function Wizard() {
     return (
       <main className="min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center">
         <div className="spinner" />
-        <h1 className="book-title text-2xl m-0">הסופר בונה את הספר של {brief.name}</h1>
+        <h1 className="book-title text-2xl m-0">{romance ? `הסופר בונה את הסיפור של ${brief.name}` : `הסופר בונה את הספר של ${brief.name}`}</h1>
         <p className="text-muted m-0">בוחר שם לספר ומתכנן את הפרקים. זה לוקח עד דקה.</p>
       </main>
     );
@@ -100,7 +101,7 @@ export default function Wizard() {
                 <button
                   key={o.id} type="button" aria-pressed={brief.occasion === o.id}
                   className={`text-right rounded-2xl border p-3 bg-card ${brief.occasion === o.id ? 'border-accent ring-2 ring-accent' : 'border-line'}`}
-                  onClick={() => { set({ occasion: o.id, ...defaultsFor(o.id) }); setStep(1); }}
+                  onClick={() => { set({ occasion: o.id, adult: false, ...defaultsFor(o.id) }); setStep(1); }}
                 >
                   <div className="text-3xl" aria-hidden="true">{o.icon}</div>
                   <div className="font-bold mt-1">{o.label}</div>
@@ -111,7 +112,30 @@ export default function Wizard() {
           </section>
         ) : null}
 
-        {step === 1 ? (
+        {step === 1 && romance ? (
+          <section className="grid gap-4">
+            <div>
+              <h2 className="book-title text-2xl m-0">רומן למבוגרים</h2>
+              <p className="text-muted mt-1 mb-0">נותנים סיפור מסגרת ומתארים את הדמויות, והסופר כותב רומן רומנטי-חושני: מתח, משיכה ואווירה. הרגעים האינטימיים נכתבים ברמז, בלי תיאור מפורש, וגם האיורים מרומזים בלבד.</p>
+            </div>
+            <label>
+              <span className="label">שמות הדמויות הראשיות</span>
+              <input className="field" value={brief.name} maxLength={80} onChange={(e) => set({ name: e.target.value })} placeholder="למשל: מאיה ואורי" />
+            </label>
+            <div className="bg-card border border-line rounded-2xl p-4 grid gap-3">
+              <ul className="m-0 pr-5 text-sm text-muted grid gap-1">
+                <li>הדמויות בדויות: לא אנשים אמיתיים, ולא מעלים תמונות.</li>
+                <li>כל הדמויות בגירות (18 ומעלה), והקשר ביניהן בהסכמה.</li>
+              </ul>
+              <label className="flex items-start gap-2 font-semibold">
+                <input type="checkbox" className="mt-1.5" checked={brief.adult === true} onChange={(e) => set({ adult: e.target.checked })} />
+                <span>אני מעל גיל 18</span>
+              </label>
+            </div>
+          </section>
+        ) : null}
+
+        {step === 1 && !romance ? (
           <section className="grid gap-4">
             <h2 className="book-title text-2xl m-0">על מי הספר?</h2>
             <label>
@@ -142,7 +166,7 @@ export default function Wizard() {
         {step === 2 ? (
           <section className="grid gap-4">
             <div>
-              <h2 className="book-title text-2xl m-0">ספרו לנו על {brief.name}</h2>
+              <h2 className="book-title text-2xl m-0">{romance ? 'הסיפור והדמויות' : `ספרו לנו על ${brief.name}`}</h2>
               <p className="text-muted mt-1 mb-0">אין חובה לענות על הכול, אבל כל פרט שתכתבו ייכנס לספר. כתבו חופשי, כמו שמספרים לחבר.</p>
             </div>
             {questions.map((q, i) => (
@@ -151,17 +175,20 @@ export default function Wizard() {
                 <textarea className="field" rows={3} maxLength={1500} value={texts[i] || ''} onChange={(e) => setTexts((t) => { const n = [...t]; n[i] = e.target.value; return n; })} />
               </label>
             ))}
-            <div>
-              <span className="label">באיזה טון לכתוב?</span>
-              <Chips label="טון" value={brief.tone} onChange={(tone) => set({ tone })} options={TONES} />
-            </div>
+            {romance ? null : (
+              <div>
+                <span className="label">באיזה טון לכתוב?</span>
+                <Chips label="טון" value={brief.tone} onChange={(tone) => set({ tone })} options={TONES} />
+              </div>
+            )}
           </section>
         ) : null}
 
         {step === 3 ? (
           <section className="grid gap-5">
             <h2 className="book-title text-2xl m-0">איך הספר ייראה?</h2>
-            <div>
+            {romance ? <p className="text-sm text-muted m-0">האיורים בקטגוריה הזאת מרומזים בלבד, של דמויות מצוירות.</p> : null}
+            <div hidden={romance}>
               <span className="label">תמונות <span className="font-normal text-muted">(לא חובה, עד {MAX_PHOTOS})</span></span>
               <p className="text-sm text-muted mt-0 mb-2">התמונה הראשונה היא של גיבור/ת הספר. שאר התמונות יופיעו באלבום בסוף הספר.</p>
               <div className="flex flex-wrap gap-2">
@@ -191,7 +218,7 @@ export default function Wizard() {
             </div>
             <div>
               <span className="label">סגנון האיורים</span>
-              <Chips label="סגנון האיורים" value={brief.style} onChange={(style) => set({ style })} options={STYLES} />
+              <Chips label="סגנון האיורים" value={brief.style} onChange={(style) => set({ style })} options={romance ? STYLES.filter((s) => s.id !== 'storybook') : STYLES} />
               <label className="flex items-center gap-2 mt-3">
                 <input type="checkbox" checked={art} onChange={(e) => setArt(e.target.checked)} />
                 <span>איור לכל פרק</span>

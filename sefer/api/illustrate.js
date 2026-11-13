@@ -6,7 +6,8 @@ let found = null;
 export const forgetModel = () => { found = null; };
 
 // ההוראה למאייר: הסצנה + סגנון האיור + איך הדמויות נראות. photo = האם צורפה תמונה של גיבור הספר
-export function artPrompt({ scene, style, look, cover, photo }) {
+// romance = רומן למבוגרים: מרומז בלבד, דמויות מצוירות ובדויות
+export function artPrompt({ scene, style, look, cover, photo, romance }) {
   return `You are the illustrator of a personal gift book. Draw one illustration.
 
 Scene: ${scene}
@@ -18,7 +19,9 @@ ${look ? `The characters and world of the book: ${look}\n` : ''}${photo
 Rules:
 - ${cover ? 'This is the book cover: a single strong image, vertical (portrait 3:4) composition, with calm empty space in the upper third for the title.' : 'An inside illustration: horizontal (landscape 4:3) composition.'}
 - No text, letters, numbers, captions, logos, watermarks or frames anywhere in the image.
-- Warm, kind and suitable for all ages.`;
+- ${romance
+    ? 'A romance novel for adults, suggestive only: the mood comes from closeness, a gaze, hands, silhouettes, light and place. Everyone is an adult and fully clothed. No nudity, no underwear or swimwear focus, no sexual acts or poses. The people are invented, drawn characters - not a likeness of any real person.'
+    : 'Warm, kind and suitable for all ages.'}`;
 }
 
 // מתוך רשימת המודלים של Google: מודל שמייצר תמונות (לא וידאו), עדיף לא "lite" ולא "pro" (היקר)

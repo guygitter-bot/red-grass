@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { safeBook, makeBook, nextStep, progress, imageKeys, coverKey, toShared, toView, pagesOf, paragraphs, tail, outlineOf } from './book.js';
-import { questionsFor, answered, briefProblem, defaultsFor, emptyBrief } from './brief.js';
+import { questionsFor, answered, briefProblem, defaultsFor, emptyBrief, isRomance } from './brief.js';
 import { fitSize } from './image.js';
 
 const BRIEF = { ...emptyBrief(), occasion: 'birthday', name: 'דנה', gender: 'f', from: 'יואב', answers: [{ q: 'א', a: 'ב' }, { q: 'ג', a: 'ד' }] };
@@ -103,5 +103,26 @@ describe('שאלון', () => {
     expect(briefProblem({ ...BRIEF, answers: [] })).toMatch(/שתי שאלות/);
     expect(briefProblem(BRIEF)).toBe('');
     expect(defaultsFor('kid')).toMatchObject({ tone: 'adventure', style: 'storybook' });
+  });
+});
+
+describe('רומן למבוגרים', () => {
+  const ROMANCE = { ...emptyBrief(), occasion: 'romance', name: 'מאיה ואורי', answers: [{ q: 'א', a: 'ב' }, { q: 'ג', a: 'ד' }] };
+
+  it('אי אפשר להתחיל בלי אישור גיל', () => {
+    expect(isRomance(ROMANCE)).toBe(true);
+    expect(briefProblem(ROMANCE)).toMatch(/18/);
+    expect(briefProblem({ ...ROMANCE, adult: true })).toBe('');
+    expect(briefProblem({ ...ROMANCE, name: '' })).toMatch(/דמויות/);
+    expect(emptyBrief().adult).toBe(false);
+  });
+
+  it('שאלות על הסיפור והדמויות, בלי תמונות של אנשים, ומסומן למבוגרים בשיתוף', () => {
+    expect(questionsFor('romance', 'x')[0]).toMatch(/סיפור המסגרת/);
+    const b = makeBook({ ...ROMANCE, adult: true }, OUTLINE, { photos: 3, coverKind: 'photo', usePhoto: true });
+    expect(b).toMatchObject({ photos: 0, coverKind: 'art', usePhoto: false });
+    b.chapters[0].text = 'טקסט';
+    expect(toShared(b).adult).toBe(true);
+    expect(toShared(makeBook(BRIEF, OUTLINE)).adult).toBe(false);
   });
 });

@@ -105,7 +105,7 @@ export default function Book({ id }) {
           {book.stage === 'outline' ? (
             <section className="grid gap-4">
               <div>
-                <h2 className="book-title text-2xl m-0">הנה הספר שתכננו ל{book.brief.name}</h2>
+                <h2 className="book-title text-2xl m-0">{book.brief.occasion === 'romance' ? `הנה הסיפור של ${book.brief.name}` : `הנה הספר שתכננו ל${book.brief.name}`}</h2>
                 <p className="text-muted mt-1 mb-0">אפשר לשנות כל דבר לפני שהסופר מתחיל לכתוב: את השם, את ההקדשה ואת הפרקים.</p>
               </div>
               <label><span className="label">שם הספר</span><input className="field" value={book.title} maxLength={120} onChange={(e) => update({ title: e.target.value })} /></label>

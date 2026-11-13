@@ -26,7 +26,7 @@ const heroPhoto = async (book) => (book.usePhoto && book.photos ? (await getImag
 
 async function draw(book, scene, cover) {
   const photo = await heroPhoto(book);
-  const art = await getArt({ scene, style: book.brief.style, look: book.look, cover, photo: photo ? { media_type: photo.media_type, data: photo.data } : undefined });
+  const art = await getArt({ scene, style: book.brief.style, look: book.look, cover, occasion: book.brief.occasion, photo: photo ? { media_type: photo.media_type, data: photo.data } : undefined });
   return compactArt(art);
 }
 

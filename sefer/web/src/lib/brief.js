@@ -8,6 +8,7 @@ export const OCCASIONS = [
   { id: 'funny', icon: '😂', label: 'צחוקים', hint: 'קורע מצחוק, ובסוף גם מרגש' },
   { id: 'kid', icon: '🧸', label: 'סיפור לילד/ה', hint: 'סיפור מאויר שהילד/ה הגיבורים שלו' },
   { id: 'just', icon: '🎁', label: 'סתם מתנה', hint: 'בלי סיבה, ובדיוק בגלל זה מרגש' },
+  { id: 'romance', icon: '🌹', label: 'רומן למבוגרים', hint: 'סיפור רומנטי-חושני על דמויות שתמציאו (18+)' },
   { id: 'other', icon: '✨', label: 'משהו אחר', hint: 'פרישה, פרידה, זיכרון, חיית מחמד...' },
 ];
 
@@ -54,6 +55,14 @@ const COUPLE = [
 ];
 
 const QUESTIONS = {
+  romance: [
+    'סיפור המסגרת: איפה ומתי זה קורה, ומה המצב בהתחלה?',
+    'הדמות הראשונה: שם, גיל, מראה, אופי, ומה היא רוצה',
+    'הדמות השנייה: שם, גיל, מראה, אופי, ומה היא רוצה',
+    'מה מושך אותם זה לזה, ומה עומד ביניהם?',
+    'רגעים או סצנות שחשוב לכם שיהיו בסיפור',
+    'איך הסיפור נגמר?',
+  ],
   anniversary: COUPLE,
   wedding: [
     'איך הזוג הכיר? ספרו על ההתחלה',
@@ -85,16 +94,19 @@ const QUESTIONS = {
 export const questionsFor = (occasion, name) => (QUESTIONS[occasion] || COMMON).map((q) => q.replaceAll('{שם}', name || 'מי שהספר עליו'));
 
 export const isKid = (brief) => brief?.occasion === 'kid';
+// רומן רומנטי-חושני למבוגרים: דמויות בדויות ובגירות, בלי תמונות של אנשים, ורק אחרי אישור גיל
+export const isRomance = (brief) => brief?.occasion === 'romance';
 
 // בריף ריק לספר חדש
 export const emptyBrief = () => ({
   occasion: '', name: '', gender: 'm', relation: '', age: '', from: '',
-  tone: 'mixed', style: 'watercolor', length: 'medium', dedication: '', answers: [],
+  tone: 'mixed', style: 'watercolor', length: 'medium', dedication: '', adult: false, answers: [],
 });
 
 // ברירות מחדל שמתאימות לאירוע (נקבעות כשבוחרים אירוע)
 export function defaultsFor(occasion) {
   if (occasion === 'kid') return { tone: 'adventure', style: 'storybook', length: 'medium' };
+  if (occasion === 'romance') return { tone: 'moving', style: 'real', length: 'medium' };
   if (occasion === 'funny') return { tone: 'funny', style: 'comic', length: 'medium' };
   if (occasion === 'romantic' || occasion === 'anniversary' || occasion === 'wedding') return { tone: 'moving', style: 'watercolor', length: 'medium' };
   return { tone: 'mixed', style: 'watercolor', length: 'medium' };
@@ -108,7 +120,8 @@ export function answered(questions, answers) {
 // אפשר להתחיל? מחזיר הודעה בעברית אם חסר משהו, או ''
 export function briefProblem(brief) {
   if (!brief.occasion) return 'בחרו לאיזה אירוע הספר';
-  if (!String(brief.name || '').trim()) return 'כתבו על מי הספר';
+  if (!String(brief.name || '').trim()) return isRomance(brief) ? 'כתבו את שמות הדמויות' : 'כתבו על מי הספר';
+  if (isRomance(brief) && !brief.adult) return 'צריך לאשר שאתם מעל גיל 18';
   if ((brief.answers || []).length < 2) return 'ענו לפחות על שתי שאלות, כדי שיהיה לסופר ממה לכתוב';
   return '';
 }

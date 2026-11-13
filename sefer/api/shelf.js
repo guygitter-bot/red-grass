@@ -33,6 +33,7 @@ export function cleanSharedBook(b) {
     name: str(b.name, 80),
     from: str(b.from, 80),
     kid: Boolean(b.kid),
+    adult: Boolean(b.adult), // רומן למבוגרים: מי שפותח את הקישור מאשר קודם שהוא מעל 18
     cover: str(b.cover, 24),
     photos: (Array.isArray(b.photos) ? b.photos : []).map((k) => str(k, 24)).filter(Boolean).slice(0, 12),
     chapters,
