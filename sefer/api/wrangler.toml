@@ -1,0 +1,27 @@
+name = "sefer-ishi-api"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[vars]
+# האתרים שמותר להם לפנות לשרת: האפליקציה ב-Cloudflare Pages (כולל כתובות תצוגה מקדימה) ופיתוח מקומי
+ALLOWED_ORIGIN_RE = "^https://([a-z0-9-]+\\.)?sefer-ishi(-[a-z0-9]+)?\\.pages\\.dev$|^http://localhost:[0-9]+$"
+# מחולל האיורים של Google (Gemini API). אם השם כבר לא קיים – השרת מוצא לבד מודל תמונות אחר ברשימת המודלים
+IMAGE_MODEL = "gemini-nano-banana-2.1"
+# תקרה יומית (לכל המשתמשים יחד) כדי שאף אחד לא ירוקן את החשבון: קריאות כתיבה, איורים, וספרים ששותפו בקישור
+DAILY_TEXT = "300"
+DAILY_IMAGES = "150"
+DAILY_SHARES = "40"
+
+# המדף: ספרים ששותפו בקישור + המונה היומי – אובייקט אחד ("main")
+[[durable_objects.bindings]]
+name = "SHELF"
+class_name = "Shelf"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Shelf"]
+
+# סודות, לא כאן (נקבעים אוטומטית מ-GitHub, ראו .github/workflows/sefer.yml):
+#   ANTHROPIC_API_KEY – המפתח של Claude (הסופר: בונה את מתווה הספר וכותב את הפרקים)
+#   GEMINI_API_KEY    – המפתח של Google AI Studio (המאייר: כריכה ואיור לכל פרק)
