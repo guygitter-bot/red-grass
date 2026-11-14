@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getMedia } from '../lib/store';
 import { dataUrl, downloadBlob, shareBlob, fileName, videoExt } from '../lib/image';
-import { shotState } from '../lib/shots';
+import { shotState, waitText } from '../lib/shots';
 
 const SOURCE = { photo: 'מהצילום', plan: 'מהשרטוט' };
 
@@ -10,6 +10,18 @@ export default function Shot({ index, shot, project, busy, onStill, onClip, onRe
   const [frame, setFrame] = useState('');
   const [clip, setClip] = useState(null); // { url, blob }
   const state = shotState(shot, busy);
+  const [now, setNow] = useState(Date.now());
+
+  // שעון להמתנה לסרטון
+  useEffect(() => {
+    if (state !== 'filming') return undefined;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => {
+      clearInterval(timer);
+    };
+  }, [state]);
+  const waited = shot.opAt ? waitText(now - shot.opAt) : '';
+  const late = shot.opAt > 0 && now - shot.opAt > 5 * 60 * 1000;
   const vertical = project.brief.aspect === '9:16';
 
   // הפריים שמוצג: זה שנוצר לשוט, או התמונה המקורית
@@ -72,7 +84,16 @@ export default function Shot({ index, shot, project, busy, onStill, onClip, onRe
           <p className="mt-3 flex items-center gap-2 text-sm"><span className="spinner" /> מכין פריים פוטוריאליסטי… (עד דקה)</p>
         )}
         {state === 'filming' && (
-          <p className="mt-3 flex items-center gap-2 text-sm"><span className="spinner" /> הסרטון בהכנה, בדרך כלל 1–4 דקות. אפשר לסגור את האפליקציה ולחזור אחר כך.</p>
+          <div className="mt-3 text-sm">
+            <p className="flex items-center gap-2"><span className="spinner" /> הסרטון בהכנה{waited ? ` – עברו ${waited}` : ''}. בדרך כלל דקה עד שלוש.</p>
+            <p className="mt-1 text-muted">זה קורה בשרת: אפשר לסגור את האפליקציה ולחזור אחר כך, הסרטון יחכה כאן.</p>
+            {late && <p className="mt-1 text-bad">זה לוקח יותר מהרגיל. אם אין סרטון אחרי 10 דקות – כדאי ליצור אותו שוב.</p>}
+          </div>
+        )}
+        {state === 'ready-to-film' && shot.still && !shot.error && (
+          <p className="mt-3 rounded-xl bg-soft p-3 text-sm">
+            <strong>הפריים מוכן.</strong> אם הוא נאמן לבניין – לחצו "להפוך לסרטון". הסרטון לא מתחיל לבד.
+          </p>
         )}
 
         {(state === 'needs-still' || state === 'ready-to-film') && (

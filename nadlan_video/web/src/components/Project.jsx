@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import Shot from './Shot';
 import Film from './Film';
 import { planFilm } from '../lib/api';
-import { QUALITIES } from '../lib/brief';
+import { QUALITIES, STYLES } from '../lib/brief';
 import { getMedia, saveProject, newId, safeShot } from '../lib/store';
 import { produceStill, produceClip, readyCount } from '../lib/shots';
 
@@ -93,8 +93,16 @@ export default function Project({ initial, onBack }) {
     await patchShot(id)({ hasClip: false, op: '', opAt: 0 });
     run(id, 'clip');
   };
+  const hasWork = () => ref.current.shots.some((s) => s.hasClip || s.hasStill || s.op);
   const replan = () => {
-    if (ref.current.shots.some((s) => s.hasClip || s.hasStill || s.op) && !window.confirm('לתכנן מחדש? השוטים שכבר נוצרו יוחלפו.')) return;
+    if (hasWork() && !window.confirm('לתכנן מחדש? השוטים שכבר נוצרו יוחלפו.')) return;
+    plan();
+  };
+  // סגנון אחר = תכנון חדש של כל השוטים
+  const restyle = async (id) => {
+    if (id === ref.current.brief.style) return;
+    if (hasWork() && !window.confirm('להחליף סגנון? הבמאי יתכנן שוטים חדשים, והשוטים שכבר נוצרו יוחלפו.')) return;
+    await update((p) => ({ ...p, brief: { ...p.brief, style: id } }));
     plan();
   };
 
@@ -177,9 +185,21 @@ export default function Project({ initial, onBack }) {
 
           {ready > 0 && <Film project={project} />}
 
-          <div className="mt-6 text-center">
-            <button className="text-sm text-muted underline" disabled={planning || anyBusy} onClick={replan}>לבקש מהבמאי תכנון אחר</button>
-          </div>
+          <section className="mt-6 rounded-2xl border border-line bg-card p-4">
+            <fieldset disabled={planning || anyBusy}>
+              <legend className="text-lg font-bold">סגנון הסרטון</legend>
+              <p className="text-sm text-muted">משעמם? בחרו סגנון אחר, והבמאי יתכנן את השוטים מחדש.</p>
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                {STYLES.map((o) => (
+                  <button key={o.id} type="button" className="chip" aria-pressed={project.brief.style === o.id} onClick={() => restyle(o.id)}>
+                    <span className="block font-semibold">{o.label}</span>
+                    <span className="block text-xs text-muted">{o.hint}</span>
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <button className="mt-3 text-sm text-muted underline" disabled={planning || anyBusy} onClick={replan}>אותו סגנון, תכנון אחר</button>
+          </section>
         </>
       )}
     </main>

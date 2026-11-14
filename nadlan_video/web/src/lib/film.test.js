@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { blackAt, layerAlpha, outroAlpha, coverRect, pickMime, wrapLines, frameSize, FADE, OUTRO } from './film';
 import { fitSize, fileName, videoExt, fromDataUrl, dataUrl } from './image';
 import { safeProject, safeShot } from './store';
-import { shotState, readyCount, withExtra } from './shots';
+import { shotState, readyCount, withExtra, waitText } from './shots';
 
 describe('הסרט המלא', () => {
   it('גודל המסגרת לפי הפורמט', () => {
@@ -69,6 +69,8 @@ describe('שוטים', () => {
     const p = safeProject({ id: 'a', shots: [{ id: 's', title: 'פתיחה' }] });
     expect(p.quality).toBe('max');
     expect(p.brief.aspect).toBe('16:9');
+    expect(p.brief.style).toBe('classic');
+    expect(safeProject({ brief: { style: 'drone' } }).brief.style).toBe('drone');
     expect(p.shots[0].hasClip).toBe(false);
     expect(p.shots[0].extra).toBe('');
     expect(safeProject({}).shots).toEqual([]);
@@ -82,6 +84,9 @@ describe('שוטים', () => {
     expect(shotState(safeShot({ hasClip: true, op: 'x' }))).toBe('done');
     expect(shotState(safeShot({ still: 'x' }), 'still')).toBe('making-still');
     expect(readyCount(safeProject({ shots: [{ hasClip: true }, {}] }))).toBe(1);
+    expect(waitText(45_000)).toBe('0:45');
+    expect(waitText(125_900)).toBe('2:05');
+    expect(waitText(-5)).toBe('0:00');
   });
 
   it('בקשה מיוחדת מצורפת להוראה', () => {

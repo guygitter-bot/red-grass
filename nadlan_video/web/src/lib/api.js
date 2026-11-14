@@ -77,7 +77,7 @@ export const planFilm = (brief, photo, plan) => api('/plan', { brief, photo, pla
 // פריים הפתיחה של שוט
 export const makeStill = (image, instruction, brief, source) => api('/still', { image, instruction, brief, source }).then((d) => d.image);
 // מתחיל יצירת סרטון -> { op, resolution }
-export const startClip = (image, motion, aspect, quality) => api('/clip', { image, motion, aspect, quality });
+export const startClip = (image, motion, aspect, quality, style) => api('/clip', { image, motion, aspect, quality, style });
 export const clipStatus = (op) => api('/clip/status', { op });
 
 // הקובץ של סרטון מוכן (Blob)

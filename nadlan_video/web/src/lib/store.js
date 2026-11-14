@@ -39,7 +39,8 @@ export const safeShot = (s) => ({ title: '', why: '', source: 'photo', still: ''
 export const safeProject = (p) => ({
   name: '', tagline: '', contact: '', createdAt: 0, thumb: '', quality: 'max', summary: '',
   ...p,
-  brief: { kind: 'building', look: 'golden', aspect: '16:9', note: '', ...(p?.brief || {}) },
+  // סרטון ישן בלי סגנון = קלאסי (מה שהיה אז)
+  brief: { kind: 'building', look: 'golden', aspect: '16:9', style: 'classic', note: '', ...(p?.brief || {}) },
   has: { photo: false, plan: false, ...(p?.has || {}) },
   shots: (Array.isArray(p?.shots) ? p.shots : []).map(safeShot),
 });
