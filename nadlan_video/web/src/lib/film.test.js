@@ -69,6 +69,8 @@ describe('שוטים', () => {
     const p = safeProject({ id: 'a', shots: [{ id: 's', title: 'פתיחה' }] });
     expect(p.quality).toBe('max');
     expect(p.brief.aspect).toBe('16:9');
+    expect(p.brief.style).toBe('classic');
+    expect(safeProject({ brief: { style: 'drone' } }).brief.style).toBe('drone');
     expect(p.shots[0].hasClip).toBe(false);
     expect(p.shots[0].extra).toBe('');
     expect(safeProject({}).shots).toEqual([]);

@@ -45,7 +45,7 @@ export async function produceClip(project, shot, patch, alive = () => true) {
   if (!op) {
     const frame = await getMedia(shot.still ? `${shot.id}:still` : `${project.id}:${shot.source}`);
     if (!frame) throw new Error('הפריים לא נמצא במכשיר הזה.');
-    const started = await startClip(frame, withExtra(shot.motion, shot.extra), project.brief.aspect, project.quality);
+    const started = await startClip(frame, withExtra(shot.motion, shot.extra), project.brief.aspect, project.quality, project.brief.style);
     op = started.op;
     opAt = Date.now();
     await patch({ op, opAt, error: '', detail: '' });
