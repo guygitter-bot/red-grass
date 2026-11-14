@@ -29,8 +29,16 @@ export function googleDetail(status, model, raw) {
 export const modelMissing = (status, raw) => status === 404 || (status === 400 && /model .*(not found|not supported)|is not found|unknown model|modalit/i.test(raw));
 
 export async function listModels(env) {
-  const res = await fetch(`${BASE}/models?pageSize=200`, { headers: { 'x-goog-api-key': env.GEMINI_API_KEY } });
-  if (!res.ok) return [];
-  const data = await res.json().catch(() => null);
-  return data?.models || [];
+  // הרשימה מגיעה בעמודים
+  const all = [];
+  let pageToken = '';
+  for (let page = 0; page < 5; page++) {
+    const res = await fetch(`${BASE}/models?pageSize=200${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ''}`, { headers: { 'x-goog-api-key': env.GEMINI_API_KEY } });
+    if (!res.ok) break;
+    const data = await res.json().catch(() => null);
+    all.push(...(data?.models || []));
+    pageToken = data?.nextPageToken || '';
+    if (!pageToken) break;
+  }
+  return all;
 }

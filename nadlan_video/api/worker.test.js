@@ -186,7 +186,7 @@ test('/plan: שולח את שתי התמונות ל-Claude ומחזיר רשימ
 test('/still: מודל שלא קיים -> מוצא אחר ברשימה; שדה יחס לא מוכר -> מנסה בלעדיו', async () => {
   await login();
   mock(({ url, body }) => {
-    if (url.endsWith('/models?pageSize=200')) return json({ models: [{ name: 'models/nano-image-9', supportedGenerationMethods: ['generateContent'] }] });
+    if (url.includes('/models?pageSize=200')) return json({ models: [{ name: 'models/nano-image-9', supportedGenerationMethods: ['generateContent'] }] });
     if (url.includes('/img-1:')) return json({ error: { message: 'model is not found' } }, 404);
     if (body.generationConfig.imageConfig) return json({ error: { message: 'Unknown name "imageConfig"' } }, 400);
     return json({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: 'UE5H' } }] } }] });

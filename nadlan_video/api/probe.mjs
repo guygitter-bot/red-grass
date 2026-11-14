@@ -32,13 +32,20 @@ function testPng(w = 640, h = 360) {
   return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', head), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
 }
 
-const list = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: { 'x-goog-api-key': env.GEMINI_API_KEY } });
-console.log('list models:', list.status);
-const data = await list.json().catch(() => ({}));
-if (!list.ok) console.log('  ', JSON.stringify(data?.error?.message || data).slice(0, 400));
-for (const m of data.models || []) {
-  if (/veo|banana|image/i.test(m.name)) console.log('  ', m.name, (m.supportedGenerationMethods || []).join(','));
-}
+// כל המודלים שהמפתח רואה (כולל עמודים נוספים), עם השיטות שכל אחד תומך בהן – כדי לדעת איך קוראים היום למחולל הווידאו
+let pageToken = '';
+let total = 0;
+do {
+  const list = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=200${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ''}`, { headers: { 'x-goog-api-key': env.GEMINI_API_KEY } });
+  const data = await list.json().catch(() => ({}));
+  if (!list.ok) { console.log('list models:', list.status, JSON.stringify(data?.error?.message || data).slice(0, 400)); break; }
+  for (const m of data.models || []) {
+    total++;
+    console.log('  ', m.name, '|', (m.supportedGenerationMethods || []).join(','));
+  }
+  pageToken = data.nextPageToken || '';
+} while (pageToken);
+console.log(`models: ${total}`);
 
 let failed = false;
 const brief = cleanBrief({ kind: 'building', look: 'golden', aspect: '16:9' });
