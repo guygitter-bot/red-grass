@@ -2,7 +2,7 @@ import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import worker, { cleanImage, Studio, OP_RE } from './worker.js';
-import { cleanBrief, KINDS, LOOKS, ASPECTS, QUALITIES, SHOTS } from './brief.js';
+import { cleanBrief, KINDS, LOOKS, STYLES, ASPECTS, QUALITIES, SHOTS } from './brief.js';
 import { readPlan, planSystem, PLAN_TOOL, MODEL } from './director.js';
 import { stillPrompt, pickStillModel, forgetStillModel } from './still.js';
 import { clipPrompt, pickVideoModel, requestBodies, findVideo, resolutionFor, forgetVideoModel } from './video.js';
@@ -87,7 +87,9 @@ const PLAN = {
 };
 
 test('בריף: ברירות מחדל וניקוי', () => {
-  assert.deepEqual(cleanBrief({}), { kind: 'building', look: 'golden', aspect: '16:9', name: '', note: '' });
+  assert.deepEqual(cleanBrief({}), { kind: 'building', look: 'golden', aspect: '16:9', style: 'classic', name: '', note: '' });
+  assert.equal(cleanBrief({ style: 'drone' }).style, 'drone');
+  assert.equal(cleanBrief({ style: 'matrix' }).style, 'classic');
   const b = cleanBrief({ kind: 'apartment', look: 'dusk', aspect: '9:16', name: '  מגדלי   הים ', note: 'x'.repeat(900) });
   assert.equal(b.kind, 'apartment');
   assert.equal(b.name, 'מגדלי הים');
@@ -99,6 +101,7 @@ test('המזהים של הבריף זהים בשרת ובאפליקציה', asyn
   const web = await import('../web/src/lib/brief.js');
   assert.deepEqual(Object.keys(web.KINDS), Object.keys(KINDS));
   assert.deepEqual(Object.keys(web.LOOKS), Object.keys(LOOKS));
+  assert.deepEqual(web.STYLES.map((x) => x.id), Object.keys(STYLES));
   assert.deepEqual(web.ASPECTS.map((a) => a.id), ASPECTS);
   assert.deepEqual(web.QUALITIES.map((q) => q.id), QUALITIES);
 });
@@ -127,6 +130,16 @@ test('ההנחיות: אמת אדריכלית, האור שנבחר, והכלי �
   assert.match(sys, /blue-hour/);
   assert.match(sys, /vertical 9:16/);
   assert.doesNotMatch(sys, /a PHOTO \(/);
+  // הסגנון קובע את שפת המצלמה אצל הבמאי ואת הקצב בהוראת הווידאו
+  const drone = planSystem(cleanBrief({ style: 'drone' }), { photo: true, plan: false });
+  assert.match(drone, /aerial drone moves only/);
+  assert.doesNotMatch(drone, /steadicam/);
+  assert.match(planSystem(cleanBrief({ style: 'tour' }), { photo: true, plan: false }), /steadicam/);
+  assert.match(clipPrompt('fly in', 'drone'), /sweeping aerial drone/);
+  assert.doesNotMatch(clipPrompt('fly in', 'dynamic'), /fast camera motion/);
+  assert.match(clipPrompt('push', 'classic'), /Avoid: [^\n]*fast camera motion/);
+  assert.match(clipPrompt('push'), /slow, elegant/);
+  for (const st of Object.values(STYLES)) assert.ok(st.arc && st.camera && st.pace && typeof st.calm === 'boolean');
   assert.equal(PLAN_TOOL.strict, true);
   assert.equal(PLAN_TOOL.input_schema.additionalProperties, false);
   assert.match(stillPrompt('a lobby', cleanBrief({}), 'plan'), /architectural drawing/);
@@ -243,7 +256,7 @@ test('/clip: עבודה ברקע -> מוכן -> הקובץ עובר דרך הש�
     if (url === `${URI}:download?alt=media`) return new Response('MP4DATA', { headers: { 'content-type': 'video/mp4' } });
     return json({}, 404);
   });
-  let res = await worker.fetch(post('/clip', { image: IMG, motion: 'slow orbit', aspect: '9:16', quality: 'max' }), env);
+  let res = await worker.fetch(post('/clip', { image: IMG, motion: 'slow orbit', aspect: '9:16', quality: 'max', style: 'drone' }), env);
   assert.equal(res.status, 200);
   const { op } = await res.json();
   assert.ok(OP_RE.test(op));
@@ -255,7 +268,7 @@ test('/clip: עבודה ברקע -> מוכן -> הקובץ עובר דרך הש�
   assert.equal(calls.length, 2);
   assert.match(calls[0].url, /\/v1beta\/interactions$/);
   assert.equal(calls[0].body.model, 'omni-x');
-  assert.match(calls[0].body.input[1].text, /exact first frame[\s\S]*slow orbit[\s\S]*no morphing/);
+  assert.match(calls[0].body.input[1].text, /exact first frame[\s\S]*slow orbit[\s\S]*sweeping aerial drone[\s\S]*no morphing/);
   assert.equal(calls[0].init.headers['x-goog-api-key'], 'g');
   assert.deepEqual(await (await worker.fetch(post('/clip/status', { op }), env)).json(), { done: true, resolution: '1080p', model: 'omni-x' });
   res = await worker.fetch(post('/clip/file', { op }), env);

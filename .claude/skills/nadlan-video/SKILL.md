@@ -8,6 +8,8 @@ description: Turn a photo of a building and/or an architectural drawing (elevati
 The same craft as the app in `nadlan_video/` (https://nadlan-video.pages.dev), run from the chat. Talk to the user in
 simple Hebrew. The prompts that carry the craft live in the app's server - read them, do not re-invent them:
 
+- `nadlan_video/api/brief.js` - `STYLES`: the film styles (drone, tour, dynamic, timelapse, classic) - the shot arc, camera
+  language and pace of each. Ask the user which style they want; default drone for a building, tour for an apartment.
 - `nadlan_video/api/director.js` - `planSystem`: how the film is planned (4 shots, the arc, truthfulness rules).
 - `nadlan_video/api/still.js` - `stillPrompt`: how a drawing or photo becomes a photorealistic opening frame.
 - `nadlan_video/api/video.js` - `clipPrompt` and `NEGATIVE`: how a frame becomes a camera move.

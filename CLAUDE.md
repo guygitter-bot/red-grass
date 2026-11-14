@@ -258,6 +258,7 @@
 - בדיקה: `cd nadlan_video/api && npm test` · `cd nadlan_video/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 - **נאמנות לבניין:** לא מנפישים שרטוט ולא ממציאים אדריכלות – תמיד מקור ← פריים ← אישור ← תנועת מצלמה אחת. ההנחיות ב-`api/director.js`, `still.js`, `video.js`; הסקיל `/nadlan-video` (`.claude/skills/nadlan-video/`) נשען עליהן.
 - סרטון עולה כסף: **עם סיסמה** (נקבעת בכניסה הראשונה) ותקרה יומית ב-`api/wrangler.toml`. `nadlan-video-probe.yml` יוצר סרטון אמיתי (פחות מדולר) – רץ רק כשמשנים את הקוד שפונה ל-Google.
+- סגנון הסרטון (רחפן / סיור / דינמי / מיום ללילה / קלאסי): `STYLES` ב-`api/brief.js` – סגנון חדש מוסיפים שם (arc, camera, pace, calm) ובתוויות שבאפליקציה.
 - המזהים של הבריף כפולים ב-`api/brief.js` וב-`web/src/lib/brief.js` – לשנות בשניהם (בדיקה מוודאת). שדה חדש – ברירת מחדל ב-`safeProject` / `safeShot`.
 - המשתמש ביקש: **תמיד למזג לבד** את ה-PR (אחרי שהבדיקות ירוקות, כולל ה-probe כשהוא רץ), לבדוק שהעלייה (`nadlan-video.yml` על main) הצליחה, ולדווח.
 - הבמאי (Claude): בלי `tool_choice` כפוי – `claude-opus-5-5` דוחה אותו (400). שינוי בקריאה ל-Claude או ל-Google נבדק ב-probe לפני מיזוג.

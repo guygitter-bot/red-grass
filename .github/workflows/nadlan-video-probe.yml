@@ -10,6 +10,9 @@ on:
       - "nadlan_video/api/still.js"
       - "nadlan_video/api/google.js"
       - "nadlan_video/api/probe.mjs"
+      - "nadlan_video/api/e2e.mjs"
+      - "nadlan_video/api/studio.js"
+      - "nadlan_video/api/worker.js"
       - ".github/workflows/nadlan-video-probe.yml"
   workflow_dispatch:
 
@@ -37,3 +40,14 @@ jobs:
         run: |
           get() { sed -n "s/^$1 = \"\(.*\)\"/\1/p" wrangler.toml; }
           IMAGE_MODEL="$(get IMAGE_MODEL)" VIDEO_MODEL="$(get VIDEO_MODEL)" node probe.mjs
+      # השרת עצמו (אותו קוד כמו באוויר, ב-wrangler dev): סרטון ב-1080p דרך עבודת הרקע, עד הורדת הקובץ
+      - name: End to end through the worker (background job, 1080p)
+        working-directory: nadlan_video/api
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          printf 'GEMINI_API_KEY=%s\nANTHROPIC_API_KEY=%s\n' "$GEMINI_API_KEY" "$ANTHROPIC_API_KEY" > .dev.vars
+          npx --yes wrangler@4.146.0 dev --port 8787 --local > wrangler.log 2>&1 &
+          for i in $(seq 1 60); do curl -s -m 2 http://127.0.0.1:8787/health > /dev/null && break; sleep 2; done
+          node e2e.mjs http://127.0.0.1:8787 max || { grep -v "^ *at " wrangler.log | tail -30; exit 1; }

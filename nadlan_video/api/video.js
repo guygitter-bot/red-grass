@@ -2,6 +2,7 @@
 // הקריאה ל-Google נשארת פתוחה עד שהסרטון מוכן (דקה ויותר), ולכן היא רצה ברקע ב-Durable Object (ראו studio.js: "עבודה"),
 // והאפליקציה רק שואלת אם הסרטון מוכן. כאן: בניית הבקשה, קריאת התשובה, והורדת הקובץ.
 import { BASE, fail, googleMessage, googleDetail, modelMissing, listModels } from './google.js';
+import { STYLES } from './brief.js';
 
 export const SECONDS = 8;
 const FILE_RE = /^https:\/\/generativelanguage\.googleapis\.com\//;
@@ -9,21 +10,22 @@ const FILE_RE = /^https:\/\/generativelanguage\.googleapis\.com\//;
 let found = null;
 export const forgetVideoModel = () => { found = null; };
 
-// מה אסור שיקרה בסרטון נדל"ן
-export const NEGATIVE = 'warping or morphing architecture, bending walls, melting windows, a changing number of floors, new buildings appearing, text, captions, subtitles, logos, watermarks, people walking into frame, fast camera motion, camera shake, cuts, flicker, cartoon look';
+// מה אסור שיקרה בסרטון נדל"ן. בסגנון רגוע גם תנועה מהירה אסורה
+export const NEGATIVE = 'warping or morphing architecture, bending walls, melting windows, a changing number of floors, new buildings appearing, text, captions, subtitles, logos, watermarks, people walking into frame, camera shake, cuts, flicker, cartoon look';
 
-// ההוראה למחולל: תנועת המצלמה של הבמאי + כללי האיכות
-export function clipPrompt(motion) {
+// ההוראה למחולל: תנועת המצלמה של הבמאי + הקצב של הסגנון + כללי האיכות
+export function clipPrompt(motion, styleId) {
+  const style = STYLES[styleId] || STYLES.classic;
   return `Use the attached image as the exact first frame of the video and animate it.
 
 ${motion}
 
-Cinematic high-end real-estate promotional film. One continuous, slow, perfectly stabilised camera move for the whole \
-shot, a single unbroken take. The architecture is rigid and stays exactly as in the first frame: straight vertical \
-lines, no morphing, no new objects. Photorealistic, natural colour grade, soft highlight roll-off, 24fps film motion. \
-Audio: subtle natural ambience only, no music, no speech.
+Cinematic high-end real-estate promotional film. ${style.pace} A single unbroken take for the whole shot, and the \
+camera really moves: the last frame is clearly a different view from the first. The architecture is rigid and stays \
+exactly as in the first frame: straight vertical lines, no morphing, no new objects. Photorealistic, natural colour \
+grade, soft highlight roll-off, 24fps film motion. Audio: subtle natural ambience only, no music, no speech.
 
-Avoid: ${NEGATIVE}.`;
+Avoid: ${NEGATIVE}${style.calm ? ', fast camera motion' : ''}.`;
 }
 
 // מתוך רשימת המודלים של Google: מודל הווידאו (Omni), הגרסה החדשה ביותר, ועדיף לא "preview"
@@ -92,8 +94,8 @@ const call = (env, body, signal) => fetch(`${BASE}/interactions`, {
 const KNOWN = ['gemini-omni-1.2-flash', 'gemini-omni-1.1-flash'];
 
 // יוצר סרטון ומחכה לו (דקה ויותר). מחזיר { uri | data, type, model, resolution } או זורק Error בעברית
-export async function generateClip(env, image, motion, aspect, quality, signal) {
-  const prompt = clipPrompt(motion);
+export async function generateClip(env, image, motion, aspect, quality, signal, style) {
+  const prompt = clipPrompt(motion, style);
   const queue = [...new Set([found, env.VIDEO_MODEL, ...KNOWN].filter(Boolean))];
   const tried = new Set();
   let listed = false;

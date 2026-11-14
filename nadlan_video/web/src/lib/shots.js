@@ -14,6 +14,12 @@ export function shotState(shot, busy) {
   return 'ready-to-film';
 }
 
+// כמה זמן מחכים, כטקסט: "0:45", "2:05"
+export function waitText(ms) {
+  const sec = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+}
+
 export const readyCount = (project) => project.shots.filter((s) => s.hasClip).length;
 
 // בקשה מיוחדת של המשתמש לשוט – מצורפת להוראה של הבמאי
@@ -39,7 +45,7 @@ export async function produceClip(project, shot, patch, alive = () => true) {
   if (!op) {
     const frame = await getMedia(shot.still ? `${shot.id}:still` : `${project.id}:${shot.source}`);
     if (!frame) throw new Error('הפריים לא נמצא במכשיר הזה.');
-    const started = await startClip(frame, withExtra(shot.motion, shot.extra), project.brief.aspect, project.quality);
+    const started = await startClip(frame, withExtra(shot.motion, shot.extra), project.brief.aspect, project.quality, project.brief.style);
     op = started.op;
     opAt = Date.now();
     await patch({ op, opAt, error: '', detail: '' });

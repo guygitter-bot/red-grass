@@ -5,7 +5,7 @@
 //   fails              -> { n, until } (נעילה קצרה אחרי הרבה ניסיונות שגויים)
 // "job:<מזהה>" – עבודה אחת של יצירת סרטון. הקריאה ל-Google נשארת פתוחה דקה ויותר, ולכן היא רצה ב-alarm (ברקע),
 // והאפליקציה רק שואלת אם הסרטון מוכן. הכול נמחק אחרי יומיים:
-//   job                -> { status: queued / working / done / failed, at, motion, aspect, quality, imageType, imageParts,
+//   job                -> { status: queued / working / done / failed, at, motion, aspect, quality, style, imageType, imageParts,
 //                           model?, resolution?, uri?, videoType?, videoParts?, error?, detail? }
 //   img:<n>            -> חלקי הפריים (base64, עד מיליון תווים – יש תקרת גודל לערך)
 //   vid:<n>            -> חלקי הסרטון, רק אם Google החזירה אותו בגוף התשובה ולא ככתובת
@@ -37,10 +37,10 @@ export class Studio {
   // ---- עבודה של סרטון (מופע "job:<מזהה>") ----
 
   // שומר את הבקשה ומתחיל לעבוד ברקע
-  async startJob({ image, motion, aspect, quality }) {
+  async startJob({ image, motion, aspect, quality, style }) {
     const parts = Math.ceil(image.data.length / PART);
     for (let i = 0; i < parts; i++) await this.storage.put(`img:${i}`, image.data.slice(i * PART, (i + 1) * PART));
-    await this.storage.put('job', { status: 'queued', at: Date.now(), motion, aspect, quality, imageType: image.media_type, imageParts: parts });
+    await this.storage.put('job', { status: 'queued', at: Date.now(), motion, aspect, quality, style, imageType: image.media_type, imageParts: parts });
     await this.storage.setAlarm(Date.now());
   }
 
@@ -70,7 +70,7 @@ export class Studio {
     try {
       let data = '';
       for (let i = 0; i < job.imageParts; i++) data += (await this.storage.get(`img:${i}`)) || '';
-      const out = await generateClip(this.env, { media_type: job.imageType, data }, job.motion, job.aspect, job.quality, AbortSignal.timeout(CALL_MS));
+      const out = await generateClip(this.env, { media_type: job.imageType, data }, job.motion, job.aspect, job.quality, AbortSignal.timeout(CALL_MS), job.style);
       const done = { status: 'done', model: out.model, resolution: out.resolution, videoType: out.type };
       if (out.uri) return await this.finishJob(job, { ...done, uri: out.uri });
       // הסרטון הגיע בגוף התשובה: שומרים אותו כאן בחלקים

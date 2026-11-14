@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { KINDS, LOOKS, ASPECTS } from '../lib/brief';
+import { KINDS, LOOKS, ASPECTS, STYLES, defaultStyle } from '../lib/brief';
 import { fileToImage, makeThumb, dataUrl } from '../lib/image';
 import { createProject, newId, safeProject } from '../lib/store';
 
@@ -48,6 +48,8 @@ export default function NewFilm({ onBack, onCreated }) {
   const [name, setName] = useState('');
   const [kind, setKind] = useState('building');
   const [look, setLook] = useState('golden');
+  const [style, setStyle] = useState(''); // ריק = לפי מה שמצלמים
+  const chosenStyle = style || defaultStyle(kind);
   const [aspect, setAspect] = useState('16:9');
   const [note, setNote] = useState('');
   const [images, setImages] = useState({ photo: null, plan: null });
@@ -75,7 +77,7 @@ export default function NewFilm({ onBack, onCreated }) {
       const id = newId();
       const project = safeProject({
         id, name: name.trim(), createdAt: Date.now(), thumb: await makeThumb(images.photo || images.plan),
-        brief: { kind, look, aspect, note: note.trim() }, has: { photo: Boolean(images.photo), plan: Boolean(images.plan) },
+        brief: { kind, look, aspect, style: chosenStyle, note: note.trim() }, has: { photo: Boolean(images.photo), plan: Boolean(images.plan) },
       });
       await createProject(project, images);
       onCreated(id);
@@ -111,6 +113,7 @@ export default function NewFilm({ onBack, onCreated }) {
           <p className="mt-2 text-sm text-muted">תוכנית ב-PDF? צלמו מסך והעלו את התמונה.</p>
         </div>
 
+        <Choice label="סגנון הסרטון" options={STYLES} value={chosenStyle} onChange={setStyle} />
         <Choice label="האור והאווירה" options={toOptions(LOOKS)} value={look} onChange={setLook} />
         <Choice label="הפורמט" options={ASPECTS} value={aspect} onChange={setAspect} />
 

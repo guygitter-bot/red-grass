@@ -3,12 +3,12 @@
 //   POST /login       { password }                 -> { ok, created? }  (הכניסה הראשונה קובעת את הסיסמה)
 //   POST /plan        { brief, photo?, plan? }     -> { summary, shots: [{ title, why, source, still, motion }] }   (Claude)
 //   POST /still       { image, instruction, brief, source } -> { image: {media_type, data}, model }                  (Google)
-//   POST /clip        { image, motion, aspect, quality }    -> { op }   (מתחיל עבודה ברקע; op = מזהה העבודה)        (Google Omni)
+//   POST /clip        { image, motion, aspect, quality, style } -> { op }   (מתחיל עבודה ברקע; op = מזהה העבודה)        (Google Omni)
 //   POST /clip/status { op }                       -> { done, resolution?, error?, detail? }
 //   POST /clip/file   { op }                       -> הקובץ (video/mp4)
 // כל הפעולות (חוץ מ-/health ו-/login) דורשות authorization: Bearer <הסיסמה, מקודדת ב-encodeURIComponent>.
 // בשגיאה: { error (עברית), detail? (מה ש-Google / Anthropic ענו, לאבחון), code? }
-import { cleanBrief, ASPECTS, QUALITIES } from './brief.js';
+import { cleanBrief, ASPECTS, QUALITIES, STYLES } from './brief.js';
 import { planFilm } from './director.js';
 import { makeStill } from './still.js';
 
@@ -140,9 +140,10 @@ export default {
       if (!motion) return reply(400, { error: 'חסרה הוראה לתנועת המצלמה' });
       const aspect = ASPECTS.includes(body.aspect) ? body.aspect : '16:9';
       const quality = QUALITIES.includes(body.quality) ? body.quality : 'max';
+      const style = STYLES[body.style] ? body.style : 'classic';
       return await metered('clips', async () => {
         const op = [...crypto.getRandomValues(new Uint8Array(16))].map((x) => x.toString(16).padStart(2, '0')).join('');
-        await jobOf(op).fetch(new Request('https://studio/job/start', { method: 'POST', body: JSON.stringify({ image, motion, aspect, quality }) }));
+        await jobOf(op).fetch(new Request('https://studio/job/start', { method: 'POST', body: JSON.stringify({ image, motion, aspect, quality, style }) }));
         return { op };
       });
     } catch (e) {
