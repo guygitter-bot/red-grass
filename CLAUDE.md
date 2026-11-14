@@ -252,6 +252,14 @@
 - בדיקה: `cd home_design/api && npm test` · `cd home_design/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 - **בלי סיסמה ובלי תקרת הוצאה** (המשתמש ביקש, אפליקציה אישית). סודות: `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`. שם מודל התמונות: `IMAGE_MODEL` ב-`api/wrangler.toml`.
 
+### סרטון נדל"ן – סרטון תדמית מצילום או משרטוט (`nadlan_video/`)
+- תיאור: `nadlan_video/README.md`. מעלים צילום של בניין ו/או שרטוט (חזית, תוכנית דירה); Claude מתכנן 4 שוטים, Google מצייר לכל שוט פריים פוטוריאליסטי, ו-Veo הופך אותו לסרטון של 8 שניות; הסרט המלא (כותרות + מעברים) מוקלט בדפדפן.
+- `nadlan_video/web` → https://nadlan-video.pages.dev · `nadlan_video/api` → Worker `nadlan-video-api` (Durable Object `Studio`: סיסמה + תקרה יומית; התמונות והסרטונים רק במכשיר). עלייה: `nadlan-video.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd nadlan_video/api && npm test` · `cd nadlan_video/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- **נאמנות לבניין:** לא מנפישים שרטוט ולא ממציאים אדריכלות – תמיד מקור ← פריים ← אישור ← תנועת מצלמה אחת. ההנחיות ב-`api/director.js`, `still.js`, `video.js`; הסקיל `/nadlan-video` (`.claude/skills/nadlan-video/`) נשען עליהן.
+- סרטון עולה כסף: **עם סיסמה** (נקבעת בכניסה הראשונה) ותקרה יומית ב-`api/wrangler.toml`. `nadlan-video-probe.yml` יוצר סרטון אמיתי (בערך דולר) – רץ רק כשמשנים את הקוד שפונה ל-Google.
+- המזהים של הבריף כפולים ב-`api/brief.js` וב-`web/src/lib/brief.js` – לשנות בשניהם (בדיקה מוודאת). שדה חדש – ברירת מחדל ב-`safeProject` / `safeShot`.
+
 ### ספר אישי – ספר דיגיטלי במתנה (`sefer/`)
 - תיאור: `sefer/README.md`. שאלון על מישהו אהוב → Claude כותב ספר שלם (מתווה שמאשרים, ואז פרק אחרי פרק), Google מאייר כריכה ופרקים; קריאה על המסך ושיתוף בקישור. בלי הדפסה.
 - `sefer/web` → https://sefer-ishi.pages.dev · `sefer/api` → Worker `sefer-ishi-api` (Durable Object `Shelf`: ספרים ששותפו + תקרה יומית). עלייה: `sefer-ishi.yml` אחרי מיזוג ל-main. (לא להתבלבל עם `seder/`.)

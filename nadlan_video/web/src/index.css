@@ -1,0 +1,130 @@
+@import "tailwindcss";
+
+/* כל הצבעים במקום אחד – במצב לילה (לפי המכשיר) מחליפים רק אותם:
+   page = רקע המסך, card = כרטיסים, ink = טקסט, muted = טקסט משני, line = מסגרות,
+   soft = רקע מודגש עדין, accent = כחול־לילה (כפתור ראשי), gold = זהב המותג */
+@theme {
+  --color-page: #f3f0ea;
+  --color-card: #ffffff;
+  --color-ink: #161b26;
+  --color-muted: #5b6373;
+  --color-line: #dcd6c9;
+  --color-soft: #ebe6da;
+  --color-accent: #161b26;
+  --color-accent-ink: #f1dfb4;
+  --color-gold: #94702a;
+  --color-bad: #a8321a;
+  --color-bad-soft: #f8dcd3;
+  --font-sans: system-ui, -apple-system, "Segoe UI", "Arial Hebrew", Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --color-page: #0e1118;
+    --color-card: #181d28;
+    --color-ink: #eef0f4;
+    --color-muted: #a2a9b8;
+    --color-line: #2d3443;
+    --color-soft: #222938;
+    --color-accent: #d6b46a;
+    --color-accent-ink: #14171f;
+    --color-gold: #d6b46a;
+    --color-bad: #ff9a7c;
+    --color-bad-soft: #3d1f17;
+  }
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  font-family: var(--font-sans);
+  background: var(--color-page);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+body {
+  font-size: 16px;
+  line-height: 1.55;
+}
+button,
+textarea,
+input {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+:focus-visible {
+  outline: 3px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+/* כפתורים – גובה מינימלי למגע */
+.btn {
+  min-height: 46px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1px solid var(--color-line);
+  background: var(--color-card);
+  color: var(--color-ink);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.btn-main {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-ink);
+}
+.chip {
+  min-height: 42px;
+  padding: 4px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--color-line);
+  background: var(--color-card);
+  font-size: 14px;
+  color: var(--color-ink);
+  text-align: start;
+}
+.chip[aria-pressed="true"] {
+  border-color: var(--color-gold);
+  box-shadow: inset 0 0 0 1px var(--color-gold);
+  background: var(--color-soft);
+}
+.field {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--color-line);
+  background: var(--color-card);
+  padding: 10px 12px;
+}
+.label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spinner {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  border: 3px solid var(--color-line);
+  border-top-color: var(--color-gold);
+  animation: spin 0.9s linear infinite;
+}

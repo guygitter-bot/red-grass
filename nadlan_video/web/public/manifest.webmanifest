@@ -1,0 +1,15 @@
+{
+  "name": "סרטון נדל״ן",
+  "short_name": "סרטון נדל״ן",
+  "description": "מצילום או שרטוט של בניין או דירה לסרטון תדמית",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#12161f",
+  "theme_color": "#12161f",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

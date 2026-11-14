@@ -1,0 +1,30 @@
+name = "nadlan-video-api"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[vars]
+# האתרים שמותר להם לפנות לשרת: האפליקציה ב-Cloudflare Pages (כולל כתובות תצוגה מקדימה) ופיתוח מקומי
+ALLOWED_ORIGIN_RE = "^https://([a-z0-9-]+\\.)?nadlan-video(-[a-z0-9]+)?\\.pages\\.dev$|^http://localhost:[0-9]+$"
+# מחולל הפריימים של Google (Gemini API). אם השם כבר לא קיים – השרת מוצא לבד מודל תמונות אחר ברשימת המודלים
+IMAGE_MODEL = "gemini-nano-banana-2.1"
+# מחולל הווידאו של Google (Veo): איכות מקסימלית, וגרסה מהירה וזולה לטיוטות. אם השם לא קיים – השרת מוצא מודל Veo אחר
+VIDEO_MODEL = "veo-3.1-generate-preview"
+VIDEO_MODEL_FAST = "veo-3.1-fast-generate-preview"
+# תקרה יומית (לכל המשתמשים יחד) כדי שאף אחד לא ירוקן את החשבון. סרטון = שוט אחד של 8 שניות (היקר ביותר)
+DAILY_CLIPS = "24"
+DAILY_STILLS = "80"
+DAILY_PLANS = "40"
+
+# הסטודיו: הסיסמה (נקבעת בכניסה הראשונה) + המונה היומי – אובייקט אחד ("main")
+[[durable_objects.bindings]]
+name = "STUDIO"
+class_name = "Studio"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Studio"]
+
+# סודות, לא כאן (נקבעים אוטומטית מ-GitHub, ראו .github/workflows/nadlan-video.yml):
+#   ANTHROPIC_API_KEY – המפתח של Claude (הבמאי: מסתכל על התמונות וכותב את רשימת השוטים)
+#   GEMINI_API_KEY    – המפתח של Google AI Studio (פריימים פוטוריאליסטיים + סרטוני Veo)
