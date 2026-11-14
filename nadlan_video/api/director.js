@@ -111,13 +111,8 @@ export function readPlan(input, has) {
 
 const imagePart = (im) => ({ type: 'image', source: { type: 'base64', media_type: im.media_type, data: im.data } });
 
-// brief: מ-cleanBrief. images: { photo?, plan? }. מחזיר { summary, shots } או זורק Error בעברית
-export async function planFilm(env, brief, images) {
-  const has = { photo: Boolean(images.photo), plan: Boolean(images.plan) };
-  const content = [];
-  if (has.photo) content.push({ type: 'text', text: 'PHOTO:' }, imagePart(images.photo));
-  if (has.plan) content.push({ type: 'text', text: 'PLAN:' }, imagePart(images.plan));
-  content.push({ type: 'text', text: `${brief.name ? `Project name: ${brief.name}\n` : ''}${brief.note ? `Note from the marketer (may be in Hebrew): ${brief.note}\n` : ''}Plan the film.` });
+// קריאה אחת ל-Claude. מחזיר את התשובה, או זורק Error בעברית (ו-detail: מה Anthropic ענה)
+async function ask(env, body) {
   let res;
   try {
     res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -129,10 +124,7 @@ export async function planFilm(env, brief, images) {
         // אם המודל מסרב – השרת של Anthropic מנסה לבד מודל אחר
         'anthropic-beta': 'server-side-fallback-2026-07-01',
       },
-      body: JSON.stringify({
-        model: MODEL, fallbacks: 'default', max_tokens: 6000, system: planSystem(brief, has),
-        tools: [PLAN_TOOL], tool_choice: { type: 'tool', name: PLAN_TOOL.name }, messages: [{ role: 'user', content }],
-      }),
+      body: JSON.stringify({ model: MODEL, fallbacks: 'default', ...body }),
     });
   } catch {
     throw new Error('אין חיבור לבמאי כרגע. נסו שוב.');
@@ -145,9 +137,26 @@ export async function planFilm(env, brief, images) {
     e.detail = `${res.status} ${MODEL}: ${String(msg || raw).replace(/\s+/g, ' ').slice(0, 300)}`;
     throw e;
   }
-  let data;
-  try { data = JSON.parse(raw); } catch { throw new Error('הבמאי לא הצליח לענות. נסו שוב.'); }
-  const use = (data.content || []).find((b) => b.type === 'tool_use' && b.name === PLAN_TOOL.name);
+  try { return JSON.parse(raw); } catch { throw new Error('הבמאי לא הצליח לענות. נסו שוב.'); }
+}
+
+// brief: מ-cleanBrief. images: { photo?, plan? }. מחזיר { summary, shots } או זורק Error בעברית
+export async function planFilm(env, brief, images) {
+  const has = { photo: Boolean(images.photo), plan: Boolean(images.plan) };
+  const content = [];
+  if (has.photo) content.push({ type: 'text', text: 'PHOTO:' }, imagePart(images.photo));
+  if (has.plan) content.push({ type: 'text', text: 'PLAN:' }, imagePart(images.plan));
+  content.push({ type: 'text', text: `${brief.name ? `Project name: ${brief.name}\n` : ''}${brief.note ? `Note from the marketer (may be in Hebrew): ${brief.note}\n` : ''}Plan the film.` });
+  // בלי tool_choice כפוי (המודל לא תומך בזה): אם Claude ענה בטקסט בלי לקרוא לכלי – מבקשים פעם אחת
+  const messages = [{ role: 'user', content }];
+  let use = null;
+  for (let step = 0; step < 2 && !use; step++) {
+    const data = await ask(env, { max_tokens: 6000, system: planSystem(brief, has), tools: [PLAN_TOOL], messages });
+    const got = data.content || [];
+    use = got.find((b) => b.type === 'tool_use' && b.name === PLAN_TOOL.name) || null;
+    if (use || data.stop_reason !== 'end_turn' || !got.length) break;
+    messages.push({ role: 'assistant', content: got }, { role: 'user', content: `Now call ${PLAN_TOOL.name} with your final answer.` });
+  }
   const plan = readPlan(use?.input, has);
   if (!plan) throw new Error('הבמאי לא הצליח לבנות רשימת שוטים. נסו שוב, או העלו תמונה ברורה יותר.');
   return plan;

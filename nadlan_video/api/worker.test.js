@@ -191,15 +191,21 @@ test('סיסמה: נעילה אחרי הרבה ניסיונות שגויים', a
 
 test('/plan: שולח את שתי התמונות ל-Claude ומחזיר רשימת שוטים; תקרה יומית', async () => {
   await login();
-  mock(() => json({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'shot_list', input: PLAN }] }));
+  // בפעם הראשונה Claude עונה בטקסט בלי הכלי – השרת מבקש שוב
+  mock(() => (calls.length === 1
+    ? json({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'הנה התוכנית' }] })
+    : json({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'shot_list', input: PLAN }] })));
   const res = await worker.fetch(post('/plan', { brief: { kind: 'building' }, photo: IMG, plan: IMG }), env);
+  assert.equal(calls.length, 2);
+  assert.match(calls[1].body.messages.at(-1).content, /call shot_list/);
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('access-control-allow-origin'), ORIGIN);
   assert.equal((await res.json()).shots.length, 2);
   const sent = calls[0].body;
   assert.equal(sent.model, MODEL);
   assert.equal(sent.messages[0].content.filter((c) => c.type === 'image').length, 2);
-  assert.equal(sent.tool_choice.name, 'shot_list');
+  assert.equal(sent.tool_choice, undefined, 'המודל לא תומך ב-tool_choice כפוי');
+  assert.equal(sent.tools[0].name, 'shot_list');
   assert.equal((await worker.fetch(post('/plan', {}), env)).status, 400);
   await worker.fetch(post('/plan', { photo: IMG }), env);
   const over = await worker.fetch(post('/plan', { photo: IMG }), env);
