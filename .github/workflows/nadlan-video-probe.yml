@@ -1,11 +1,12 @@
 name: nadlan-video-probe
 
-# בדיקה אמיתית של "סרטון נדל"ן" מול Google: אילו מודלים קיימים, פריים אחד, וסרטון אחד בטיוטה.
+# בדיקה אמיתית של "סרטון נדל"ן" מול Claude ו-Google: רשימת שוטים, אילו מודלים קיימים, פריים אחד, וסרטון אחד בטיוטה.
 # יוצר סרטון אמיתי (עולה פחות מדולר), ולכן רץ רק כשמשנים את הקוד שפונה ל-Google, או בהפעלה ידנית.
 on:
   pull_request:
     paths:
       - "nadlan_video/api/video.js"
+      - "nadlan_video/api/director.js"
       - "nadlan_video/api/still.js"
       - "nadlan_video/api/google.js"
       - "nadlan_video/api/probe.mjs"
@@ -32,6 +33,7 @@ jobs:
         working-directory: nadlan_video/api
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           get() { sed -n "s/^$1 = \"\(.*\)\"/\1/p" wrangler.toml; }
           IMAGE_MODEL="$(get IMAGE_MODEL)" VIDEO_MODEL="$(get VIDEO_MODEL)" node probe.mjs

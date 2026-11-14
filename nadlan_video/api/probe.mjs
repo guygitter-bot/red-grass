@@ -4,8 +4,9 @@ import zlib from 'node:zlib';
 import { makeStill } from './still.js';
 import { generateClip, fetchClipFile } from './video.js';
 import { cleanBrief } from './brief.js';
+import { planFilm } from './director.js';
 
-const env = { GEMINI_API_KEY: process.env.GEMINI_API_KEY, IMAGE_MODEL: process.env.IMAGE_MODEL, VIDEO_MODEL: process.env.VIDEO_MODEL };
+const env = { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY, GEMINI_API_KEY: process.env.GEMINI_API_KEY, IMAGE_MODEL: process.env.IMAGE_MODEL, VIDEO_MODEL: process.env.VIDEO_MODEL };
 if (!env.GEMINI_API_KEY) { console.log('GEMINI_API_KEY is not set - nothing to probe'); process.exit(0); }
 
 // תמונת בדיקה: שמיים, "בניין" אפור עם שורות חלונות, ו"דשא" (PNG בלי ספריות)
@@ -50,6 +51,18 @@ console.log(`models: ${total}`);
 let failed = false;
 const brief = cleanBrief({ kind: 'building', look: 'golden', aspect: '16:9' });
 let frame = { media_type: 'image/png', data: testPng().toString('base64') };
+
+// הבמאי (Claude): רשימת שוטים אמיתית מאותו שרטוט
+if (env.ANTHROPIC_API_KEY) {
+  try {
+    const plan = await planFilm(env, brief, { plan: frame });
+    console.log(`plan: ok, ${plan.shots.length} shots, stills: ${plan.shots.filter((s) => s.still).length}`);
+    if (plan.shots.length < 2) failed = true;
+  } catch (e) {
+    failed = true;
+    console.log('plan: FAILED -', e.message, '|', e.detail || '');
+  }
+} else console.log('ANTHROPIC_API_KEY is not set - skipping the director');
 try {
   const still = await makeStill(env, frame, 'Photorealistic eye-level street view of this simple residential building with a small lawn.', brief, 'plan');
   console.log(`still: ok, model ${still.model}, ${still.media_type}, ${Math.round(still.data.length * 0.75 / 1024)} KB`);
