@@ -1,27 +1,48 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import worker, { cleanImage, Studio } from './worker.js';
+import worker, { cleanImage, Studio, OP_RE } from './worker.js';
 import { cleanBrief, KINDS, LOOKS, ASPECTS, QUALITIES, SHOTS } from './brief.js';
 import { readPlan, planSystem, PLAN_TOOL, MODEL } from './director.js';
 import { stillPrompt, pickStillModel, forgetStillModel } from './still.js';
-import { clipPrompt, pickVideoModel, paramSets, readOperation, forgetVideoModel, OP_RE } from './video.js';
+import { clipPrompt, pickVideoModel, requestBodies, findVideo, resolutionFor, forgetVideoModel } from './video.js';
 
 const ORIGIN = 'https://nadlan-video.pages.dev';
 const IMG = { media_type: 'image/jpeg', data: 'QUJD' };
-const OP = 'models/veo-x/operations/abc123';
 const PASS = 'סוד גדול 1';
 
-// אחסון מדומה של Durable Object + ה-binding שלו
+// אחסון מדומה של Durable Object + ה-binding שלו: מופע לכל שם ("main", "job:<מזהה>"), עם alarm שמריצים ידנית
 function fakeStudio(vars) {
-  const map = new Map();
-  const storage = {
-    get: async (k) => (map.has(k) ? structuredClone(map.get(k)) : undefined),
-    put: async (k, v) => { map.set(k, structuredClone(v)); },
-    delete: async (k) => map.delete(k),
+  const all = new Map();
+  const binding = {
+    idFromName: (name) => name,
+    get: (name) => {
+      if (!all.has(name)) {
+        const map = new Map();
+        const one = { map, alarmAt: null };
+        const storage = {
+          get: async (k) => (map.has(k) ? structuredClone(map.get(k)) : undefined),
+          put: async (k, v) => { map.set(k, structuredClone(v)); },
+          delete: async (k) => map.delete(k),
+          deleteAll: async () => map.clear(),
+          setAlarm: async (t) => { one.alarmAt = t; },
+        };
+        one.studio = new Studio({ storage }, { ...vars, STUDIO: binding });
+        all.set(name, one);
+      }
+      return { fetch: (req) => all.get(name).studio.fetch(req) };
+    },
   };
-  const studio = new Studio({ storage }, vars);
-  return { map, binding: { idFromName: () => 'main', get: () => ({ fetch: (req) => studio.fetch(req) }) } };
+  // מריץ את ה-alarm של כל עבודה שהגיע זמנה (או של כולן, עם force)
+  const runAlarms = async (force) => {
+    for (const one of [...all.values()]) {
+      if (one.alarmAt === null || (!force && one.alarmAt > Date.now())) continue;
+      one.alarmAt = null;
+      await one.studio.alarm();
+    }
+  };
+  binding.get('main');
+  return { all, get map() { return all.get('main').map; }, binding, runAlarms };
 }
 
 let env;
@@ -31,10 +52,10 @@ const realFetch = globalThis.fetch;
 beforeEach(() => {
   forgetStillModel();
   forgetVideoModel();
-  const vars = { DAILY_PLANS: '2', DAILY_STILLS: '2', DAILY_CLIPS: '2' };
+  const vars = { DAILY_PLANS: '2', DAILY_STILLS: '2', DAILY_CLIPS: '2', GEMINI_API_KEY: 'g', VIDEO_MODEL: 'omni-x' };
   studio = fakeStudio(vars);
   env = {
-    ...vars, ANTHROPIC_API_KEY: 'a', GEMINI_API_KEY: 'g', IMAGE_MODEL: 'img-1', VIDEO_MODEL: 'veo-x', VIDEO_MODEL_FAST: 'veo-x-fast', STUDIO: studio.binding,
+    ...vars, ANTHROPIC_API_KEY: 'a', GEMINI_API_KEY: 'g', IMAGE_MODEL: 'img-1', VIDEO_MODEL: 'omni-x', STUDIO: studio.binding,
     ALLOWED_ORIGIN_RE: '^https://([a-z0-9-]+\\.)?nadlan-video(-[a-z0-9]+)?\\.pages\\.dev$',
   };
   calls = [];
@@ -109,31 +130,34 @@ test('ההנחיות: אמת אדריכלית, האור שנבחר, והכלי �
   assert.equal(PLAN_TOOL.strict, true);
   assert.equal(PLAN_TOOL.input_schema.additionalProperties, false);
   assert.match(stillPrompt('a lobby', cleanBrief({}), 'plan'), /architectural drawing/);
-  assert.match(clipPrompt('orbit'), /^orbit[\s\S]*no morphing/);
+  assert.match(clipPrompt('orbit'), /orbit[\s\S]*no morphing/);
 });
 
 test('בחירת מודלים מהרשימה של Google', () => {
-  const m = (name, method) => ({ name: `models/${name}`, supportedGenerationMethods: [method] });
-  const list = [m('veo-3.1-lite-generate-preview', 'predictLongRunning'), m('veo-3.1-fast-generate-preview', 'predictLongRunning'), m('veo-3.1-generate-preview', 'predictLongRunning'),
-    m('veo-4.0-generate-001', 'predictLongRunning'), m('veo-4.0-fast-generate-001', 'predictLongRunning'), m('gemini-3-pro-image-preview', 'generateContent'), m('gemini-2.5-flash-image', 'generateContent'), m('gemini-pro', 'generateContent')];
-  assert.equal(pickVideoModel(list, false), 'veo-4.0-generate-001');
-  assert.equal(pickVideoModel(list, true), 'veo-4.0-fast-generate-001');
-  assert.equal(pickVideoModel([m('gemini-pro', 'generateContent')], false), null);
+  const m = (name, method = 'generateContent') => ({ name: `models/${name}`, supportedGenerationMethods: [method] });
+  const list = [m('gemini-omni-flash-preview'), m('gemini-omni-1.1-flash'), m('gemini-omni-1.2-flash'), m('gemini-3-pro-image-preview'), m('gemini-2.5-flash-image'), m('gemini-pro')];
+  assert.equal(pickVideoModel(list), 'gemini-omni-1.2-flash');
+  assert.equal(pickVideoModel([m('gemini-pro')]), null);
   assert.equal(pickStillModel(list), 'gemini-3-pro-image-preview');
-  assert.equal(paramSets('9:16')[0].resolution, '1080p');
-  assert.deepEqual(paramSets('9:16').at(-1), { aspectRatio: '9:16' });
 });
 
-test('קריאת פעולה של Veo: לא מוכן, מוכן, שגיאה, סירוב', () => {
-  assert.deepEqual(readOperation({ name: OP }), { done: false });
-  const uri = 'https://generativelanguage.googleapis.com/v1beta/files/x:download?alt=media';
-  assert.deepEqual(readOperation({ done: true, response: { generateVideoResponse: { generatedSamples: [{ video: { uri } }] } } }), { done: true, uri });
-  assert.match(readOperation({ done: true, error: { message: 'boom' } }).detail, /boom/);
-  assert.match(readOperation({ done: true, response: { generateVideoResponse: { raiMediaFilteredCount: 1, raiMediaFilteredReasons: ['people'] } } }).error, /סירב/);
+test('הבקשה למחולל הווידאו: פריים ראשון, 1080p, 8 שניות; ויורדת עד לבסיסית', () => {
+  const bodies = requestBodies('omni-x', IMG, 'p', '9:16', 'max');
+  assert.deepEqual(bodies[0].input[0], { type: 'image', data: 'QUJD', mime_type: 'image/jpeg' });
+  assert.deepEqual(bodies[0].response_format, { type: 'video', aspect_ratio: '9:16', duration: '8s', resolution: '1080p', delivery: 'uri' });
+  assert.equal(bodies[0].generation_config.video_config.task, 'image_to_video');
+  assert.deepEqual(Object.keys(bodies.at(-1)), ['model', 'input']);
+  assert.equal(resolutionFor('fast'), '360p');
+});
+
+test('קריאת התשובה של מחולל הווידאו: כתובת, נתונים, כלום', () => {
+  const uri = 'https://generativelanguage.googleapis.com/v1beta/files/abc';
+  assert.deepEqual(findVideo({ steps: [{ type: 'thought' }, { type: 'model_output', content: [{ type: 'text', text: 'x' }, { type: 'video', uri, mime_type: 'video/mp4' }] }] }), { uri, type: 'video/mp4' });
+  assert.deepEqual(findVideo({ outputs: [{ type: 'video', data: 'AAAA' }] }), { data: 'AAAA', type: 'video/mp4' });
+  assert.equal(findVideo({ steps: [{ type: 'model_output', content: [{ type: 'text', text: 'no' }] }] }), null);
   // כתובת שלא של Google לא מתקבלת
-  assert.equal(readOperation({ done: true, response: { generateVideoResponse: { generatedSamples: [{ video: { uri: 'https://evil.example/x' } }] } } }).uri, undefined);
-  assert.ok(OP_RE.test(OP));
-  assert.ok(!OP_RE.test('models/x/operations/../../files'));
+  assert.equal(findVideo({ steps: [{ content: [{ type: 'video', uri: 'https://evil.example/x' }] }] }), null);
+  assert.ok(OP_RE.test('0123456789abcdef0123456789abcdef'));
   assert.ok(!OP_RE.test('https://evil.example'));
 });
 
@@ -200,49 +224,73 @@ test('/still: מודל שלא קיים -> מוצא אחר ברשימה; שדה �
   assert.equal((await worker.fetch(post('/still', { image: IMG }), env)).status, 400);
 });
 
-test('/clip: מתחיל ב-1080p, יורד בהגדרות כש-Google דוחה, כישלון לא נספר בתקרה', async () => {
+const OUT = (part) => ({ id: 'i1', status: 'completed', steps: [{ type: 'model_output', content: [part] }] });
+const URI = 'https://generativelanguage.googleapis.com/v1beta/files/v1';
+
+test('/clip: עבודה ברקע -> מוכן -> הקובץ עובר דרך השרת עם המפתח; Google דוחה שדה -> בקשה פשוטה יותר', async () => {
   await login();
-  let n = 0;
-  mock(({ body }) => {
-    n++;
-    if (body.parameters.resolution === '1080p') return json({ error: { message: '1080p is not supported for this aspect ratio' } }, 400);
-    return json({ name: OP });
+  mock(({ url, body }) => {
+    if (url.endsWith('/interactions')) {
+      if (body.generation_config) return json({ error: { message: 'Unknown name "video_config"' } }, 400);
+      return json(OUT({ type: 'video', uri: URI, mime_type: 'video/mp4' }));
+    }
+    if (url === `${URI}:download?alt=media`) return new Response('MP4DATA', { headers: { 'content-type': 'video/mp4' } });
+    return json({}, 404);
   });
   let res = await worker.fetch(post('/clip', { image: IMG, motion: 'slow orbit', aspect: '9:16', quality: 'max' }), env);
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { op: OP, model: 'veo-x', resolution: '720p' });
-  assert.equal(n, 3);
-  assert.match(calls[0].url, /veo-x:predictLongRunning$/);
-  assert.deepEqual(calls[0].body.instances[0].image, { bytesBase64Encoded: 'QUJD', mimeType: 'image/jpeg' });
-  assert.equal(calls[0].body.parameters.aspectRatio, '9:16');
+  const { op } = await res.json();
+  assert.ok(OP_RE.test(op));
+  assert.equal(calls.length, 0, 'הקריאה ל-Google רצה ברקע, לא בזמן הבקשה');
+  assert.deepEqual(await (await worker.fetch(post('/clip/status', { op }), env)).json(), { done: false });
+  assert.equal((await worker.fetch(post('/clip/file', { op }), env)).status, 409);
+
+  await studio.runAlarms();
+  assert.equal(calls.length, 2);
+  assert.match(calls[0].url, /\/v1beta\/interactions$/);
+  assert.equal(calls[0].body.model, 'omni-x');
+  assert.match(calls[0].body.input[1].text, /exact first frame[\s\S]*slow orbit[\s\S]*no morphing/);
   assert.equal(calls[0].init.headers['x-goog-api-key'], 'g');
-
-  mock(() => json({ error: { message: 'quota exceeded, check billing' } }, 429));
-  for (let i = 0; i < 3; i++) {
-    res = await worker.fetch(post('/clip', { image: IMG, motion: 'x', quality: 'fast' }), env);
-    assert.equal(res.status, 502);
-  }
-  assert.match(calls.at(-1).url, /veo-x-fast:/);
-  mock(() => json({ name: OP }));
-  assert.equal((await worker.fetch(post('/clip', { image: IMG, motion: 'x' }), env)).status, 200);
-  assert.equal((await worker.fetch(post('/clip', { image: IMG, motion: 'x' }), env)).status, 429);
-});
-
-test('/clip/status ו-/clip/file: רק מזהה תקין, הקובץ עובר דרך השרת עם המפתח', async () => {
-  await login();
-  const uri = 'https://generativelanguage.googleapis.com/v1beta/files/v1:download?alt=media';
-  mock(({ url }) => {
-    if (url.endsWith(OP)) return json({ name: OP, done: true, response: { generateVideoResponse: { generatedSamples: [{ video: { uri } }] } } });
-    if (url === uri) return new Response('MP4DATA', { headers: { 'content-type': 'video/mp4' } });
-    return json({}, 404);
-  });
-  assert.equal((await worker.fetch(post('/clip/status', { op: 'https://evil.example/x' }), env)).status, 400);
-  let res = await worker.fetch(post('/clip/status', { op: OP }), env);
-  assert.deepEqual(await res.json(), { done: true });
-  res = await worker.fetch(post('/clip/file', { op: OP }), env);
+  assert.deepEqual(await (await worker.fetch(post('/clip/status', { op }), env)).json(), { done: true, resolution: '1080p', model: 'omni-x' });
+  res = await worker.fetch(post('/clip/file', { op }), env);
   assert.equal(res.headers.get('content-type'), 'video/mp4');
   assert.equal(await res.text(), 'MP4DATA');
   assert.equal(calls.at(-1).init.headers['x-goog-api-key'], 'g');
+  // הפריים נמחק מהשרת אחרי שהסרטון מוכן, ואחרי יומיים הכול נמחק
+  const job = studio.all.get(`job:${op}`);
+  assert.deepEqual([...job.map.keys()], ['job']);
+  await studio.runAlarms(true);
+  assert.equal(job.map.size, 0);
+  assert.match((await (await worker.fetch(post('/clip/status', { op }), env)).json()).error, /כבר לא נמצא/);
+  assert.equal((await worker.fetch(post('/clip/status', { op: 'https://evil.example/x' }), env)).status, 400);
+});
+
+test('/clip: סרטון שהגיע בגוף התשובה נשמר בחלקים; כישלון לא נספר בתקרה ולא רץ פעמיים', async () => {
+  await login();
+  mock(() => json(OUT({ type: 'video', data: btoa('MP4-INLINE'), mime_type: 'video/mp4' })));
+  let { op } = await (await worker.fetch(post('/clip', { image: IMG, motion: 'x', quality: 'fast' }), env)).json();
+  await studio.runAlarms();
+  assert.equal(calls[0].body.response_format.resolution, '360p');
+  assert.equal(await (await worker.fetch(post('/clip/file', { op }), env)).text(), 'MP4-INLINE');
+
+  // כישלון אצל Google: המונה חוזר, ולכן אפשר להמשיך עד התקרה (2)
+  mock(() => json({ error: { message: 'quota exceeded, check billing' } }, 429));
+  ({ op } = await (await worker.fetch(post('/clip', { image: IMG, motion: 'x' }), env)).json());
+  await studio.runAlarms();
+  const state = await (await worker.fetch(post('/clip/status', { op }), env)).json();
+  assert.equal(state.done, true);
+  assert.match(state.error, /חיוב פעיל/);
+  assert.match(state.detail, /429 omni-x/);
+
+  // עבודה שנקטעה באמצע לא יוצרת סרטון שני
+  mock(() => { throw new Error('לא אמור לפנות שוב'); });
+  ({ op } = await (await worker.fetch(post('/clip', { image: IMG, motion: 'x' }), env)).json());
+  const job = studio.all.get(`job:${op}`);
+  job.map.set('job', { ...job.map.get('job'), status: 'working' });
+  await studio.runAlarms();
+  assert.match((await (await worker.fetch(post('/clip/status', { op }), env)).json()).error, /נקטעה/);
+  assert.equal((await worker.fetch(post('/clip', { image: IMG, motion: 'x' }), env)).status, 200);
+  assert.equal((await worker.fetch(post('/clip', { image: IMG, motion: 'x' }), env)).status, 429);
 });
 
 test('CORS: רק מכתובת האפליקציה', async () => {

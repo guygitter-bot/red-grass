@@ -1,11 +1,11 @@
-// בדיקה אמיתית מול Google (רצה ב-GitHub Actions, שם יש מפתח): אילו מודלים קיימים, פריים אחד, וסרטון אחד בגרסה המהירה.
+// בדיקה אמיתית מול Google (רצה ב-GitHub Actions, שם יש מפתח): אילו מודלים קיימים, פריים אחד, וסרטון אחד בטיוטה.
 // מדפיס רק שמות מודלים, סטטוס, גדלים והודעות שגיאה – לא את המפתח ולא תמונות.
 import zlib from 'node:zlib';
 import { makeStill } from './still.js';
-import { startClip, clipStatus, clipFile } from './video.js';
+import { generateClip, fetchClipFile } from './video.js';
 import { cleanBrief } from './brief.js';
 
-const env = { GEMINI_API_KEY: process.env.GEMINI_API_KEY, IMAGE_MODEL: process.env.IMAGE_MODEL, VIDEO_MODEL: process.env.VIDEO_MODEL, VIDEO_MODEL_FAST: process.env.VIDEO_MODEL_FAST };
+const env = { GEMINI_API_KEY: process.env.GEMINI_API_KEY, IMAGE_MODEL: process.env.IMAGE_MODEL, VIDEO_MODEL: process.env.VIDEO_MODEL };
 if (!env.GEMINI_API_KEY) { console.log('GEMINI_API_KEY is not set - nothing to probe'); process.exit(0); }
 
 // תמונת בדיקה: שמיים, "בניין" אפור עם שורות חלונות, ו"דשא" (PNG בלי ספריות)
@@ -59,23 +59,21 @@ try {
   console.log('still: FAILED -', e.message, '|', e.detail || '');
 }
 
+// סרטון אחד בטיוטה (360p) – אותה קריאה שהשרת עושה ברקע
 try {
-  const started = await startClip(env, frame, 'Slow aerial drone push-in toward the building, leaves moving in a light breeze.', '16:9', 'fast');
-  console.log(`clip: started, model ${started.model}, ${started.resolution}`);
   const from = Date.now();
-  let state = { done: false };
-  while (!state.done && Date.now() - from < 10 * 60 * 1000) {
-    await new Promise((r) => setTimeout(r, 10000));
-    state = await clipStatus(env, started.op);
+  const clip = await generateClip(env, frame, 'Slow aerial drone push-in toward the building, leaves moving in a light breeze.', '16:9', 'fast', AbortSignal.timeout(12 * 60 * 1000));
+  console.log(`clip: ok after ${Math.round((Date.now() - from) / 1000)}s, model ${clip.model}, ${clip.resolution}, ${clip.type}, delivered as ${clip.uri ? `uri (${new URL(clip.uri).pathname.replace(/[A-Za-z0-9_-]{8,}/g, '<id>')})` : 'inline data'}`);
+  let bytes;
+  if (clip.uri) {
+    const res = await fetchClipFile(env, clip.uri);
+    console.log(`clip file: ${res.status} ${res.headers.get('content-type')} from ${new URL(res.url || clip.uri).pathname.replace(/[A-Za-z0-9_-]{8,}/g, '<id>')}`);
+    bytes = (await res.arrayBuffer()).byteLength;
+  } else {
+    bytes = Buffer.from(clip.data, 'base64').length;
   }
-  console.log(`clip: ${state.done ? 'done' : 'still not done'} after ${Math.round((Date.now() - from) / 1000)}s`, state.error || '', state.detail || '');
-  if (!state.done || state.error) failed = true;
-  else {
-    const file = await clipFile(env, started.op);
-    const bytes = (await new Response(file.body).arrayBuffer()).byteLength;
-    console.log(`clip file: ${file.type}, ${Math.round(bytes / 1024)} KB`);
-    if (bytes < 10000) failed = true;
-  }
+  console.log(`clip size: ${Math.round(bytes / 1024)} KB`);
+  if (bytes < 10000) failed = true;
 } catch (e) {
   failed = true;
   console.log('clip: FAILED -', e.message, '|', e.detail || '');

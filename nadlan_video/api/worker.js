@@ -3,21 +3,22 @@
 //   POST /login       { password }                 -> { ok, created? }  (הכניסה הראשונה קובעת את הסיסמה)
 //   POST /plan        { brief, photo?, plan? }     -> { summary, shots: [{ title, why, source, still, motion }] }   (Claude)
 //   POST /still       { image, instruction, brief, source } -> { image: {media_type, data}, model }                  (Google)
-//   POST /clip        { image, motion, aspect, quality }    -> { op, model, resolution }                             (Veo, מתחיל)
-//   POST /clip/status { op }                       -> { done, error?, detail? }
+//   POST /clip        { image, motion, aspect, quality }    -> { op }   (מתחיל עבודה ברקע; op = מזהה העבודה)        (Google Omni)
+//   POST /clip/status { op }                       -> { done, resolution?, error?, detail? }
 //   POST /clip/file   { op }                       -> הקובץ (video/mp4)
 // כל הפעולות (חוץ מ-/health ו-/login) דורשות authorization: Bearer <הסיסמה, מקודדת ב-encodeURIComponent>.
 // בשגיאה: { error (עברית), detail? (מה ש-Google / Anthropic ענו, לאבחון), code? }
 import { cleanBrief, ASPECTS, QUALITIES } from './brief.js';
 import { planFilm } from './director.js';
 import { makeStill } from './still.js';
-import { startClip, clipStatus, clipFile, OP_RE } from './video.js';
 
 export { Studio } from './studio.js';
 
 const MAX_BODY = 15 * 1024 * 1024; // עד שתי תמונות (צילום + שרטוט)
 const MAX_IMAGE_B64 = 7 * 1024 * 1024;
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+// מזהה עבודה של סרטון (נוצר כאן, אקראי)
+export const OP_RE = /^[a-f0-9]{32}$/;
 const POSTS = ['/login', '/plan', '/still', '/clip', '/clip/status', '/clip/file'];
 
 function corsHeaders(request, env) {
@@ -68,6 +69,8 @@ export default {
     const { pathname } = new URL(request.url);
     if (!env.STUDIO) return reply(503, { error: 'השרת לא מוגדר' });
     const studio = env.STUDIO.get(env.STUDIO.idFromName('main'));
+    // כל סרטון הוא עבודה במופע משלו (רץ ברקע, ראו studio.js)
+    const jobOf = (op) => env.STUDIO.get(env.STUDIO.idFromName(`job:${op}`));
     const ask = async (path, body = {}) => (await studio.fetch(new Request(`https://studio${path}`, { method: 'POST', body: JSON.stringify(body) }))).json().catch(() => ({}));
 
     if (pathname === '/' || pathname === '/health') {
@@ -104,10 +107,12 @@ export default {
     try {
       if (pathname === '/clip/status' || pathname === '/clip/file') {
         if (!OP_RE.test(body?.op || '')) return reply(400, { error: 'בקשה לא תקינה' });
-        if (!env.GEMINI_API_KEY) return noKey('מחולל הווידאו');
-        if (pathname === '/clip/status') return reply(200, await clipStatus(env, body.op));
-        const file = await clipFile(env, body.op);
-        return new Response(file.body, { status: 200, headers: { ...cors, 'content-type': file.type, ...(file.length ? { 'content-length': file.length } : {}), 'cache-control': 'no-store' } });
+        const job = jobOf(body.op);
+        if (pathname === '/clip/status') return reply(200, await (await job.fetch(new Request('https://studio/job/state', { method: 'POST', body: '{}' }))).json());
+        const file = await job.fetch(new Request('https://studio/job/file', { method: 'POST', body: '{}' }));
+        if (!file.ok) return reply(file.status, await file.json().catch(() => ({ error: 'לא הצלחנו להוריד את הסרטון. נסו שוב.' })));
+        const length = file.headers.get('content-length');
+        return new Response(file.body, { status: 200, headers: { ...cors, 'content-type': file.headers.get('content-type') || 'video/mp4', ...(length ? { 'content-length': length } : {}), 'cache-control': 'no-store' } });
       }
 
       if (pathname === '/plan') {
@@ -135,7 +140,11 @@ export default {
       if (!motion) return reply(400, { error: 'חסרה הוראה לתנועת המצלמה' });
       const aspect = ASPECTS.includes(body.aspect) ? body.aspect : '16:9';
       const quality = QUALITIES.includes(body.quality) ? body.quality : 'max';
-      return await metered('clips', () => startClip(env, image, motion, aspect, quality));
+      return await metered('clips', async () => {
+        const op = [...crypto.getRandomValues(new Uint8Array(16))].map((x) => x.toString(16).padStart(2, '0')).join('');
+        await jobOf(op).fetch(new Request('https://studio/job/start', { method: 'POST', body: JSON.stringify({ image, motion, aspect, quality }) }));
+        return { op };
+      });
     } catch (e) {
       return reply(502, { error: e?.message || 'משהו השתבש. נסו שוב.', detail: e?.detail || '' });
     }

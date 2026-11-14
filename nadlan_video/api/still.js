@@ -1,5 +1,5 @@
 // מחולל הפריימים (Google Gemini API, מודל תמונות): מקבל צילום או שרטוט + הוראה, ומחזיר את פריים הפתיחה של השוט –
-// תמונה פוטוריאליסטית שממנה Veo מתחיל את התנועה. שרטוט הופך כאן להדמיה אדריכלית.
+// תמונה פוטוריאליסטית שממנה מחולל הווידאו מתחיל את התנועה. שרטוט הופך כאן להדמיה אדריכלית.
 import { BASE, fail, googleMessage, googleDetail, modelMissing, listModels } from './google.js';
 import { LOOKS } from './brief.js';
 
@@ -36,7 +36,7 @@ export function pickStillModel(models) {
   const names = (models || [])
     .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
     .map((m) => String(m.name || '').replace(/^models\//, ''))
-    .filter((n) => /banana|image/i.test(n) && !/imagen|veo|embed|vision/i.test(n));
+    .filter((n) => /banana|image/i.test(n) && !/imagen|veo|omni|embed|vision/i.test(n));
   if (!names.length) return null;
   const score = (n) => (/lite/i.test(n) ? 2 : 0) + (/pro/i.test(n) ? -1 : 0) + (/preview|exp/i.test(n) ? 0.5 : 0);
   return names.sort((a, b) => score(a) - score(b) || b.localeCompare(a, 'en', { numeric: true }))[0];

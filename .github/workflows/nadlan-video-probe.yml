@@ -1,7 +1,7 @@
 name: nadlan-video-probe
 
-# בדיקה אמיתית של "סרטון נדל"ן" מול Google: אילו מודלים קיימים, פריים אחד, וסרטון אחד קצר בגרסה המהירה.
-# יוצר סרטון אמיתי (עולה בערך דולר), ולכן רץ רק כשמשנים את הקוד שפונה ל-Google, או בהפעלה ידנית.
+# בדיקה אמיתית של "סרטון נדל"ן" מול Google: אילו מודלים קיימים, פריים אחד, וסרטון אחד בטיוטה.
+# יוצר סרטון אמיתי (עולה פחות מדולר), ולכן רץ רק כשמשנים את הקוד שפונה ל-Google, או בהפעלה ידנית.
 on:
   pull_request:
     paths:
@@ -34,4 +34,4 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           get() { sed -n "s/^$1 = \"\(.*\)\"/\1/p" wrangler.toml; }
-          IMAGE_MODEL="$(get IMAGE_MODEL)" VIDEO_MODEL="$(get VIDEO_MODEL)" VIDEO_MODEL_FAST="$(get VIDEO_MODEL_FAST)" node probe.mjs
+          IMAGE_MODEL="$(get IMAGE_MODEL)" VIDEO_MODEL="$(get VIDEO_MODEL)" node probe.mjs

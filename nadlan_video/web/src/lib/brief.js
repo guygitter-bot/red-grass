@@ -17,6 +17,6 @@ export const ASPECTS = [
 ];
 
 export const QUALITIES = [
-  { id: 'max', label: 'איכות מקסימלית', hint: 'לסרטון הסופי' },
-  { id: 'fast', label: 'טיוטה מהירה', hint: 'זול ומהיר, לבדוק כיוון' },
+  { id: 'max', label: 'איכות מקסימלית', hint: 'לסרטון הסופי (1080p)' },
+  { id: 'fast', label: 'טיוטה מהירה', hint: 'זול ומהיר, רק לבדוק כיוון (360p)' },
 ];

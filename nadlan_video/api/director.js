@@ -1,5 +1,5 @@
 // הבמאי: Claude מסתכל על הצילום ו/או השרטוט וכותב רשימת שוטים לסרטון תדמית.
-// לכל שוט: כותרת והסבר בעברית + הוראה באנגלית לפריים הפתיחה (מחולל התמונות) + הוראה באנגלית לתנועת המצלמה (Veo).
+// לכל שוט: כותרת והסבר בעברית + הוראה באנגלית לפריים הפתיחה (מחולל התמונות) + הוראה באנגלית לתנועת המצלמה (מחולל הווידאו).
 import { KINDS, LOOKS, SHOTS } from './brief.js';
 
 export const MODEL = 'claude-opus-5-5';
@@ -44,7 +44,7 @@ a luxury project: slow, confident camera moves, perfect light, architecture show
 
 A real-estate marketer sends you ${material} of ${KINDS[brief.kind]}. You plan a film of exactly ${SHOTS} shots, 8 seconds \
 each. For every shot an image model first produces a photorealistic opening frame from one of the supplied images, and an \
-image-to-video model (Google Veo) then animates that frame with one camera move.
+image-to-video model then animates that frame with one camera move.
 
 The film has an arc: (1) an establishing hero shot, (2) a move that reveals scale or approaches the entrance, (3) a detail \
 or lifestyle moment (balcony, lobby, living room, view), (4) a closing wide shot that holds still enough for a logo and \

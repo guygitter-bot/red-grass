@@ -42,7 +42,7 @@ export async function produceClip(project, shot, patch, alive = () => true) {
     const started = await startClip(frame, withExtra(shot.motion, shot.extra), project.brief.aspect, project.quality);
     op = started.op;
     opAt = Date.now();
-    await patch({ op, opAt, resolution: started.resolution || '', error: '', detail: '' });
+    await patch({ op, opAt, error: '', detail: '' });
   }
   for (;;) {
     if (!alive()) return;
@@ -61,6 +61,7 @@ export async function produceClip(project, shot, patch, alive = () => true) {
         err.detail = state.detail || '';
         throw err;
       }
+      await patch({ resolution: state.resolution || '' });
       break;
     }
     if (Date.now() - opAt > MAX_WAIT_MS) {
