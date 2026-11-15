@@ -1,7 +1,7 @@
 // שיחה עם ה-AI, כמו בוואטסאפ. השיחה משותפת לכל מי שנכנס עם הסיסמה (כל הודעה נשמרת ומסתנכרנת, עם שם השואל).
 // בכל שאלה נשלח ל-AI סיכום מלא ועדכני של היומן (aiContext): הגדרות, סטטיסטיקה, דפוס לכל ארוחה ופירוט 3 השבועות האחרונים.
 import { useEffect, useRef, useState } from 'react';
-import { Bot, Send, Trash2 } from 'lucide-react';
+import { Bot, Copy, Download, Send, Share2, Trash2 } from 'lucide-react';
 import { aiContext } from '../lib/diary';
 import { askAi, remove } from '../lib/store';
 import { getMe } from '../lib/me';
@@ -19,6 +19,20 @@ const QUICK = [
 let pending = '';
 export function askLater(q) {
   pending = q;
+}
+
+// טקסט נקי לשיתוף (בלי סימני העיצוב ** ו-##)
+export const plain = (text) =>
+  String(text || '')
+    .replace(/\*\*/g, '')
+    .replace(/^#{1,4}\s+/gm, '')
+    .trim();
+
+function download(name, text) {
+  const url = URL.createObjectURL(new Blob([`\ufeff${text}`], { type: 'text/plain;charset=utf-8' }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: name });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 const timeOf = (at) => new Date(at).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
@@ -54,6 +68,44 @@ export default function ChatView({ data }) {
     }
   };
 
+  const [note, setNote] = useState('');
+  const flash = (t) => {
+    setNote(t);
+    setTimeout(() => setNote(''), 2000);
+  };
+
+  // התשובה עם השאלה שלפניה – כדי שמי שמקבל יבין על מה מדובר
+  const withQuestion = (c) => {
+    const i = data.chats.findIndex((x) => x.id === c.id);
+    const q = [...data.chats.slice(0, i)].reverse().find((x) => x.role === 'user');
+    return `${q ? `שאלה: ${q.text}\n\n` : ''}תשובה (יומן סוכר, ${dateOf(c.at)}):\n${plain(c.text)}`;
+  };
+  const copy = async (c) => {
+    try {
+      await navigator.clipboard.writeText(withQuestion(c));
+      flash('הועתק');
+    } catch {
+      flash('לא הצלחתי להעתיק');
+    }
+  };
+  const share = async (c) => {
+    const text = withQuestion(c);
+    try {
+      if (navigator.share) await navigator.share({ title: 'יומן סוכר – תשובת AI', text });
+      else {
+        await navigator.clipboard.writeText(text);
+        flash('אין שיתוף בדפדפן הזה – הטקסט הועתק');
+      }
+    } catch {
+      // ביטול השיתוף
+    }
+  };
+  const exportAll = () =>
+    download(
+      `yoman-sukar-ai-chat-${data.today}.txt`,
+      data.chats.map((c) => `[${dateOf(c.at)} ${timeOf(c.at)}] ${c.role === 'user' ? c.by || 'שאלה' : 'AI'}:\n${plain(c.text)}`).join('\n\n'),
+    );
+
   let lastDate = '';
   return (
     <div className="mx-auto flex max-w-3xl flex-col">
@@ -65,7 +117,13 @@ export default function ChatView({ data }) {
           <h1 className="text-xl font-bold">שאלות ל-AI</h1>
           <p className="text-xs text-muted">רואה את כל היומן ועונה לפי הנתונים שלכם. לא מחליף את הצוות הרפואי.</p>
         </div>
+        {data.chats.length > 0 && (
+          <button onClick={exportAll} className="mr-auto flex items-center gap-1 rounded-lg px-2 py-1 text-sm text-accent-ink hover:bg-soft" title="הורדת כל השיחה כקובץ">
+            <Download size={16} /> ייצוא השיחה
+          </button>
+        )}
       </div>
+      {note && <p className="fixed bottom-24 left-1/2 z-40 -translate-x-1/2 rounded-full bg-ink px-4 py-2 text-sm text-page shadow-lg">{note}</p>}
 
       <div className="mb-3 space-y-2 rounded-2xl bg-soft/50 p-3">
         {!data.chats.length && <p className="p-4 text-center text-sm text-muted">אפשר לשאול כל שאלה על הסוכר, הארוחות והאינסולין. כל מי שמשתף את היומן רואה את השיחה.</p>}
@@ -81,6 +139,19 @@ export default function ChatView({ data }) {
                 <div className={`max-w-[88%] rounded-2xl px-3 py-2 shadow-sm lg:max-w-[75%] ${mine ? 'rounded-tr-sm bg-bubble' : 'rounded-tl-sm bg-card'}`}>
                   {mine && c.by && <div className="text-xs font-bold text-accent-ink">{c.by}</div>}
                   {mine ? <p className="whitespace-pre-wrap">{c.text}</p> : <Markdown text={c.text} />}
+                  {!mine && (
+                    <div className="mt-2 flex flex-wrap gap-1 border-t border-line pt-2 text-xs">
+                      <button onClick={() => copy(c)} className="flex items-center gap-1 rounded-lg px-2 py-1 text-accent-ink hover:bg-soft">
+                        <Copy size={14} /> העתקה
+                      </button>
+                      <button onClick={() => share(c)} className="flex items-center gap-1 rounded-lg px-2 py-1 text-accent-ink hover:bg-soft">
+                        <Share2 size={14} /> שיתוף
+                      </button>
+                      <button onClick={() => download(`yoman-sukar-ai-${data.today}.txt`, withQuestion(c))} className="flex items-center gap-1 rounded-lg px-2 py-1 text-accent-ink hover:bg-soft">
+                        <Download size={14} /> הורדה
+                      </button>
+                    </div>
+                  )}
                   <div className="mt-1 flex items-center justify-end gap-2 text-[11px] text-muted">
                     <button
                       onClick={() => {
