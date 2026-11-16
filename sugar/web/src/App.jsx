@@ -1,7 +1,7 @@
 // יומן סוכר: מסך יום (ארוחות, מדידות, גרף), מחשבון אינסולין, לוח שנה, תפריט קבוע, מעקב ודפוסים, שיחה עם AI והגדרות.
 // ניווט לפי כתובת (#/day/2026-11-04, #/calc, #/cal/2026-11, #/menu, #/stats, #/chat, #/settings, #/more) כדי שכפתור "חזרה" יעבוד.
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, Camera, Calculator as CalcIcon, CalendarDays, CalendarRange, ChevronLeft, Cloud, CloudOff, Droplet, Menu, MessageCircle, Moon, RefreshCw, Settings as Gear, Sun, UtensilsCrossed } from 'lucide-react';
+import { BarChart3, Camera, Calculator as CalcIcon, CalendarDays, CalendarRange, ChevronLeft, Cloud, CloudOff, Droplet, Menu, MessageCircle, Moon, Presentation, RefreshCw, Settings as Gear, Sun, UtensilsCrossed } from 'lucide-react';
 import { prepare, today } from './lib/diary';
 import { sync, useStore } from './lib/store';
 import { isDark, setTheme } from './lib/theme';
@@ -15,8 +15,9 @@ import Settings from './components/Settings';
 import Calculator from './components/Calculator';
 import CalendarView from './components/CalendarView';
 import SensorView from './components/SensorView';
+import ReportView from './components/ReportView';
 
-const PAGES = ['day', 'calc', 'cal', 'menu', 'sensor', 'stats', 'chat', 'settings', 'more'];
+const PAGES = ['day', 'calc', 'cal', 'menu', 'sensor', 'report', 'stats', 'chat', 'settings', 'more'];
 
 function parseHash() {
   const [, page = 'day', arg] = window.location.hash.replace(/^#/, '').split('/');
@@ -29,6 +30,7 @@ const NAV = [
   ['calc', 'מחשבון', CalcIcon],
   ['cal', 'לוח שנה', CalendarRange],
   ['stats', 'מעקב', BarChart3],
+  ['report', 'מצגת לתקופה', Presentation],
   ['chat', 'שאלות ל-AI', MessageCircle],
   ['menu', 'תפריט קבוע', UtensilsCrossed],
   ['sensor', 'החיישן', Camera],
@@ -43,7 +45,7 @@ const TABS = [
   ['chat', 'AI', MessageCircle],
   ['more', 'עוד', Menu],
 ];
-const MORE = ['menu', 'sensor', 'settings'];
+const MORE = ['report', 'menu', 'sensor', 'settings'];
 
 function MoreView({ go }) {
   return (
@@ -115,7 +117,7 @@ export default function App() {
   return (
     <div className="min-h-dvh lg:flex">
       {/* תפריט צד במחשב */}
-      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-l border-line bg-card p-4 lg:flex">
+      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-l border-line bg-card p-4 lg:flex print:hidden">
         <div className="mb-6 flex items-center gap-2 px-2 text-xl font-bold">
           <Droplet className="text-accent" /> {title}
         </div>
@@ -141,7 +143,7 @@ export default function App() {
 
       <div className="min-w-0 flex-1">
         {/* כותרת בטלפון */}
-        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-card/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur lg:hidden">
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-card/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur lg:hidden print:hidden">
           <div className="flex items-center gap-2 py-3 font-bold">
             <Droplet size={20} className="text-accent" /> {title}
           </div>
@@ -153,7 +155,7 @@ export default function App() {
           </div>
         </header>
 
-        <main className="mx-auto max-w-5xl px-4 pt-4 pb-28 lg:px-8 lg:pt-8 lg:pb-10">
+        <main className="mx-auto max-w-5xl px-4 pt-4 pb-28 lg:px-8 lg:pt-8 lg:pb-10 print:max-w-none print:p-0">
           {route.page === 'day' && <DayView data={data} date={route.date || day} go={(d) => go('day', d)} openCal={(m) => go('cal', m)} />}
           {route.page === 'calc' && <Calculator data={data} />}
           {route.page === 'cal' && <CalendarView data={data} month={route.month || day.slice(0, 7)} go={(m) => go('cal', m)} openDay={(d) => go('day', d)} />}
@@ -162,12 +164,13 @@ export default function App() {
           {route.page === 'stats' && <StatsView data={data} openDay={(d) => go('day', d)} openChat={() => go('chat')} />}
           {route.page === 'chat' && <ChatView data={data} />}
           {route.page === 'sensor' && <SensorView data={data} />}
+          {route.page === 'report' && <ReportView data={data} />}
           {route.page === 'settings' && <Settings data={data} records={records} />}
         </main>
       </div>
 
       {/* סרגל תחתון בטלפון */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-line bg-card pb-[env(safe-area-inset-bottom)] lg:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-line bg-card pb-[env(safe-area-inset-bottom)] lg:hidden print:hidden">
         {TABS.map(([page, label, Icon]) => (
           <button key={page} onClick={() => go(page)} className={`flex flex-col items-center gap-0.5 py-2 text-xs ${route.page === page || (page === 'more' && MORE.includes(route.page)) ? 'text-accent-ink' : 'text-muted'}`}>
             <Icon size={22} />
