@@ -11,6 +11,7 @@
 //   settings        -> { models: { <agent>: 'haiku' | 'sonnet' | 'opus' } }
 //   busy            -> { <מפתח שיחה>: { agent } } מי כותב עכשיו
 //   r:<id>          -> עריכת וידאו ברקע (render.js)
+//   skills          -> הסקילים שהספרן לימד את הצוות ממאגר AI (maagar.js)
 import { AGENTS, AGENT_KEYS, TIERS } from './agents.js';
 import * as auth from './auth.js';
 import { renderView } from './render.js';
@@ -277,6 +278,7 @@ export async function handleApp(t, path, body, headers, origin) {
         convs: await convList(t),
         costs: { today: c.today, month: c.now.usd, ils: ILS },
         video: Boolean(t.env.GITHUB_TOKEN && t.env.FILES),
+        maagar: Boolean(t.env.MAAGAR),
       };
     }
     case '/app/conv':
@@ -318,6 +320,15 @@ export async function handleApp(t, path, body, headers, origin) {
       notes.splice(i, 1);
       await storage.put('notes', notes);
       return { notes };
+    }
+
+    // מה שהספרן לימד את הצוות ממאגר AI
+    case '/app/skills':
+      return { skills: (await storage.get('skills')) || [] };
+    case '/app/skills/delete': {
+      const skills = ((await storage.get('skills')) || []).filter((s) => s.name !== String(body.name || ''));
+      await storage.put('skills', skills);
+      return { skills };
     }
 
     case '/app/costs':

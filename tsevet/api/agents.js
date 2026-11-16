@@ -57,6 +57,31 @@ beyond that frame, and ask when the request depends on the content. When the req
 right away with sensible defaults and say in one or two short sentences what you chose. If no file was uploaded, \
 ask for it. One render per request unless asked for more. For titles or copy ideas, ask קריאייטיב with handoff.`,
   },
+  // רק באפליקציה: מכיר את "מאגר AI" של הבעלים ומלמד את שאר הבוטים ממנו
+  librarian: {
+    name: 'ספרן',
+    emoji: '📚',
+    tier: 'sonnet',
+    appOnly: true,
+    short: 'מוצא ידע, שיטות, פרומפטים וסקילים ב"מאגר AI" ומלמד אותם את שאר הבוטים',
+    role: `You are "ספרן" (Librarian) – the team's knowledge expert. The owner keeps everything they collect about AI \
+in their own app "מאגר AI" (the AI repository): articles, videos, tools, and a "לימוד וסקילים" area where material was \
+already turned into skills, ready prompts, steps and lessons – much of it about video creation and editing.
+Your job:
+- Find what the repository knows (maagar_search, then maagar_read) and answer from it, naming the item you used.
+- When an item was only summarized and the owner wants its method, start maagar_learn on it; it takes a minute or \
+two in the background – say so and offer to continue afterwards (search again to see the result).
+- Teach the team: turn what you read into a team skill with teach. A skill is know-how that a teammate loads before \
+doing that kind of task. Write the body complete and self-contained: the goal, when to use it, the method step by \
+step, rules, and the ready prompts / templates copied faithfully from the item. Choose the teammates it really fits \
+(e.g. video prompts and scripts → creative; editing choices → editor). Reuse the same name to update a skill; \
+unteach removes one.
+- Be honest about the limit: a skill adds knowledge, not new tools. If an item teaches a tool the team cannot run \
+(e.g. generating a clip in Veo / Kling / Runway), the skill lets a teammate prepare the exact prompts and steps for \
+the owner to run there – say that plainly instead of promising the team will produce it.
+When asked to "learn everything" about a topic, search with several words (Hebrew and English), read the best few \
+items, and teach a small number of solid skills rather than many thin ones. Then list what you taught and to whom.`,
+  },
 };
 export const AGENT_KEYS = Object.keys(AGENTS);
 // הבוטים שיש להם בוט ב-Telegram
@@ -65,7 +90,7 @@ export const label = (key) => `${AGENTS[key].emoji} ${AGENTS[key].name}`;
 
 const appsList = APPS.map((a) => `- ${a.key}: ${a.name} – ${a.about} (${a.url})`).join('\n');
 
-const common = (team, channel) => `You are part of a small AI team ${channel === 'app' ? "in the owner's private team app (a group chat on the phone or computer)" : 'in a Telegram group'}. You work for the owner – an Israeli who \
+const common = (team, channel, maagar) => `You are part of a small AI team ${channel === 'app' ? "in the owner's private team app (a group chat on the phone or computer)" : 'in a Telegram group'}. You work for the owner – an Israeli who \
 builds web apps (installable on the phone) and now wants to market each of them, with a dedicated business page \
 per app for advertising.
 
@@ -80,7 +105,8 @@ How to work:
 paragraphs, lines starting with "•", **bold** only for a few key words. No tables and no "#" headings.
 - Before working on an app, read it with app_info so you know what it really does. Never invent features.
 - Use web_search / web_fetch for anything current: competitors, trends, benchmarks and costs in Israel, ad policies.
-- Use remember for lasting facts and decisions (brand voice, audiences, budgets, page names, what worked) – \
+${maagar ? `- The owner's AI repository ("מאגר AI") holds what they collected about AI – methods, ready prompts and skills, a lot of \
+it about making and editing videos. When a task could benefit from it, look there with maagar_search / maagar_read.\n` : ''}- Use remember for lasting facts and decisions (brand voice, audiences, budgets, page names, what worked) – \
 not for chit-chat. Use forget when the owner says something is no longer true.
 - When a teammate is better suited for part of the task, write your part and then call handoff with a clear \
 request. Don't hand off when the owner only needs your answer, and never hand back and forth for nothing.
@@ -90,11 +116,15 @@ a few minutes, with exact step-by-step instructions. Never claim you did somethi
 - Never spend money and never ask for passwords or API keys in the chat.`;
 
 // team = הבוטים שזמינים בערוץ הזה (ב-Telegram רק מי שיש לו בוט), channel = 'tg' | 'app'
-export function systemPrompt(agent, notes = [], { team = TG_KEYS, channel = 'tg' } = {}) {
+// skills = הסקילים שהבוט הזה למד (רק השם ומתי להשתמש; את התוכן הוא טוען עם use_skill)
+export function systemPrompt(agent, notes = [], { team = TG_KEYS, channel = 'tg', maagar = false, skills = [] } = {}) {
   const memory = notes.length
     ? `What the team remembers (numbered):\n${notes.map((n, i) => `${i + 1}. ${n}`).join('\n')}`
     : 'The team has no saved notes yet.';
-  return `${AGENTS[agent].role}\n\n${common(team, channel)}\n\n${memory}`;
+  const learned = skills.length
+    ? `\n\nSkills you were taught (before a task that fits one, load it with use_skill and follow it):\n${skills.map((s) => `- ${s.name}: ${s.title} – ${s.when}`).join('\n')}`
+    : '';
+  return `${AGENTS[agent].role}\n\n${common(team, channel, maagar)}${learned}\n\n${memory}`;
 }
 
 // הכלי של עורך הווידאו: מתחיל עריכה ברקע (render.js). הקבצים לפי המזהה שמופיע בשיחה.
@@ -123,8 +153,65 @@ const webTools = (model) => (model === MODELS.haiku
   ? [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }, { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: 3 }]
   : [{ type: 'web_search_20260209', name: 'web_search', max_uses: 5 }, { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 3 }]);
 
-export const TOOLS = (agent, team = TG_KEYS, model = MODEL) => [
+// כלי המאגר: לכל הבוטים חיפוש וקריאה; לספרן גם "ללמוד מזה" ולימוד הצוות
+const MAAGAR_TOOLS = [
+  {
+    name: 'maagar_search',
+    description: "Search the owner's AI repository (מאגר AI) by words. Returns matching items with ids.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'A few words, Hebrew and/or English' },
+        area: { type: 'string', enum: ['all', 'learn', 'library'], description: 'learn = only "לימוד וסקילים" (skills, prompts, steps); library = the summarized items' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'maagar_read',
+    description: 'Read one repository item in full (summary, lessons, steps, prompts, skills).',
+    input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+  },
+];
+const LIBRARIAN_TOOLS = (team) => [
+  {
+    name: 'maagar_learn',
+    description: 'Ask the repository to study a summarized item in depth ("ללמוד מזה"): it builds skills, prompts and steps from the source in the background (1-2 minutes).',
+    input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+  },
+  {
+    name: 'teach',
+    description: 'Save a team skill (know-how) that the listed teammates load before a fitting task. Same name = update.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'kebab-case English, e.g. "veo-video-prompts"' },
+        title: { type: 'string', description: 'Short Hebrew name' },
+        when: { type: 'string', description: 'One sentence: for which tasks a teammate should load it' },
+        body: { type: 'string', description: 'The full skill in Markdown: goal, method step by step, rules, ready prompts / templates' },
+        agents: { type: 'array', items: { type: 'string', enum: team }, description: 'Who learns it' },
+        source: { type: 'string', description: 'Title of the repository item(s) it came from' },
+      },
+      required: ['name', 'title', 'when', 'body', 'agents'],
+    },
+  },
+  {
+    name: 'unteach',
+    description: 'Remove a team skill by name.',
+    input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+  },
+];
+const USE_SKILL = (skills) => ({
+  name: 'use_skill',
+  description: 'Load the full text of a skill you were taught, before doing a task it fits.',
+  input_schema: { type: 'object', properties: { name: { type: 'string', enum: skills.map((s) => s.name) } }, required: ['name'] },
+});
+
+export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, skills = [] } = {}) => [
   ...webTools(model),
+  ...(maagar ? MAAGAR_TOOLS : []),
+  ...(maagar && agent === 'librarian' ? LIBRARIAN_TOOLS(team) : []),
+  ...(skills.length ? [USE_SKILL(skills)] : []),
   {
     name: 'app_info',
     description: "Read the full description of one of the owner's apps (features, audience, how it works).",
@@ -185,7 +272,8 @@ export function transcript(history, owner = 'הבעלים') {
 
 // תור אחד של בוט. tools = { app_info, remember, forget, edit_video } (פונקציות שמחזירות טקסט).
 // model = המודל של הבוט, team = מי זמין בערוץ, images = תמונות מההודעה האחרונה. מחזיר { text, handoff, usage[] }
-export async function runAgent(client, { agent, notes, history, owner, image, images = image ? [image] : [], model = MODEL, team = TG_KEYS, channel = 'tg' }, tools) {
+// maagar = יש חיבור למאגר AI, skills = הסקילים שהבוט הזה למד
+export async function runAgent(client, { agent, notes, history, owner, image, images = image ? [image] : [], model = MODEL, team = TG_KEYS, channel = 'tg', maagar = false, skills = [] }, tools) {
   const intro = `The conversation so far (latest at the bottom):\n\n${transcript(history, owner)}\n\n` +
     `Now it's your turn as ${label(agent)}. Reply to the latest message.`;
   const content = images.length ? [...images, { type: 'text', text: intro }] : intro;
@@ -200,8 +288,8 @@ export async function runAgent(client, { agent, notes, history, owner, image, im
       max_tokens: 8000,
       ...fallback,
       output_config: { effort: 'medium' },
-      system: [{ type: 'text', text: systemPrompt(agent, notes, { team, channel }), cache_control: { type: 'ephemeral' } }],
-      tools: TOOLS(agent, team, model),
+      system: [{ type: 'text', text: systemPrompt(agent, notes, { team, channel, maagar, skills }), cache_control: { type: 'ephemeral' } }],
+      tools: TOOLS(agent, team, model, { maagar, skills }),
       messages,
     });
     usage.push({ model, ...(response.usage || {}) });

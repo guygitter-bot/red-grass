@@ -43,8 +43,8 @@ export default function TeamBoard({ team }) {
   if (!team) return <p className="p-8 text-center text-muted">רגע…</p>;
   const agents = team.agents;
   const n = agents.length;
-  // עם מעט בוטים העיגולים גדולים, ולכן המעגל קטן יותר (שהעליון לא ייחתך)
-  const pos = circlePositions(n, n > 4 ? 34 : n > 1 ? 27 : 0);
+  // עד 3 בוטים יש מקום גם לתיאור, ולכן המעגל קטן יותר (שהעליון לא ייחתך); מ-4 – בטלפון רק השם
+  const pos = circlePositions(n, n > 3 ? 33 : n > 1 ? 27 : 0);
   const size = avatarSize(n);
 
   return (
@@ -71,7 +71,7 @@ export default function TeamBoard({ team }) {
           })}
         </svg>
         {agents.map((a, i) => (
-          <Node key={a.key} agent={a} agents={agents} pos={pos[i]} size={size} many={n > 6} onClick={() => newConversation(a.key)} />
+          <Node key={a.key} agent={a} agents={agents} pos={pos[i]} size={size} many={n > 3} onClick={() => newConversation(a.key)} />
         ))}
       </div>
 
