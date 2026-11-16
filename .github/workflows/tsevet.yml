@@ -1,7 +1,9 @@
 name: tsevet
 
-# צוות (tsevet/): בוטים של שיווק ב-Telegram
-#   api -> Cloudflare Worker "tsevet-api" (הבוטים, Durable Object אחד, Claude)
+# צוות (tsevet/): צוות בוטים – אפליקציה משלו, וגם ב-Telegram
+#   api -> Cloudflare Worker "tsevet-api" (הבוטים, Durable Object אחד, Claude; קבצים בדלי R2 "tsevet-files")
+#   web -> Cloudflare Pages "tsevet-ai" -> https://tsevet-ai.pages.dev
+# עריכת הווידאו עצמה רצה ב-tsevet-render.yml.
 # עולה גם כשה-README של אחת האפליקציות משתנה – כדי שהבוטים יכירו את הגרסה העדכנית.
 on:
   push:
@@ -42,6 +44,12 @@ jobs:
           npm ci
           node build-apps.mjs
           npm test
+      - name: App tests and build
+        working-directory: tsevet/web
+        run: |
+          npm ci
+          npm test
+          npm run build
 
   api:
     needs: test
@@ -77,6 +85,15 @@ jobs:
         run: |
           npm ci
           node build-apps.mjs
+      - name: Create the files bucket (first run only)
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: tsevet/api
+          wranglerVersion: "4.146.0"
+          command: r2 bucket create tsevet-files
       - name: Deploy worker
         id: deploy
         uses: cloudflare/wrangler-action@v3
@@ -95,6 +112,18 @@ jobs:
             TG_CREATIVE_TOKEN
             TG_CAMPAIGNS_TOKEN
             TEAM_OWNER_CODE
+      - name: GitHub token for video editing (optional)
+        working-directory: tsevet/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GH_RENDER_TOKEN: ${{ secrets.POINTS_GITHUB_TOKEN }}
+        run: |
+          if [ -z "$GH_RENDER_TOKEN" ]; then
+            echo "::notice::POINTS_GITHUB_TOKEN is not set; video editing in the app stays off"
+            exit 0
+          fi
+          printf '%s' "$GH_RENDER_TOKEN" | npx --yes wrangler@4.146.0 secret put GITHUB_TOKEN
       - name: Connect the bots to Telegram
         env:
           URL: ${{ steps.deploy.outputs.deployment-url }}
@@ -111,3 +140,41 @@ jobs:
           done
           echo "::error::Could not connect the bots to Telegram"
           exit 1
+
+  web:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build
+        working-directory: tsevet/web
+        run: |
+          npm ci
+          npm run build
+      - name: Create the Pages project (first run only)
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: tsevet/web
+          wranglerVersion: "4.146.0"
+          command: pages project create tsevet-ai --production-branch=main
+      - name: Publish
+        id: publish
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: tsevet/web
+          wranglerVersion: "4.146.0"
+          command: pages deploy dist --project-name=tsevet-ai --branch=main --commit-dirty=true
+      - name: Summary
+        env:
+          URL: ${{ steps.publish.outputs.deployment-url }}
+        run: |
+          echo "Published: https://tsevet-ai.pages.dev ($URL)" >> "$GITHUB_STEP_SUMMARY"

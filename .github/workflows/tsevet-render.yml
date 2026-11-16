@@ -1,0 +1,57 @@
+name: tsevet render
+
+# עריכת וידאו בשביל הבוט 🎬 באפליקציית "צוות" (tsevet/api/render.js):
+# השרת שולח אות (repository_dispatch) עם מזהה עבודה; כאן מורידים את הקבצים, עורכים עם הכלים שב-.claude/skills,
+# ומעלים את הסרטון המוכן בחזרה לשיחה. המאגר ציבורי – בלוג לא מודפס תוכן של המשתמש (ראו tsevet/render/run.py).
+on:
+  repository_dispatch:
+    types: [tsevet-render]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tsevet-render-${{ github.event.client_payload.id }}
+  cancel-in-progress: false
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TSEVET_API: https://tsevet-api.guygitter.workers.dev
+      TSEVET_TOKEN: ${{ secrets.POINTS_GITHUB_TOKEN }}
+      RENDER_ID: ${{ github.event.client_payload.id }}
+    steps:
+      - name: Check the request
+        run: |
+          [ -n "$TSEVET_TOKEN" ] || { echo "::error::Missing secret POINTS_GITHUB_TOKEN (see tsevet/README.md)"; exit 1; }
+          printf '%s' "$RENDER_ID" | grep -Eq '^[a-z0-9]{8,32}$' || { echo "::error::Bad render id"; exit 1; }
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Editing tools (ffmpeg, Hebrew text)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg libfribidi0 libharfbuzz0b
+          pip install --quiet pillow numpy
+      - name: Which edit
+        id: job
+        run: |
+          op=$(curl -sf -H "authorization: Bearer $TSEVET_TOKEN" "$TSEVET_API/render/job?id=$RENDER_ID" | python3 -c "import json,sys; print(json.load(sys.stdin)['op'])") || op=""
+          printf '%s' "$op" | grep -Eq '^[a-z_]*$' || op=""
+          echo "op=$op" >> "$GITHUB_OUTPUT"
+      # כותרות מונפשות מצוירות בדפדפן (Chromium)
+      - uses: actions/setup-node@v4
+        if: steps.job.outputs.op == 'motion_graphics'
+        with:
+          node-version: "22"
+      - name: Browser for animated titles
+        if: steps.job.outputs.op == 'motion_graphics'
+        run: |
+          npm install -g --silent playwright@1.63.0
+          npx --yes playwright@1.63.0 install --with-deps chromium
+          echo "NODE_PATH=$(npm root -g)" >> "$GITHUB_ENV"
+      - name: Edit and upload
+        run: python3 tsevet/render/run.py "$RENDER_ID"

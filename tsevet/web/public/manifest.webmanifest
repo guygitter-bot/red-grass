@@ -1,0 +1,13 @@
+{
+  "name": "הצוות",
+  "short_name": "הצוות",
+  "description": "הצוות הפרטי שלי – בוטים מומחים בשיחה אחת",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b0f1d",
+  "theme_color": "#4f46e5",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

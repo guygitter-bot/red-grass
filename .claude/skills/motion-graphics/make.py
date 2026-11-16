@@ -100,6 +100,7 @@ def main():
     vch.append(f"[{cur_v}][ov]overlay=0:0:format=auto,fade=t=in:st=0:d=0.3,fade=t=out:st={D - 0.6:.2f}:d=0.6,format=yuv420p[vout]")
     if a.music:
         ins += ["-i", a.music]
+        ach.append(f"[{cur_a}]anullsink")  # הצליל של הקליפים לא בשימוש כשיש מוזיקה – חייבים לסגור אותו
         ach.append(f"[{ov + 1}:a]atrim=0:{D:.3f},afade=t=out:st={D - 1.0:.2f}:d=1.0,aformat=channel_layouts=stereo[aout]")
     else:
         ach.append(f"[{cur_a}]afade=t=in:st=0:d=0.2,afade=t=out:st={D - 0.6:.2f}:d=0.6[aout]")
