@@ -178,6 +178,7 @@
 - בדיקה: `cd tsevet/api && npm test` · `cd tsevet/web && npm test && npm run build`. מסכים: `node api/dev.mjs` (שרת מקומי בזיכרון). טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 - בוט חדש = מפתח ב-`AGENTS` (`api/agents.js`, עם `tier`); ל-Telegram גם סוד `TG_<KEY>_TOKEN` ב-workflow (`appOnly: true` = רק באפליקציה).
 - עריכת וידאו רצה ב-GitHub Actions (`tsevet-render.yml` + `tsevet/render/run.py`, כלים מ-`.claude/skills`). **המאגר ציבורי – לא להדפיס שם תוכן של המשתמש.**
+- המשתמש ביקש: **תמיד למזג לבד** את ה-PR (אחרי שהבדיקות ירוקות), לבדוק שהעלייה (`tsevet.yml` על main) הצליחה, ולדווח.
 - הבוטים לא מוציאים כסף בלי אישור מפורש של הבעלים (בכפתור). רק הבעלים מדבר איתם (באפליקציה: סיסמה שנקבעת בכניסה הראשונה).
 
 ### Isport – חנות חולצות כדורגל (`isport/`)
