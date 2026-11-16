@@ -1,0 +1,336 @@
+// האפליקציה של הצוות (tsevet/web): שיחות, קבצים, זיכרון, עלויות והגדרות.
+// הכול רץ בתוך ה-Durable Object (team.js קורא ל-handleApp); כאן אין Telegram.
+//
+// אחסון נוסף (מעבר למה שמתואר ב-team.js):
+//   auth            -> הסיסמה והמכשירים המחוברים (auth.js)
+//   convs           -> השיחות שנפתחו באפליקציה [{ id, title, at }]
+//   titles          -> שמות שניתנו לשיחות שהגיעו מ-Telegram { <id>: title }
+//   h:app:<id>      -> ההודעות של שיחה מהאפליקציה (שיחות Telegram נשארות ב-h:<chat>:<thread>)
+//   f:<id>          -> פרטי קובץ שהועלה { id, kind, name, type, size, dur, w, h, poster, conv, at } (התוכן ב-R2: files/<id>)
+//   fileKey         -> סוד לחתימה על קישורים זמניים לקבצים
+//   settings        -> { models: { <agent>: 'haiku' | 'sonnet' | 'opus' } }
+//   busy            -> { <מפתח שיחה>: { agent } } מי כותב עכשיו
+//   r:<id>          -> עריכת וידאו ברקע (render.js)
+import { AGENTS, AGENT_KEYS, TIERS } from './agents.js';
+import * as auth from './auth.js';
+import { renderView } from './render.js';
+
+const { fail } = auth;
+export const APP_PREFIX = 'h:app:';
+export const MAX_TEXT = 8000;
+const MAX_FILES = 6;
+const MAX_TITLE = 60;
+const MAX_CONVS = 200;
+const HOUR = 60 * 60 * 1000;
+const FILE_TTL = 6 * HOUR;
+const ILS = 3.7;
+
+export const newId = (n = 12) => crypto.randomUUID().replace(/-/g, '').slice(0, n);
+export const israelDate = (t = Date.now()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(t);
+
+// מזהה שיחה <-> מפתח באחסון. שיחה מ-Telegram: tg:<chat>:<thread>
+export function convKey(id) {
+  id = String(id || '');
+  if (/^tg:-?\d+:\d+$/.test(id)) return `h:${id.slice(3)}`;
+  return /^[a-z0-9]{6,24}$/.test(id) ? `${APP_PREFIX}${id}` : null;
+}
+export const convId = (key) => (key.startsWith(APP_PREFIX) ? key.slice(APP_PREFIX.length) : `tg:${key.slice(2)}`);
+
+// ---------- הגדרות ----------
+export async function getSettings(storage) {
+  const s = (await storage.get('settings')) || {};
+  const models = {};
+  for (const k of AGENT_KEYS) models[k] = TIERS.includes(s.models?.[k]) ? s.models[k] : AGENTS[k].tier;
+  return { models };
+}
+
+// ---------- קבצים ----------
+// קישור זמני לקובץ (חתום). התוקף מעוגל לשעה, כדי שהקישור לא ישתנה בכל רענון והסרטון לא ייטען מחדש
+async function fileUrl(storage, origin, id) {
+  let secret = await storage.get('fileKey');
+  if (!secret) {
+    secret = auth.randomHex();
+    await storage.put('fileKey', secret);
+  }
+  const exp = Math.ceil((Date.now() + FILE_TTL) / HOUR) * HOUR;
+  return `${origin}/file/${id}?e=${exp}&s=${await auth.sign(secret, `${id}:${exp}`)}`;
+}
+
+export async function checkFileUrl(storage, id, exp, sig) {
+  const secret = await storage.get('fileKey');
+  if (!secret || !(Number(exp) > Date.now())) return null;
+  if (!auth.safeEqual(await auth.sign(secret, `${id}:${Number(exp)}`), String(sig || ''))) return null;
+  return (await storage.get(`f:${id}`)) || null;
+}
+
+export async function fileView(storage, origin, f) {
+  if (!f?.id) return null;
+  return {
+    id: f.id, kind: f.kind, name: f.name || '', size: f.size || 0, dur: f.dur || 0, w: f.w || 0, h: f.h || 0,
+    url: await fileUrl(storage, origin, f.id),
+    ...(f.poster ? { poster: await fileUrl(storage, origin, f.poster) } : {}),
+  };
+}
+
+const KINDS = { image: /^image\/(jpeg|png|webp|gif)$/, video: /^video\//, audio: /^audio\// };
+export const MAX_BYTES = { image: 8 * 1024 * 1024, video: 95 * 1024 * 1024, audio: 30 * 1024 * 1024 };
+
+// סוג הקובץ לפי ה-type שהדפדפן שלח (null = לא מקבלים)
+export const kindOf = (type) => Object.keys(KINDS).find((k) => KINDS[k].test(String(type || ''))) || null;
+
+// נרשם אחרי שה-worker שמר את התוכן ב-R2
+export async function addFile(storage, f) {
+  const num = (v, max) => Math.min(Math.max(Number(v) || 0, 0), max);
+  const rec = {
+    id: f.id,
+    kind: f.kind,
+    name: String(f.name || '').replace(/[\r\n"]/g, ' ').slice(0, 120),
+    type: String(f.type || ''),
+    size: Number(f.size) || 0,
+    dur: num(f.dur, 36_000),
+    w: num(f.w, 20_000),
+    h: num(f.h, 20_000),
+    at: Date.now(),
+  };
+  if (f.poster && (await storage.get(`f:${f.poster}`))?.kind === 'image') rec.poster = f.poster;
+  if (f.conv) rec.conv = f.conv;
+  await storage.put(`f:${rec.id}`, rec);
+  return rec;
+}
+
+// ---------- שיחות ----------
+async function convList(t) {
+  const { storage } = t;
+  const convs = (await storage.get('convs')) || [];
+  const titles = (await storage.get('titles')) || {};
+  const q = (await storage.get('q')) || [];
+  const busy = (key) => q.some((j) => t.jobKey(j) === key);
+  const out = convs.map((c) => ({ id: c.id, title: c.title || 'שיחה חדשה', at: c.at, source: 'app', busy: busy(`${APP_PREFIX}${c.id}`) }));
+  // שיחות שהתנהלו ב-Telegram – ממשיכות כאן עם כל ההיסטוריה
+  const all = await storage.list({ prefix: 'h:' });
+  for (const [key, history] of all) {
+    if (key.startsWith(APP_PREFIX) || !history?.length) continue;
+    const id = convId(key);
+    const thread = Number(key.split(':')[2]) || 0;
+    out.push({ id, title: titles[id] || (thread ? `Telegram · נושא ${thread}` : 'Telegram'), at: history[history.length - 1].at || 0, source: 'tg', busy: busy(key) });
+  }
+  return out.sort((a, b) => b.at - a.at);
+}
+
+async function convView(t, id, origin) {
+  const { storage } = t;
+  const key = convKey(id);
+  if (!key) throw fail(404, 'השיחה לא נמצאה');
+  const history = (await storage.get(key)) || [];
+  const convs = (await storage.get('convs')) || [];
+  const meta = convs.find((c) => c.id === id);
+  if (!meta && !history.length) throw fail(404, 'השיחה לא נמצאה');
+  const messages = [];
+  let pending = false;
+  for (let i = 0; i < history.length; i++) {
+    const h = history[i];
+    const files = (await Promise.all((h.files || []).map((f) => fileView(storage, origin, f)))).filter(Boolean);
+    const renders = [];
+    for (const rid of h.renders || []) {
+      const r = await renderView(t, rid, origin);
+      if (r) renders.push(r);
+      if (r?.status === 'queued') pending = true;
+    }
+    messages.push({
+      i, who: h.who, text: h.text || '', at: h.at || 0,
+      ...(h.photo ? { photo: true } : {}),
+      ...(h.handoff ? { handoff: h.handoff } : {}),
+      ...(files.length ? { files } : {}),
+      ...(renders.length ? { renders } : {}),
+    });
+  }
+  const job = ((await storage.get('q')) || []).find((j) => t.jobKey(j) === key);
+  const now = ((await storage.get('busy')) || {})[key];
+  const titles = (await storage.get('titles')) || {};
+  return {
+    id,
+    title: meta?.title || titles[id] || (id.startsWith('tg:') ? 'Telegram' : 'שיחה חדשה'),
+    source: id.startsWith('tg:') ? 'tg' : 'app',
+    messages,
+    busy: job ? { agent: now?.agent || job.target || null } : null,
+    pending,
+  };
+}
+
+async function setTitle(storage, id, title) {
+  title = String(title || '').replace(/\s+/g, ' ').trim().slice(0, MAX_TITLE);
+  if (!title) throw fail(400, 'צריך שם');
+  if (id.startsWith('tg:')) {
+    const titles = (await storage.get('titles')) || {};
+    titles[id] = title;
+    await storage.put('titles', titles);
+    return;
+  }
+  const convs = (await storage.get('convs')) || [];
+  const c = convs.find((x) => x.id === id);
+  if (!c) throw fail(404, 'השיחה לא נמצאה');
+  c.title = title;
+  await storage.put('convs', convs);
+}
+
+async function deleteConv(t, id) {
+  const { storage } = t;
+  const key = convKey(id);
+  if (!key) throw fail(404, 'השיחה לא נמצאה');
+  await t.dropJobs(key);
+  // הקבצים של השיחה (גם סרטונים שנערכו) נמחקים איתה
+  const history = (await storage.get(key)) || [];
+  const ids = new Set();
+  for (const h of history) {
+    for (const f of h.files || []) {
+      ids.add(f.id);
+      if (f.poster) ids.add(f.poster);
+    }
+    for (const rid of h.renders || []) {
+      const r = await storage.get(`r:${rid}`);
+      if (r?.file) ids.add(r.file);
+      await storage.delete(`r:${rid}`);
+    }
+  }
+  for (const fid of ids) {
+    await storage.delete(`f:${fid}`);
+    await t.env.FILES?.delete(`files/${fid}`).catch(() => {});
+  }
+  await storage.delete(key);
+  await storage.put('convs', ((await storage.get('convs')) || []).filter((c) => c.id !== id));
+  const titles = (await storage.get('titles')) || {};
+  if (titles[id]) {
+    delete titles[id];
+    await storage.put('titles', titles);
+  }
+}
+
+async function send(t, body) {
+  const { storage } = t;
+  const id = String(body.id || '');
+  const key = convKey(id);
+  if (!key) throw fail(404, 'השיחה לא נמצאה');
+  const convs = (await storage.get('convs')) || [];
+  const meta = convs.find((c) => c.id === id);
+  const history = (await storage.get(key)) || [];
+  if (!meta && !history.length) throw fail(404, 'השיחה לא נמצאה');
+
+  const text = String(body.text || '').trim().slice(0, MAX_TEXT);
+  const files = [];
+  for (const fid of (Array.isArray(body.files) ? body.files : []).slice(0, MAX_FILES)) {
+    const f = await storage.get(`f:${String(fid)}`);
+    if (!f) continue;
+    if (!f.conv) await storage.put(`f:${f.id}`, { ...f, conv: id });
+    files.push({ id: f.id, kind: f.kind, name: f.name, size: f.size, dur: f.dur, w: f.w, h: f.h, ...(f.poster ? { poster: f.poster } : {}) });
+  }
+  if (!text && !files.length) throw fail(400, 'אין מה לשלוח');
+
+  await t.pushHistory(key, { who: 'owner', text, ...(files.length ? { files } : {}), at: Date.now() });
+  if (meta) {
+    meta.at = Date.now();
+    // השיחה מקבלת שם מההודעה הראשונה
+    if (!meta.title) meta.title = (text || files[0]?.name || 'שיחה').replace(/\s+/g, ' ').slice(0, 40);
+    await storage.put('convs', convs);
+  }
+  const target = AGENT_KEYS.includes(body.to) ? body.to : null;
+  await t.enqueue({ id: newId(), chan: 'app', key, target, turns: 0, attempts: 0 });
+  return { ok: true };
+}
+
+// ---------- עלויות ----------
+async function costs(storage) {
+  const date = israelDate();
+  const month = date.slice(0, 7);
+  const prev = israelDate(new Date(`${month}-01T12:00:00Z`).getTime() - 5 * 24 * HOUR).slice(0, 7);
+  const read = async (m) => {
+    const c = (await storage.get(`cost:${m}`)) || {};
+    return { month: m, usd: c.usd || 0, days: c.days || {}, agents: c.agents || {} };
+  };
+  const now = await read(month);
+  return { today: now.days[date.slice(8)] || 0, now, prev: await read(prev), ils: ILS };
+}
+
+// ---------- הכתובות ----------
+// מחזיר את התשובה (אובייקט), או זורק fail(status, הודעה)
+export async function handleApp(t, path, body, headers, origin) {
+  const { storage } = t;
+  if (path === '/app/status') return { ready: await auth.isReady(storage) };
+  if (path === '/app/setup') return { token: await auth.setup(storage, body.password) };
+  if (path === '/app/login') return { token: await auth.login(storage, body.password) };
+
+  await auth.authed(storage, headers);
+  switch (path) {
+    case '/app/auth':
+      return { ok: true };
+    case '/app/logout':
+      await auth.logout(storage, headers);
+      return { ok: true };
+    case '/app/password':
+      return { token: await auth.changePassword(storage, body.password, body.newPassword) };
+
+    case '/app/team': {
+      const settings = await getSettings(storage);
+      const busy = Object.values((await storage.get('busy')) || {}).map((b) => b.agent);
+      const c = await costs(storage);
+      return {
+        agents: AGENT_KEYS.map((k) => ({ key: k, name: AGENTS[k].name, emoji: AGENTS[k].emoji, short: AGENTS[k].short, tier: settings.models[k], busy: busy.includes(k) })),
+        convs: await convList(t),
+        costs: { today: c.today, month: c.now.usd, ils: ILS },
+        video: Boolean(t.env.GITHUB_TOKEN && t.env.FILES),
+      };
+    }
+    case '/app/conv':
+      return convView(t, String(body.id || ''), origin);
+    case '/app/conv/new': {
+      const convs = (await storage.get('convs')) || [];
+      const conv = { id: newId(), title: String(body.title || '').replace(/\s+/g, ' ').trim().slice(0, MAX_TITLE), at: Date.now() };
+      await storage.put('convs', [conv, ...convs].slice(0, MAX_CONVS));
+      return { id: conv.id };
+    }
+    case '/app/conv/rename':
+      await setTitle(storage, String(body.id || ''), body.title);
+      return { ok: true };
+    case '/app/conv/delete':
+      await deleteConv(t, String(body.id || ''));
+      return { ok: true };
+    case '/app/send':
+      return send(t, body);
+    case '/app/stop': {
+      const key = convKey(body.id);
+      if (key) await t.dropJobs(key);
+      return { ok: true };
+    }
+
+    case '/app/memory':
+      return { notes: (await storage.get('notes')) || [] };
+    case '/app/memory/add': {
+      const note = String(body.note || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+      if (!note) throw fail(400, 'אין מה לשמור');
+      const notes = [...((await storage.get('notes')) || []), note].slice(-60);
+      await storage.put('notes', notes);
+      return { notes };
+    }
+    case '/app/memory/delete': {
+      const notes = (await storage.get('notes')) || [];
+      const i = Number(body.number) - 1;
+      // text = מה שהמשתמש ראה, כדי שלא יימחק משפט אחר אם הרשימה השתנתה בינתיים
+      if (!(i >= 0 && i < notes.length) || (body.text != null && notes[i] !== body.text)) throw fail(409, 'הרשימה השתנתה, נסו שוב');
+      notes.splice(i, 1);
+      await storage.put('notes', notes);
+      return { notes };
+    }
+
+    case '/app/costs':
+      return costs(storage);
+    case '/app/settings': {
+      if (body.models && typeof body.models === 'object') {
+        const current = await getSettings(storage);
+        for (const k of AGENT_KEYS) if (TIERS.includes(body.models[k])) current.models[k] = body.models[k];
+        await storage.put('settings', current);
+      }
+      return getSettings(storage);
+    }
+    default:
+      throw fail(404, 'לא נמצא');
+  }
+}

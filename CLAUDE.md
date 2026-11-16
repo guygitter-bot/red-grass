@@ -172,11 +172,13 @@
 - בדיקה: `cd harochshim/api && npm test` · `cd harochshim/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 - ספק לא נמחק – רק "מורד מהרשימה" (`active: false`). ספק רואה רק את הלידים שלו (נבדק בשרת). צבעי הלוגו ב-`web/src/index.css`.
 
-### צוות – בוטים של שיווק ב-Telegram (`tsevet/`)
-- תיאור: `tsevet/README.md`. בוטים עם תפקידים (🎨 קריאייטיב, 📊 קמפיינים) בקבוצת Telegram עם נושאים; מדברים ביניהם (`handoff`).
-- `tsevet/api` → Worker `tsevet-api` (Durable Object `Team` אחד, עבודה ברקע ב-alarm). עלייה: `tsevet.yml` אחרי מיזוג ל-main.
-- בדיקה: `cd tsevet/api && npm test`. בוט חדש = מפתח ב-`AGENTS` (`api/agents.js`) + סוד `TG_<KEY>_TOKEN` ב-workflow.
-- הבוטים לא מוציאים כסף בלי אישור מפורש של הבעלים (בכפתור). רק הבעלים מדבר איתם.
+### צוות – צוות בוטים מומחים (`tsevet/`)
+- תיאור: `tsevet/README.md`. בוטים עם תפקידים (🎨 קריאייטיב, 📊 קמפיינים, 🎬 עורך וידאו) שמדברים ביניהם (`handoff`) וחולקים זיכרון; אפליקציה משלהם, וגם Telegram.
+- `tsevet/web` → https://tsevet-ai.pages.dev · `tsevet/api` → Worker `tsevet-api` (Durable Object `Team` אחד, עבודה ברקע ב-alarm; קבצים ב-R2 `tsevet-files`). עלייה: `tsevet.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd tsevet/api && npm test` · `cd tsevet/web && npm test && npm run build`. מסכים: `node api/dev.mjs` (שרת מקומי בזיכרון). טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- בוט חדש = מפתח ב-`AGENTS` (`api/agents.js`, עם `tier`); ל-Telegram גם סוד `TG_<KEY>_TOKEN` ב-workflow (`appOnly: true` = רק באפליקציה).
+- עריכת וידאו רצה ב-GitHub Actions (`tsevet-render.yml` + `tsevet/render/run.py`, כלים מ-`.claude/skills`). **המאגר ציבורי – לא להדפיס שם תוכן של המשתמש.**
+- הבוטים לא מוציאים כסף בלי אישור מפורש של הבעלים (בכפתור). רק הבעלים מדבר איתם (באפליקציה: סיסמה שנקבעת בכניסה הראשונה).
 
 ### Isport – חנות חולצות כדורגל (`isport/`)
 - תיאור: `isport/README.md`. קטלוג חולצות בלי סליקה/עגלה: התאמה אישית -> הערה למוכר (מועתקת) -> קישור FlyLinking.

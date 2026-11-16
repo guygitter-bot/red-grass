@@ -210,5 +210,5 @@ test('helpers', () => {
   const parts = split(`${'א'.repeat(3000)}\n\n${'ב'.repeat(3000)}`);
   assert.equal(parts.length, 2);
   assert.match(transcript([{ who: 'owner', text: 'היי' }, { who: 'campaigns', text: 'שלום' }], 'גיא'), /גיא: היי\n\n📊 קמפיינים: שלום/);
-  assert.ok(Math.abs(priceOf({ model: 'claude-opus-5-5', input_tokens: 1e6 }) - 5) < 1e-9);
+  assert.ok(Math.abs(priceOf({ model: 'claude-opus-5-5', input_tokens: 1e6 }) - 4) < 1e-9);
 });

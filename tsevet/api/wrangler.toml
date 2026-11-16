@@ -3,6 +3,17 @@ main = "worker.js"
 compatibility_date = "2026-09-01"
 workers_dev = true
 
+[vars]
+# האתרים שמותר להם לפנות לשרת (* = תת-כתובת של גרסה ב-Cloudflare Pages)
+ALLOWED_ORIGINS = "https://tsevet-ai.pages.dev,https://*.tsevet-ai.pages.dev,http://localhost:5173,http://localhost:4173"
+# עריכת וידאו רצה ב-GitHub Actions של המאגר הזה (tsevet-render.yml); הטוקן: הסוד GITHUB_TOKEN (מ-POINTS_GITHUB_TOKEN)
+GITHUB_REPO = "guygitter-bot/red-grass"
+
+# קבצים שמעלים בשיחה (תמונות, סרטונים, שירים) וסרטונים ערוכים
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "tsevet-files"
+
 # כל הצוות (בוטים, שיחות, זיכרון, עלויות) – אובייקט אחד ("main")
 [[durable_objects.bindings]]
 name = "TEAM"
@@ -17,3 +28,4 @@ new_sqlite_classes = ["Team"]
 #   TG_CREATIVE_TOKEN   – הבוט 🎨 קריאייטיב (מ-BotFather)
 #   TG_CAMPAIGNS_TOKEN  – הבוט 📊 קמפיינים (מ-BotFather)
 #   TEAM_OWNER_CODE     – הקוד שהבעלים שולח פעם אחת: /start <קוד>
+#   GITHUB_TOKEN        – לא חובה: מפעיל את עריכת הווידאו (נקבע מ-POINTS_GITHUB_TOKEN)

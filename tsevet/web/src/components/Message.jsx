@@ -1,0 +1,68 @@
+// הודעה אחת בשיחה: של הבעלים, של בוט, או של המערכת
+import { memo } from 'react';
+import { findAgent } from '../lib/agents';
+import { clock } from '../lib/format';
+import Avatar from './Avatar';
+import Markdown from './Markdown';
+import { FileView, RenderCard } from './Files';
+
+function Body({ m }) {
+  return (
+    <>
+      {m.text && <Markdown text={m.text} />}
+      {m.photo && !m.files?.length && <span className="text-sm text-muted">📷 תמונה</span>}
+      {m.files?.length > 0 && (
+        <div className={`${m.text ? 'mt-2' : ''} space-y-2`}>
+          {m.files.map((f) => (
+            <FileView key={f.id} file={f} />
+          ))}
+        </div>
+      )}
+      {m.renders?.length > 0 && (
+        <div className="mt-2 space-y-2">
+          {m.renders.map((r) => (
+            <RenderCard key={r.id} render={r} />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function MessageBase({ m, agents }) {
+  if (m.who === 'system')
+    return <div className="mx-auto max-w-[90%] px-2 py-1 text-center text-xs text-muted">{m.text}</div>;
+
+  if (m.who === 'owner')
+    return (
+      <div className="flex max-w-[88%] flex-col items-start self-start lg:max-w-[70%]">
+        <div className="rounded-2xl rounded-ss-md bg-accent px-3.5 py-2.5 text-white [&_a]:text-white">
+          <Body m={m} />
+        </div>
+        <span className="mt-0.5 px-1 text-[11px] text-muted">{clock(m.at)}</span>
+      </div>
+    );
+
+  const agent = findAgent(agents, m.who) || { key: m.who, name: m.who, emoji: '🤖' };
+  const to = m.handoff && findAgent(agents, m.handoff.to);
+  return (
+    <div className="flex max-w-[92%] items-start gap-2 self-end lg:max-w-[75%]">
+      <Avatar agent={agent} agents={agents} size={34} />
+      <div className="min-w-0">
+        <div className="mb-0.5 px-1 text-xs font-bold text-muted">{agent.name}</div>
+        <div className="rounded-2xl rounded-ss-md border border-line bg-card px-3.5 py-2.5">
+          <Body m={m} />
+        </div>
+        {m.handoff && (
+          <div className="mt-1 inline-block rounded-full bg-soft px-3 py-1 text-xs text-accent-ink">
+            ↪️ ל{to ? `${to.emoji} ${to.name}` : m.handoff.to}: {m.handoff.request}
+          </div>
+        )}
+        <div className="px-1 text-[11px] text-muted">{clock(m.at)}</div>
+      </div>
+    </div>
+  );
+}
+
+// memo: אותה הודעה = בלי ציור מחדש (כדי שסרטון מתנגן לא יופסק)
+export default memo(MessageBase);
