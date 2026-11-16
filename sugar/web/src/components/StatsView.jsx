@@ -46,7 +46,12 @@ export default function StatsView({ data, openDay, openChat }) {
 
   return (
     <div className="mx-auto max-w-4xl">
-      <h1 className="mb-3 text-2xl font-bold">מעקב ודפוסים</h1>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h1 className="text-2xl font-bold">מעקב ודפוסים</h1>
+        <a href="#/report" className="rounded-xl border border-line bg-card px-3 py-2 text-sm font-medium text-accent-ink hover:bg-soft">
+          📊 מצגת לתקופה
+        </a>
+      </div>
 
       {/* תובנות והמלצות מהנתונים (בלי AI), ולניתוח מעמיק – שאלה מוכנה ל-AI */}
       <section className="mb-4 rounded-2xl bg-card p-4 shadow-sm">

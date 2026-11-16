@@ -58,3 +58,54 @@ body {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* מצגת הדוח: תמיד בהירה (גם במצב לילה), בגודל קבוע 1280×720 שמוקטן לרוחב המסך (ReportSlides.jsx) */
+.deck {
+  color-scheme: light;
+  --color-page: #f4f7fb;
+  --color-card: #ffffff;
+  --color-ink: #16202c;
+  --color-muted: #637083;
+  --color-line: #e1e7ef;
+  --color-soft: #e8f0fa;
+  --color-accent: #1d5fa8;
+  --color-accent-ink: #174c87;
+}
+.slide-frame {
+  position: relative;
+}
+.slide {
+  position: absolute;
+  top: 0;
+  right: 0;
+  transform-origin: top right;
+  font-family: "Rubik", system-ui, sans-serif;
+}
+.report-ai h3 {
+  font-size: 1.15em;
+}
+
+/* הדפסה / שמירה כ-PDF: רק השקופיות, שקופית לעמוד */
+@media print {
+  @page {
+    size: 1280px 720px;
+    margin: 0;
+  }
+  html,
+  body {
+    background: #fff !important;
+  }
+  .slide-frame {
+    width: 1280px !important;
+    height: 720px !important;
+    aspect-ratio: auto !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    break-after: page;
+    page-break-after: always;
+  }
+  .slide {
+    transform: none !important;
+  }
+}
