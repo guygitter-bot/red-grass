@@ -32,7 +32,7 @@
 - שינוי: `code_change` → כרטיס "לאשר ולהתחיל" → אות `tsevet-dev` → `.github/workflows/tsevet-dev.yml` + `tsevet/devbot/` מריצים את
   Claude Code על ענף `tsevet-dev/<מזהה>`, רק בתוך תיקיית האפליקציה (שינוי מחוץ לה מבוטל), מריצים את הבדיקות והבנייה ופותחים PR.
   הסיכום חוזר לשיחה; "למזג ולהעלות" ממזג רק כשכל הבדיקות של ה-PR עברו, ואז ה-workflow של האפליקציה מעלה אותה. שאלה → "❓" בשיחה.
-- תקרה: `DAILY_DEV` (ברירת מחדל 6 ביום). מודל: המשתנה `TSEVET_DEV_MODEL` ב-GitHub (ברירת מחדל `claude-opus-5-5`). טוקן: `POINTS_GITHUB_TOKEN`.
+- תקרה: `DAILY_DEV` (ברירת מחדל 6 ביום). העלות של כל ריצה (`total_cost_usd` מ-Claude Code) חוזרת לשרת ונכנסת למסך העלויות על חשבון המתכנת (`devs` / `devUsd`). מודל: המשתנה `TSEVET_DEV_MODEL` ב-GitHub (ברירת מחדל `claude-opus-5-5`). טוקן: `POINTS_GITHUB_TOKEN`.
 - המאגר ציבורי: הבקשה נקראת מהשרת ולא מודפסת בלוג, וגם הפלט של Claude לא.
 
 ## חדרים 🚪

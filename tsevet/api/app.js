@@ -327,7 +327,7 @@ async function costs(storage, clipsLimit = 0) {
   const prev = israelDate(new Date(`${month}-01T12:00:00Z`).getTime() - 5 * 24 * HOUR).slice(0, 7);
   const read = async (m) => {
     const c = (await storage.get(`cost:${m}`)) || {};
-    return { month: m, usd: c.usd || 0, days: c.days || {}, agents: c.agents || {}, clips: c.clips || 0 };
+    return { month: m, usd: c.usd || 0, days: c.days || {}, agents: c.agents || {}, clips: c.clips || 0, devs: c.devs || 0, devUsd: c.devUsd || 0 };
   };
   const now = await read(month);
   return { today: now.days[date.slice(8)] || 0, now, prev: await read(prev), ils: ILS, clipsToday: (await storage.get(`clips:${date}`)) || 0, clipsLimit };

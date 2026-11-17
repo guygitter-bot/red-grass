@@ -41,6 +41,17 @@ def output(name, value):
         f.write(f"{name}={value}\n")
 
 
+def cost():
+    """כמה עלתה הריצה של Claude Code (מהפלט שלו), בדולרים – למסך העלויות באפליקציה."""
+    try:
+        data = json.loads((WORK / "claude.json").read_text(encoding="utf-8"))
+        if isinstance(data, list):
+            data = next((x for x in reversed(data) if isinstance(x, dict) and "total_cost_usd" in x), {})
+        return round(float(data.get("total_cost_usd") or 0), 4)
+    except Exception:
+        return 0
+
+
 def read(name):
     p = WORK / name
     return p.read_text(encoding="utf-8").strip() if p.exists() else ""
@@ -113,15 +124,15 @@ def main():
     elif cmd == "tests":
         tests(sys.argv[2])
     elif cmd == "done":
-        request("POST", "/dev/done", {"pr": int(sys.argv[2]), "summary": read("summary.md")[:3000]})
+        request("POST", "/dev/done", {"pr": int(sys.argv[2]), "summary": read("summary.md")[:3000], "cost": cost()})
         print("reported: ready")
     elif cmd == "question":
-        request("POST", "/dev/question", {"question": read("question.md")[:2000]})
+        request("POST", "/dev/question", {"question": read("question.md")[:2000], "cost": cost()})
         print("reported: question")
     elif cmd == "fail":
         reason = sys.argv[2] if len(sys.argv) > 2 else ""
         try:
-            request("POST", "/dev/fail", {"error": reason})
+            request("POST", "/dev/fail", {"error": reason, "cost": cost()})
         except Exception:
             pass
         print("reported: failed")

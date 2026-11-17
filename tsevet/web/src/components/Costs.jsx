@@ -74,6 +74,22 @@ export default function Costs({ agents }) {
         </ul>
       </section>
 
+      {(data.now?.devs > 0 || data.prev?.devs > 0) && (
+        <section className="rounded-2xl border border-line bg-card p-4 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-muted">👨‍💻 שינויים בקוד החודש</span>
+            <span className="num font-bold">{data.now?.devs || 0}</span>
+          </div>
+          <div className="mt-1 flex items-center justify-between">
+            <span className="text-muted">עלות העבודה ב-GitHub</span>
+            <span className="num font-bold">
+              {ils(data.now?.devUsd, rate)} <span className="font-normal text-muted">({usd(data.now?.devUsd)})</span>
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-muted">כלול בסכומים שלמעלה (על חשבון המתכנת). השיחה עם המתכנת עצמה נספרת כמו כל בוט.</p>
+        </section>
+      )}
+
       {data.clipsLimit > 0 && (
         <section className="rounded-2xl border border-line bg-card p-4 text-sm">
           <div className="flex items-center justify-between">

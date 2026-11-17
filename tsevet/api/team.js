@@ -568,14 +568,19 @@ export class Team {
 
   // who = הבוט שעבד (או 'router' – ההחלטה מי עונה), כדי לראות באפליקציה כמה כל אחד עולה
   async addCost(usage = [], who = '') {
-    const usd = usage.reduce((s, u) => s + priceOf(u), 0);
-    if (!usd) return 0;
+    return this.addUsd(usage.reduce((s, u) => s + priceOf(u), 0), who);
+  }
+
+  // סכום בדולרים לחודש וליום (ולבוט). extra = מונים נוספים לחודש, למשל { devs: 1, devUsd: 2.5 }
+  async addUsd(usd, who = '', extra = {}) {
+    if (!usd && !Object.keys(extra).length) return 0;
     const date = israelDate();
     const key = `cost:${date.slice(0, 7)}`;
     const c = (await this.storage.get(key)) || { usd: 0, days: {} };
     c.usd += usd;
     c.days[date.slice(8)] = (c.days[date.slice(8)] || 0) + usd;
-    if (who) c.agents = { ...(c.agents || {}), [who]: ((c.agents || {})[who] || 0) + usd };
+    if (who && usd) c.agents = { ...(c.agents || {}), [who]: ((c.agents || {})[who] || 0) + usd };
+    for (const [k, v] of Object.entries(extra)) c[k] = (c[k] || 0) + v;
     await this.storage.put(key, c);
     return usd;
   }

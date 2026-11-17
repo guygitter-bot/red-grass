@@ -79,7 +79,9 @@ export function DevCard({ dev }) {
               </a>
             )}
           </div>
-          <p className="text-xs text-muted">המיזוג אפשרי רק כשהבדיקות ב-GitHub עברו.</p>
+          <p className="text-xs text-muted">
+            המיזוג אפשרי רק כשהבדיקות ב-GitHub עברו.{dev.cost ? ` העבודה עלתה $${dev.cost.toFixed(2)}.` : ''}
+          </p>
         </div>
       )}
       {dev.status === 'question' && dev.question && <p className="mt-2 whitespace-pre-line break-words">{dev.question}</p>}
