@@ -1051,3 +1051,40 @@ test('a conversation with nothing written in it does not appear in the list', as
   ids = (await call(env, '/app/team', {}, token)).data.convs.map((c) => c.id);
   assert.ok(ids.includes(empty.id));
 });
+
+// ---------- חדרים ----------
+test('a room: only the chosen bots answer, hand off and see each other', async () => {
+  const { env, aiCalls } = setupEnv({
+    replies: [
+      { content: text('campaigns') }, // ההחלטה מי עונה
+      { content: text('תוכנית קמפיין קצרה') },
+    ],
+  });
+  const token = await signIn(env);
+  // פחות משני בוטים – לא
+  assert.equal((await call(env, '/app/conv/new', { members: ['creative'] }, token)).status, 400);
+  const { data: room } = await call(env, '/app/conv/new', { title: 'השקה', members: ['manager', 'creative', 'campaigns', 'nobody'] }, token);
+  // חדר ריק כן מופיע ברשימה, עם מי שבו
+  let team = (await call(env, '/app/team', {}, token)).data;
+  const listed = team.convs.find((c) => c.id === room.id);
+  assert.deepEqual(listed.members, ['creative', 'campaigns', 'manager']);
+  assert.deepEqual((await call(env, '/app/conv', { id: room.id }, token)).data.members, ['creative', 'campaigns', 'manager']);
+
+  await call(env, '/app/send', { id: room.id, text: 'בואו נתכנן קמפיין' }, token);
+  await env.team.alarm();
+  // מי עונה – רק מתוך החדר
+  assert.match(aiCalls[0].messages[0].content, /creative \/ campaigns \/ manager\)/);
+  // הבוט יודע שהוא בחדר, ומעביר רק למי שבחדר
+  const sys = aiCalls[1].system[0].text;
+  assert.match(sys, /private ROOM/);
+  assert.doesNotMatch(sys, /\(doctor\)/);
+  const handoff = aiCalls[1].tools.find((t) => t.name === 'handoff');
+  const to = handoff.input_schema.properties.to.enum;
+  assert.equal(to.length, 2);
+  assert.ok(to.every((k) => ['creative', 'campaigns', 'manager'].includes(k)));
+
+  // שינוי מי בחדר
+  assert.equal((await call(env, '/app/conv/members', { id: room.id, members: ['travel', 'manager'] }, token)).status, 200);
+  team = (await call(env, '/app/team', {}, token)).data;
+  assert.deepEqual(team.convs.find((c) => c.id === room.id).members, ['travel', 'manager']);
+});

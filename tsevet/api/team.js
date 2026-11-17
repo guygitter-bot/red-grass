@@ -214,9 +214,13 @@ export class Team {
     return send(this.env, tokenOf(this.env, via), job, text);
   }
 
-  // מי זמין בערוץ: ב-Telegram רק בוטים שיש להם טוקן
-  teamOf(job) {
-    if (job.chan === 'app') return AGENT_KEYS;
+  // מי זמין בערוץ: בחדר – רק מי שבחדר; באפליקציה – כולם; ב-Telegram רק בוטים שיש להם טוקן
+  async teamOf(job) {
+    if (job.chan === 'app') {
+      const key = this.jobKey(job);
+      const room = ((await this.storage.get('convs')) || []).find((c) => `${APP_PREFIX}${c.id}` === key)?.members;
+      return room?.length ? room : AGENT_KEYS;
+    }
     const withToken = TG_KEYS.filter((k) => tokenOf(this.env, k));
     return withToken.length ? withToken : TG_KEYS;
   }
@@ -375,7 +379,7 @@ export class Team {
     const client = this.client();
     const app = job.chan === 'app';
     const key = this.jobKey(job);
-    const team = this.teamOf(job);
+    const team = await this.teamOf(job);
     const owner = await this.storage.get('owner');
     const { models } = await getSettings(this.storage);
     let agent = team.includes(job.target) ? job.target : null;

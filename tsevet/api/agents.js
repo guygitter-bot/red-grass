@@ -222,7 +222,11 @@ const common = (team, channel, maagar, gen, github) => `You are part of a small 
 builds web apps (installable on the phone) and now wants to market each of them, with a dedicated business page \
 per app for advertising.
 
-The team:
+${channel === 'app' && team.length < AGENT_KEYS.length
+    ? `This conversation is a private ROOM the owner opened with only these teammates – the rest of the team is not here. \
+Work together on the owner's task only with them (hand off / assign only to them), and don't mention or wait for anyone else.
+In this room:`
+    : 'The team:'}
 ${team.map((k) => `- ${label(k)} (${k}): ${AGENTS[k].short}`).join('\n')}
 
 The apps:

@@ -10,6 +10,8 @@ import { findAgent } from '../lib/agents';
 import Message from './Message';
 import { RELOAD } from './Gen';
 import Composer from './Composer';
+import RoomSheet from './RoomSheet';
+import Avatar from './Avatar';
 import { MIC_BLOCKED, askMic, canListen } from '../lib/voice';
 import { Button, Sheet, Spinner, inputCls } from './ui';
 
@@ -20,6 +22,7 @@ export default function Chat({ id, agents, refresh }) {
   const [sending, setSending] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [title, setTitle] = useState('');
+  const [editRoom, setEditRoom] = useState(false);
   const scroller = useRef(null);
   const nearBottom = useRef(true);
   const justSent = useRef(false);
@@ -155,6 +158,8 @@ export default function Chat({ id, agents, refresh }) {
     }
   };
 
+  // בחדר – רק מי שבחדר
+  const roomAgents = conv?.members ? agents.filter((a) => conv.members.includes(a.key)) : agents;
   const busyAgent = conv?.busy?.agent ? findAgent(agents, conv.busy.agent) : null;
   // סקיל חדש שמחכה לאישור – תזכורת קבועה מעל שורת הכתיבה (הכרטיס עצמו יכול להיות רחוק למעלה)
   const waiting = (conv?.messages || []).flatMap((m) => m.skills || []).filter((s) => s.status === 'pending');
@@ -183,6 +188,15 @@ export default function Chat({ id, agents, refresh }) {
         >
           {conv?.title || 'שיחה'}
         </button>
+        {conv?.members && (
+          <button onClick={() => setEditRoom(true)} className="flex shrink-0 items-center -space-x-2 rtl:space-x-reverse" title="מי בחדר" aria-label="מי בחדר">
+            {conv.members.slice(0, 4).map((k) => {
+              const a = findAgent(agents, k);
+              return a ? <Avatar key={k} agent={a} agents={agents} size={30} /> : null;
+            })}
+            {conv.members.length > 4 && <span className="ms-1 text-xs text-muted">+{conv.members.length - 4}</span>}
+          </button>
+        )}
         {canListen() && (
           <button
             onClick={toggleVoice}
@@ -206,7 +220,7 @@ export default function Chat({ id, agents, refresh }) {
           {!conv && !error && <p className="p-6 text-center text-muted">רגע…</p>}
           {error && <p className="rounded-xl border border-line bg-card p-3 text-sm text-bad">{error}</p>}
           {conv && conv.messages.length === 0 && (
-            <p className="p-8 text-center text-sm text-muted">{to ? `כתבו הודעה ל${findAgent(agents, to)?.name || 'בוט'} כדי להתחיל.` : 'כתבו הודעה, והצוות יחליט מי עונה.'}</p>
+            <p className="p-8 text-center text-sm text-muted">{to ? `כתבו הודעה ל${findAgent(agents, to)?.name || 'בוט'} כדי להתחיל.` : conv.members ? `חדר עם ${roomAgents.map((a) => `${a.emoji} ${a.name}`).join(', ')}. כתבו משימה, ורק הם יעבדו עליה.` : 'כתבו הודעה, והצוות יחליט מי עונה.'}</p>
           )}
           {conv?.messages.map((m) => (
             <Message key={m.i} m={m} agents={agents} />
@@ -241,13 +255,24 @@ export default function Chat({ id, agents, refresh }) {
         </div>
       )}
           {voice && <p className="px-4 pt-2 text-xs text-muted">🎧 שיחה קולית: מדברים, ההודעה נשלחת לבד, והמיקרופון נפתח שוב אחרי התשובה. {voiceNote}</p>}
-          <Composer agents={agents} to={to} setTo={setTo} onSend={send} sending={sending} voice={voice} listenTick={listenTick} onMicBlocked={() => {
+          <Composer agents={roomAgents} room={Boolean(conv?.members)} to={to} setTo={setTo} onSend={send} sending={sending} voice={voice} listenTick={listenTick} onMicBlocked={() => {
             micBlocked.current = true;
             setVoiceNote(MIC_BLOCKED);
           }} />
         </div>
       </div>
 
+      {editRoom && conv?.members && (
+        <RoomSheet
+          agents={agents}
+          room={conv}
+          onClose={() => setEditRoom(false)}
+          onSaved={() => {
+            load();
+            refresh();
+          }}
+        />
+      )}
       {renaming && (
         <Sheet title="שינוי שם לשיחה" onClose={() => setRenaming(false)}>
           <input className={`${inputCls} mb-3`} value={title} onChange={(e) => setTitle(e.target.value)} autoFocus maxLength={80} />

@@ -28,6 +28,17 @@ export const MAX_TEXT = 8000;
 const MAX_FILES = 6;
 const MAX_TITLE = 60;
 const MAX_CONVS = 200;
+const ROOM_MIN = 2;
+const ROOM_MAX = 6;
+
+// חדר = שיחה עם בוטים נבחרים בלבד (2-6, אפשר עם המנהל). רק הם עונים, מעבירים ומקבלים שלבים בחדר
+export function roomMembers(list) {
+  if (!Array.isArray(list)) return null;
+  const members = AGENT_KEYS.filter((k) => list.includes(k));
+  if (members.length < ROOM_MIN) throw fail(400, `בחדר צריך לפחות ${ROOM_MIN} בוטים`);
+  if (members.length > ROOM_MAX) throw fail(400, `בחדר אפשר עד ${ROOM_MAX} בוטים`);
+  return members;
+}
 const HOUR = 60 * 60 * 1000;
 const FILE_TTL = 6 * HOUR;
 const ILS = 3.7;
@@ -137,8 +148,9 @@ async function convList(t) {
   for (const c of convs) {
     const key = `${APP_PREFIX}${c.id}`;
     // שיחה שנפתחה ולא נכתב בה כלום – לא מופיעה ברשימה
-    if (!busy(key) && !(await storage.get(key))?.length) continue;
-    out.push({ id: c.id, title: c.title || 'שיחה חדשה', at: c.at, source: 'app', busy: busy(key) });
+    // שיחה ריקה לא מופיעה; חדר כן (נפתח בכוונה)
+    if (!c.members && !busy(key) && !(await storage.get(key))?.length) continue;
+    out.push({ id: c.id, title: c.title || (c.members ? 'חדר' : 'שיחה חדשה'), at: c.at, source: 'app', busy: busy(key), ...(c.members ? { members: c.members } : {}) });
   }
   // שיחות שהתנהלו ב-Telegram – ממשיכות כאן עם כל ההיסטוריה
   const all = await storage.list({ prefix: 'h:' });
@@ -155,7 +167,7 @@ async function convList(t) {
 async function dropEmpty(storage, convs) {
   const keep = [];
   for (const c of convs) {
-    if (Date.now() - c.at < 3600e3 || (await storage.get(`${APP_PREFIX}${c.id}`))?.length) keep.push(c);
+    if (c.members || Date.now() - c.at < 3600e3 || (await storage.get(`${APP_PREFIX}${c.id}`))?.length) keep.push(c);
   }
   return keep;
 }
@@ -203,8 +215,9 @@ async function convView(t, id, origin) {
   const titles = (await storage.get('titles')) || {};
   return {
     id,
-    title: meta?.title || titles[id] || (id.startsWith('tg:') ? 'Telegram' : 'שיחה חדשה'),
+    title: meta?.title || titles[id] || (id.startsWith('tg:') ? 'Telegram' : meta?.members ? 'חדר' : 'שיחה חדשה'),
     source: id.startsWith('tg:') ? 'tg' : 'app',
+    ...(meta?.members ? { members: meta.members } : {}),
     messages,
     // step = איפה התוכנית של המנהל עומדת (שלב n מתוך of)
     busy: job ? { agent: now?.agent || job.target || null, ...(job.plan?.length ? { step: { n: job.step, of: job.steps } } : {}) } : null,
@@ -345,9 +358,19 @@ export async function handleApp(t, path, body, headers, origin) {
       return convView(t, String(body.id || ''), origin);
     case '/app/conv/new': {
       const convs = await dropEmpty(storage, (await storage.get('convs')) || []);
-      const conv = { id: newId(), title: String(body.title || '').replace(/\s+/g, ' ').trim().slice(0, MAX_TITLE), at: Date.now() };
+      const members = roomMembers(body.members);
+      const conv = { id: newId(), title: String(body.title || '').replace(/\s+/g, ' ').trim().slice(0, MAX_TITLE), at: Date.now(), ...(members ? { members } : {}) };
       await storage.put('convs', [conv, ...convs].slice(0, MAX_CONVS));
       return { id: conv.id };
+    }
+    // מי בחדר (להוסיף / להוריד בוטים)
+    case '/app/conv/members': {
+      const convs = (await storage.get('convs')) || [];
+      const c = convs.find((x) => x.id === String(body.id || ''));
+      if (!c?.members) throw fail(404, 'החדר לא נמצא');
+      c.members = roomMembers(body.members);
+      await storage.put('convs', convs);
+      return { ok: true, members: c.members };
     }
     case '/app/conv/rename':
       await setTitle(storage, String(body.id || ''), body.title);

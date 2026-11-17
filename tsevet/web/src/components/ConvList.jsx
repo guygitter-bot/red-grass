@@ -6,7 +6,7 @@ import { go } from '../lib/route';
 import { relTime } from '../lib/format';
 import { Button, Sheet, Spinner, inputCls } from './ui';
 
-export default function ConvList({ convs, activeId, refresh, compact }) {
+export default function ConvList({ convs, activeId, refresh, compact, agents = [] }) {
   const [menu, setMenu] = useState(null); // השיחה שהתפריט שלה פתוח
   const [mode, setMode] = useState(null); // 'rename' | 'delete'
   const [title, setTitle] = useState('');
@@ -40,11 +40,16 @@ export default function ConvList({ convs, activeId, refresh, compact }) {
           <li key={c.id} className={`group flex items-center rounded-xl ${activeId === c.id ? 'bg-soft' : 'hover:bg-soft'} ${compact ? '' : 'border border-line bg-card'}`}>
             <button onClick={() => go(`/c/${encodeURIComponent(c.id)}`)} className="min-w-0 flex-1 px-3 py-2.5 text-start">
               <span className="flex items-center gap-2">
-                <span className="truncate font-medium">{c.title || 'שיחה חדשה'}</span>
+                <span className="truncate font-medium">{c.title || (c.members ? 'חדר' : 'שיחה חדשה')}</span>
                 {c.busy && <Spinner size={12} />}
               </span>
               <span className="mt-0.5 flex items-center gap-2 text-xs text-muted">
                 <span>{relTime(c.at)}</span>
+                {c.members && (
+                  <span className="inline-flex min-w-0 items-center gap-1 truncate rounded-full bg-soft px-2 py-0.5 text-accent-ink" title="חדר">
+                    🚪 {c.members.map((k) => agents.find((a) => a.key === k)?.emoji || '🤖').join('')}
+                  </span>
+                )}
                 {c.source === 'tg' && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-soft px-2 py-0.5 text-accent-ink">
                     <Send size={10} /> Telegram
