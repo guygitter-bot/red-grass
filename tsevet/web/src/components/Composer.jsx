@@ -89,9 +89,11 @@ export default function Composer({ agents, to, setTo, onSend, sending, voice = f
     stopSpeaking(); // מדברים – הבוט מפסיק להקריא
     setNotice('');
     const base = textRef.current;
+    let finished = false; // אחרי הסיום (ובטח אחרי שליחה) – מתעלמים מתוצאות מאוחרות (כרום באנדרואיד שולח כאלה)
     const rec = listen({
       continuous: !auto,
       onText: (done, interim) => {
+        if (finished) return;
         setText(joinText(base, joinText(done, interim)));
         requestAnimationFrame(grow);
       },
@@ -101,12 +103,17 @@ export default function Composer({ agents, to, setTo, onSend, sending, voice = f
         if (code === 'not-allowed' || code === 'service-not-allowed') onMicBlocked?.();
       },
       onEnd: (done) => {
+        if (finished) return;
+        finished = true;
         recRef.current = null;
         setListening(false);
         const full = joinText(base, done);
         setText(full);
-        // במצב שיחה קולית – שולחים מיד מה שנאמר
-        if (auto && done.trim()) sendText(full);
+        // במצב שיחה קולית – שולחים מיד מה שנאמר (והתיבה מתרוקנת)
+        if (auto && done.trim()) {
+          rec?.abort?.();
+          sendText(full);
+        }
       },
     });
     if (rec) {
