@@ -1,5 +1,7 @@
 // הודעה אחת בשיחה: של הבעלים, של בוט, או של המערכת
-import { memo } from 'react';
+import { memo, useState } from 'react';
+import { Check, Copy } from 'lucide-react';
+import { copyText, plainText } from '../lib/copy';
 import { findAgent } from '../lib/agents';
 import { clock } from '../lib/format';
 import Avatar from './Avatar';
@@ -111,9 +113,29 @@ function MessageBase({ m, agents }) {
             ↪️ ל{to ? `${to.emoji} ${to.name}` : m.handoff.to}: {m.handoff.request}
           </div>
         )}
-        <div className="px-1 text-[11px] text-muted">{clock(m.at)}</div>
+        <div className="flex items-center gap-2 px-1 text-[11px] text-muted">
+          <span>{clock(m.at)}</span>
+          {m.text && <CopyButton text={m.text} />}
+        </div>
       </div>
     </div>
+  );
+}
+
+// העתקת התשובה (בלי סימני העיצוב – טקסט נקי להדבקה בוואטסאפ, במייל וכו')
+function CopyButton({ text }) {
+  const [done, setDone] = useState(false);
+  const copy = async () => {
+    if (await copyText(plainText(text))) {
+      setDone(true);
+      setTimeout(() => setDone(false), 1800);
+    }
+  };
+  return (
+    <button onClick={copy} className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 hover:bg-soft hover:text-ink" aria-label="העתקת התשובה">
+      {done ? <Check size={12} /> : <Copy size={12} />}
+      {done ? 'הועתק' : 'העתקה'}
+    </button>
   );
 }
 
