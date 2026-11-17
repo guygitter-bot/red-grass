@@ -82,6 +82,34 @@ the owner to run there – say that plainly instead of promising the team will p
 When asked to "learn everything" about a topic, search with several words (Hebrew and English), read the best few \
 items, and teach a small number of solid skills rather than many thin ones. Then list what you taught and to whom.`,
   },
+  // רק באפליקציה: מתכנן טיולים, משווה טיסות ומלונות, ולומד לעצמו שיטות (סקילים) מהרשת וממאגר AI
+  travel: {
+    name: 'טיולים',
+    emoji: '✈️',
+    tier: 'sonnet',
+    appOnly: true,
+    short: 'תכנון טיולים: מסלול יומי, טיסות, מלונות, השוואות מחירים ותקציב',
+    role: `You are "טיולים" (Travel) – the owner's personal travel planner. The owner is Israeli; trips usually start \
+from Tel Aviv (TLV) unless they say otherwise.
+What you do: plan trips end to end and research thoroughly – destination ideas, a day-by-day itinerary with realistic \
+travel times, flights (direct vs. connections, airlines, typical prices for the dates), hotels / apartments \
+(neighbourhood, rating, price per night, why it fits), getting around, must-book-ahead attractions, food, weather \
+for the dates, entry rules for Israeli passport holders, the Israeli travel warnings (National Security Council) and \
+anything safety-related, insurance, and a total budget in ILS.
+How to work:
+- Before a big plan, make sure you know: dates (or month and length), who travels (adults / kids and ages), budget, \
+and style (relaxed / active, city / nature). If one of these is missing and matters, ask in one short message with \
+all the questions at once; otherwise assume and say what you assumed.
+- Research with web_search and web_fetch: compare at least 2-3 options for flights and for hotels, using sources such \
+as Google Flights, Skyscanner, Kayak, the airlines' sites, Booking.com, Google Maps and recent reviews. Prices change \
+all the time: say when you checked and that it's indicative, and give direct links the owner can open to check and book.
+- Give a clear recommendation, not only a list, and say why.
+- You never book, never pay and never ask for passport or credit-card details – you prepare everything so the owner \
+books in a few minutes.
+- Learning: when the owner asks you to learn how to do something better (or you find a method worth reusing), look \
+for it yourself – in the owner's AI repository (maagar_search / maagar_read) and on the web – and save it as your own \
+skill with teach. Use your skills (use_skill) before the tasks they fit.`,
+  },
   // רק באפליקציה: מקבל משימה גדולה, מחלק אותה בין הבוטים (assign), ובסוף בודק ומסכם
   manager: {
     name: 'מנהל',
@@ -174,9 +202,40 @@ const EDIT_VIDEO = {
 };
 
 // חיפוש וקריאה ברשת: הגרסה החדשה לא קיימת ב-Haiku
-const webTools = (model) => (model === MODELS.haiku
-  ? [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }, { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: 3 }]
-  : [{ type: 'web_search_20260209', name: 'web_search', max_uses: 5 }, { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 3 }]);
+// מחקר מקיף (טיולים) מקבל יותר חיפושים בכל תור
+const WEB_LIMITS = { travel: [12, 10] };
+const webTools = (model, agent) => {
+  const [search, read] = WEB_LIMITS[agent] || [5, 3];
+  return model === MODELS.haiku
+    ? [{ type: 'web_search_20250305', name: 'web_search', max_uses: search }, { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: read }]
+    : [{ type: 'web_search_20260209', name: 'web_search', max_uses: search }, { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: read }];
+};
+
+// בוטים שלומדים לעצמם: שומרים סקילים רק לעצמם (הספרן מלמד את כולם)
+export const SELF_LEARNERS = ['travel'];
+const SELF_TEACH = (agent) => [
+  {
+    name: 'teach',
+    description: 'Save a skill for yourself (a method, checklist or ready prompts you will reuse). Same name = update. Load it later with use_skill.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'kebab-case English, e.g. "cheap-flights-search"' },
+        title: { type: 'string', description: 'Short Hebrew name' },
+        when: { type: 'string', description: 'One sentence: for which tasks to load it' },
+        body: { type: 'string', description: 'The full skill in Markdown: goal, method step by step, rules, sources / links, templates' },
+        agents: { type: 'array', items: { type: 'string', enum: [agent] }, description: `Always ["${agent}"]` },
+        source: { type: 'string', description: 'Where it came from (repository item title or site)' },
+      },
+      required: ['name', 'title', 'when', 'body', 'agents'],
+    },
+  },
+  {
+    name: 'unteach',
+    description: 'Remove one of your own skills by name.',
+    input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+  },
+];
 
 // כלי המאגר: לכל הבוטים חיפוש וקריאה; לספרן גם "ללמוד מזה" ולימוד הצוות
 const MAAGAR_TOOLS = [
@@ -277,9 +336,10 @@ const ASSIGN = (team) => ({
 
 // assign = המנהל יכול לחלק משימה; noHandoff = בוט שעובד על שלב בתוכנית (לא מעביר הלאה)
 export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, skills = [], gen = false, assign = false, noHandoff = false } = {}) => [
-  ...webTools(model),
+  ...webTools(model, agent),
   ...(maagar ? MAAGAR_TOOLS : []),
   ...(maagar && agent === 'librarian' ? LIBRARIAN_TOOLS(team) : []),
+  ...(SELF_LEARNERS.includes(agent) ? SELF_TEACH(agent) : []),
   ...(skills.length ? [USE_SKILL(skills)] : []),
   {
     name: 'app_info',
