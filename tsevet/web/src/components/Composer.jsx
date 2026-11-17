@@ -1,14 +1,14 @@
 // שורת הכתיבה בתחתית הצ'אט: טקסט, הכתבה במיקרופון, צירוף קבצים עם התקדמות, בחירת מי עונה, שליחה
 import { useEffect, useRef, useState } from 'react';
 import { Mic, Paperclip, SendHorizontal, X } from 'lucide-react';
-import { canListen, joinText, listen, stopSpeaking } from '../lib/voice';
+import { MIC_BLOCKED, askMic, canListen, joinText, listen, stopSpeaking } from '../lib/voice';
 import { MAX_FILES, checkFile, uploadFile } from '../lib/media';
 import { Spinner } from './ui';
 
 const isDesktop = () => window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
 
 // voice = מצב שיחה קולית: ההקשבה נגמרת לבד אחרי שתיקה וההודעה נשלחת מיד. listenTick = בקשה מהצ'אט להתחיל להקשיב (אחרי שהתשובה הוקראה)
-export default function Composer({ agents, to, setTo, onSend, sending, voice = false, listenTick = 0 }) {
+export default function Composer({ agents, to, setTo, onSend, sending, voice = false, listenTick = 0, onMicBlocked }) {
   const [text, setText] = useState('');
   const [items, setItems] = useState([]); // { key, name, kind, progress, id?, error? }
   const [notice, setNotice] = useState('');
@@ -95,7 +95,11 @@ export default function Composer({ agents, to, setTo, onSend, sending, voice = f
         setText(joinText(base, joinText(done, interim)));
         requestAnimationFrame(grow);
       },
-      onError: (msg) => setNotice(msg),
+      onError: (msg, code) => {
+        setNotice(msg);
+        // חסום – לא מנסים שוב לבד בכל תשובה
+        if (code === 'not-allowed' || code === 'service-not-allowed') onMicBlocked?.();
+      },
       onEnd: (done) => {
         recRef.current = null;
         setListening(false);
@@ -110,7 +114,13 @@ export default function Composer({ agents, to, setTo, onSend, sending, voice = f
       setListening(true);
     }
   };
-  const toggleMic = () => (listening ? stopListening() : startListening(voice));
+  const toggleMic = async () => {
+    if (listening) return stopListening();
+    stopSpeaking();
+    // קודם הרשאה למיקרופון (כאן כרום מקפיץ את השאלה)
+    if (!(await askMic())) return setNotice(MIC_BLOCKED);
+    startListening(voice);
+  };
 
   // הצ'אט מבקש להקשיב (אחרי שהבוט סיים לדבר)
   useEffect(() => {

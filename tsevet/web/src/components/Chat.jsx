@@ -10,7 +10,7 @@ import { findAgent } from '../lib/agents';
 import Message from './Message';
 import { RELOAD } from './Gen';
 import Composer from './Composer';
-import { canListen, canSpeak, hasHebrewVoice, speak, stopSpeaking } from '../lib/voice';
+import { MIC_BLOCKED, askMic, canListen, canSpeak, hasHebrewVoice, speak, stopSpeaking } from '../lib/voice';
 import { Button, Sheet, Spinner, inputCls } from './ui';
 
 export default function Chat({ id, agents, refresh }) {
@@ -36,6 +36,7 @@ export default function Chat({ id, agents, refresh }) {
   const [voiceNote, setVoiceNote] = useState('');
   const spokenUpTo = useRef(null); // ההודעה האחרונה שכבר הוקראה (או שהייתה לפני שהמצב הופעל)
   const busyRef = useRef(false);
+  const micBlocked = useRef(false); // המיקרופון נחסם – לא פותחים אותו לבד אחרי כל תשובה
 
   const load = useCallback(
     () =>
@@ -72,7 +73,7 @@ export default function Chat({ id, agents, refresh }) {
     if (!fresh.length) return;
     const text = fresh.map((m) => m.text).join('\n');
     speak(text, () => {
-      if (!busyRef.current) setListenTick((n) => n + 1);
+      if (!busyRef.current && !micBlocked.current) setListenTick((n) => n + 1);
     });
   }, [lastI, voice]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -98,8 +99,19 @@ export default function Chat({ id, agents, refresh }) {
       return;
     }
     setVoiceNote(canSpeak() && !hasHebrewVoice() ? 'אין במכשיר הזה קול בעברית – ההקראה עלולה להישמע לא טוב.' : '');
-    // פתיחה בלחיצה (בטלפון ההקראה והמיקרופון חייבים להתחיל מלחיצה)
-    speak('מצב שיחה קולית. דברו.', () => setListenTick((n) => n + 1));
+    // פתיחה בלחיצה (בטלפון ההקראה והמיקרופון חייבים להתחיל מלחיצה): ההקראה מתחילה מיד,
+    // ובמקביל כרום שואל על המיקרופון. מקשיבים רק אחרי שהרשות ניתנה.
+    micBlocked.current = false;
+    const mic = canListen() ? askMic() : Promise.resolve(false);
+    speak('מצב שיחה קולית. דברו.', async () => {
+      if (await mic) setListenTick((n) => n + 1);
+    });
+    mic.then((ok) => {
+      if (!ok && canListen()) {
+        micBlocked.current = true;
+        setVoiceNote(MIC_BLOCKED);
+      }
+    });
   };
 
   // גלילה למטה רק אם המשתמשת כבר קרובה לתחתית, או כששלחה הודעה
@@ -249,7 +261,10 @@ export default function Chat({ id, agents, refresh }) {
         </div>
       )}
           {voice && <p className="px-4 pt-2 text-xs text-muted">🎧 שיחה קולית: מדברים, ההודעה נשלחת לבד, והתשובה מוקראת. {voiceNote}</p>}
-          <Composer agents={agents} to={to} setTo={setTo} onSend={send} sending={sending} voice={voice} listenTick={listenTick} />
+          <Composer agents={agents} to={to} setTo={setTo} onSend={send} sending={sending} voice={voice} listenTick={listenTick} onMicBlocked={() => {
+            micBlocked.current = true;
+            setVoiceNote(MIC_BLOCKED);
+          }} />
         </div>
       </div>
 
