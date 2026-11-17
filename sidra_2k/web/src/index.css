@@ -1,0 +1,175 @@
+@import "tailwindcss";
+
+/* מצב לילה: מחלקה dark על html (נקבעת ב-src/lib/theme.js) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* כל הצבעים במקום אחד – במצב לילה מחליפים רק את צבעי המסך; צבעי הקבוצות קבועים.
+   page = רקע, card = כרטיסים, ink = טקסט, muted = משני, line = מסגרות */
+@theme {
+  --color-page: #eef0f6;
+  --color-card: #ffffff;
+  --color-ink: #12152a;
+  --color-muted: #5f6782;
+  --color-line: #d9dcea;
+  --color-live: #e5383b;
+  --color-lal: #552583;
+  --color-lal2: #7a3cc0;
+  --color-gold: #fdb927;
+  --color-sas: #1a1d22;
+  --color-sil: #c4ced4;
+  --color-sil2: #8a969c;
+  --font-num: "Oswald", "Rubik", Impact, sans-serif;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-page: #07090f;
+  --color-card: #0e1220;
+  --color-ink: #f2f4fa;
+  --color-muted: #8e97b0;
+  --color-line: #232a3d;
+}
+
+html,
+body {
+  font-family: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--color-page);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+.dark body {
+  background: radial-gradient(1200px 600px at 50% -10%, #1b2140 0%, var(--color-page) 60%) fixed, var(--color-page);
+}
+
+.num {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+/* ===== הלוח הגדול (בסגנון שידור) ===== */
+.team {
+  position: relative;
+  overflow: hidden;
+}
+.team::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.04) 0 2px, transparent 2px 14px);
+  pointer-events: none;
+}
+.team-LAL {
+  background: linear-gradient(160deg, var(--color-lal2), var(--color-lal) 55%, #2e1150);
+}
+.team-SAS {
+  background: linear-gradient(200deg, #3a4048, var(--color-sas) 60%, #0b0c0f);
+}
+.team-lose {
+  filter: saturate(0.35) brightness(0.7);
+}
+.logo-shadow {
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.5));
+}
+.dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+}
+.dot-LAL {
+  background: var(--color-gold);
+  border-color: var(--color-gold);
+  box-shadow: 0 0 10px var(--color-gold);
+}
+.dot-SAS {
+  background: var(--color-sil);
+  border-color: var(--color-sil);
+  box-shadow: 0 0 10px var(--color-sil);
+}
+.mid {
+  background: linear-gradient(#0b0e18, #05060a);
+}
+.ticker-LAL {
+  background: linear-gradient(90deg, var(--color-gold), #ffd76a, var(--color-gold));
+  color: #1b0d2e;
+}
+.ticker-SAS {
+  background: linear-gradient(90deg, var(--color-sil2), var(--color-sil), var(--color-sil2));
+  color: #0b0c0f;
+}
+.ticker-even {
+  background: linear-gradient(90deg, #2a3150, #3b4570, #2a3150);
+  color: #f2f4fa;
+}
+.pop {
+  animation: pop 0.6s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+@keyframes pop {
+  0% {
+    transform: scale(1.8);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.live {
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* כפתורי "מי ניצח" */
+.pick-LAL {
+  background: linear-gradient(135deg, var(--color-lal2), var(--color-lal));
+  color: var(--color-gold);
+  box-shadow: 0 8px 24px -10px var(--color-lal2);
+}
+.pick-SAS {
+  background: linear-gradient(135deg, #454c55, #16181c);
+  color: var(--color-sil);
+  box-shadow: 0 8px 24px -10px #000;
+}
+
+/* לוח המשחקים */
+.won-LAL {
+  border-color: var(--color-gold);
+  background: linear-gradient(#2c1347, #1a1030);
+  color: #f2f4fa;
+}
+.won-SAS {
+  border-color: var(--color-sil2);
+  background: linear-gradient(#2a2f36, #121418);
+  color: #f2f4fa;
+}
+.badge-LAL {
+  background: var(--color-gold);
+  color: #1b0d2e;
+}
+.badge-SAS {
+  background: var(--color-sil);
+  color: #0b0c0f;
+}
+.champ-LAL {
+  background: linear-gradient(160deg, var(--color-lal2), #2e1150);
+  color: var(--color-gold);
+}
+.champ-SAS {
+  background: linear-gradient(160deg, #4a525b, #0b0c0f);
+  color: var(--color-sil);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
