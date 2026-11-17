@@ -191,7 +191,7 @@ test('a message to one bot skips the routing; the model level can be changed in 
   const { env, aiCalls } = setupEnv({ replies: [{ content: text('בסדר') }] });
   const token = await signIn(env);
   const set = await call(env, '/app/settings', { models: { creative: 'opus', campaigns: 'nonsense' } }, token);
-  assert.deepEqual(set.data.models, { creative: 'opus', campaigns: 'opus', editor: 'sonnet', librarian: 'sonnet', social: 'sonnet', doctor: 'opus', bursai: 'opus', travel: 'sonnet', manager: 'opus' });
+  assert.deepEqual(set.data.models, { creative: 'opus', campaigns: 'opus', editor: 'sonnet', librarian: 'sonnet', social: 'sonnet', doctor: 'opus', coder: 'opus', bursai: 'opus', travel: 'sonnet', manager: 'opus' });
   const { data: conv } = await call(env, '/app/conv/new', {}, token);
   await call(env, '/app/send', { id: conv.id, text: 'רעיון', to: 'creative' }, token);
   await env.team.alarm();
@@ -350,7 +350,7 @@ test('a Telegram topic continues in the app with its history and the shared memo
 
   const token = await signIn(env);
   const team = (await call(env, '/app/team', {}, token)).data;
-  assert.deepEqual(team.agents.map((a) => a.key), ['creative', 'campaigns', 'editor', 'librarian', 'social', 'doctor', 'bursai', 'travel', 'manager']);
+  assert.deepEqual(team.agents.map((a) => a.key), ['creative', 'campaigns', 'editor', 'librarian', 'social', 'doctor', 'coder', 'bursai', 'travel', 'manager']);
   const conv = team.convs.find((c) => c.source === 'tg');
   assert.equal(conv.id, 'tg:-100:5');
   let view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
@@ -1087,4 +1087,74 @@ test('a room: only the chosen bots answer, hand off and see each other', async (
   assert.equal((await call(env, '/app/conv/members', { id: room.id, members: ['travel', 'manager'] }, token)).status, 200);
   team = (await call(env, '/app/team', {}, token)).data;
   assert.deepEqual(team.convs.find((c) => c.id === room.id).members, ['travel', 'manager']);
+});
+
+// ---------- המתכנת ----------
+test('the developer reads the code, proposes a change, and nothing runs or merges without the owner', async () => {
+  const gh = [];
+  let checks = 'in_progress';
+  let devId = '';
+  const FETCH = async (url, init = {}) => {
+    const u = new URL(url);
+    gh.push(`${init.method || 'GET'} ${u.pathname}`);
+    const json = (d, s = 200) => new Response(JSON.stringify(d), { status: s });
+    if (u.pathname === '/repos/me/repo/contents/CLAUDE.md') return new Response('# rules\n### mat-kon – מתכונים (`mat_kon/`)\n- תיאור: `mat_kon/README.md`. ספר מתכונים למשפחה.\n### תקציב הבית (`budget/`)\n- תיאור: `budget/README.md`. הוצאות והכנסות.\n');
+    if (u.pathname === '/repos/me/repo/contents/mat_kon') return json([{ type: 'dir', path: 'mat_kon/web', size: 0 }, { type: 'file', path: 'mat_kon/README.md', size: 120 }]);
+    if (u.pathname === '/repos/me/repo/dispatches') return new Response(null, { status: 204 });
+    if (u.pathname === '/repos/me/repo/pulls/7' && (init.method || 'GET') === 'GET') return json({ number: 7, state: 'open', merged: false, head: { ref: `tsevet-dev/${devId}`, sha: 'abc' } });
+    if (u.pathname === '/repos/me/repo/commits/abc/check-runs') return json({ check_runs: [{ status: checks, conclusion: checks === 'completed' ? 'success' : null }] });
+    if (u.pathname === '/repos/me/repo/pulls/7/merge') return json({ merged: true });
+    return json({}, 404);
+  };
+  const { env, aiCalls } = setupEnv({
+    replies: [
+      { stop: 'tool_use', content: tool('code_tree', { path: 'mat_kon' }) },
+      { stop: 'tool_use', content: tool('code_change', { app: 'mat_kon', title: 'כפתור הדפסה', summary: 'כפתור להדפסת מתכון בדף המתכון', request: 'Add a print button to the recipe page (web/src/...), print-friendly CSS, works in dark mode.' }) },
+      { content: text('הכנתי בקשה להוספת כפתור הדפסה – מחכה לאישור שלך.') },
+    ],
+  }, { FETCH });
+  const token = await signIn(env);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'תוסיף כפתור הדפסה למתכונים', to: 'coder' }, token);
+  await env.team.alarm();
+
+  // מכיר את האפליקציות (מ-CLAUDE.md) ויש לו כלי קוד
+  assert.match(aiCalls[0].system[0].text, /- mat_kon\/ – mat-kon – מתכונים: ספר מתכונים למשפחה/);
+  assert.ok(aiCalls[0].tools.some((t) => t.name === 'code_change'));
+  assert.match(aiCalls[1].messages.at(-1).content[0].content, /📁 mat_kon\/web/);
+
+  // ההצעה מוצגת בכרטיס; שום דבר לא נשלח ל-GitHub לפני האישור
+  let view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  const card = view.messages.flatMap((m) => m.devs || [])[0];
+  devId = card.id;
+  assert.equal(card.status, 'proposed');
+  assert.ok(!gh.some((g) => g.includes('dispatches')));
+
+  // אישור -> אות ל-GitHub; העבודה רצה
+  assert.equal((await call(env, '/app/dev/approve', { id: card.id }, token)).status, 200);
+  assert.ok(gh.includes('POST /repos/me/repo/dispatches'));
+  assert.equal((await call(env, '/app/dev/approve', { id: card.id }, token)).status, 409);
+
+  // ה-workflow: רק עם הטוקן
+  const wf = (path, init = {}) => worker.fetch(new Request(`${API}${path}`, { ...init, headers: { authorization: `Bearer ${GH}`, 'content-type': 'application/json', ...(init.headers || {}) } }), env);
+  assert.equal((await worker.fetch(new Request(`${API}/dev/job?id=${card.id}`), env)).status, 403);
+  const job = await (await wf(`/dev/job?id=${card.id}`)).json();
+  assert.equal(job.app, 'mat_kon');
+  assert.match(job.request, /print button/);
+  assert.equal((await wf(`/dev/done?id=${card.id}`, { method: 'POST', body: JSON.stringify({ pr: 7, summary: 'נוסף כפתור 🖨️ בדף המתכון.' }) })).status, 200);
+
+  view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  assert.equal(view.messages.flatMap((m) => m.devs || []).filter((d) => d.id === card.id).length, 1);
+  const ready = view.messages.flatMap((m) => m.devs || []).find((d) => d.id === card.id);
+  assert.equal(ready.status, 'ready');
+  assert.equal(ready.url, 'https://github.com/me/repo/pull/7');
+  assert.match(view.messages.at(-1).text, /מוכן/);
+
+  // מיזוג: לא כשהבדיקות עוד רצות; כן כשהן עברו
+  assert.equal((await call(env, '/app/dev/merge', { id: card.id }, token)).status, 409);
+  checks = 'completed';
+  assert.equal((await call(env, '/app/dev/merge', { id: card.id }, token)).status, 200);
+  assert.ok(gh.includes('PUT /repos/me/repo/pulls/7/merge'));
+  view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  assert.equal(view.messages.flatMap((m) => m.devs || []).find((d) => d.id === card.id).status, 'merged');
 });

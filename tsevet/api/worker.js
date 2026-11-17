@@ -3,6 +3,7 @@
 //   PUT  /app/upload  – העלאת תמונה / סרטון / שיר (נשמר ב-R2, דלי tsevet-files)
 //   GET  /file/<id>   – קובץ שהועלה, בקישור זמני חתום (בלי סיסמה, כדי ש-<img> ו-<video> יוכלו לטעון אותו)
 //   /render/<...>     – ה-workflow שעורך וידאו (render.js): מזדהה עם הטוקן של GitHub
+//   /dev/<...>        – ה-workflow של המתכנת (dev.js, tsevet-dev.yml): מזדהה עם הטוקן של GitHub
 //   POST /tg/<agent>  – עדכונים מ-Telegram (בודקים את הסיסמה ש-Telegram שולחת), נכנסים לתור של הצוות
 //   POST /setup       – הקמה אחרי כל עלייה: כתובת, שם, תיאור ופקודות לכל בוט (נקרא מ-.github/workflows/tsevet.yml)
 import { AGENTS, TG_KEYS as AGENT_KEYS, label } from './agents.js';
@@ -188,6 +189,19 @@ async function render(request, env, url) {
   return json(404, { error: 'not found' });
 }
 
+// ה-workflow של המתכנת (tsevet-dev.yml). מזדהה עם הטוקן של GitHub שיש גם לשרת
+async function dev(request, env, url) {
+  const bearer = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  if (!env.GITHUB_TOKEN || !bearer || !safeEqual(bearer, env.GITHUB_TOKEN)) return json(403, { error: 'forbidden' });
+  const id = url.searchParams.get('id') || '';
+  const route = `${request.method} ${url.pathname}`;
+  const routes = { 'GET /dev/job': 'dev-job', 'POST /dev/done': 'dev-done', 'POST /dev/question': 'dev-question', 'POST /dev/fail': 'dev-fail' };
+  if (!routes[route]) return json(404, { error: 'not found' });
+  const body = request.method === 'POST' ? await request.json().catch(() => ({})) : {};
+  const r = await call(env, `/internal/${routes[route]}`, { ...body, id });
+  return json(r.status, r.data);
+}
+
 async function app(request, env, url) {
   const cors = corsHeaders(request, env);
   const reply = (status, data) => new Response(JSON.stringify(data), { status, headers: { ...cors, 'content-type': 'application/json' } });
@@ -215,6 +229,7 @@ export default {
     if (pathname.startsWith('/app/')) return app(request, env, url);
     if (pathname.startsWith('/file/') && (request.method === 'GET' || request.method === 'HEAD')) return serveFile(request, env, url);
     if (pathname.startsWith('/render/')) return render(request, env, url);
+    if (pathname.startsWith('/dev/')) return dev(request, env, url);
     if (request.method === 'GET' && pathname === '/') return new Response('צוות 🤖');
     if (request.method !== 'POST') return json(405, { error: 'method' });
     if (pathname === '/setup') return setup(request, env);

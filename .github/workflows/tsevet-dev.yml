@@ -1,0 +1,102 @@
+name: tsevet dev
+
+# המתכנת באפליקציית "צוות" (tsevet/api/dev.js): הבעלים אישר בקשת שינוי בכפתור -> השרת שולח אות עם מזהה הבקשה.
+# כאן Claude Code עושה את השינוי בתוך תיקיית האפליקציה בלבד, מריצים את הבדיקות שלה, ופותחים PR מהענף tsevet-dev/<מזהה>.
+# הסיכום חוזר לשיחה, והבעלים ממזג מהאפליקציה ("למזג ולהעלות") – אחר כך ה-workflow של האפליקציה מעלה אותה.
+# המאגר ציבורי: הבקשה נקראת מהשרת (לא מודפסת), והפלט של Claude לא מודפס (tsevet/devbot/run.py).
+on:
+  repository_dispatch:
+    types: [tsevet-dev]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tsevet-dev-${{ github.event.client_payload.id }}
+  cancel-in-progress: false
+
+jobs:
+  dev:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      TSEVET_API: https://tsevet-api.guygitter.workers.dev
+      TSEVET_TOKEN: ${{ secrets.POINTS_GITHUB_TOKEN }}
+      DEV_ID: ${{ github.event.client_payload.id }}
+    steps:
+      - name: Check the request
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          [ -n "$TSEVET_TOKEN" ] || { echo "::error::Missing secret POINTS_GITHUB_TOKEN"; exit 1; }
+          [ -n "$KEY" ] || { echo "::error::Missing secret ANTHROPIC_API_KEY"; exit 1; }
+          printf '%s' "$DEV_ID" | grep -Eq '^[a-z0-9]{8,32}$' || { echo "::error::Bad id"; exit 1; }
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          # Claude runs without the push token; only the publish step gets it
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Read the request
+        id: job
+        run: python3 tsevet/devbot/run.py prepare
+      - name: Install
+        env:
+          APP: ${{ steps.job.outputs.app }}
+        run: |
+          for d in "$APP"/*/; do
+            if [ -f "$d/package-lock.json" ]; then (cd "$d" && npm ci --silent --no-audit --no-fund) || true; fi
+          done
+          npm install -g --silent @anthropic-ai/claude-code
+          git checkout -q -B "tsevet-dev/${DEV_ID}"
+      - name: Claude makes the change
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MODEL: ${{ vars.TSEVET_DEV_MODEL || 'claude-opus-5-5' }}
+        run: |
+          claude -p "$(cat .dev/prompt.txt)" \
+            --model "$MODEL" \
+            --max-turns 100 \
+            --permission-mode acceptEdits \
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(cd:*),Bash(ls:*),Bash(cat:*),Bash(npm test:*),Bash(npm run build:*),Bash(npm run test:*),Bash(npx vitest:*),Bash(node --test:*),Bash(git diff:*),Bash(git status:*)" \
+            --output-format json > .dev/claude.json 2>/dev/null || echo "::warning::Claude exited with an error"
+      - name: Check the result
+        id: check
+        run: python3 tsevet/devbot/run.py check "${{ steps.job.outputs.app }}"
+      - name: Tests
+        if: steps.check.outputs.status == 'fixed'
+        run: python3 tsevet/devbot/run.py tests "${{ steps.job.outputs.app }}"
+      - name: Open the pull request
+        id: publish
+        if: steps.check.outputs.status == 'fixed'
+        env:
+          # a personal token, so the PR runs the app checks
+          GH_TOKEN: ${{ secrets.POINTS_GITHUB_TOKEN }}
+          APP: ${{ steps.job.outputs.app }}
+        run: |
+          branch="tsevet-dev/${DEV_ID}"
+          git config user.name "tsevet-dev"
+          git config user.email "tsevet-dev@users.noreply.github.com"
+          [ -s .dev/commit.txt ] || printf 'Change requested from the team app\n' > .dev/commit.txt
+          git add -A -- "$APP"
+          git commit -q -F .dev/commit.txt
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$branch"
+          { cat .dev/summary.md 2>/dev/null || echo "שינוי שהתבקש מאפליקציית צוות."; printf '\n\n---\nנפתח על ידי 👨‍💻 המתכנת באפליקציית "צוות", אחרי אישור הבעלים.\n'; } > .dev/pr.md
+          title="$(head -c 80 .dev/title.txt)"
+          url=$(gh pr create --base main --head "$branch" --title "${APP}: ${title}" --body-file .dev/pr.md)
+          echo "pr=${url##*/}" >> "$GITHUB_OUTPUT"
+      - name: Report
+        if: always()
+        run: |
+          if [ -n "${{ steps.publish.outputs.pr }}" ]; then
+            python3 tsevet/devbot/run.py done "${{ steps.publish.outputs.pr }}"
+          elif [ "${{ steps.check.outputs.status }}" = "question" ]; then
+            python3 tsevet/devbot/run.py question
+          elif [ "${{ steps.check.outputs.status }}" = "none" ]; then
+            python3 tsevet/devbot/run.py fail "לא נעשה שום שינוי"
+          else
+            python3 tsevet/devbot/run.py fail "הבדיקות או הפרסום נכשלו"
+          fi
