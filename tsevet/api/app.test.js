@@ -191,7 +191,7 @@ test('a message to one bot skips the routing; the model level can be changed in 
   const { env, aiCalls } = setupEnv({ replies: [{ content: text('בסדר') }] });
   const token = await signIn(env);
   const set = await call(env, '/app/settings', { models: { creative: 'opus', campaigns: 'nonsense' } }, token);
-  assert.deepEqual(set.data.models, { creative: 'opus', campaigns: 'opus', editor: 'sonnet', librarian: 'sonnet', social: 'sonnet', travel: 'sonnet', manager: 'opus' });
+  assert.deepEqual(set.data.models, { creative: 'opus', campaigns: 'opus', editor: 'sonnet', librarian: 'sonnet', social: 'sonnet', doctor: 'opus', travel: 'sonnet', manager: 'opus' });
   const { data: conv } = await call(env, '/app/conv/new', {}, token);
   await call(env, '/app/send', { id: conv.id, text: 'רעיון', to: 'creative' }, token);
   await env.team.alarm();
@@ -350,7 +350,7 @@ test('a Telegram topic continues in the app with its history and the shared memo
 
   const token = await signIn(env);
   const team = (await call(env, '/app/team', {}, token)).data;
-  assert.deepEqual(team.agents.map((a) => a.key), ['creative', 'campaigns', 'editor', 'librarian', 'social', 'travel', 'manager']);
+  assert.deepEqual(team.agents.map((a) => a.key), ['creative', 'campaigns', 'editor', 'librarian', 'social', 'doctor', 'travel', 'manager']);
   const conv = team.convs.find((c) => c.source === 'tg');
   assert.equal(conv.id, 'tg:-100:5');
   let view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
@@ -964,4 +964,22 @@ test('updating an installed skill keeps the old version working until approved; 
   assert.deepEqual([skills.length, skills[0].title, skills[0].next], [1, 'טיסות', undefined]);
   view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
   assert.match(view.messages.at(-1).text, /❌ הסקיל "טיסות v2" לא אושר/);
+});
+
+// ---------- הדוקטור ----------
+test('the doctor bot: careful medical rules, more research, the strong model, and it can learn skills', async () => {
+  const { env, aiCalls } = setupEnv({ replies: [{ content: text('מידע כללי. זה מידע כללי ולא תחליף לרופא') }] });
+  const token = await signIn(env);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'מה אומר ערך גבוה של ALT?', to: 'doctor' }, token);
+  await env.team.alarm();
+  const d = aiCalls[0];
+  assert.equal(d.model, MODELS.opus);
+  assert.match(d.system[0].text, /^You are "הדוקטור"/);
+  assert.match(d.system[0].text, /מד"א 101/);
+  assert.match(d.system[0].text, /never tell the owner to start, stop or change a prescribed medicine/);
+  assert.match(d.system[0].text, /Don't save them with remember unless the owner explicitly asks/);
+  assert.equal(d.tools.find((t) => t.name === 'web_search').max_uses, 12);
+  assert.deepEqual(d.tools.find((t) => t.name === 'teach').input_schema.properties.agents.items.enum, ['doctor']);
+  assert.ok(d.tools.some((t) => t.name === 'github_skills_search'));
 });
