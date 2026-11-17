@@ -1,6 +1,6 @@
 // לוח הצוות: הבוטים כעיגולים על מעגל, מחוברים בקווים דקים. לחיצה על בוט פותחת שיחה אליו
 import { Video } from 'lucide-react';
-import { avatarSize, circlePositions, pairs } from '../lib/board';
+import { avatarSize, boardLayout } from '../lib/board';
 import { hueOf } from '../lib/agents';
 import { ils, usd } from '../lib/format';
 import { newConversation } from '../lib/convs';
@@ -43,9 +43,10 @@ export default function TeamBoard({ team }) {
   if (!team) return <p className="p-8 text-center text-muted">רגע…</p>;
   const agents = team.agents;
   const n = agents.length;
-  // עד 3 בוטים יש מקום גם לתיאור, ולכן המעגל קטן יותר (שהעליון לא ייחתך); מ-4 – בטלפון רק השם
-  const pos = circlePositions(n, n > 3 ? 33 : n > 1 ? 27 : 0);
-  const size = avatarSize(n);
+  // המנהל באמצע, השאר סביבו. מ-4 בוטים – בטלפון רק השם
+  const { pos, lines, mid } = boardLayout(agents);
+  const size = avatarSize(mid >= 0 ? n - 1 : n);
+  const manager = mid >= 0 ? agents[mid] : null;
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col items-center px-4 pb-8 pt-4">
@@ -54,7 +55,7 @@ export default function TeamBoard({ team }) {
         style={{ containerType: 'inline-size', backgroundImage: 'radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--color-accent) 14%, transparent), transparent 65%)' }}
       >
         <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full" aria-hidden="true">
-          {pairs(n).map(([a, b]) => {
+          {lines.map(([a, b]) => {
             const hot = agents[a].busy || agents[b].busy;
             return (
               <line
@@ -75,7 +76,16 @@ export default function TeamBoard({ team }) {
         ))}
       </div>
 
-      <button onClick={() => newConversation(null)} className="mt-5 w-full max-w-[620px] rounded-2xl bg-accent px-4 py-3.5 text-base font-bold text-white hover:opacity-90">
+      {manager && (
+        <button onClick={() => newConversation(manager.key)} className="mt-5 w-full max-w-[620px] rounded-2xl bg-accent px-4 py-3.5 text-base font-bold text-white hover:opacity-90">
+          {manager.emoji} משימה חדשה למנהל
+          <span className="block text-sm font-normal opacity-90">הוא מתכנן, מחלק בין הבוטים ומסכם</span>
+        </button>
+      )}
+      <button
+        onClick={() => newConversation(null)}
+        className={`mt-3 w-full max-w-[620px] rounded-2xl px-4 py-3 font-bold ${manager ? 'border border-line bg-card hover:bg-soft' : 'bg-accent py-3.5 text-base text-white hover:opacity-90'}`}
+      >
         שיחה עם כל הצוות
       </button>
 

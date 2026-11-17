@@ -82,6 +82,29 @@ the owner to run there – say that plainly instead of promising the team will p
 When asked to "learn everything" about a topic, search with several words (Hebrew and English), read the best few \
 items, and teach a small number of solid skills rather than many thin ones. Then list what you taught and to whom.`,
   },
+  // רק באפליקציה: מקבל משימה גדולה, מחלק אותה בין הבוטים (assign), ובסוף בודק ומסכם
+  manager: {
+    name: 'מנהל',
+    emoji: '🧭',
+    tier: 'opus',
+    appOnly: true,
+    short: 'משימות גדולות: מתכנן, מחלק בין הבוטים, בודק ומסכם',
+    role: `You are "מנהל" (Manager) – the team lead. The owner gives you a goal; you turn it into a short plan and \
+assign each step to the right teammate with assign. You do not do the specialists' work yourself.
+How to plan:
+- First understand the goal. If something essential is missing and guessing would waste work (which app? what \
+budget?), ask one short question instead of planning. Otherwise choose sensible defaults and say what you assumed.
+- 2-6 steps, in order. Each step: one teammate and a clear, self-contained request (what to deliver, for which app, \
+format, length). Later steps see the results of earlier ones, so order matters, e.g. librarian (find methods in the \
+AI repository) → creative (script / copy) → editor (video) → campaigns (ads plan).
+- Only assign what the goal needs. Not every teammate has to work.
+- Before planning, write one or two sentences to the owner: what you understood and the plan in brief.
+When all the steps are done you get the turn back:
+- Check the results against the goal. If something important is missing or wrong, you may assign a short fix-up \
+round once; otherwise don't.
+- Then write the owner a short summary: what is ready (and where in the chat), what waits for their approval \
+(e.g. a proposed video clip), and the next step you recommend. Don't repeat the teammates' work at length.`,
+  },
 };
 export const AGENT_KEYS = Object.keys(AGENTS);
 // הבוטים שיש להם בוט ב-Telegram
@@ -227,7 +250,33 @@ const MAKE_VIDEO = {
 };
 const VIDEO_MAKERS = ['creative', 'editor'];
 
-export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, skills = [], gen = false } = {}) => [
+// המנהל מחלק משימה לשלבים. השלבים רצים לפי הסדר (team.js), וכל בוט רואה את מה שנעשה לפניו
+export const MAX_STEPS_IN_PLAN = 6;
+const ASSIGN = (team) => ({
+  name: 'assign',
+  description: 'Split the task into steps and assign each to a teammate. They work in this order; each sees the conversation, including the earlier steps. When all are done you get the turn back to review and summarize. Write your message to the owner first; call this last.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      steps: {
+        type: 'array',
+        maxItems: MAX_STEPS_IN_PLAN,
+        items: {
+          type: 'object',
+          properties: {
+            to: { type: 'string', enum: team.filter((k) => k !== 'manager') },
+            request: { type: 'string', description: 'Exactly what this teammate should deliver (Hebrew, self-contained)' },
+          },
+          required: ['to', 'request'],
+        },
+      },
+    },
+    required: ['steps'],
+  },
+});
+
+// assign = המנהל יכול לחלק משימה; noHandoff = בוט שעובד על שלב בתוכנית (לא מעביר הלאה)
+export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, skills = [], gen = false, assign = false, noHandoff = false } = {}) => [
   ...webTools(model),
   ...(maagar ? MAAGAR_TOOLS : []),
   ...(maagar && agent === 'librarian' ? LIBRARIAN_TOOLS(team) : []),
@@ -253,7 +302,8 @@ export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, sk
   },
   ...(agent === 'editor' ? [EDIT_VIDEO] : []),
   ...(gen && VIDEO_MAKERS.includes(agent) ? [MAKE_VIDEO] : []),
-  ...(team.filter((k) => k !== agent).length
+  ...(assign && agent === 'manager' ? [ASSIGN(team)] : []),
+  ...(!noHandoff && agent !== 'manager' && team.filter((k) => k !== agent).length
     ? [{
       name: 'handoff',
       description: 'Pass the next step to a teammate. Write your own message first; call this last.',
@@ -288,7 +338,8 @@ export function transcript(history, owner = 'הבעלים') {
       const gen = h.gens?.length && !h.made?.length ? ' [proposed a generated clip – it is created only after the owner approves]' : '';
       const render = h.renders?.length ? ' [started a video render – the result appears in the chat when ready]' : '';
       const to = h.handoff ? `\n↪️ ל${label(h.handoff.to)}: ${h.handoff.request}` : '';
-      return `${who}:${pic} ${h.text || ''}${render}${gen}${files}${to}`;
+      const plan = h.plan?.length ? `\n📋 התוכנית:\n${h.plan.map((s, n) => `${n + 1}. ל${AGENTS[s.to] ? label(s.to) : s.to}: ${s.request}`).join('\n')}` : '';
+      return `${who}:${pic} ${h.text || ''}${render}${gen}${files}${to}${plan}`;
     })
     .join('\n\n');
 }
@@ -296,9 +347,11 @@ export function transcript(history, owner = 'הבעלים') {
 // תור אחד של בוט. tools = { app_info, remember, forget, edit_video } (פונקציות שמחזירות טקסט).
 // model = המודל של הבוט, team = מי זמין בערוץ, images = תמונות מההודעה האחרונה. מחזיר { text, handoff, usage[] }
 // maagar = יש חיבור למאגר AI, skills = הסקילים שהבוט הזה למד
-export async function runAgent(client, { agent, notes, history, owner, image, images = image ? [image] : [], model = MODEL, team = TG_KEYS, channel = 'tg', maagar = false, skills = [], gen = false }, tools) {
+export async function runAgent(client, { agent, notes, history, owner, image, images = image ? [image] : [], model = MODEL, team = TG_KEYS, channel = 'tg', maagar = false, skills = [], gen = false, task = '', assign = false }, tools) {
+  // task = הוראה לתור הזה (שלב שהמנהל הקצה, או "סכם" למנהל). בשלב של תוכנית אין העברה הלאה
+  const noHandoff = Boolean(task) && agent !== 'manager';
   const intro = `The conversation so far (latest at the bottom):\n\n${transcript(history, owner)}\n\n` +
-    `Now it's your turn as ${label(agent)}. Reply to the latest message.`;
+    (task || `Now it's your turn as ${label(agent)}. Reply to the latest message.`);
   const content = images.length ? [...images, { type: 'text', text: intro }] : intro;
   // Haiku: בלי fallback בצד השרת (לא נתמך שם)
   const fallback = model === MODELS.haiku ? {} : { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' };
@@ -312,14 +365,24 @@ export async function runAgent(client, { agent, notes, history, owner, image, im
       ...fallback,
       output_config: { effort: 'medium' },
       system: [{ type: 'text', text: systemPrompt(agent, notes, { team, channel, maagar, skills, gen }), cache_control: { type: 'ephemeral' } }],
-      tools: TOOLS(agent, team, model, { maagar, skills, gen }),
+      tools: TOOLS(agent, team, model, { maagar, skills, gen, assign, noHandoff }),
       messages,
     });
     usage.push({ model, ...(response.usage || {}) });
     if (response.stop_reason === 'refusal') return { text: 'את זה אני לא יכול לעשות.', usage };
     for (const b of response.content) if (b.type === 'text' && b.text.trim()) texts.push(b.text.trim());
     const calls = response.content.filter((b) => b.type === 'tool_use');
+    const plan = assign && calls.find((c) => c.name === 'assign');
+    if (plan) {
+      const steps = (Array.isArray(plan.input?.steps) ? plan.input.steps : [])
+        .map((s) => ({ to: String(s?.to || ''), request: String(s?.request || '').trim().slice(0, 1500) }))
+        .filter((s) => team.includes(s.to) && s.to !== 'manager' && s.request)
+        .slice(0, MAX_STEPS_IN_PLAN);
+      return { text: texts.join('\n\n'), plan: steps.length ? steps : null, usage };
+    }
     const handoff = calls.find((c) => c.name === 'handoff');
+    // בשלב של תוכנית אין העברה: מסיימים את התור בלי להעביר (המנהל מתאם)
+    if (handoff && noHandoff) return { text: texts.join('\n\n'), usage };
     if (handoff) {
       const to = team.includes(handoff.input?.to) && handoff.input.to !== agent ? handoff.input.to : null;
       const request = String(handoff.input?.request || '').trim();

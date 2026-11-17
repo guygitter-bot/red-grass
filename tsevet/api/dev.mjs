@@ -58,12 +58,22 @@ const ai = {
         const prompt = JSON.stringify(req.messages[0].content);
         if (req.max_tokens === 10) {
           const last = prompt.split('\\n\\n').filter((p) => !p.includes('Who should answer')).pop() || '';
-          const pick = /מאגר|תלמד|ללמוד/.test(last) ? 'librarian' : /סרטון|וידאו|לערוך|תערוך/.test(last) ? 'editor' : /קמפיין|תקציב|מודעות/.test(last) ? 'campaigns' : 'creative';
+          const pick = /משימה|תכין לי/.test(last) ? 'manager' : /מאגר|תלמד|ללמוד/.test(last) ? 'librarian' : /סרטון|וידאו|לערוך|תערוך/.test(last) ? 'editor' : /קמפיין|תקציב|מודעות/.test(last) ? 'campaigns' : 'creative';
           return { content: [{ type: 'text', text: pick }], usage: { input_tokens: 200, output_tokens: 2 } };
         }
         await wait(1500);
         const role = req.system[0].text;
         const results = req.messages.at(-1).content;
+        // המנהל: מתכנן ומחלק, ובתור האחרון מסכם
+        if (role.startsWith('You are "מנהל"')) {
+          if (/All the steps of your plan are done/.test(prompt)) {
+            return { stop_reason: 'end_turn', content: [{ type: 'text', text: '**מה מוכן:**\n\n• תסריט לריל (שלב 1)\n• תוכנית קמפיין עם תקציב בדיקה (שלב 2)\n\n**הצעד הבא:** לאשר את התסריט, ואז אבקש מעורך הווידאו להכין את הסרטון.' }], usage };
+          }
+          return { stop_reason: 'tool_use', content: [{ type: 'text', text: 'הבנתי – ריל וקמפיין לאפליקציית סדר. קודם תסריט, ואז קמפיין קטן לבדיקה.' }, { type: 'tool_use', id: 'p1', name: 'assign', input: { steps: [
+            { to: 'creative', request: 'תסריט לריל של 20 שניות לאפליקציית סדר: הוק, 3 סצנות וקריאה לפעולה' },
+            { to: 'campaigns', request: 'תוכנית קמפיין בדיקה בפייסבוק לריל, תקציב קטן' },
+          ] } }], usage };
+        }
         // הספרן: מחפש במאגר, מלמד את העורך, ומדווח
         if (role.startsWith('You are "ספרן"')) {
           const done = JSON.stringify(req.messages);

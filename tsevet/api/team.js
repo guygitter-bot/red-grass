@@ -30,6 +30,9 @@ const MAX_HISTORY_BYTES = 1_200_000;
 const MAX_IMAGES = 4;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_TURNS = 4;
+// משימה של המנהל: תוכנית ראשונה + סבב תיקון אחד, ותקרת תורות כדי לא לרוץ סתם
+const MAX_PLAN_ROUNDS = 2;
+const MAX_PLAN_TURNS = 16;
 const MAX_NOTES = 60;
 const MAX_SEEN = 500;
 const MAX_ATTEMPTS = 3;
@@ -392,26 +395,47 @@ export class Team {
       },
     };
 
-    while (agent && job.turns < MAX_TURNS) {
+    // תוכנית של המנהל: job.plan = השלבים שנשארו, job.step / job.steps = איפה אנחנו, job.rounds = כמה תוכניות היו
+    const limit = () => (job.rounds ? MAX_PLAN_TURNS : MAX_TURNS);
+    while (agent && job.turns < limit()) {
       const { token, prefix } = app ? {} : this.speaker(job, agent);
       if (app) await this.setBusy(key, agent);
       else await typing(this.env, token, job);
       const history = (await this.storage.get(key)) || [];
       const notes = (await this.storage.get('notes')) || [];
       const images = app ? await this.appImages(history) : image ? [image] : [];
+      const inPlan = Boolean(job.plan?.length) && agent === job.plan[0].to;
+      const review = !inPlan && agent === 'manager' && job.rounds > 0;
+      const task = inPlan
+        ? `The manager assigned you step ${job.step} of ${job.steps}: "${job.plan[0].request}". Do only this step, completely, as ${label(agent)}. Don't hand off; the manager coordinates the next steps.`
+        : review
+          ? `All the steps of your plan are done (see above). Now, as ${label('manager')}: check the results against the owner's goal${job.rounds < MAX_PLAN_ROUNDS ? ', assign a short fix-up round only if something important is missing,' : ''} and write the owner a short summary – what is ready, what waits for their approval, and the recommended next step.`
+          : '';
       const r = await runAgent(client, {
-        agent, notes, history: history.slice(-30), owner: owner?.name, images,
+        agent, notes, history: history.slice(-40), owner: owner?.name, images,
         model: MODELS[models[agent]], team, channel: app ? 'app' : 'tg',
         maagar, skills: skillsOf((await this.storage.get('skills')) || [], agent),
         gen: app && genReady(this.env),
+        task, assign: agent === 'manager' && (job.rounds || 0) < MAX_PLAN_ROUNDS,
       }, tools);
       await this.addCost(r.usage, agent);
       // נעצר באמצע (מהאפליקציה)? התשובה לא נשמרת
       if (!(await this.alive(job))) return;
 
-      const next = r.handoff?.to || null;
+      let next = r.handoff?.to || null;
+      if (r.plan) {
+        // המנהל חילק: השלב הראשון מתחיל, ובסוף התור חוזר אליו
+        job = { ...job, plan: r.plan, step: 1, steps: r.plan.length, rounds: (job.rounds || 0) + 1 };
+        next = r.plan[0].to;
+      } else if (inPlan) {
+        const rest = job.plan.slice(1);
+        job = { ...job, plan: rest, step: job.step + 1 };
+        next = rest.length ? rest[0].to : 'manager';
+      }
       await this.pushHistory(key, {
         who: agent, text: r.text || '',
+        ...(r.plan ? { plan: r.plan } : {}),
+        ...(inPlan ? { step: { n: job.step - 1, of: job.steps } } : {}),
         ...(r.handoff ? { handoff: r.handoff } : {}),
         ...(renders.length ? { renders: renders.splice(0) } : {}),
         ...(gens.length ? { gens: gens.splice(0) } : {}),

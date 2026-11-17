@@ -21,3 +21,19 @@ export function avatarSize(n) {
   if (n <= 8) return 16;
   return 13;
 }
+
+// הלוח: המנהל (אם יש) באמצע, וכל השאר במעגל סביבו. מחזיר מיקום לכל בוט (באותו סדר) ואת הקווים ביניהם
+export function boardLayout(agents, center = 'manager') {
+  const mid = agents.findIndex((a) => a.key === center);
+  const ring = agents.map((_, i) => i).filter((i) => i !== mid);
+  const n = ring.length;
+  // עד 3 בוטים במעגל יש מקום גם לתיאור, ולכן המעגל קטן יותר (שהעליון לא ייחתך)
+  const around = circlePositions(n, mid >= 0 ? 35 : n > 3 ? 33 : n > 1 ? 27 : 0);
+  const pos = agents.map(() => ({ x: 50, y: 50 }));
+  ring.forEach((i, k) => {
+    pos[i] = around[k];
+  });
+  const lines = pairs(n).map(([a, b]) => [ring[a], ring[b]]);
+  if (mid >= 0) ring.forEach((i) => lines.push([mid, i]));
+  return { pos, lines, mid };
+}
