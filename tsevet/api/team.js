@@ -18,6 +18,7 @@ import { AGENTS, AGENT_KEYS, MODELS, SELF_LEARNERS, STOP, TG_KEYS, aiMessage, ap
 import { APP_PREFIX, addFile, checkFileUrl, getSettings, handleApp, newId as convIdNew } from './app.js';
 import { IG_SKILLS } from './igskills.js';
 import { bursaReady, bursaTools } from './bursa.js';
+import { appsOf, appsText, codeTools, devDone, devFail, devJob, devQuestion, devReady, proposeChange } from './dev.js';
 import { readSkill as githubRead, searchSkills as githubSearch } from './github.js';
 import { addSkill, learnFrom, listItems, pendingOf, read as maagarRead, search as maagarSearch, skillsOf } from './maagar.js';
 import { genDone, genFail, genReady, genStart, proposeClip, runGenJob } from './gen.js';
@@ -126,6 +127,15 @@ export class Team {
       // יצירת סרטון: gen-start מגיע למופע של העבודה, gen-done / gen-fail חוזרים ממנו למופע הראשי
       case '/internal/gen-start':
         return genStart(storage, body);
+      // המתכנת: ה-workflow (tsevet-dev.yml) קורא את הבקשה ומדווח
+      case '/internal/dev-job':
+        return devJob(storage, body.id);
+      case '/internal/dev-done':
+        return devDone(this, body.id, body);
+      case '/internal/dev-question':
+        return devQuestion(this, body.id, body);
+      case '/internal/dev-fail':
+        return devFail(this, body.id, body);
       case '/internal/gen-done':
         return genDone(this, body.id, body.file || {});
       case '/internal/gen-fail':
@@ -397,6 +407,7 @@ export class Team {
 
     const renders = [];
     const gens = [];
+    const devs = [];
     const maagar = Boolean(this.env.MAAGAR);
     // סקילים מ-GitHub: מה שנמצא בחיפוש (רק אותו אפשר לקרוא), ומה שנקרא אחרון (מקור הסקיל שיישמר)
     const githubFound = new Map();
@@ -427,6 +438,9 @@ export class Team {
       edit_video: (input) => startRender(this, job, input, renders),
       // אפליקציית בורסאי (רק לבוט 📈 בורסאי; הכלים מוצעים לו רק כשיש חיבור)
       ...(bursaReady(this.env) ? bursaTools(this.env) : {}),
+      // המתכנת: קריאת הקוד במאגר, והצעת שינוי (שרץ רק אחרי אישור)
+      ...(devReady(this.env) ? codeTools(this) : {}),
+      code_change: (input) => proposeChange(this, job, input, devs),
       make_video: (input) => proposeClip(this, job, input, gens),
       // מאגר AI: הרשימה נטענת פעם אחת לכל עבודה
       maagar_search: async ({ query, area }) => maagarSearch(await items(), query, area),
@@ -504,6 +518,8 @@ export class Team {
         check: app && !task && SELF_LEARNERS.includes(agent) && Boolean(this.env.GITHUB_TOKEN || this.env.MAAGAR),
         github: app && Boolean(this.env.GITHUB_TOKEN),
         bursa: app && bursaReady(this.env),
+        code: app && devReady(this.env),
+        extra: agent === 'coder' && app && devReady(this.env) ? `The apps (folders in the repository):\n${appsText(await appsOf(this))}` : '',
         gen: app && genReady(this.env),
         task, assign: agent === 'manager' && (job.rounds || 0) < MAX_PLAN_ROUNDS,
       }, tools);
@@ -529,6 +545,7 @@ export class Team {
         ...(r.handoff ? { handoff: r.handoff } : {}),
         ...(renders.length ? { renders: renders.splice(0) } : {}),
         ...(gens.length ? { gens: gens.splice(0) } : {}),
+        ...(devs.length ? { devs: devs.splice(0) } : {}),
         ...(proposed.length ? { skillsProposed: proposed.splice(0) } : {}),
         at: Date.now(),
       });

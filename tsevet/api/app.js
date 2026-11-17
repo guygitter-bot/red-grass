@@ -17,6 +17,7 @@
 import { AGENTS, AGENT_KEYS, TIERS } from './agents.js';
 import * as auth from './auth.js';
 import { approve as approveGen, cancel as cancelGen, dailyLimit, genReady, genView } from './gen.js';
+import { approveDev, cancelDev, devView, discardDev, mergeDev } from './dev.js';
 import { renderView } from './render.js';
 import { approveSkill, declineSkill } from './maagar.js';
 import { BUDGETS, MAX_SCHEDULES, cleanSchedule, nextRun } from './schedule.js';
@@ -198,6 +199,14 @@ async function convView(t, id, origin) {
       if (g) gens.push(g);
       if (g?.status === 'working') pending = true;
     }
+    const devs = [];
+    // אותה בקשה בכמה הודעות (הצעה, ואז "מוכן") – הכרטיס מוצג רק בהודעה האחרונה
+    const later = new Set(history.slice(i + 1).flatMap((x) => x.devs || []));
+    for (const did of (h.devs || []).filter((x) => !later.has(x))) {
+      const d = await devView(t, did);
+      if (d) devs.push(d);
+      if (d?.status === 'working') pending = true;
+    }
     messages.push({
       i, who: h.who, text: h.text || '', at: h.at || 0,
       ...(h.photo ? { photo: true } : {}),
@@ -208,6 +217,7 @@ async function convView(t, id, origin) {
       ...(files.length ? { files } : {}),
       ...(renders.length ? { renders } : {}),
       ...(gens.length ? { gens } : {}),
+      ...(devs.length ? { devs } : {}),
     });
   }
   const job = ((await storage.get('q')) || []).find((j) => t.jobKey(j) === key);
@@ -410,6 +420,16 @@ export async function handleApp(t, path, body, headers, origin) {
       return approveGen(t, body.id);
     case '/app/gen/cancel':
       return cancelGen(storage, body.id);
+
+    // המתכנת: שינוי בקוד רק אחרי אישור, ומיזוג רק אחרי לחיצה נוספת (dev.js)
+    case '/app/dev/approve':
+      return approveDev(t, body.id);
+    case '/app/dev/cancel':
+      return cancelDev(storage, body.id);
+    case '/app/dev/merge':
+      return mergeDev(t, body.id);
+    case '/app/dev/discard':
+      return discardDev(t, body.id);
 
     // משימות קבועות (schedule.js; ההרצה עצמה ב-team.js)
     case '/app/schedules':

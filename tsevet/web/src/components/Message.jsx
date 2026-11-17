@@ -6,6 +6,7 @@ import Avatar from './Avatar';
 import Markdown from './Markdown';
 import { FileView, RenderCard } from './Files';
 import { GenCard } from './Gen';
+import { DevCard } from './DevCard';
 import { SkillCard } from './SkillCard';
 
 function Body({ m }) {
@@ -31,6 +32,13 @@ function Body({ m }) {
         <div className="mt-2 space-y-2">
           {m.skills.map((s) => (
             <SkillCard key={s.name} skill={s} />
+          ))}
+        </div>
+      )}
+      {m.devs?.length > 0 && (
+        <div className="mt-2 space-y-2">
+          {m.devs.map((d) => (
+            <DevCard key={d.id} dev={d} />
           ))}
         </div>
       )}

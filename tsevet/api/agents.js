@@ -1,6 +1,7 @@
 // הצוות: הבוטים, התפקידים והכלים שלהם, והרצה של תור אחד של בוט מול Claude.
 import { APPS } from './apps.js';
 import { BURSA_TOOLS } from './bursa.js';
+import { CODE_TOOLS } from './dev.js';
 
 // שלוש רמות מודל. לכל בוט ברירת מחדל (tier), ואפשר לשנות אותה בהגדרות של האפליקציה.
 export const MODELS = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5', opus: 'claude-opus-5-5' };
@@ -134,6 +135,30 @@ medicines), then answer.
 - Privacy: health details are personal. Don't save them with remember unless the owner explicitly asks you to.
 - Learning: you can look for skills that make you better (e.g. reading blood tests, triage, nutrition) in the AI \
 repository and on GitHub, like the rest of the team.`,
+  },
+  // רק באפליקציה: המתכנת – מכיר את כל האפליקציות שבמאגר, ומתקן / מוסיף רק באישור (dev.js)
+  coder: {
+    name: 'המתכנת',
+    emoji: '👨‍💻',
+    tier: 'opus',
+    appOnly: true,
+    short: 'מכיר את הקוד של כל האפליקציות שלנו; מתקן ומוסיף פיצ\'רים – באישור שלך',
+    role: `You are "המתכנת" (The Developer) – the senior developer of all the owner's apps. They live in one GitHub \
+repository: each app has its own folder (web app in React + Vite + Tailwind, server on Cloudflare Workers + Durable \
+Objects), its own README, and shared rules in CLAUDE.md at the root. The list of apps is below.
+How to work:
+- You know the apps by reading their code: code_apps, code_tree, code_read, code_search (main branch). Before \
+answering about an app or planning a change, read CLAUDE.md (the app's section) and the app's README, then the \
+relevant files. Never guess how the code works – check. Explain to the owner in simple, non-technical Hebrew.
+- Changes: when the owner asks for a fix or a feature, first understand it (ask one short question if something \
+important is unclear), find where it lives in the code, then call code_change with a precise developer task: \
+what to change, in which files, the expected behavior on phone and computer and in dark mode, old data that must \
+keep working, and what not to touch. One app per change. The owner approves with a button; then the pipeline \
+(Claude Code in GitHub Actions) makes the change, runs the app's tests and opens a pull request. When it is ready, \
+the owner merges with another button and the app deploys by itself.
+- Never claim you changed code yourself – you propose; the pipeline changes after approval. Never propose \
+changes to secrets, passwords, payments or security rules unless the owner explicitly asked, and say what it affects.
+- The repository is public: never put private data (names, emails, keys, the owner's personal content) in a request.`,
   },
   // רק באפליקציה: יועץ בורסה שמחובר לאפליקציית "בורסאי" – נתונים חיים, המלצות, ופעולות שהבעלים מבקש
   bursai: {
@@ -295,11 +320,11 @@ skill was found), and do the task.`;
 
 // team = הבוטים שזמינים בערוץ הזה (ב-Telegram רק מי שיש לו בוט), channel = 'tg' | 'app'
 // skills = הסקילים הפעילים של הבוט (מותקנים + מובנים); pending = מחכים לאישור; check = לבדוק סקיל טוב יותר לפני משימה
-export function systemPrompt(agent, notes = [], { team = TG_KEYS, channel = 'tg', maagar = false, skills = [], pending = [], gen = false, github = false, check = false } = {}) {
+export function systemPrompt(agent, notes = [], { team = TG_KEYS, channel = 'tg', maagar = false, skills = [], pending = [], gen = false, github = false, check = false, extra = '' } = {}) {
   const memory = notes.length
     ? `What the team remembers (numbered):\n${notes.map((n, i) => `${i + 1}. ${n}`).join('\n')}`
     : 'The team has no saved notes yet.';
-  return `${AGENTS[agent].role}\n\n${common(team, channel, maagar, gen, github && SKILL_SEEKERS.includes(agent))}${skillsSection(skills, pending)}${check ? `\n\n${CHECK_SKILLS}` : ''}\n\n${memory}`;
+  return `${AGENTS[agent].role}${extra ? `\n\n${extra}` : ''}\n\n${common(team, channel, maagar, gen, github && SKILL_SEEKERS.includes(agent))}${skillsSection(skills, pending)}${check ? `\n\n${CHECK_SKILLS}` : ''}\n\n${memory}`;
 }
 
 // הכלי של עורך הווידאו: מתחיל עריכה ברקע (render.js). הקבצים לפי המזהה שמופיע בשיחה.
@@ -473,7 +498,7 @@ const ASSIGN = (team) => ({
 });
 
 // assign = המנהל יכול לחלק משימה; noHandoff = בוט שעובד על שלב בתוכנית (לא מעביר הלאה)
-export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, skills = [], gen = false, assign = false, noHandoff = false, github = false, bursa = false } = {}) => [
+export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, skills = [], gen = false, assign = false, noHandoff = false, github = false, bursa = false, code = false } = {}) => [
   ...webTools(model, agent),
   ...(maagar ? MAAGAR_TOOLS : []),
   ...(maagar && agent === 'librarian' ? LIBRARIAN_TOOLS(team) : []),
@@ -501,6 +526,7 @@ export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, sk
   },
   ...(agent === 'editor' ? [EDIT_VIDEO] : []),
   ...(bursa && agent === 'bursai' ? BURSA_TOOLS : []),
+  ...(code && agent === 'coder' ? CODE_TOOLS : []),
   ...(gen && VIDEO_MAKERS.includes(agent) ? [MAKE_VIDEO] : []),
   ...(assign && agent === 'manager' ? [ASSIGN(team)] : []),
   ...(!noHandoff && agent !== 'manager' && team.filter((k) => k !== agent).length
@@ -547,7 +573,7 @@ export function transcript(history, owner = 'הבעלים') {
 // תור אחד של בוט. tools = { app_info, remember, forget, edit_video } (פונקציות שמחזירות טקסט).
 // model = המודל של הבוט, team = מי זמין בערוץ, images = תמונות מההודעה האחרונה. מחזיר { text, handoff, usage[] }
 // maagar = יש חיבור למאגר AI, skills = הסקילים שהבוט הזה למד
-export async function runAgent(client, { agent, notes, history, owner, image, images = image ? [image] : [], model = MODEL, team = TG_KEYS, channel = 'tg', maagar = false, skills = [], pending = [], gen = false, task = '', assign = false, github = false, check = false, bursa = false }, tools) {
+export async function runAgent(client, { agent, notes, history, owner, image, images = image ? [image] : [], model = MODEL, team = TG_KEYS, channel = 'tg', maagar = false, skills = [], pending = [], gen = false, task = '', assign = false, github = false, check = false, bursa = false, code = false, extra = '' }, tools) {
   // task = הוראה לתור הזה (שלב שהמנהל הקצה, או "סכם" למנהל). בשלב של תוכנית אין העברה הלאה
   const noHandoff = Boolean(task) && agent !== 'manager';
   const intro = `The conversation so far (latest at the bottom):\n\n${transcript(history, owner)}\n\n` +
@@ -564,8 +590,8 @@ export async function runAgent(client, { agent, notes, history, owner, image, im
       max_tokens: 8000,
       ...fallback,
       output_config: { effort: 'medium' },
-      system: [{ type: 'text', text: systemPrompt(agent, notes, { team, channel, maagar, skills, pending, gen, github, check }), cache_control: { type: 'ephemeral' } }],
-      tools: TOOLS(agent, team, model, { maagar, skills, gen, assign, noHandoff, github, bursa }),
+      system: [{ type: 'text', text: systemPrompt(agent, notes, { team, channel, maagar, skills, pending, gen, github, check, extra }), cache_control: { type: 'ephemeral' } }],
+      tools: TOOLS(agent, team, model, { maagar, skills, gen, assign, noHandoff, github, bursa, code }),
       messages,
     });
     usage.push({ model, ...(response.usage || {}) });

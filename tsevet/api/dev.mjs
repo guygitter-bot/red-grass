@@ -67,6 +67,13 @@ const ai = {
         await wait(1500);
         const role = req.system[0].text;
         const results = req.messages.at(-1).content;
+        // המתכנת: קורא תיקייה, מציע שינוי, ומסכם
+        if (role.startsWith('You are "המתכנת"')) {
+          const done = JSON.stringify(req.messages);
+          if (!done.includes('"id":"c1"')) return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'c1', name: 'code_tree', input: { path: 'mat_kon/web/src' } }], usage };
+          if (!done.includes('"id":"c2"')) return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'c2', name: 'code_change', input: { app: 'mat_kon', title: 'כפתור הדפסה למתכון', summary: 'כפתור 🖨️ בדף המתכון שמדפיס רק את המתכון (בלי תפריטים).', request: 'Add a print button to the recipe page with print-only CSS.' } }], usage };
+          return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'בדקתי את דף המתכון ב-**mat_kon**. הכנתי בקשה להוספת כפתור הדפסה – מחכה לאישור שלך 👇' }], usage };
+        }
         // המנהל: מתכנן ומחלק, ובתור האחרון מסכם
         if (role.startsWith('You are "מנהל"')) {
           if (/All the steps of your plan are done/.test(prompt)) {
@@ -143,13 +150,22 @@ const env = {
   // במקום GitHub: מריצים את העריכה כאן
   async FETCH(url, init) {
     if (url.includes('api.github.com') && url.endsWith('/dispatches')) {
-      const { client_payload } = JSON.parse(init.body);
+      const { client_payload, event_type } = JSON.parse(init.body);
+      // המתכנת: עבודה מדומה – אחרי כמה שניות "PR מוכן"
+      if (event_type === 'tsevet-dev') {
+        setTimeout(() => {
+          fetch(`http://localhost:${PORT}/dev/done?id=${client_payload.id}`, { method: 'POST', headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }, body: JSON.stringify({ pr: 99, summary: 'נוסף כפתור 🖨️ בדף המתכון, שמדפיס רק את המתכון.\nאחרי העלייה: לסגור ולפתוח את האפליקציה.' }) }).catch(() => {});
+        }, 4000);
+        return new Response(null, { status: 204 });
+      }
       const script = fileURLToPath(new URL('../render/run.py', import.meta.url));
       spawn('python3', [script, client_payload.id], { stdio: 'inherit', env: { ...process.env, TSEVET_API: `http://localhost:${PORT}`, TSEVET_TOKEN: TOKEN } });
       return new Response(null, { status: 204 });
     }
     // מחולל וידאו מדומה: מחכה כמה שניות ומחזיר את סרטון הבדיקה (DEV_CLIP), אם יש
     // GitHub מדומה
+    if (url === 'https://api.github.com/repos/local/dev/contents/CLAUDE.md') return new Response('### mat-kon – מתכונים (`mat_kon/`)\nספר מתכונים למשפחה.\n### תקציב הבית (`budget/`)\n- תיאור: `budget/README.md`. הוצאות והכנסות.\n');
+    if (url.startsWith('https://api.github.com/repos/local/dev/contents/')) return new Response(JSON.stringify([{ type: 'dir', path: 'mat_kon/web/src/components', size: 0 }, { type: 'file', path: 'mat_kon/web/src/App.jsx', size: 4000 }]));
     if (url.startsWith('https://api.github.com/search/code')) return new Response(JSON.stringify({ items: [{ path: 'skills/trip-planner/SKILL.md', repository: { full_name: 'good/travel-skills' } }] }));
     if (url === 'https://api.github.com/repos/good/travel-skills') return new Response(JSON.stringify({ full_name: 'good/travel-skills', owner: { login: 'good' }, stargazers_count: 850, pushed_at: new Date().toISOString(), license: { spdx_id: 'MIT' }, html_url: 'https://github.com/good/travel-skills' }));
     if (url.startsWith('https://api.github.com/repos/good/travel-skills/contents/')) return new Response('# Trip planner\nPlan day by day.');
