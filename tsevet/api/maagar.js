@@ -97,10 +97,11 @@ export function addSkill(skills, input, agentKeys) {
   if (!name || !title || !when || body.length < 40) return { error: 'A skill needs name (kebab-case English), title, when, and a full body.' };
   const agents = [...new Set(arr(input.agents).filter((k) => agentKeys.includes(k)))];
   if (!agents.length) return { error: `agents must list who learns it: ${agentKeys.join(', ')}.` };
-  const saved = { name, title, when, body, agents, source: clean(input.source, 160), at: Date.now() };
+  // origin = מאגר ב-GitHub; סקיל משם מחכה לאישור (pending) עד שהבעלים מאשר בכפתור
+  const saved = { name, title, when, body, agents, source: clean(input.source, 160), at: Date.now(), ...(input.origin ? { origin: input.origin, pending: true } : {}) };
   const rest = skills.filter((s) => s.name !== name);
   if (rest.length >= MAX_SKILLS) return { error: `The team already has ${MAX_SKILLS} skills. Remove one first (unteach).` };
   return { skills: [...rest, saved], saved };
 }
 
-export const skillsOf = (skills, agent) => skills.filter((s) => arr(s.agents).includes(agent));
+export const skillsOf = (skills, agent) => skills.filter((s) => !s.pending && arr(s.agents).includes(agent));

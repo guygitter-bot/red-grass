@@ -51,6 +51,15 @@ export async function getSettings(storage) {
   return { models, notifyAll: Boolean(s.notifyAll) };
 }
 
+// סקיל שהוצע בשיחה (מ-GitHub): מחכה / אושר / נמחק
+function proposedView(names, skills) {
+  return names.map((name) => {
+    const s = skills.find((x) => x.name === name);
+    if (!s) return { name, status: 'removed' };
+    return { name, title: s.title, when: s.when, agents: s.agents, origin: s.origin || null, status: s.pending ? 'pending' : 'approved' };
+  });
+}
+
 // משימות קבועות, עם הפעם הבאה שהן ירוצו
 async function schedulesView(storage) {
   const now = Date.now();
@@ -142,6 +151,7 @@ async function convView(t, id, origin) {
   const convs = (await storage.get('convs')) || [];
   const meta = convs.find((c) => c.id === id);
   if (!meta && !history.length) throw fail(404, 'השיחה לא נמצאה');
+  const allSkills = (await storage.get('skills')) || [];
   const messages = [];
   let pending = false;
   for (let i = 0; i < history.length; i++) {
@@ -165,6 +175,7 @@ async function convView(t, id, origin) {
       ...(h.handoff ? { handoff: h.handoff } : {}),
       ...(h.plan ? { plan: h.plan } : {}),
       ...(h.step ? { step: h.step } : {}),
+      ...(h.skillsProposed ? { skills: proposedView(h.skillsProposed, allSkills) } : {}),
       ...(files.length ? { files } : {}),
       ...(renders.length ? { renders } : {}),
       ...(gens.length ? { gens } : {}),
@@ -401,6 +412,15 @@ export async function handleApp(t, path, body, headers, origin) {
     // מה שהספרן לימד את הצוות ממאגר AI
     case '/app/skills':
       return { skills: (await storage.get('skills')) || [] };
+    // סקיל מ-GitHub מחכה לאישור; אחרי האישור הבוטים משתמשים בו
+    case '/app/skills/approve': {
+      const skills = (await storage.get('skills')) || [];
+      const s = skills.find((x) => x.name === String(body.name || ''));
+      if (!s) throw fail(404, 'הסקיל לא נמצא');
+      delete s.pending;
+      await storage.put('skills', skills);
+      return { skills };
+    }
     case '/app/skills/delete': {
       const skills = ((await storage.get('skills')) || []).filter((s) => s.name !== String(body.name || ''));
       await storage.put('skills', skills);
