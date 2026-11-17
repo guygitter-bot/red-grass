@@ -12,6 +12,7 @@
 //              items: [{ foodId, name, qty, carbs }] (מה נבחר במחשבון), site (מיקום הזריקה, SITES),
 //              before (סוכר לפני), insulin (יחידות), readings: [{ time, value }] (מדידות אחרי), tags: [], note, by }
 //   reading  – מדידה בלי ארוחה (בוקר, לילה, ספורט): { t: 'reading', date, time, value, insulin (תיקון, לא חובה), site, note, by }
+//              basal: true = הזריקה הלילית (ארוכת טווח) – insulin = היחידות, value = מדד הסוכר באותה שעה (לא חובה)
 //   cgm      – מדידות החיישן ליום אחד (מיובא מקובץ CareLink, ראו carelink.js): { id: 'cgm:YYYY-MM-DD', t: 'cgm', date,
 //              points: [[דקה ביום, ערך], ...] } – רשומה אחת ליום (כ-288 מדידות), כדי שלא יהיו עשרות אלפי רשומות
 //   sensor   – { id: 'sensor', t: 'sensor', at, by, changed: 'YYYY-MM-DD' } – מתי הועלתה תמונת החיישן הנוכחי (התמונה עצמה
@@ -107,6 +108,9 @@ export function safeSettings(r = {}) {
     cf: numOrEmpty(r.cf),
     target: numOrEmpty(r.target),
     note: typeof r.note === 'string' ? r.note : '',
+    // הזריקה הלילית: כמה יחידות ובאיזו שעה בדרך כלל (ממלא מראש, ואפשר לשנות בכל פעם)
+    basalDose: r.basalDose === undefined ? 11 : numOrEmpty(r.basalDose),
+    basalTime: isTime(r.basalTime) ? r.basalTime : '21:00',
   };
 }
 
@@ -188,7 +192,7 @@ export function foodsOf(records) {
 }
 
 export function safeReading(r) {
-  return { ...r, date: isDate(r.date) ? r.date : today(), time: isTime(r.time) ? r.time : '00:00', value: numOrEmpty(r.value), insulin: numOrEmpty(r.insulin), site: SITES[r.site] ? r.site : '', note: String(r.note || ''), by: String(r.by || '') };
+  return { ...r, date: isDate(r.date) ? r.date : today(), time: isTime(r.time) ? r.time : '00:00', value: numOrEmpty(r.value), insulin: numOrEmpty(r.insulin), site: SITES[r.site] ? r.site : '', basal: !!r.basal, note: String(r.note || ''), by: String(r.by || '') };
 }
 
 const byTime = (a, b) => (a.date === b.date ? minutes(a.time) - minutes(b.time) : a.date < b.date ? -1 : 1);
@@ -205,7 +209,8 @@ export function prepare(records) {
   const readings = live
     .filter((r) => r.t === 'reading')
     .map(safeReading)
-    .filter((r) => r.value !== '')
+    // מדידה בלי ערך נשמרת רק אם היא הזריקה הלילית
+    .filter((r) => r.value !== '' || (r.basal && r.insulin !== ''))
     .sort(byTime);
   const chats = live.filter((r) => r.t === 'chat' && r.text).sort((a, b) => (a.at || 0) - (b.at || 0));
   const sensor = live.find((r) => r.t === 'sensor') || null;
@@ -389,7 +394,7 @@ export function manualPoints(data, from = '0000-00-00', to = '9999-99-99') {
       pts.push({ date, time: r.time, value: r.value, kind: 'after', meal: m });
     }
   }
-  for (const r of data.readings) if (r.date >= from && r.date <= to) pts.push({ date: r.date, time: r.time, value: r.value, kind: 'reading', reading: r });
+  for (const r of data.readings) if (r.value !== '' && r.date >= from && r.date <= to) pts.push({ date: r.date, time: r.time, value: r.value, kind: 'reading', reading: r });
   return pts.filter((p) => p.date >= from && p.date <= to).sort(byTime);
 }
 
@@ -481,7 +486,7 @@ export function looseAfter(data, meal) {
   const next = data.meals.filter((m) => m.id !== meal.id && m.date === meal.date && minutes(m.time) > start).map((m) => minutes(m.time));
   const end = Math.min(start + 240, ...next);
   return (data.readings || [])
-    .filter((r) => r.date === meal.date && minutes(r.time) > start && minutes(r.time) <= end)
+    .filter((r) => r.value !== '' && r.date === meal.date && minutes(r.time) > start && minutes(r.time) <= end)
     .map((r) => ({ time: r.time, value: r.value, mins: minutes(r.time) - start, loose: true }));
 }
 
@@ -504,6 +509,11 @@ export function sensorUploadDue(data, date = today(), time = nowTime()) {
   if (weekday(date) !== 0 || minutes(time) < 9 * 60 + 30) return false;
   const last = [...(data.cgm?.keys() || [])].sort().at(-1) || '';
   return last < addDays(date, -1);
+}
+
+// הזריקה הלילית שנרשמה ביום מסוים (אם יש)
+export function basalOn(data, date) {
+  return data.readings.find((r) => r.basal && r.date === date) || null;
 }
 
 // מיקום הזריקה האחרון לפני הארוחה / המדידה הזו (להחלפת מקומות) – מכל הזריקות: בארוחות ובמדידות
@@ -537,7 +547,7 @@ export function aiContext(data, base = today(), detailDays = 21) {
   const s = data.settings;
   const lines = [];
   lines.push(`היום: ${base} (${dayLabel(base, base)})`);
-  lines.push(`הגדרות: ${s.person ? `שם: ${s.person}. ` : ''}טווח תקין לפני ארוחה ${s.low}-${s.high} mg/dL, ולאורך היום (אחרי אוכל, חיישן, אחוז בטווח) ${s.low}-${s.dayHigh}.` + (s.icr !== '' ? ` יחס פחמימות (שהמשפחה הזינה): יחידה לכל ${s.icr} גרם.` : '') + (s.cf !== '' ? ` פקטור תיקון: יחידה מורידה ${s.cf}.` : '') + (s.target !== '' ? ` יעד לתיקון: ${s.target}.` : ''));
+  lines.push(`הגדרות: ${s.person ? `שם: ${s.person}. ` : ''}טווח תקין לפני ארוחה ${s.low}-${s.high} mg/dL, ולאורך היום (אחרי אוכל, חיישן, אחוז בטווח) ${s.low}-${s.dayHigh}.` + (s.icr !== '' ? ` יחס פחמימות (שהמשפחה הזינה): יחידה לכל ${s.icr} גרם.` : '') + (s.cf !== '' ? ` פקטור תיקון: יחידה מורידה ${s.cf}.` : '') + (s.target !== '' ? ` יעד לתיקון: ${s.target}.` : '') + (s.basalDose !== '' ? ` זריקה לילית (ארוכת טווח) בדרך כלל ${s.basalDose} יח׳ בסביבות ${s.basalTime}.` : ''));
   if (s.note) lines.push(`הערות קבועות: ${s.note}`);
   if (isDate(data.sensor?.changed)) lines.push(`החיישן הנוכחי הוחלף ב-${data.sensor.changed} (יום ראשון של חיישן יכול להיות פחות מדויק).`);
   for (const d of [7, 30]) {
@@ -570,7 +580,8 @@ export function aiContext(data, base = today(), detailDays = 21) {
       const after = o.after.map((r) => `${r.time}=${r.value}${r.cgm ? ' (חיישן)' : ''} (+${r.mins} דק׳)`).join(', ');
       lines.push(`  ${m.time} | ${m.name}${m.food ? ` (${m.food})` : ''}${m.items.length ? ` [מחשבון: ${itemsText(m.items)}]` : ''} | ${m.portion} | ${fmt(m.carbs)} | ${m.before !== '' ? m.before : o.before !== '' ? `${o.before} (חיישן)` : '?'} | ${fmt(m.insulin)}${m.site ? ` (${SITES[m.site]})` : ''} | ${after || 'אין'}${m.tags.length ? ` | ${m.tags.map((x) => TAGS[x]).join(' ')}` : ''}${m.note ? ` | הערה: ${m.note}` : ''}`);
     }
-    for (const r of loose) lines.push(`  ${r.time} | מדידה ${r.value}${r.insulin !== '' ? ` | אינסולין (תיקון) ${r.insulin}${r.site ? ` (${SITES[r.site]})` : ''}` : r.site ? ` | זריקה ב${SITES[r.site]}` : ''}${r.note ? ` (${r.note})` : ''}`);
+    for (const r of loose.filter((x) => x.basal)) lines.push(`  ${r.time} | זריקה לילית (ארוכת טווח) ${r.insulin} יח׳${r.site ? ` (${SITES[r.site]})` : ''}${r.value !== '' ? ` | סוכר ${r.value}` : ''}${r.note ? ` (${r.note})` : ''}`);
+    for (const r of loose.filter((x) => !x.basal)) lines.push(`  ${r.time} | מדידה ${r.value}${r.insulin !== '' ? ` | אינסולין (תיקון) ${r.insulin}${r.site ? ` (${SITES[r.site]})` : ''}` : r.site ? ` | זריקה ב${SITES[r.site]}` : ''}${r.note ? ` (${r.note})` : ''}`);
     const c = cgmDaySummary(data, d);
     if (c) lines.push(`  חיישן: ${c.count} מדידות, ממוצע ${c.mean}, בטווח ${c.inRange}%, ${c.low} מדידות נמוכות, טווח ${c.min}-${c.max}`);
   }
@@ -583,7 +594,7 @@ export function toCsv(data) {
   const rows = [['תאריך', 'שעה', 'סוג', 'ארוחה', 'מה אכל', 'מנה', 'פחמימה (גרם)', 'סוכר לפני', 'אינסולין', 'מיקום הזריקה', 'מדידות אחרי', 'אחרי שעתיים', 'שיא', 'סימונים', 'הערה', 'נרשם ע״י']];
   const all = [...data.meals.map((m) => ({ ...m, kind: 'meal' })), ...data.readings.map((r) => ({ ...r, kind: 'reading' }))].sort(byTime);
   for (const x of all) {
-    if (x.kind === 'reading') rows.push([x.date, x.time, 'מדידה', '', '', '', '', x.value, x.insulin, SITES[x.site] || '', '', '', '', '', x.note, x.by]);
+    if (x.kind === 'reading') rows.push([x.date, x.time, x.basal ? 'זריקה לילית' : 'מדידה', '', '', '', '', x.value, x.insulin, SITES[x.site] || '', '', '', '', '', x.note, x.by]);
     else {
       const o = outcome(x, data);
       rows.push([x.date, x.time, 'ארוחה', x.name, x.food, x.portion, x.carbs, x.before, x.insulin, SITES[x.site] || '', o.after.map((r) => `${r.time}: ${r.value}`).join(' · '), o.after2h, o.peak, x.tags.map((t) => TAGS[t]).join(' '), x.note, x.by]);

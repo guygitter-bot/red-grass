@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { sensorUploadDue, templateFromMeal, lastSite, DEFAULT_FOODS, calcDose, insights, itemsCarbs, monthDays, addDays, aiContext, allPoints, level, mealFromTemplate, minutesAfter, missingFixed, outcome, pattern, patternsByMeal, prepare, safeMeal, similarMeals, stats, suggestByRatio, toCsv, waitingForCheck } from './diary';
+import { basalOn, sensorUploadDue, templateFromMeal, lastSite, DEFAULT_FOODS, calcDose, insights, itemsCarbs, monthDays, addDays, aiContext, allPoints, level, mealFromTemplate, minutesAfter, missingFixed, outcome, pattern, patternsByMeal, prepare, safeMeal, similarMeals, stats, suggestByRatio, toCsv, waitingForCheck } from './diary';
 
 const BASE = '2026-11-04'; // יום רביעי
 const tpl = { id: 'tl', t: 'template', name: 'צהריים בבית', slot: 'lunch', time: '13:30', food: 'אורז ועוף', portion: 1, days: [] };
@@ -213,5 +213,20 @@ describe('יומן סוכר', () => {
     expect(safeMeal({ id: 'x', t: 'meal' }).site).toBe('');
     expect(lastSite(data, data.meals[1])).toBe('legL');
     expect(toCsv(data)).toMatch(/רגל שמאל/);
+  });
+
+  test('הזריקה הלילית: ברירות מחדל, בלי מדד סוכר, ולא נספרת כמדידה', () => {
+    expect(prepare([]).settings).toMatchObject({ basalDose: 11, basalTime: '21:00' });
+    const data = prepare([
+      { id: 'b1', t: 'reading', date: BASE, time: '21:05', basal: true, insulin: 11, value: '' },
+      { id: 'b2', t: 'reading', date: '2026-11-03', time: '21:00', basal: true, insulin: 12, value: 140 },
+      { id: 'x', t: 'reading', date: BASE, time: '10:00', value: '' },
+    ]);
+    expect(data.readings).toHaveLength(2);
+    expect(basalOn(data, BASE)).toMatchObject({ insulin: 11 });
+    expect(basalOn(data, '2026-11-02')).toBeNull();
+    expect(allPoints(data).map((p) => p.value)).toEqual([140]);
+    expect(aiContext(data, BASE)).toMatch(/21:05 \| זריקה לילית \(ארוכת טווח\) 11 יח׳/);
+    expect(toCsv(data)).toMatch(/זריקה לילית/);
   });
 });
