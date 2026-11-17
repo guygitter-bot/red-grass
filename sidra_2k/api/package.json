@@ -1,0 +1,8 @@
+{
+  "name": "sidra-2k-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

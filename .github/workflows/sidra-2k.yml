@@ -1,0 +1,115 @@
+name: sidra-2k
+
+# הסדרה – סדרת פלייאוף ב-2K, אבא נגד הבן (sidra_2k/):
+#   api -> Cloudflare Worker "sidra-2k-api" (כל הסדרה, Durable Object אחד; בלי סודות מלבד Cloudflare)
+#   web -> Cloudflare Pages "sidra-2k" -> https://sidra-2k.pages.dev
+on:
+  push:
+    branches: [main]
+    paths: ["sidra_2k/**", ".github/workflows/sidra-2k.yml"]
+  pull_request:
+    paths: ["sidra_2k/**", ".github/workflows/sidra-2k.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sidra-2k-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Server tests
+        working-directory: sidra_2k/api
+        run: |
+          npm ci
+          npm test
+      - name: App tests and build
+        working-directory: sidra_2k/web
+        run: |
+          npm ci
+          npm test
+          npm run build
+
+  api:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check secrets
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          missing=""
+          [ -n "$CF_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -n "$CF_ACCOUNT" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing (see sidra_2k/README.md)"
+            exit 1
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install
+        working-directory: sidra_2k/api
+        run: npm ci
+      - name: Deploy worker
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: sidra_2k/api
+          wranglerVersion: "4.146.0"
+      - name: Summary
+        env:
+          URL: ${{ steps.deploy.outputs.deployment-url }}
+        run: |
+          echo "Worker: $URL" >> "$GITHUB_STEP_SUMMARY"
+
+  web:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build
+        working-directory: sidra_2k/web
+        run: |
+          npm ci
+          npm run build
+      - name: Create the Pages project (first run only)
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: sidra_2k/web
+          wranglerVersion: "4.146.0"
+          command: pages project create sidra-2k --production-branch=main
+      - name: Publish
+        id: publish
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: sidra_2k/web
+          wranglerVersion: "4.146.0"
+          command: pages deploy dist --project-name=sidra-2k --branch=main --commit-dirty=true
+      - name: Summary
+        env:
+          URL: ${{ steps.publish.outputs.deployment-url }}
+        run: |
+          echo "Published: https://sidra-2k.pages.dev ($URL)" >> "$GITHUB_STEP_SUMMARY"
