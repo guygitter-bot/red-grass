@@ -1141,13 +1141,21 @@ test('the developer reads the code, proposes a change, and nothing runs or merge
   const job = await (await wf(`/dev/job?id=${card.id}`)).json();
   assert.equal(job.app, 'mat_kon');
   assert.match(job.request, /print button/);
-  assert.equal((await wf(`/dev/done?id=${card.id}`, { method: 'POST', body: JSON.stringify({ pr: 7, summary: 'נוסף כפתור 🖨️ בדף המתכון.' }) })).status, 200);
+  const before = (await call(env, '/app/costs', {}, token)).data.now.usd;
+  assert.equal((await wf(`/dev/done?id=${card.id}`, { method: 'POST', body: JSON.stringify({ pr: 7, summary: 'נוסף כפתור 🖨️ בדף המתכון.', cost: 2.5 }) })).status, 200);
+  // העלות של העבודה ב-GitHub נכנסת למסך העלויות (על חשבון המתכנת)
+  const costs = (await call(env, '/app/costs', {}, token)).data;
+  assert.equal(costs.now.devs, 1);
+  assert.equal(costs.now.devUsd, 2.5);
+  assert.ok(Math.abs(costs.now.usd - before - 2.5) < 1e-9);
+  assert.ok(costs.now.agents.coder >= 2.5);
 
   view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
   assert.equal(view.messages.flatMap((m) => m.devs || []).filter((d) => d.id === card.id).length, 1);
   const ready = view.messages.flatMap((m) => m.devs || []).find((d) => d.id === card.id);
   assert.equal(ready.status, 'ready');
   assert.equal(ready.url, 'https://github.com/me/repo/pull/7');
+  assert.equal(ready.cost, 2.5);
   assert.match(view.messages.at(-1).text, /מוכן/);
 
   // מיזוג: לא כשהבדיקות עוד רצות; כן כשהן עברו

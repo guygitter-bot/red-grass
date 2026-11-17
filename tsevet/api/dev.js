@@ -170,6 +170,7 @@ export async function devView(t, id) {
   if (d.pr) Object.assign(out, { pr: d.pr, url: d.url });
   if (d.result) out.result = d.result;
   if (d.question) out.question = d.question;
+  if (d.cost) out.cost = d.cost;
   if (d.status === 'failed') out.error = d.error || 'העבודה לא הצליחה. אפשר לבקש שוב.';
   return out;
 }
@@ -259,12 +260,21 @@ async function note(t, d, text) {
   await t.pushHistory(d.key, { who: 'coder', text, devs: [d.id], at: Date.now() });
 }
 
+// כמה עלתה הריצה של Claude Code ב-GitHub (מהפלט שלו) – נכנס למסך העלויות, על חשבון המתכנת
+const costOf = (body) => Math.min(Math.max(Number(body.cost) || 0, 0), 100);
+async function chargeRun(t, body) {
+  const cost = costOf(body);
+  await t.addUsd(cost, 'coder', { devs: 1, devUsd: cost });
+  return cost;
+}
+
 export async function devDone(t, id, body) {
   const d = await working(t.storage, id);
+  const cost = await chargeRun(t, body);
   const pr = Number(body.pr) || 0;
   const result = String(body.summary || '').trim().slice(0, 3000);
   if (!pr) throw fail(400, 'pr is required');
-  const rec = { ...d, status: 'ready', pr, url: `https://github.com/${t.env.GITHUB_REPO}/pull/${pr}`, result, doneAt: Date.now() };
+  const rec = { ...d, status: 'ready', pr, url: `https://github.com/${t.env.GITHUB_REPO}/pull/${pr}`, result, cost, doneAt: Date.now() };
   await t.storage.put(`d:${d.id}`, rec);
   await note(t, rec, `✅ השינוי "${d.title}" מוכן. ${result ? `\n\n${result}\n\n` : ''}כשהבדיקות ב-GitHub יסתיימו – "למזג ולהעלות" בכרטיס.`);
   return { ok: true };
@@ -273,7 +283,8 @@ export async function devDone(t, id, body) {
 export async function devQuestion(t, id, body) {
   const d = await working(t.storage, id);
   const question = String(body.question || '').trim().slice(0, 2000);
-  await t.storage.put(`d:${d.id}`, { ...d, status: 'question', question });
+  const cost = await chargeRun(t, body);
+  await t.storage.put(`d:${d.id}`, { ...d, status: 'question', question, cost });
   await note(t, d, `❓ לפני שאני משנה את "${d.title}" – צריך הבהרה:\n\n${question}\n\nאפשר לענות כאן, ואכין בקשה מעודכנת.`);
   return { ok: true };
 }
@@ -281,7 +292,8 @@ export async function devQuestion(t, id, body) {
 export async function devFail(t, id, body) {
   const d = await working(t.storage, id);
   const error = String(body.error || '').trim().slice(0, 300);
-  await t.storage.put(`d:${d.id}`, { ...d, status: 'failed', error });
+  const cost = await chargeRun(t, body);
+  await t.storage.put(`d:${d.id}`, { ...d, status: 'failed', error, cost });
   await note(t, d, `⚠️ העבודה על "${d.title}" לא הצליחה${error ? ` (${error})` : ''}. אפשר לבקש שוב, אולי עם יותר פרטים.`);
   return { ok: true };
 }
