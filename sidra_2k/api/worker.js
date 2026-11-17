@@ -1,16 +1,20 @@
 // השרת של "הסדרה" (Cloudflare Worker). כל הנתונים ב-Durable Object אחד (Series, ראו series.js).
-//   POST /get                         -> הסדרה {players, games, rev}
+//   POST /get                         -> הסדרה {players, games, rev, locked, master} – פתוח לכולם (צפייה)
+//   POST /setup {password}             -> {token, ...} פעם ראשונה: קביעת סיסמת המאסטר
+//   POST /login {password}             -> {token, ...} כניסת מאסטר
+// מכאן רק המאסטר (authorization: Bearer <token>):
+//   POST /logout
 //   POST /game {n, winner, lal?, sas?} -> רישום משחק מספר n+1 (רק אם הוא באמת הבא)
 //   POST /undo {n}                     -> ביטול המשחק האחרון (רק אם יש n משחקים)
 //   POST /players {LAL, SAS}           -> מי משחק עם איזו קבוצה
 //   POST /reset                        -> סדרה חדשה (השמות נשארים)
-// בלי סיסמה (אפליקציה משפחתית); מקבלים בקשות רק מהאתר של האפליקציה.
+// מקבלים בקשות רק מהאתר של האפליקציה.
 import { Series } from './series.js';
 
 export { Series };
 
 const MAX_BODY_BYTES = 4096;
-const ROUTES = ['/get', '/game', '/undo', '/players', '/reset'];
+const ROUTES = ['/get', '/setup', '/login', '/logout', '/game', '/undo', '/players', '/reset'];
 
 // כתובת מותרת? (* בהגדרה = כל רצף אותיות)
 export function originAllowed(origin, list) {
@@ -25,7 +29,7 @@ function corsHeaders(request, env) {
   const origin = request.headers.get('origin') || '';
   const headers = {
     'access-control-allow-methods': 'POST, OPTIONS',
-    'access-control-allow-headers': 'content-type',
+    'access-control-allow-headers': 'content-type, authorization',
     'access-control-max-age': '86400',
     vary: 'origin',
   };
@@ -49,7 +53,7 @@ export default {
     const text = await request.text();
     if (text.length > MAX_BODY_BYTES) return reply(413, { error: 'גדול מדי' });
     const stub = env.SERIES.get(env.SERIES.idFromName('main'));
-    const res = await stub.fetch(new Request(`https://series${pathname}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: text || '{}' }));
+    const res = await stub.fetch(new Request(`https://series${pathname}`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: request.headers.get('authorization') || '' }, body: text || '{}' }));
     return reply(res.status, await res.json());
   },
 };

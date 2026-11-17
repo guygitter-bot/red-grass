@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import Board from './components/Board';
 import Schedule from './components/Schedule';
 import Logo from './components/Logo';
-import { HOME, TEAM, champion, other, wins } from './lib/series';
+import { HOME, TEAM, champion, other, shareText, wins } from './lib/series';
 import { cached, call } from './lib/api';
 import { confetti } from './lib/confetti';
 import { getTheme, setTheme } from './lib/theme';
@@ -118,6 +118,67 @@ function Champion({ series }) {
   );
 }
 
+// צופה (לא מאסטר): רק מה המשחק הבא, בלי כפתורים
+function ViewerNext({ series }) {
+  const n = series.games.length;
+  const home = HOME[n];
+  return (
+    <section className="flex flex-col gap-1 rounded-2xl border border-line bg-card p-4">
+      <h3 className="text-lg font-black">המשחק הבא: משחק {n + 1}</h3>
+      <div className="text-sm text-muted">
+        בבית של {TEAM[home].city} · רק המאסטר רושם תוצאות, והמסך מתעדכן לבד
+      </div>
+    </section>
+  );
+}
+
+// כניסת מאסטר: בפעם הראשונה קובעים סיסמה, אחר כך נכנסים איתה
+function MasterSheet({ series, onDone, onClose }) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const first = !series.locked;
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      onDone(await call(first ? 'setup' : 'login', { password }));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <form onSubmit={submit} className="flex flex-col gap-3 rounded-2xl border border-gold bg-card p-4">
+      <h3 className="text-lg font-black">{first ? '👑 קביעת סיסמת מאסטר' : '👑 כניסת מאסטר'}</h3>
+      <p className="text-sm text-muted">
+        {first ? 'מי שקובע את הסיסמה הוא המאסטר – רק הוא יכול לרשום ולשנות תוצאות. כל השאר רק צופים.' : 'רק המאסטר יכול לרשום ולשנות תוצאות.'}
+      </p>
+      <input
+        id="master-password"
+        type="password"
+        autoFocus
+        autoComplete={first ? 'new-password' : 'current-password'}
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder={first ? 'סיסמה חדשה (לפחות 4 תווים)' : 'סיסמה'}
+        className="w-full rounded-lg border border-line bg-page px-3 py-2.5"
+      />
+      {error && <div className="text-sm text-live">{error}</div>}
+      <div className="flex flex-wrap gap-2">
+        <button type="submit" disabled={busy || password.length < (first ? 4 : 1)} className="rounded-lg bg-gold px-4 py-2 font-black text-[#1b0d2e] disabled:opacity-50">
+          {first ? 'קבע סיסמה' : 'כניסה'}
+        </button>
+        <button type="button" className={btn} onClick={onClose}>
+          ביטול
+        </button>
+      </div>
+    </form>
+  );
+}
+
 const THEMES = { auto: '🌓 אוטומטי', dark: '🌙 לילה', light: '☀️ יום' };
 
 export default function App() {
@@ -128,6 +189,8 @@ export default function App() {
   const [confirm, setConfirm] = useState(null);
   const [theme, setThemeState] = useState(getTheme);
   const [popped, setPopped] = useState(null);
+  const [showMaster, setShowMaster] = useState(false);
+  const [toast, setToast] = useState('');
   const prev = useRef(null);
 
   // רענון מהשרת: בפתיחה, כל 15 שניות וכשחוזרים לאפליקציה
@@ -182,6 +245,31 @@ export default function App() {
     }
   };
 
+  // שיתוף: חלון השיתוף של הטלפון, ואם אין – העתקת הקישור
+  const share = async () => {
+    const url = `${location.origin}${location.pathname}`;
+    const text = shareText(series);
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'הסדרה', text, url });
+        return;
+      }
+      await navigator.clipboard.writeText(`${text}\n${url}`);
+      setToast('הקישור הועתק – אפשר להדביק בווטסאפ');
+    } catch (e) {
+      if (e?.name !== 'AbortError') setToast(`הקישור: ${url}`);
+    }
+  };
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const t = setTimeout(() => setToast(''), 3500);
+    return () => {
+      clearTimeout(t);
+    };
+  }, [toast]);
+
+  const master = series.master;
   const ch = champion(series.games);
   const needPlayers = !series.players.LAL || !series.players.SAS;
   const n = series.games.length;
@@ -193,6 +281,16 @@ export default function App() {
           <span className="live num rounded bg-live px-2 py-0.5 text-xs tracking-[.12em] text-white">LIVE</span>
           פלייאוף 2K27 · אבא נגד הבן
         </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+        <button className="rounded-full bg-gold px-3 py-1 text-xs font-black text-[#1b0d2e]" onClick={share}>
+          ↗ שיתוף
+        </button>
+        <button
+          className={`rounded-full border px-3 py-1 text-xs font-semibold ${master ? 'border-gold text-gold' : 'border-line bg-card text-muted'}`}
+          onClick={() => (master ? setConfirm('logout') : setShowMaster(!showMaster))}
+        >
+          {master ? '👑 מאסטר' : '🔒 מאסטר'}
+        </button>
         <button
           className="rounded-full border border-line bg-card px-3 py-1 text-xs font-semibold text-muted"
           onClick={() => {
@@ -203,13 +301,32 @@ export default function App() {
         >
           {THEMES[theme]}
         </button>
+        </div>
       </header>
+
+      {toast && (
+        <div role="status" className="fixed inset-x-0 bottom-[max(16px,env(safe-area-inset-bottom))] z-40 mx-auto w-fit max-w-[90%] rounded-full bg-ink px-4 py-2 text-sm font-semibold text-page shadow-lg">
+          {toast}
+        </div>
+      )}
+
+      {showMaster && !master && (
+        <MasterSheet
+          series={series}
+          onClose={() => setShowMaster(false)}
+          onDone={(s) => {
+            setSeries(s);
+            setShowMaster(false);
+            setToast('נכנסת כמאסטר 👑');
+          }}
+        />
+      )}
 
       <Board series={series} popped={popped} />
 
       {error && <div className="rounded-xl border border-live/50 bg-live/10 px-3 py-2 text-sm">{error}</div>}
 
-      {(needPlayers || editPlayers) && (
+      {master && (needPlayers || editPlayers) && (
         <Players
           players={series.players}
           onCancel={editPlayers && !needPlayers ? () => setEditPlayers(false) : null}
@@ -217,11 +334,21 @@ export default function App() {
         />
       )}
 
-      {ch ? <Champion series={series} /> : <NextGame series={series} busy={busy} onWin={(winner, pts) => run('game', { n, winner, lal: pts.LAL, sas: pts.SAS })} />}
+      {ch ? <Champion series={series} /> : !master ? <ViewerNext series={series} /> : <NextGame series={series} busy={busy} onWin={(winner, pts) => run('game', { n, winner, lal: pts.LAL, sas: pts.SAS })} />}
 
       <Schedule games={series.games} />
 
-      {confirm ? (
+      {confirm === 'logout' ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-card px-3 py-2.5 text-sm">
+          לצאת ממצב מאסטר במכשיר הזה?
+          <button className={btn} disabled={busy} onClick={() => run('logout').then(() => setConfirm(null))}>
+            יציאה
+          </button>
+          <button className={btn} onClick={() => setConfirm(null)}>
+            ביטול
+          </button>
+        </div>
+      ) : !master ? null : confirm ? (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-live bg-live/10 px-3 py-2.5 text-sm">
           {confirm === 'undo' ? `למחוק את התוצאה של משחק ${n}?` : 'להתחיל סדרה חדשה? כל המשחקים יימחקו.'}
           <button
