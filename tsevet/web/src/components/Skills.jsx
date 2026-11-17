@@ -44,7 +44,7 @@ export default function Skills({ agents, connected }) {
     <section className="rounded-2xl border border-line bg-card p-4">
       <h2 className="mb-3 font-bold">מה הצוות למד</h2>
       <p className="mb-3 text-sm text-muted">
-        שיטות ופרומפטים שהבוטים למדו – ממאגר AI, מהרשת או מ-GitHub. כדי להוסיף: לבקש בשיחה, למשל "תלמד את העורך כל מה שיש במאגר על עריכת רילס" או "תחפש ב-GitHub סקיל לתכנון טיולים". מה שנלמד מ-GitHub מחכה לאישור שלך.
+        שיטות ופרומפטים שהבוטים למדו – ממאגר AI, מהרשת או מ-GitHub. כדי להוסיף: לבקש בשיחה, למשל "תלמד את העורך כל מה שיש במאגר על עריכת רילס" או "תחפש ב-GitHub סקיל לתכנון טיולים". כל סקיל חדש מחכה לאישור שלך, ואחרי האישור הבוט תמיד עובד לפיו.
       </p>
       {connected === false && <p className="mb-3 text-sm text-bad">מאגר AI עוד לא מחובר.</p>}
       {error && <p className="mb-2 text-sm text-bad">{error}</p>}
@@ -58,7 +58,7 @@ export default function Skills({ agents, connected }) {
                 <span className="min-w-0 flex-1">
                   <span className="block font-medium break-words">
                     {s.title}
-                    {s.pending && <span className="ms-1.5 rounded-full bg-card px-2 py-0.5 text-xs font-medium text-accent-ink">מחכה לאישור</span>}
+                    {(s.pending || s.next) && <span className="ms-1.5 rounded-full bg-card px-2 py-0.5 text-xs font-medium text-accent-ink">מחכה לאישור</span>}
                   </span>
                   <span className="block text-sm text-muted break-words">{s.when}</span>
                   <span className="mt-1 flex flex-wrap gap-1 text-xs">
@@ -86,7 +86,7 @@ export default function Skills({ agents, connected }) {
                 ) : (
                   s.source && <p className="mb-2 text-xs text-muted">מקור: {s.source}</p>
                 )}
-                {s.pending && (
+                {(s.pending || s.next) && (
                   <Button className="mb-3" onClick={() => approve(s)}>
                     לאשר את הסקיל
                   </Button>

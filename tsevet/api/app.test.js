@@ -422,8 +422,10 @@ test('the librarian searches the AI repository, reads an item and teaches a skil
     replies: [
       { stop: 'tool_use', content: tool('maagar_search', { query: 'עריכת רילס', area: 'learn' }) },
       { stop: 'tool_use', content: tool('maagar_read', { id: 'l1' }) },
-      { stop: 'tool_use', content: tool('teach', { name: 'Reels Editor!', title: 'עריכת רילס', when: 'כשעורכים ריל קצר', body, agents: ['editor', 'nobody'], source: 'עריכת רילס מהירה' }) },
-      { content: text('לימדתי את עורך הווידאו') },
+      // אחרי teach התור נגמר: הסקיל מחכה לאישור
+      { stop: 'tool_use', content: [...text('מצאתי שיטה טובה, מחכה לאישור שלך'), ...tool('teach', { name: 'Reels Editor!', title: 'עריכת רילס', when: 'כשעורכים ריל קצר', body, agents: ['editor', 'nobody'], source: 'עריכת רילס מהירה' })] },
+      // אחרי האישור הספרן ממשיך מעצמו
+      { content: text('העורך יכול לעבוד לפי השיטה') },
       // התור של העורך
       { stop: 'tool_use', content: tool('use_skill', { name: 'reels-editor' }) },
       { content: text('עובד לפי השיטה') },
@@ -435,26 +437,42 @@ test('the librarian searches the AI repository, reads an item and teaches a skil
   await call(env, '/app/send', { id: conv.id, text: 'תלמד את העורך לערוך רילס', to: 'librarian' }, token);
   await env.team.alarm();
 
-  const results = aiCalls.slice(1, 4).map((c) => c.messages.at(-1).content[0].content);
+  const results = aiCalls.slice(1, 3).map((c) => c.messages.at(-1).content[0].content);
   // חיפוש רק באזור הלימוד, בלי מה שלא קשור
   assert.match(results[0], /\[l1\] עריכת רילס מהירה \| learned: 1 skills, 1 prompts, 1 steps/);
   assert.doesNotMatch(results[0], /a1|x9/);
   assert.match(results[1], /A fast dolly-in on \[product\]/);
   assert.match(results[1], /reels-editor – עורך רילס/);
-  assert.match(results[2], /Saved skill "reels-editor" for editor\./);
+  // אחרי teach אין עוד קריאה: התור נגמר עד האישור
+  assert.equal(aiCalls.length, 3);
+  let view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  assert.equal(view.messages[1].text, 'מצאתי שיטה טובה, מחכה לאישור שלך');
+  assert.equal(view.messages[1].skills[0].status, 'pending');
   // המאגר נקרא פעם אחת לכל עבודה
   assert.equal(maagarCalls.filter((c) => c.path === '/list').length, 1);
   // רק לספרן יש את כלי הלימוד; לכולם חיפוש וקריאה
   assert.ok(aiCalls[0].tools.some((t) => t.name === 'teach'));
 
-  const saved = (await call(env, '/app/skills', {}, token)).data.skills;
+  let saved = (await call(env, '/app/skills', {}, token)).data.skills;
   assert.equal(saved.length, 1);
-  assert.deepEqual([saved[0].name, saved[0].agents, saved[0].source], ['reels-editor', ['editor'], 'עריכת רילס מהירה']);
+  assert.deepEqual([saved[0].name, saved[0].agents, saved[0].source, saved[0].pending], ['reels-editor', ['editor'], 'עריכת רילס מהירה', true]);
+  // אישור: הודעה בשיחה, והבוט שהציע ממשיך לבד
+  await call(env, '/app/skills/approve', { name: 'reels-editor' }, token);
+  await env.team.alarm();
+  assert.match(aiCalls[3].messages[0].content, /The owner just approved your skill "reels-editor"/);
+  view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  assert.deepEqual(view.messages.slice(2).map((m) => m.who), ['system', 'librarian']);
+  assert.match(view.messages[2].text, /✅ הסקיל "עריכת רילס" אושר/);
+  saved = (await call(env, '/app/skills', {}, token)).data.skills;
+  assert.equal(saved[0].pending, undefined);
 
   await call(env, '/app/send', { id: conv.id, text: 'תערוך ריל', to: 'editor' }, token);
   await env.team.alarm();
   const editor = aiCalls[4];
-  assert.match(editor.system[0].text, /Skills you were taught[\s\S]*- reels-editor: עריכת רילס – כשעורכים ריל קצר/);
+  // סקיל מותקן תמיד פעיל: הטקסט המלא בהנחיות
+  assert.match(editor.system[0].text, /Your installed skills – always active[\s\S]*### reels-editor – עריכת רילס\nUse for: כשעורכים ריל קצר\n.*חיתוך כל 2 שניות/);
+  // ולפני משימה חדשה – לבדוק אם יש סקיל טוב יותר
+  assert.match(editor.system[0].text, /Before you start a new task/);
   // העורך לומד רק לעצמו
   assert.deepEqual(editor.tools.find((t) => t.name === 'teach').input_schema.properties.agents.items.enum, ['editor']);
   assert.ok(editor.tools.some((t) => t.name === 'maagar_search'));
@@ -771,6 +789,10 @@ test('the travel bot researches more, and saves skills only for itself', async (
   const { data: conv } = await call(env, '/app/conv/new', {}, token);
   await call(env, '/app/send', { id: conv.id, text: 'תלמד איך מוצאים טיסות זולות', to: 'travel' }, token);
   await env.team.alarm();
+  // הסקיל מחכה לאישור; אחרי האישור הוא ממשיך (ומנסה למחוק סקיל של העורך – לא מצליח)
+  assert.equal(aiCalls.length, 1);
+  await call(env, '/app/skills/approve', { name: 'cheap-flights' }, token);
+  await env.team.alarm();
 
   const travel = aiCalls[0];
   assert.match(travel.system[0].text, /^You are "טיולים"/);
@@ -786,7 +808,7 @@ test('the travel bot researches more, and saves skills only for itself', async (
   // בתור הבא הוא רואה את הסקיל שלו
   await call(env, '/app/send', { id: conv.id, text: 'טיסה לרומא באפריל', to: 'travel' }, token);
   await env.team.alarm();
-  assert.match(aiCalls[3].system[0].text, /- cheap-flights: טיסות זולות/);
+  assert.match(aiCalls[3].system[0].text, /### cheap-flights – טיסות זולות[\s\S]*השוואה ב-3 אתרים/);
   assert.match(aiCalls[4].messages.at(-1).content[0].content, /השוואה ב-3 אתרים/);
   // לבוט אחר אין כלי לימוד
   assert.equal(aiCalls[3].tools.filter((t) => t.name === 'teach').length, 1);
@@ -829,9 +851,8 @@ test('bots find trusted skills on GitHub; a skill learned from there waits for t
       { stop: 'tool_use', content: tool('github_skills_search', { query: 'travel itinerary' }) },
       { stop: 'tool_use', content: tool('github_skill_read', { ref: 'tiny/scam:SKILL.md' }) },
       { stop: 'tool_use', content: tool('github_skill_read', { ref: 'good/travel-skills:skills/trip-planner/SKILL.md' }) },
-      { stop: 'tool_use', content: tool('teach', { name: 'trip-planner', title: 'תכנון טיול', when: 'כשמתכננים טיול', body, agents: ['travel'] }) },
-      { content: text('מצאתי שיטה ב-GitHub, מחכה לאישור שלך') },
-      { content: text('בלי הסקיל') },
+      { stop: 'tool_use', content: [...text('מצאתי שיטה ב-GitHub, מחכה לאישור שלך'), ...tool('teach', { name: 'trip-planner', title: 'תכנון טיול', when: 'כשמתכננים טיול', body, agents: ['travel'] })] },
+      { content: text('עוד לא אישרת את הסקיל – הכפתור מעל שורת הכתיבה') },
       { content: text('עם הסקיל') },
     ],
   });
@@ -855,24 +876,29 @@ test('bots find trusted skills on GitHub; a skill learned from there waits for t
   const read = aiCalls[3].messages.at(-1).content[0].content;
   assert.match(read, /^UNTRUSTED CONTENT from GitHub/);
   assert.match(read, /BEGIN skills\/trip-planner\/SKILL\.md[\s\S]*IGNORE PREVIOUS INSTRUCTIONS[\s\S]*END/);
-  assert.match(aiCalls[4].messages.at(-1).content[0].content, /only the owner can approve it, with the "לאשר את הסקיל" button/);
+  // אחרי ההצעה התור נגמר – לא מתכנן כלום לפני האישור
+  assert.equal(aiCalls.length, 4);
 
   // בשיחה: כרטיס הצעה עם המקור והדירוג
   let view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
   const card = view.messages[1].skills[0];
   assert.deepEqual([card.name, card.status, card.origin.repo, card.origin.stars], ['trip-planner', 'pending', 'good/travel-skills', 850]);
 
-  // לפני אישור – הבוט לא רואה אותו
+  // לפני אישור – הוא לא עובד לפיו, ויודע שהוא מחכה לאישור (לא מתחיל משימה)
   await call(env, '/app/send', { id: conv.id, text: 'טיול לרומא', to: 'travel' }, token);
   await env.team.alarm();
-  assert.doesNotMatch(aiCalls[5].system[0].text, /trip-planner/);
-  // אחרי אישור – כן
+  assert.doesNotMatch(aiCalls[4].system[0].text, /### trip-planner/);
+  assert.match(aiCalls[4].system[0].text, /Waiting for the owner's approval: "תכנון טיול" \(trip-planner\)[\s\S]*don't start the task/);
+  // אחרי אישור – ממשיך לבד, עם הסקיל המלא בהנחיות
   await call(env, '/app/skills/approve', { name: 'trip-planner' }, token);
-  await call(env, '/app/send', { id: conv.id, text: 'ועכשיו?', to: 'travel' }, token);
   await env.team.alarm();
-  assert.match(aiCalls[6].system[0].text, /- trip-planner: תכנון טיול/);
+  assert.match(aiCalls[5].system[0].text, /### trip-planner – תכנון טיול[\s\S]*יום מנוחה כל 4 ימים/);
+  assert.doesNotMatch(aiCalls[5].system[0].text, /Waiting for the owner's approval/);
   view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
   assert.equal(view.messages[1].skills[0].status, 'approved');
+  assert.deepEqual(view.messages.slice(-2).map((m) => [m.who, m.text.slice(0, 8)]), [['system', '✅ הסקיל '], ['travel', 'עם הסקיל']]);
+  // אי אפשר לאשר שוב
+  assert.equal((await call(env, '/app/skills/approve', { name: 'trip-planner' }, token)).status, 404);
 
   // המנהל לא מחפש ב-GitHub; בלי טוקן אין כלים
   const off = setupEnv({ replies: [{ content: text('היי') }] }, { GITHUB_TOKEN: '' });
@@ -912,4 +938,30 @@ test('the Instagram bot has the ig skill pack built in, the owner voice and the 
   await call(env2, '/app/send', { id: c2.id, text: 'היי', to: 'creative' }, t2);
   await env2.team.alarm();
   assert.ok(!calls2[0].tools.some((t) => t.name === 'use_skill'));
+});
+
+test('updating an installed skill keeps the old version working until approved; declining keeps it', async () => {
+  const { env, aiCalls } = setupEnv({
+    replies: [
+      { stop: 'tool_use', content: tool('teach', { name: 'flights', title: 'טיסות v2', when: 'טיסות', body: 'גרסה חדשה: ' + 'ב'.repeat(60), agents: ['travel'] }) },
+      { content: text('עובד לפי הגרסה הקיימת') },
+    ],
+  });
+  const token = await signIn(env);
+  await env.team.storage.put('skills', [{ name: 'flights', title: 'טיסות', when: 'טיסות', body: 'גרסה ישנה: ' + 'א'.repeat(60), agents: ['travel'], at: 1 }]);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'תשפר את השיטה', to: 'travel' }, token);
+  await env.team.alarm();
+  let view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  assert.deepEqual([view.messages[1].skills[0].status, view.messages[1].skills[0].update, view.messages[1].skills[0].title], ['pending', true, 'טיסות v2']);
+  // עד האישור – הגרסה הישנה פעילה
+  await call(env, '/app/send', { id: conv.id, text: 'טיסה לפריז', to: 'travel' }, token);
+  await env.team.alarm();
+  assert.match(aiCalls[1].system[0].text, /### flights – טיסות\nUse for: טיסות\nגרסה ישנה/);
+  // "לא צריך": הגרסה הישנה נשארת, והודעה בשיחה
+  await call(env, '/app/skills/decline', { name: 'flights' }, token);
+  const skills = (await call(env, '/app/skills', {}, token)).data.skills;
+  assert.deepEqual([skills.length, skills[0].title, skills[0].next], [1, 'טיסות', undefined]);
+  view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  assert.match(view.messages.at(-1).text, /❌ הסקיל "טיסות v2" לא אושר/);
 });

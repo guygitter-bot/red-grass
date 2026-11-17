@@ -105,7 +105,7 @@ export default function Chat({ id, agents, refresh }) {
   };
 
   const busyAgent = conv?.busy?.agent ? findAgent(agents, conv.busy.agent) : null;
-  // סקיל מ-GitHub שמחכה לאישור – תזכורת קבועה מעל שורת הכתיבה (הכרטיס עצמו יכול להיות רחוק למעלה)
+  // סקיל חדש שמחכה לאישור – תזכורת קבועה מעל שורת הכתיבה (הכרטיס עצמו יכול להיות רחוק למעלה)
   const waiting = (conv?.messages || []).flatMap((m) => m.skills || []).filter((s) => s.status === 'pending');
   const approveSkill = async (name) => {
     try {
@@ -170,7 +170,7 @@ export default function Chat({ id, agents, refresh }) {
         <div className="border-t border-line bg-soft px-4 py-2 text-sm">
           {waiting.map((sk) => (
             <div key={sk.name} className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 break-words">🧩 סקיל שמחכה לאישור שלך: <b>{sk.title || sk.name}</b></span>
+              <span className="min-w-0 flex-1 break-words">🧩 {sk.update ? 'עדכון לסקיל' : 'סקיל'} שמחכה לאישור שלך: <b>{sk.title || sk.name}</b></span>
               <Button className="shrink-0 !px-3 !py-1.5 text-sm" onClick={() => approveSkill(sk.name)}>
                 לאשר
               </Button>

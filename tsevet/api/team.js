@@ -14,11 +14,11 @@
 // הודעה חדשה רק נכנסת לתור; Durable Object alarm מריץ את הבוטים ברקע (תשובה יכולה לקחת דקה-שתיים).
 // ב-Telegram התשובה נשלחת לקבוצה; באפליקציה היא פשוט נשמרת בשיחה, והאפליקציה מרעננת.
 import Anthropic from '@anthropic-ai/sdk';
-import { AGENTS, AGENT_KEYS, MODELS, TG_KEYS, aiMessage, appInfo, label, pickAgent, priceOf, runAgent, temporary } from './agents.js';
+import { AGENTS, AGENT_KEYS, MODELS, SELF_LEARNERS, STOP, TG_KEYS, aiMessage, appInfo, label, pickAgent, priceOf, runAgent, temporary } from './agents.js';
 import { APP_PREFIX, addFile, checkFileUrl, getSettings, handleApp, newId as convIdNew } from './app.js';
 import { IG_SKILLS } from './igskills.js';
 import { readSkill as githubRead, searchSkills as githubSearch } from './github.js';
-import { addSkill, learnFrom, listItems, read as maagarRead, search as maagarSearch, skillsOf } from './maagar.js';
+import { addSkill, learnFrom, listItems, pendingOf, read as maagarRead, search as maagarSearch, skillsOf } from './maagar.js';
 import { genDone, genFail, genReady, genStart, proposeClip, runGenJob } from './gen.js';
 import { DEFAULT_BUDGET, isDue, nextOf } from './schedule.js';
 import { notifyOwner } from './notify.js';
@@ -34,7 +34,7 @@ const MAX_HISTORY_BYTES = 1_200_000;
 const MAX_IMAGES = 4;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 // סקילים מובנים (נבנים מהמאגר בכל עלייה): בוט האינסטגרם מקבל את חבילת ig-*
-const builtinSkills = (agent) => (agent === 'social' ? IG_SKILLS : []);
+const builtinSkills = (agent) => (agent === 'social' ? IG_SKILLS.map((s) => ({ ...s, builtin: true })) : []);
 const MAX_TURNS = 4;
 // משימה של המנהל: תוכנית ראשונה + סבב תיקון אחד, ותקרת תורות כדי לא לרוץ סתם
 const MAX_PLAN_ROUNDS = 2;
@@ -435,23 +435,22 @@ export class Team {
         cache = null;
         return `Started. The repository is studying it in the background (1-2 minutes); the result will be item ${learnId} – search or read it again later.`;
       },
-      // הספרן מלמד את כולם; בוט שלומד לעצמו (טיולים) – רק את עצמו
+      // הספרן מלמד את כולם; בוט שלומד לעצמו – רק את עצמו. כל סקיל חדש מחכה לאישור הבעלים, והתור נגמר (STOP)
       teach: async (input) => {
         const own = current !== 'librarian';
-        // אחרי קריאה מ-GitHub בתור הזה – הסקיל נשמר כהצעה שמחכה לאישור
+        // אחרי קריאה מ-GitHub בתור הזה – המקור נשמר עם ההצעה (מוצג לבעלים)
         const origin = githubLast ? { repo: githubLast.repo, url: githubLast.url, stars: githubLast.stars, official: githubLast.official, updated: githubLast.updated, license: githubLast.license } : null;
-        const r = addSkill((await this.storage.get('skills')) || [], { ...(own ? { ...input, agents: [current] } : input), origin }, AGENT_KEYS);
+        const proposedIn = job.chan === 'app' ? { key: this.jobKey(job), agent: current } : null;
+        const r = addSkill((await this.storage.get('skills')) || [], { ...(own ? { ...input, agents: [current] } : input), origin, proposedIn }, AGENT_KEYS);
         if (!r.error && own) {
           const before = ((await this.storage.get('skills')) || []).find((s) => s.name === r.saved.name);
           if (before && String(before.agents) !== String([current])) return 'A team skill with this name already exists. Choose another name.';
         }
         if (r.error) return r.error;
         await this.storage.put('skills', r.skills);
-        if (r.saved.pending) {
-          proposed.push(r.saved.name);
-          return `Saved as a proposal: it comes from GitHub (${origin.repo}, ⭐ ${origin.stars}), so only the owner can approve it, with the "לאשר את הסקיל" button on the card under your message (or in הגדרות ← "מה הצוות למד"); writing "מאשר" in the chat does not approve it. Tell the owner briefly what it does, the source, and where the button is.`;
-        }
-        return `Saved skill "${r.saved.name}" for ${r.saved.agents.join(', ')}.`;
+        proposed.push(r.saved.name);
+        const from = origin ? ` It comes from GitHub (${origin.repo}, ⭐ ${origin.stars}).` : '';
+        return `${STOP} Saved "${r.saved.name}" as a proposal${r.saved.update ? ' (an update – the current version keeps working until then)' : ''}.${from} Only the owner can approve it, with the "לאשר" button above the message box (or on the card under your message); writing "מאשר" in the chat does not approve it. Your turn ends here – after approval you'll continue automatically.`;
       },
       unteach: async ({ name }) => {
         const skills = (await this.storage.get('skills')) || [];
@@ -479,17 +478,23 @@ export class Team {
       const history = (await this.storage.get(key)) || [];
       const notes = (await this.storage.get('notes')) || [];
       const images = app ? await this.appImages(history) : image ? [image] : [];
+      const allSkills = (await this.storage.get('skills')) || [];
       const inPlan = Boolean(job.plan?.length) && agent === job.plan[0].to;
       const review = !inPlan && agent === 'manager' && job.rounds > 0;
-      const task = inPlan
-        ? `The manager assigned you step ${job.step} of ${job.steps}: "${job.plan[0].request}". Do only this step, completely, as ${label(agent)}. Don't hand off; the manager coordinates the next steps.`
+      const resume = Boolean(job.resume) && job.turns === 0;
+      const task = resume
+        ? `The owner just approved your skill "${job.resume}" – it is now in your installed skills. Now do the owner's task from the conversation, working by it. Don't search for other skills now.`
+        : inPlan
+        ? `The manager assigned you step ${job.step} of ${job.steps}: "${job.plan[0].request}". Do only this step, completely, as ${label(agent)}, using your installed skills (don't look for new skills now). Don't hand off; the manager coordinates the next steps.`
         : review
           ? `All the steps of your plan are done (see above). Now, as ${label('manager')}: check the results against the owner's goal${job.rounds < MAX_PLAN_ROUNDS ? ', assign a short fix-up round only if something important is missing,' : ''} and write the owner a short summary – what is ready, what waits for their approval, and the recommended next step.`
           : '';
       const r = await runAgent(client, {
         agent, notes, history: history.slice(-40), owner: owner?.name, images,
         model: MODELS[models[agent]], team, channel: app ? 'app' : 'tg',
-        maagar, skills: [...skillsOf((await this.storage.get('skills')) || [], agent), ...builtinSkills(agent)],
+        maagar, skills: [...skillsOf(allSkills, agent), ...builtinSkills(agent)], pending: app ? pendingOf(allSkills, agent) : [],
+        // לפני משימה חדשה: לבדוק אם יש סקיל טוב יותר (רק בשיחה רגילה באפליקציה, לא בשלב של תוכנית)
+        check: app && !task && SELF_LEARNERS.includes(agent) && Boolean(this.env.GITHUB_TOKEN || this.env.MAAGAR),
         github: app && Boolean(this.env.GITHUB_TOKEN),
         gen: app && genReady(this.env),
         task, assign: agent === 'manager' && (job.rounds || 0) < MAX_PLAN_ROUNDS,

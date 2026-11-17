@@ -97,11 +97,40 @@ export function addSkill(skills, input, agentKeys) {
   if (!name || !title || !when || body.length < 40) return { error: 'A skill needs name (kebab-case English), title, when, and a full body.' };
   const agents = [...new Set(arr(input.agents).filter((k) => agentKeys.includes(k)))];
   if (!agents.length) return { error: `agents must list who learns it: ${agentKeys.join(', ')}.` };
-  // origin = מאגר ב-GitHub; סקיל משם מחכה לאישור (pending) עד שהבעלים מאשר בכפתור
-  const saved = { name, title, when, body, agents, source: clean(input.source, 160), at: Date.now(), ...(input.origin ? { origin: input.origin, pending: true } : {}) };
+  // כל סקיל חדש (מהמאגר, מהרשת או מ-GitHub) מחכה לאישור הבעלים בכפתור (pending).
+  // origin = מאגר ב-GitHub; proposedIn = השיחה והבוט שהציעו (כדי להמשיך לעבוד שם אחרי האישור)
+  const saved = {
+    name, title, when, body, agents, source: clean(input.source, 160), at: Date.now(), pending: true,
+    ...(input.origin ? { origin: input.origin } : {}),
+    ...(input.proposedIn ? { proposedIn: input.proposedIn } : {}),
+  };
+  const old = skills.find((s) => s.name === name);
+  // עדכון של סקיל שכבר מאושר: הגרסה הקיימת ממשיכה לעבוד עד שהחדשה מאושרת
+  if (old && !old.pending) {
+    const { pending, ...next } = saved;
+    return { skills: skills.map((s) => (s === old ? { ...old, next } : s)), saved: { ...saved, update: true } };
+  }
   const rest = skills.filter((s) => s.name !== name);
   if (rest.length >= MAX_SKILLS) return { error: `The team already has ${MAX_SKILLS} skills. Remove one first (unteach).` };
   return { skills: [...rest, saved], saved };
 }
 
 export const skillsOf = (skills, agent) => skills.filter((s) => !s.pending && arr(s.agents).includes(agent));
+// מה שמחכה לאישור אצל הבוט הזה (חדש, או עדכון של סקיל קיים)
+export const pendingOf = (skills, agent) => skills.filter((s) => (s.pending || s.next) && arr((s.next || s).agents).includes(agent));
+
+// אישור: חדש -> פעיל; עדכון -> מחליף את הגרסה הקיימת. מחזיר את הרשימה החדשה ואת הסקיל, או null
+export function approveSkill(skills, name) {
+  const s = skills.find((x) => x.name === name);
+  if (!s || (!s.pending && !s.next)) return null;
+  const approved = s.next ? { ...s.next } : (({ pending, ...rest }) => rest)(s);
+  return { skills: skills.map((x) => (x === s ? approved : x)), skill: approved, proposedIn: (s.next || s).proposedIn };
+}
+
+// דחייה: חדש -> נמחק; עדכון -> הגרסה הקיימת נשארת
+export function declineSkill(skills, name) {
+  const s = skills.find((x) => x.name === name);
+  if (!s || (!s.pending && !s.next)) return null;
+  const left = s.next ? skills.map((x) => (x === s ? (({ next, ...rest }) => rest)(s) : x)) : skills.filter((x) => x !== s);
+  return { skills: left, skill: s.next || s, proposedIn: (s.next || s).proposedIn };
+}
