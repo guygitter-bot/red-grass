@@ -60,7 +60,7 @@ export async function askMic() {
     return false;
   }
 }
-export const MIC_BLOCKED = 'המיקרופון חסום. בכרום: לוחצים על הסמל שמשמאל לכתובת ← הרשאות ← מיקרופון ← לאפשר, ומרעננים.';
+export const MIC_BLOCKED = 'המיקרופון חסום. בכרום: ⋮ ← הגדרות ← הגדרות אתר ← מיקרופון – לבדוק שהאתר לא ברשימת החסומים, ולרענן.';
 
 export const joinText = (a, b) => [a, b].map((s) => (s || '').trim()).filter(Boolean).join(' ');
 
