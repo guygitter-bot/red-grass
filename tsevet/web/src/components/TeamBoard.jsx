@@ -1,7 +1,7 @@
 // לוח הצוות: הבוטים כעיגולים על מעגל, מחוברים בקווים דקים. לחיצה על בוט פותחת שיחה אליו
 import { Video } from 'lucide-react';
 import { avatarSize, boardLayout } from '../lib/board';
-import { hueOf } from '../lib/agents';
+import { hueOf, photoOf } from '../lib/agents';
 import { ils, usd } from '../lib/format';
 import { newConversation } from '../lib/convs';
 import { Spinner } from './ui';
@@ -18,10 +18,14 @@ function Node({ agent, agents, pos, size, many, onClick }) {
       <span className="relative block w-full" style={{ aspectRatio: '1' }}>
         {agent.busy && <span className="pulse-ring absolute inset-0 rounded-full border-2" style={{ borderColor: `hsl(${hue} 85% 62%)` }} />}
         <span
-          className="flex h-full w-full items-center justify-center rounded-full border-[3px] bg-card"
+          className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border-[3px] bg-card"
           style={{ borderColor: `hsl(${hue} 80% 60%)`, boxShadow: `0 0 24px hsl(${hue} 80% 60% / 0.35)`, fontSize: `${size * 0.5}cqw` }}
         >
-          <span style={{ lineHeight: 1 }}>{agent.emoji}</span>
+          {photoOf(agent.key) ? (
+            <img src={photoOf(agent.key)} alt="" className="h-full w-full object-cover" decoding="async" />
+          ) : (
+            <span style={{ lineHeight: 1 }}>{agent.emoji}</span>
+          )}
         </span>
         {!agent.busy && <span className="absolute bottom-[6%] end-[6%] h-[18%] w-[18%] rounded-full border-2 border-card bg-ok" title="פנוי" />}
       </span>
