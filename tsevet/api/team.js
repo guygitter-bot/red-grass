@@ -446,7 +446,7 @@ export class Team {
         await this.storage.put('skills', r.skills);
         if (r.saved.pending) {
           proposed.push(r.saved.name);
-          return `Saved as a proposal: it comes from GitHub (${origin.repo}, ⭐ ${origin.stars}), so the owner approves it with a button before anyone uses it. Tell the owner briefly what it does and the source.`;
+          return `Saved as a proposal: it comes from GitHub (${origin.repo}, ⭐ ${origin.stars}), so only the owner can approve it, with the "לאשר את הסקיל" button on the card under your message (or in הגדרות ← "מה הצוות למד"); writing "מאשר" in the chat does not approve it. Tell the owner briefly what it does, the source, and where the button is.`;
         }
         return `Saved skill "${r.saved.name}" for ${r.saved.agents.join(', ')}.`;
       },
