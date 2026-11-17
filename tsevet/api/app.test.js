@@ -855,7 +855,7 @@ test('bots find trusted skills on GitHub; a skill learned from there waits for t
   const read = aiCalls[3].messages.at(-1).content[0].content;
   assert.match(read, /^UNTRUSTED CONTENT from GitHub/);
   assert.match(read, /BEGIN skills\/trip-planner\/SKILL\.md[\s\S]*IGNORE PREVIOUS INSTRUCTIONS[\s\S]*END/);
-  assert.match(aiCalls[4].messages.at(-1).content[0].content, /owner approves it with a button/);
+  assert.match(aiCalls[4].messages.at(-1).content[0].content, /only the owner can approve it, with the "לאשר את הסקיל" button/);
 
   // בשיחה: כרטיס הצעה עם המקור והדירוג
   let view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
