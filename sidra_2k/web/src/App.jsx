@@ -255,7 +255,7 @@ export default function App() {
         </div>
       )}
 
-      <p className="text-center text-xs text-muted">הסמלים צוירו בהשראת צבעי הקבוצות · מתעדכן אוטומטית בכל המכשירים</p>
+      <p className="text-center text-xs text-muted">הלוגואים: NBA · מתעדכן אוטומטית בכל המכשירים</p>
     </div>
   );
 }

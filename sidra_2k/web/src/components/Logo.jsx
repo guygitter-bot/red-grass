@@ -1,4 +1,9 @@
-// סמלי הקבוצות – ציור משלנו בצבעי הקבוצות (לא הלוגו הרשמי)
+// סמלי הקבוצות: הלוגו האמיתי מהאתר של ה-NBA (cdn.nba.com, מאושר ב-CSP שב-public/_headers).
+// אם הוא לא נטען (בלי אינטרנט, או שהכתובת השתנתה) – מוצג ציור משלנו בצבעי הקבוצה.
+import { useState } from 'react';
+
+const NBA_ID = { LAL: '1610612747', SAS: '1610612759' };
+const NAMES = { LAL: 'לוס אנג\'לס לייקרס', SAS: 'סן אנטוניו ספרס' };
 
 function Lakers() {
   return (
@@ -39,5 +44,20 @@ function Spurs() {
 }
 
 export default function Logo({ team, className = '' }) {
-  return <span className={`block ${className}`}>{team === 'LAL' ? <Lakers /> : <Spurs />}</span>;
+  const [failed, setFailed] = useState(false);
+  return (
+    <span className={`block ${className}`}>
+      {failed ? (
+        team === 'LAL' ? <Lakers /> : <Spurs />
+      ) : (
+        <img
+          src={`https://cdn.nba.com/logos/nba/${NBA_ID[team]}/primary/L/logo.svg`}
+          alt={NAMES[team]}
+          className="h-full w-full object-contain"
+          draggable="false"
+          onError={() => setFailed(true)}
+        />
+      )}
+    </span>
+  );
 }
