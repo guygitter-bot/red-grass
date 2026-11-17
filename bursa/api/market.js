@@ -136,6 +136,8 @@ export class Market {
       if (pathname === '/status') return json(200, { hasPassword: !!(await this.storage.get('auth')) });
       if (pathname === '/setup') return await this.setup(body);
       if (pathname === '/login') return await this.login(body);
+      // הבוט של "צוות" (worker.js כבר בדק את המפתח ואת הפעולה; מבחוץ אי אפשר להגיע לכאן ישירות)
+      if (request.headers.get('x-team') === '1') return await this.route(pathname, body, '');
       const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') || '';
       if (!(await this.validToken(token))) return json(401, { error: 'צריך להתחבר מחדש' });
       return await this.route(pathname, body, token);

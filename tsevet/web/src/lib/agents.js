@@ -20,5 +20,5 @@ export const TIERS = [
 ];
 
 // תמונות הבוטים (דמויות בדויות, נוצרו ב-AI): public/avatars/<מפתח>.webp. בוט בלי תמונה – מוצג האימוג'י שלו
-const PHOTOS = ['creative', 'campaigns', 'editor', 'librarian', 'social', 'doctor', 'travel', 'manager'];
+const PHOTOS = ['creative', 'campaigns', 'editor', 'librarian', 'social', 'doctor', 'bursai', 'travel', 'manager'];
 export const photoOf = (key) => (PHOTOS.includes(key) ? `avatars/${key}.webp` : '');

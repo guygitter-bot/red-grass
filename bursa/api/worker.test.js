@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import worker, { Market } from './worker.js';
+import worker, { Market, teamKey } from './worker.js';
 import { analyze, backtest, forecast, macd, rsi, sma, verdictOf } from './analysis.js';
 import { cleanSymbol, marketsOpen, parseChart, parseRss } from './data.js';
 import { slimCandles, valuePortfolio, MAX_CHAT_PER_DAY } from './market.js';
@@ -385,4 +385,27 @@ test('buy list: the bot proposes, and a stock is added only after approval', asy
   // הוצאה מרשימת הקניות (נשאר במעקב)
   const moved = await call(env, '/watch', { symbol: 'AAPL', plan: null }, token);
   assert.equal(moved.data.watch[0].plan, undefined);
+});
+
+test('the team bot link: only with the right key, and only allowed actions', async () => {
+  const { env } = await loggedIn({ ANTHROPIC_API_KEY: 'sk-test' });
+  const key = await teamKey('sk-test');
+  const team = (path, body = {}, k = key) => worker.fetch(new Request(`https://api.test${path}`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-team-link': k }, body: JSON.stringify(body),
+  }), env);
+  // בלי סיסמה – עם המפתח
+  let res = await team('/watch', { symbol: 'TEVA' });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).watch[0].symbol, 'TEVA');
+  res = await team('/demo/trade', { symbol: 'TEVA', side: 'buy', qty: 2 });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).demo.holdings[0].qty, 2);
+  // מפתח שגוי / פעולה אסורה
+  assert.equal((await team('/data', {}, 'wrong')).status, 403);
+  for (const p of ['/setup', '/login', '/demo/reset', '/chat/clear', '/push/subscribe', '/settings']) assert.equal((await team(p)).status, 403, p);
+  // בלי מפתח Claude בשרת – החיבור סגור
+  const env2 = fakeEnv({});
+  assert.equal((await worker.fetch(new Request('https://api.test/data', { method: 'POST', headers: { 'x-team-link': await teamKey('sk-test') } }), env2)).status, 403);
+  // בלי הכותרת – עדיין צריך סיסמה
+  assert.equal((await call(env, '/data', {}, 'nope')).status, 401);
 });

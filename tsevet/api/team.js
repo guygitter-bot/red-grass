@@ -17,6 +17,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { AGENTS, AGENT_KEYS, MODELS, SELF_LEARNERS, STOP, TG_KEYS, aiMessage, appInfo, label, pickAgent, priceOf, runAgent, temporary } from './agents.js';
 import { APP_PREFIX, addFile, checkFileUrl, getSettings, handleApp, newId as convIdNew } from './app.js';
 import { IG_SKILLS } from './igskills.js';
+import { bursaReady, bursaTools } from './bursa.js';
 import { readSkill as githubRead, searchSkills as githubSearch } from './github.js';
 import { addSkill, learnFrom, listItems, pendingOf, read as maagarRead, search as maagarSearch, skillsOf } from './maagar.js';
 import { genDone, genFail, genReady, genStart, proposeClip, runGenJob } from './gen.js';
@@ -420,6 +421,8 @@ export class Team {
         return 'Deleted';
       },
       edit_video: (input) => startRender(this, job, input, renders),
+      // אפליקציית בורסאי (רק לבוט 📈 בורסאי; הכלים מוצעים לו רק כשיש חיבור)
+      ...(bursaReady(this.env) ? bursaTools(this.env) : {}),
       make_video: (input) => proposeClip(this, job, input, gens),
       // מאגר AI: הרשימה נטענת פעם אחת לכל עבודה
       maagar_search: async ({ query, area }) => maagarSearch(await items(), query, area),
@@ -496,6 +499,7 @@ export class Team {
         // לפני משימה חדשה: לבדוק אם יש סקיל טוב יותר (רק בשיחה רגילה באפליקציה, לא בשלב של תוכנית)
         check: app && !task && SELF_LEARNERS.includes(agent) && Boolean(this.env.GITHUB_TOKEN || this.env.MAAGAR),
         github: app && Boolean(this.env.GITHUB_TOKEN),
+        bursa: app && bursaReady(this.env),
         gen: app && genReady(this.env),
         task, assign: agent === 'manager' && (job.rounds || 0) < MAX_PLAN_ROUNDS,
       }, tools);

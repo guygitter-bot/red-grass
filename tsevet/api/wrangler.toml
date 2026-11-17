@@ -25,6 +25,11 @@ bucket_name = "tsevet-files"
 binding = "MAAGAR"
 service = "ai-maagar-api"
 
+# אפליקציית "בורסאי" (bursa/) – הבוט 📈 בורסאי קורא משם ומבצע פעולות (המפתח: tsevet/api/bursa.js)
+[[services]]
+binding = "BURSA"
+service = "bursa-api"
+
 # כל הצוות (בוטים, שיחות, זיכרון, עלויות) – אובייקט אחד ("main")
 [[durable_objects.bindings]]
 name = "TEAM"
