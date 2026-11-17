@@ -9,6 +9,7 @@
 import { AGENTS, TG_KEYS as AGENT_KEYS, label } from './agents.js';
 import { MAX_BYTES, kindOf, newId } from './app.js';
 import { safeEqual } from './auth.js';
+import { fillLinks } from './create.js';
 import { hookSecret, tg, tokenOf } from './telegram.js';
 
 export { Team } from './team.js';
@@ -116,12 +117,33 @@ async function stream(request, env, key, type, extra = {}) {
   return new Response(request.method === 'HEAD' ? null : obj.body, { headers });
 }
 
+const DOC_CSP = "sandbox allow-scripts allow-popups allow-forms; default-src * data: blob: 'unsafe-inline'";
+async function serveDoc(request, env, url, id, info) {
+  const obj = await env.FILES.get(`files/${id}`);
+  if (!obj) return json(404, { error: 'not found' });
+  let body = await obj.text();
+  if (info.links) body = fillLinks(body, info.links);
+  const name = encodeURIComponent(info.name || `tsevet-${id.slice(0, 6)}.txt`);
+  return new Response(request.method === 'HEAD' ? null : body, {
+    headers: {
+      'content-type': info.type || 'text/plain; charset=utf-8',
+      'content-security-policy': DOC_CSP,
+      'x-content-type-options': 'nosniff',
+      'cache-control': 'private, max-age=600',
+      'cross-origin-resource-policy': 'cross-origin',
+      'content-disposition': url.searchParams.get('dl') ? `attachment; filename*=UTF-8''${name}` : 'inline',
+    },
+  });
+}
+
 // GET /file/<id>?e=<תוקף>&s=<חתימה>[&dl=1]
 async function serveFile(request, env, url) {
   const id = url.pathname.slice('/file/'.length);
   if (!env.FILES || !/^[a-z0-9]{8,32}$/.test(id)) return json(404, { error: 'not found' });
-  const check = await call(env, '/internal/file-check', { id, e: url.searchParams.get('e'), s: url.searchParams.get('s') });
+  const check = await call(env, '/internal/file-check', { id, e: url.searchParams.get('e'), s: url.searchParams.get('s'), origin: url.origin });
   if (check.status !== 200) return json(403, { error: 'forbidden' });
+  // קובץ שהצוות יצר (דף נחיתה, איור, מסמך): בלי גישה לאפליקציה או לשרת, ועם קישורים עדכניים לתמונות שבתוכו
+  if (check.data.kind === 'doc') return serveDoc(request, env, url, id, check.data);
   const ext = (check.data.type.split('/')[1] || 'bin').replace(/[^a-z0-9]/g, '').replace('quicktime', 'mov').replace('mpeg', 'mp3');
   return stream(request, env, `files/${id}`, check.data.type, {
     'cache-control': 'private, max-age=3600',

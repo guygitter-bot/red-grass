@@ -45,7 +45,7 @@ function memoryBucket() {
       const offset = m ? Number(m[1]) : 0;
       const end = m && m[2] ? Math.min(Number(m[2]), bytes.length - 1) : bytes.length - 1;
       const part = bytes.slice(offset, end + 1);
-      return { size: bytes.length, body: part, range: m ? { offset, length: part.length } : undefined, arrayBuffer: async () => bytes.buffer };
+      return { size: bytes.length, body: part, range: m ? { offset, length: part.length } : undefined, arrayBuffer: async () => bytes.buffer, text: async () => new TextDecoder().decode(bytes) };
     },
     async delete(key) { map.delete(key); },
   };
@@ -67,6 +67,16 @@ const ai = {
         await wait(1500);
         const role = req.system[0].text;
         const results = req.messages.at(-1).content;
+        // קריאייטיב: תמונה (באישור) ודף נחיתה כקובץ
+        if (role.startsWith('You are "קריאייטיב"') && /דף נחיתה|תמונה/.test(JSON.stringify(req.messages))) {
+          const done = JSON.stringify(req.messages);
+          if (!/דף נחיתה/.test(done) && !done.includes('"id":"i1"')) return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'i1', name: 'make_image', input: { prompt: 'A warm kitchen table with a phone showing a to-do app, soft morning light, photorealistic', summary: 'שולחן מטבח עם הטלפון והאפליקציה, אור בוקר', aspect: '4:5' } }], usage };
+          if (/דף נחיתה/.test(done) && !done.includes('"id":"f1"')) {
+            const img = (done.match(/\[file ([a-z0-9]+): image/) || [])[1];
+            return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'f1', name: 'make_file', input: { kind: 'html', name: 'דף נחיתה – סדר', content: `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:system-ui;margin:0;background:#f5f3ff;color:#1e1b4b}header{padding:48px 20px;text-align:center}h1{font-size:2.2rem;margin:0 0 8px}a{display:inline-block;margin-top:16px;background:#4f46e5;color:#fff;padding:12px 22px;border-radius:999px;text-decoration:none}img{max-width:100%;border-radius:16px}</style></head><body><header><h1>הסדר חוזר הביתה</h1><p>כל המשימות של המשפחה במקום אחד.</p>${img ? `<img src="{{file:${img}}}" alt="">` : ''}<br><a href="#">להתחיל בחינם</a></header></body></html>` } }], usage };
+          }
+          return { stop_reason: 'end_turn', content: [{ type: 'text', text: done.includes('"id":"f1"') ? 'הנה **דף הנחיתה** – אפשר לפתוח, להוריד ולראות תצוגה מקדימה 👇' : 'הכנתי הצעה לתמונה – מחכה לאישור שלך 👇' }], usage };
+        }
         // המתכנת: קורא תיקייה, מציע שינוי, ומסכם
         if (role.startsWith('You are "המתכנת"')) {
           const done = JSON.stringify(req.messages);
@@ -169,6 +179,12 @@ const env = {
     if (url.startsWith('https://api.github.com/search/code')) return new Response(JSON.stringify({ items: [{ path: 'skills/trip-planner/SKILL.md', repository: { full_name: 'good/travel-skills' } }] }));
     if (url === 'https://api.github.com/repos/good/travel-skills') return new Response(JSON.stringify({ full_name: 'good/travel-skills', owner: { login: 'good' }, stargazers_count: 850, pushed_at: new Date().toISOString(), license: { spdx_id: 'MIT' }, html_url: 'https://github.com/good/travel-skills' }));
     if (url.startsWith('https://api.github.com/repos/good/travel-skills/contents/')) return new Response('# Trip planner\nPlan day by day.');
+    // מחולל תמונות מדומה: ריבוע סגול קטן
+    if (url.includes('generativelanguage.googleapis.com') && url.includes(':generateContent')) {
+      const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      await wait(1500);
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: png } }] } }] }));
+    }
     if (url.endsWith('/interactions')) {
       await wait(4000);
       return new Response(JSON.stringify({ steps: [{ type: 'video', uri: 'https://generativelanguage.googleapis.com/v1beta/files/dev' }] }));

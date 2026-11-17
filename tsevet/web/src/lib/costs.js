@@ -5,6 +5,7 @@ export const ROUTER = 'router';
 export function agentRows(agentsUsd = {}, agents = []) {
   const rows = Object.entries(agentsUsd).map(([key, usd]) => {
     if (key === ROUTER) return { key, label: 'ניתוב (מי עונה)', emoji: '🧭', usd };
+    if (key === 'images') return { key, label: 'תמונות (Google)', emoji: '🖼️', usd };
     const a = agents.find((x) => x.key === key);
     return { key, label: a ? a.name : key, emoji: a ? a.emoji : '🤖', usd };
   });
