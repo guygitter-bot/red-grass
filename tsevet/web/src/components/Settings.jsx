@@ -1,9 +1,10 @@
-// הגדרות: רמת חוכמה לכל בוט, מה הצוות זוכר, תצוגה, סיסמה, יציאה
+// הגדרות: רמת חוכמה לכל בוט, מה הצוות למד (Skills.jsx), מה הצוות זוכר, תצוגה, סיסמה, יציאה
 import { useEffect, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { api, setToken } from '../lib/api';
 import { TIERS } from '../lib/agents';
 import { getTheme, setTheme } from '../lib/theme';
+import Skills from './Skills';
 import { Button, Segmented, inputCls } from './ui';
 
 function Card({ title, children }) {
@@ -170,6 +171,7 @@ export default function Settings({ team, onLogout }) {
   return (
     <div className="mx-auto max-w-2xl space-y-4 p-4">
       <Models agents={team?.agents || []} />
+      <Skills agents={team?.agents || []} connected={team?.maagar} />
       <Memory />
       <Card title="תצוגה">
         <Segmented

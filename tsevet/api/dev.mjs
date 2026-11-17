@@ -57,12 +57,24 @@ const ai = {
         const prompt = JSON.stringify(req.messages[0].content);
         if (req.max_tokens === 10) {
           const last = prompt.split('\\n\\n').filter((p) => !p.includes('Who should answer')).pop() || '';
-          const pick = /סרטון|וידאו|לערוך|תערוך/.test(last) ? 'editor' : /קמפיין|תקציב|מודעות/.test(last) ? 'campaigns' : 'creative';
+          const pick = /מאגר|תלמד|ללמוד/.test(last) ? 'librarian' : /סרטון|וידאו|לערוך|תערוך/.test(last) ? 'editor' : /קמפיין|תקציב|מודעות/.test(last) ? 'campaigns' : 'creative';
           return { content: [{ type: 'text', text: pick }], usage: { input_tokens: 200, output_tokens: 2 } };
         }
         await wait(1500);
         const role = req.system[0].text;
         const results = req.messages.at(-1).content;
+        // הספרן: מחפש במאגר, מלמד את העורך, ומדווח
+        if (role.startsWith('You are "ספרן"')) {
+          const done = JSON.stringify(req.messages);
+          if (!done.includes('maagar_search')) return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'm1', name: 'maagar_search', input: { query: 'עריכת רילס וידאו', area: 'learn' } }], usage };
+          if (!done.includes('"teach"')) {
+            return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'm2', name: 'teach', input: {
+              name: 'reels-editing', title: 'עריכת רילס מהירה', when: 'כשעורכים ריל קצר לרשתות', agents: ['editor', 'creative'], source: 'עריכת רילס מהירה',
+              body: '**המטרה:** ריל של 15-20 שניות שמחזיק את הצופה.\n\n• הוק בשתי השניות הראשונות\n• חיתוך כל 2 שניות, על הביט\n• כותרת אחת בכל סצנה\n\nפרומפט להוק: A fast dolly-in on [product], shallow depth of field',
+            } }], usage };
+          }
+          return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'מצאתי במאגר את **"עריכת רילס מהירה"** ולימדתי את זה את 🎬 עורך הווידאו ואת 🎨 קריאייטיב.\n\n• הוק בשתי השניות הראשונות\n• חיתוך כל 2 שניות\n\nאפשר לראות ולמחוק בהגדרות ← "מה הצוות למד".' }], usage };
+        }
         if (Array.isArray(results) && results[0]?.type === 'tool_result') {
           return { stop_reason: 'end_turn', content: [{ type: 'text', text: /started/i.test(results[0].content) ? 'התחלתי לערוך 🎬 בחרתי **גוון קולנועי**. הסרטון יופיע כאן כשיהיה מוכן.' : 'לא הצלחתי להתחיל את העריכה. אפשר לנסות שוב?' }], usage };
         }
@@ -80,7 +92,19 @@ const ai = {
   },
 };
 
+// מאגר AI מדומה
+const maagarItems = [
+  { id: 'l1', kind: 'link', mode: 'learn', url: 'https://example.com/reels', title: 'עריכת רילס מהירה', summary: 'שיטה לעריכת רילס קצרים', status: 'ready', createdAt: 2, lessons: ['הוק בשתי השניות הראשונות'], steps: [{ title: 'חיתוך', detail: 'כל 2 שניות' }], prompts: [], skills: [] },
+  { id: 'a1', kind: 'link', url: 'https://example.com/veo', title: 'פרומפטים לסרטוני Veo', summary: 'איך כותבים פרומפט לסרטון', category: 'וידאו', status: 'ready', createdAt: 1 },
+];
+const MAAGAR = {
+  async fetch(url) {
+    return new URL(url).pathname === '/list' ? new Response(JSON.stringify({ items: maagarItems })) : new Response(JSON.stringify({ item: { id: 'l2' } }));
+  },
+};
+
 const env = {
+  MAAGAR,
   ALLOWED_ORIGINS: 'http://localhost:5173,http://localhost:4173',
   GITHUB_TOKEN: TOKEN,
   GITHUB_REPO: 'local/dev',

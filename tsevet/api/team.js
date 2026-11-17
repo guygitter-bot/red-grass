@@ -16,6 +16,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { AGENTS, AGENT_KEYS, MODELS, TG_KEYS, aiMessage, appInfo, label, pickAgent, priceOf, runAgent, temporary } from './agents.js';
 import { APP_PREFIX, addFile, checkFileUrl, getSettings, handleApp } from './app.js';
+import { addSkill, learnFrom, listItems, read as maagarRead, search as maagarSearch, skillsOf } from './maagar.js';
 import { renderDone, renderFail, renderInput, renderJob, startRender } from './render.js';
 import { botIdOf, downloadImage, send, tokenOf, typing } from './telegram.js';
 
@@ -330,6 +331,9 @@ export class Team {
     if (!app && job.photo) image = await downloadImage(this.env, tokenOf(this.env, job.via), job.photo).catch(() => null);
 
     const renders = [];
+    const maagar = Boolean(this.env.MAAGAR);
+    let cache = null;
+    const items = () => (cache ||= listItems(this.env));
     const tools = {
       app_info: ({ app: name }) => appInfo(name),
       remember: async ({ note }) => {
@@ -349,6 +353,31 @@ export class Team {
         return 'Deleted';
       },
       edit_video: (input) => startRender(this, job, input, renders),
+      // מאגר AI: הרשימה נטענת פעם אחת לכל עבודה
+      maagar_search: async ({ query, area }) => maagarSearch(await items(), query, area),
+      maagar_read: async ({ id }) => maagarRead(await items(), id),
+      maagar_learn: async ({ id }) => {
+        const learnId = await learnFrom(this.env, id);
+        cache = null;
+        return `Started. The repository is studying it in the background (1-2 minutes); the result will be item ${learnId} – search or read it again later.`;
+      },
+      teach: async (input) => {
+        const r = addSkill((await this.storage.get('skills')) || [], input, AGENT_KEYS);
+        if (r.error) return r.error;
+        await this.storage.put('skills', r.skills);
+        return `Saved skill "${r.saved.name}" for ${r.saved.agents.join(', ')}.`;
+      },
+      unteach: async ({ name }) => {
+        const skills = (await this.storage.get('skills')) || [];
+        const left = skills.filter((s) => s.name !== String(name || '').trim());
+        if (left.length === skills.length) return `No such skill. Existing: ${skills.map((s) => s.name).join(', ') || '-'}`;
+        await this.storage.put('skills', left);
+        return 'Removed.';
+      },
+      use_skill: async ({ name }) => {
+        const skill = ((await this.storage.get('skills')) || []).find((s) => s.name === name);
+        return skill ? `# ${skill.title}\n\n${skill.body}` : 'No such skill.';
+      },
     };
 
     while (agent && job.turns < MAX_TURNS) {
@@ -361,6 +390,7 @@ export class Team {
       const r = await runAgent(client, {
         agent, notes, history: history.slice(-30), owner: owner?.name, images,
         model: MODELS[models[agent]], team, channel: app ? 'app' : 'tg',
+        maagar, skills: skillsOf((await this.storage.get('skills')) || [], agent),
       }, tools);
       await this.addCost(r.usage, agent);
       // נעצר באמצע (מהאפליקציה)? התשובה לא נשמרת

@@ -53,7 +53,8 @@ function fakeAI(script, calls) {
     beta: {
       messages: {
         async create(req) {
-          calls.push(req);
+          // עותק של רשימת ההודעות: הרשימה עצמה ממשיכה להשתנות בתורות הבאים
+          calls.push({ ...req, messages: [...req.messages] });
           if (req.max_tokens === 10) return { content: [{ type: 'text', text: script.route || 'creative' }], usage: { input_tokens: 100, output_tokens: 2 } };
           const next = script.replies.shift();
           if (!next) throw new Error('no more replies');
@@ -190,7 +191,7 @@ test('a message to one bot skips the routing; the model level can be changed in 
   const { env, aiCalls } = setupEnv({ replies: [{ content: text('בסדר') }] });
   const token = await signIn(env);
   const set = await call(env, '/app/settings', { models: { creative: 'opus', campaigns: 'nonsense' } }, token);
-  assert.deepEqual(set.data.models, { creative: 'opus', campaigns: 'opus', editor: 'sonnet' });
+  assert.deepEqual(set.data.models, { creative: 'opus', campaigns: 'opus', editor: 'sonnet', librarian: 'sonnet' });
   const { data: conv } = await call(env, '/app/conv/new', {}, token);
   await call(env, '/app/send', { id: conv.id, text: 'רעיון', to: 'creative' }, token);
   await env.team.alarm();
@@ -349,7 +350,7 @@ test('a Telegram topic continues in the app with its history and the shared memo
 
   const token = await signIn(env);
   const team = (await call(env, '/app/team', {}, token)).data;
-  assert.deepEqual(team.agents.map((a) => a.key), ['creative', 'campaigns', 'editor']);
+  assert.deepEqual(team.agents.map((a) => a.key), ['creative', 'campaigns', 'editor', 'librarian']);
   const conv = team.convs.find((c) => c.source === 'tg');
   assert.equal(conv.id, 'tg:-100:5');
   let view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
@@ -387,4 +388,109 @@ test('in Telegram the team is only the bots that exist there', async () => {
   assert.doesNotMatch(aiCalls[1].system[0].text, /עורך וידאו/);
   assert.ok(!aiCalls[1].tools.some((t) => t.name === 'edit_video'));
   assert.equal((await worker.fetch(new Request(`${API}/tg/editor`, { method: 'POST' }), env)).status, 404);
+});
+
+// ---------- מאגר AI והסקילים של הצוות ----------
+const MAAGAR_ITEMS = [
+  { id: 'a1', kind: 'link', url: 'https://example.com/veo', title: 'פרומפטים לסרטוני Veo', summary: 'איך כותבים פרומפט לסרטון', category: 'וידאו', type: 'סרטון', tags: ['veo', 'וידאו'], points: ['תנועת מצלמה אחת'], status: 'ready', createdAt: 2 },
+  {
+    id: 'l1', kind: 'link', mode: 'learn', url: 'https://example.com/edit', title: 'עריכת רילס מהירה', summary: 'שיטה לעריכת רילס', status: 'ready', createdAt: 3,
+    lessons: ['הוק בשתי השניות הראשונות'], steps: [{ title: 'חיתוך', detail: 'כל 2 שניות' }],
+    prompts: [{ title: 'הוק', purpose: 'פתיחה', tool: 'Veo', prompt: 'A fast dolly-in on [product]', from_source: true }],
+    skills: [{ name: 'reels-editor', title: 'עורך רילס', description: 'Edit reels fast', instructions: 'שלב 1: לבחור הוק. שלב 2: לחתוך כל 2 שניות.' }],
+  },
+  { id: 'x9', kind: 'text', title: 'מתכון לעוגה', summary: 'לא קשור', category: 'אחר', status: 'ready', createdAt: 1 },
+];
+
+function fakeMaagar(calls = []) {
+  return {
+    async fetch(url, init) {
+      const path = new URL(url).pathname;
+      const body = JSON.parse(init.body || '{}');
+      calls.push({ path, body });
+      if (path === '/list') return new Response(JSON.stringify({ items: MAAGAR_ITEMS, categories: {} }));
+      if (path === '/learn-from') return new Response(JSON.stringify({ item: { id: 'new-learn' } }));
+      return new Response(JSON.stringify({ error: 'לא נמצא' }), { status: 404 });
+    },
+  };
+}
+
+test('the librarian searches the AI repository, reads an item and teaches a skill that the editor then loads', async () => {
+  const maagarCalls = [];
+  const body = 'שיטה לעריכת רילס: הוק בשתי השניות הראשונות, חיתוך כל 2 שניות, כותרת אחת בכל סצנה.';
+  const { env, aiCalls } = setupEnv({
+    replies: [
+      { stop: 'tool_use', content: tool('maagar_search', { query: 'עריכת רילס', area: 'learn' }) },
+      { stop: 'tool_use', content: tool('maagar_read', { id: 'l1' }) },
+      { stop: 'tool_use', content: tool('teach', { name: 'Reels Editor!', title: 'עריכת רילס', when: 'כשעורכים ריל קצר', body, agents: ['editor', 'nobody'], source: 'עריכת רילס מהירה' }) },
+      { content: text('לימדתי את עורך הווידאו') },
+      // התור של העורך
+      { stop: 'tool_use', content: tool('use_skill', { name: 'reels-editor' }) },
+      { content: text('עובד לפי השיטה') },
+    ],
+  }, { MAAGAR: fakeMaagar(maagarCalls) });
+  const token = await signIn(env);
+  assert.equal((await call(env, '/app/team', {}, token)).data.maagar, true);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'תלמד את העורך לערוך רילס', to: 'librarian' }, token);
+  await env.team.alarm();
+
+  const results = aiCalls.slice(1, 4).map((c) => c.messages.at(-1).content[0].content);
+  // חיפוש רק באזור הלימוד, בלי מה שלא קשור
+  assert.match(results[0], /\[l1\] עריכת רילס מהירה \| learned: 1 skills, 1 prompts, 1 steps/);
+  assert.doesNotMatch(results[0], /a1|x9/);
+  assert.match(results[1], /A fast dolly-in on \[product\]/);
+  assert.match(results[1], /reels-editor – עורך רילס/);
+  assert.match(results[2], /Saved skill "reels-editor" for editor\./);
+  // המאגר נקרא פעם אחת לכל עבודה
+  assert.equal(maagarCalls.filter((c) => c.path === '/list').length, 1);
+  // רק לספרן יש את כלי הלימוד; לכולם חיפוש וקריאה
+  assert.ok(aiCalls[0].tools.some((t) => t.name === 'teach'));
+
+  const saved = (await call(env, '/app/skills', {}, token)).data.skills;
+  assert.equal(saved.length, 1);
+  assert.deepEqual([saved[0].name, saved[0].agents, saved[0].source], ['reels-editor', ['editor'], 'עריכת רילס מהירה']);
+
+  await call(env, '/app/send', { id: conv.id, text: 'תערוך ריל', to: 'editor' }, token);
+  await env.team.alarm();
+  const editor = aiCalls[4];
+  assert.match(editor.system[0].text, /Skills you were taught[\s\S]*- reels-editor: עריכת רילס – כשעורכים ריל קצר/);
+  assert.ok(!editor.tools.some((t) => t.name === 'teach'));
+  assert.ok(editor.tools.some((t) => t.name === 'maagar_search'));
+  assert.deepEqual(editor.tools.find((t) => t.name === 'use_skill').input_schema.properties.name.enum, ['reels-editor']);
+  assert.match(aiCalls[5].messages.at(-1).content[0].content, /חיתוך כל 2 שניות/);
+
+  // מחיקה מההגדרות: הסקיל נעלם גם מהבוט
+  assert.deepEqual((await call(env, '/app/skills/delete', { name: 'reels-editor' }, token)).data.skills, []);
+});
+
+test('repository tools: learn-from, bad skills, and no tools when the repository is not connected', async () => {
+  const maagarCalls = [];
+  const { env, aiCalls } = setupEnv({
+    replies: [
+      { stop: 'tool_use', content: [...tool('maagar_learn', { id: 'a1' })] },
+      { stop: 'tool_use', content: tool('teach', { name: 'x', title: 'קצר', when: 'תמיד', body: 'קצר מדי', agents: ['editor'] }) },
+      { stop: 'tool_use', content: tool('maagar_search', { query: 'קוונטים' }) },
+      { content: text('סיימתי') },
+    ],
+  }, { MAAGAR: fakeMaagar(maagarCalls) });
+  const token = await signIn(env);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'תלמד את זה לעומק', to: 'librarian' }, token);
+  await env.team.alarm();
+  assert.deepEqual(maagarCalls[0], { path: '/learn-from', body: { id: 'a1' } });
+  const results = aiCalls.slice(1).map((c) => c.messages.at(-1).content[0].content);
+  assert.match(results[0], /item new-learn/);
+  assert.match(results[1], /needs name/);
+  assert.match(results[2], /Nothing matched "קוונטים"\. The repository has 3 items \(1 learned\)/);
+  assert.deepEqual((await call(env, '/app/skills', {}, token)).data.skills, []);
+
+  const off = setupEnv({ replies: [{ content: text('היי') }] });
+  const t2 = await signIn(off.env);
+  assert.equal((await call(off.env, '/app/team', {}, t2)).data.maagar, false);
+  const c2 = (await call(off.env, '/app/conv/new', {}, t2)).data;
+  await call(off.env, '/app/send', { id: c2.id, text: 'היי', to: 'librarian' }, t2);
+  await off.env.team.alarm();
+  assert.ok(!off.aiCalls[0].tools.some((t) => /maagar|teach/.test(t.name)));
+  assert.doesNotMatch(off.aiCalls[0].system[0].text, /maagar_search \/ maagar_read/);
 });

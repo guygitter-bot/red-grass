@@ -14,6 +14,11 @@ GITHUB_REPO = "guygitter-bot/red-grass"
 binding = "FILES"
 bucket_name = "tsevet-files"
 
+# "מאגר AI" (ai_maagar) – הבוטים מחפשים וקוראים שם, והספרן מלמד מזה את הצוות
+[[services]]
+binding = "MAAGAR"
+service = "ai-maagar-api"
+
 # כל הצוות (בוטים, שיחות, זיכרון, עלויות) – אובייקט אחד ("main")
 [[durable_objects.bindings]]
 name = "TEAM"

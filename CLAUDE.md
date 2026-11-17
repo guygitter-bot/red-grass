@@ -173,10 +173,11 @@
 - ספק לא נמחק – רק "מורד מהרשימה" (`active: false`). ספק רואה רק את הלידים שלו (נבדק בשרת). צבעי הלוגו ב-`web/src/index.css`.
 
 ### צוות – צוות בוטים מומחים (`tsevet/`)
-- תיאור: `tsevet/README.md`. בוטים עם תפקידים (🎨 קריאייטיב, 📊 קמפיינים, 🎬 עורך וידאו) שמדברים ביניהם (`handoff`) וחולקים זיכרון; אפליקציה משלהם, וגם Telegram.
+- תיאור: `tsevet/README.md`. בוטים עם תפקידים (🎨 קריאייטיב, 📊 קמפיינים, 🎬 עורך וידאו, 📚 ספרן) שמדברים ביניהם (`handoff`) וחולקים זיכרון; אפליקציה משלהם, וגם Telegram.
 - `tsevet/web` → https://tsevet-ai.pages.dev · `tsevet/api` → Worker `tsevet-api` (Durable Object `Team` אחד, עבודה ברקע ב-alarm; קבצים ב-R2 `tsevet-files`). עלייה: `tsevet.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd tsevet/api && npm test` · `cd tsevet/web && npm test && npm run build`. מסכים: `node api/dev.mjs` (שרת מקומי בזיכרון). טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 - בוט חדש = מפתח ב-`AGENTS` (`api/agents.js`, עם `tier`); ל-Telegram גם סוד `TG_<KEY>_TOKEN` ב-workflow (`appOnly: true` = רק באפליקציה).
+- מחובר ל"מאגר AI" (service binding `MAAGAR`, `api/maagar.js`): כל הבוטים מחפשים וקוראים שם; הספרן שומר "סקילים של הצוות" (ידע, לא כלים) שהבוטים טוענים עם `use_skill`. שינוי במבנה פריט ב-`ai_maagar` – לבדוק גם כאן.
 - עריכת וידאו רצה ב-GitHub Actions (`tsevet-render.yml` + `tsevet/render/run.py`, כלים מ-`.claude/skills`). **המאגר ציבורי – לא להדפיס שם תוכן של המשתמש.**
 - המשתמש ביקש: **תמיד למזג לבד** את ה-PR (אחרי שהבדיקות ירוקות), לבדוק שהעלייה (`tsevet.yml` על main) הצליחה, ולדווח.
 - הבוטים לא מוציאים כסף בלי אישור מפורש של הבעלים (בכפתור). רק הבעלים מדבר איתם (באפליקציה: סיסמה שנקבעת בכניסה הראשונה).
