@@ -16,6 +16,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { AGENTS, AGENT_KEYS, MODELS, TG_KEYS, aiMessage, appInfo, label, pickAgent, priceOf, runAgent, temporary } from './agents.js';
 import { APP_PREFIX, addFile, checkFileUrl, getSettings, handleApp, newId as convIdNew } from './app.js';
+import { readSkill as githubRead, searchSkills as githubSearch } from './github.js';
 import { addSkill, learnFrom, listItems, read as maagarRead, search as maagarSearch, skillsOf } from './maagar.js';
 import { genDone, genFail, genReady, genStart, proposeClip, runGenJob } from './gen.js';
 import { DEFAULT_BUDGET, isDue, nextOf } from './schedule.js';
@@ -389,6 +390,10 @@ export class Team {
     const renders = [];
     const gens = [];
     const maagar = Boolean(this.env.MAAGAR);
+    // סקילים מ-GitHub: מה שנמצא בחיפוש (רק אותו אפשר לקרוא), ומה שנקרא אחרון (מקור הסקיל שיישמר)
+    const githubFound = new Map();
+    let githubLast = null;
+    const proposed = [];
     let cache = null;
     const items = () => (cache ||= listItems(this.env));
     // הבוט שבתור עכשיו (כלים כמו teach בודקים מי קורא להם)
@@ -416,6 +421,12 @@ export class Team {
       // מאגר AI: הרשימה נטענת פעם אחת לכל עבודה
       maagar_search: async ({ query, area }) => maagarSearch(await items(), query, area),
       maagar_read: async ({ id }) => maagarRead(await items(), id),
+      github_skills_search: async ({ query }) => githubSearch(this.env, query, githubFound),
+      github_skill_read: async ({ ref }) => {
+        const out = await githubRead(this.env, ref, githubFound);
+        if (githubFound.has(ref)) githubLast = { ref, ...githubFound.get(ref).trust };
+        return out;
+      },
       maagar_learn: async ({ id }) => {
         const learnId = await learnFrom(this.env, id);
         cache = null;
@@ -424,13 +435,19 @@ export class Team {
       // הספרן מלמד את כולם; בוט שלומד לעצמו (טיולים) – רק את עצמו
       teach: async (input) => {
         const own = current !== 'librarian';
-        const r = addSkill((await this.storage.get('skills')) || [], own ? { ...input, agents: [current] } : input, AGENT_KEYS);
+        // אחרי קריאה מ-GitHub בתור הזה – הסקיל נשמר כהצעה שמחכה לאישור
+        const origin = githubLast ? { repo: githubLast.repo, url: githubLast.url, stars: githubLast.stars, official: githubLast.official, updated: githubLast.updated, license: githubLast.license } : null;
+        const r = addSkill((await this.storage.get('skills')) || [], { ...(own ? { ...input, agents: [current] } : input), origin }, AGENT_KEYS);
         if (!r.error && own) {
           const before = ((await this.storage.get('skills')) || []).find((s) => s.name === r.saved.name);
           if (before && String(before.agents) !== String([current])) return 'A team skill with this name already exists. Choose another name.';
         }
         if (r.error) return r.error;
         await this.storage.put('skills', r.skills);
+        if (r.saved.pending) {
+          proposed.push(r.saved.name);
+          return `Saved as a proposal: it comes from GitHub (${origin.repo}, ⭐ ${origin.stars}), so the owner approves it with a button before anyone uses it. Tell the owner briefly what it does and the source.`;
+        }
         return `Saved skill "${r.saved.name}" for ${r.saved.agents.join(', ')}.`;
       },
       unteach: async ({ name }) => {
@@ -469,6 +486,7 @@ export class Team {
         agent, notes, history: history.slice(-40), owner: owner?.name, images,
         model: MODELS[models[agent]], team, channel: app ? 'app' : 'tg',
         maagar, skills: skillsOf((await this.storage.get('skills')) || [], agent),
+        github: app && Boolean(this.env.GITHUB_TOKEN),
         gen: app && genReady(this.env),
         task, assign: agent === 'manager' && (job.rounds || 0) < MAX_PLAN_ROUNDS,
       }, tools);
@@ -494,6 +512,7 @@ export class Team {
         ...(r.handoff ? { handoff: r.handoff } : {}),
         ...(renders.length ? { renders: renders.splice(0) } : {}),
         ...(gens.length ? { gens: gens.splice(0) } : {}),
+        ...(proposed.length ? { skillsProposed: proposed.splice(0) } : {}),
         at: Date.now(),
       });
       job = { ...job, target: next, turns: job.turns + 1, attempts: 0 };

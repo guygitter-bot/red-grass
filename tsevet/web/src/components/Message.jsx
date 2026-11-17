@@ -6,6 +6,7 @@ import Avatar from './Avatar';
 import Markdown from './Markdown';
 import { FileView, RenderCard } from './Files';
 import { GenCard } from './Gen';
+import { SkillCard } from './SkillCard';
 
 function Body({ m }) {
   return (
@@ -23,6 +24,13 @@ function Body({ m }) {
         <div className="mt-2 space-y-2">
           {m.renders.map((r) => (
             <RenderCard key={r.id} render={r} />
+          ))}
+        </div>
+      )}
+      {m.skills?.length > 0 && (
+        <div className="mt-2 space-y-2">
+          {m.skills.map((s) => (
+            <SkillCard key={s.name} skill={s} />
           ))}
         </div>
       )}

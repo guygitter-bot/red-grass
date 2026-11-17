@@ -61,7 +61,7 @@ const ai = {
         const prompt = JSON.stringify(req.messages[0].content);
         if (req.max_tokens === 10) {
           const last = prompt.split('\\n\\n').filter((p) => !p.includes('Who should answer')).pop() || '';
-          const pick = /משימה|תכין לי/.test(last) ? 'manager' : /מאגר|תלמד|ללמוד/.test(last) ? 'librarian' : /סרטון|וידאו|לערוך|תערוך/.test(last) ? 'editor' : /קמפיין|תקציב|מודעות/.test(last) ? 'campaigns' : 'creative';
+          const pick = /טיול/.test(last) ? 'travel' : /משימה|תכין לי/.test(last) ? 'manager' : /מאגר|תלמד|ללמוד/.test(last) ? 'librarian' : /סרטון|וידאו|לערוך|תערוך/.test(last) ? 'editor' : /קמפיין|תקציב|מודעות/.test(last) ? 'campaigns' : 'creative';
           return { content: [{ type: 'text', text: pick }], usage: { input_tokens: 200, output_tokens: 2 } };
         }
         await wait(1500);
@@ -88,6 +88,14 @@ const ai = {
             } }], usage };
           }
           return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'מצאתי במאגר את **"עריכת רילס מהירה"** ולימדתי את זה את 🎬 עורך הווידאו ואת 🎨 קריאייטיב.\n\n• הוק בשתי השניות הראשונות\n• חיתוך כל 2 שניות\n\nאפשר לראות ולמחוק בהגדרות ← "מה הצוות למד".' }], usage };
+        }
+        // טיולים: מוצא סקיל ב-GitHub, קורא ושומר (מחכה לאישור)
+        if (role.startsWith('You are "טיולים"')) {
+          const done = JSON.stringify(req.messages);
+          if (!done.includes('"id":"h1"')) return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'h1', name: 'github_skills_search', input: { query: 'travel itinerary' } }], usage };
+          if (!done.includes('"id":"h2"')) return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'h2', name: 'github_skill_read', input: { ref: 'good/travel-skills:skills/trip-planner/SKILL.md' } }], usage };
+          if (!done.includes('"id":"h3"')) return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'h3', name: 'teach', input: { name: 'trip-planner', title: 'תכנון טיול יום-יום', when: 'כשמתכננים טיול', agents: ['travel'], body: '**השיטה:**\n\n• מסלול יום-יום עם זמני נסיעה אמיתיים\n• מלון אחד במיקום מרכזי\n• יום מנוחה כל 4 ימים' } }], usage };
+          return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'מצאתי ב-GitHub שיטה טובה לתכנון טיול (850 כוכבים, מתוחזק). שמרתי אותה – **מחכה לאישור שלך** 👇' }], usage };
         }
         if (Array.isArray(results) && results[0]?.type === 'tool_result' && /proposal/i.test(results[0].content)) return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'אחרי שתאשר, הסרטון יופיע כאן תוך דקה-שתיים.' }], usage };
         if (Array.isArray(results) && results[0]?.type === 'tool_result') {
@@ -132,13 +140,17 @@ const env = {
   AI_CLIENT: ai,
   // במקום GitHub: מריצים את העריכה כאן
   async FETCH(url, init) {
-    if (url.includes('api.github.com')) {
+    if (url.includes('api.github.com') && url.endsWith('/dispatches')) {
       const { client_payload } = JSON.parse(init.body);
       const script = fileURLToPath(new URL('../render/run.py', import.meta.url));
       spawn('python3', [script, client_payload.id], { stdio: 'inherit', env: { ...process.env, TSEVET_API: `http://localhost:${PORT}`, TSEVET_TOKEN: TOKEN } });
       return new Response(null, { status: 204 });
     }
     // מחולל וידאו מדומה: מחכה כמה שניות ומחזיר את סרטון הבדיקה (DEV_CLIP), אם יש
+    // GitHub מדומה
+    if (url.startsWith('https://api.github.com/search/code')) return new Response(JSON.stringify({ items: [{ path: 'skills/trip-planner/SKILL.md', repository: { full_name: 'good/travel-skills' } }] }));
+    if (url === 'https://api.github.com/repos/good/travel-skills') return new Response(JSON.stringify({ full_name: 'good/travel-skills', owner: { login: 'good' }, stargazers_count: 850, pushed_at: new Date().toISOString(), license: { spdx_id: 'MIT' }, html_url: 'https://github.com/good/travel-skills' }));
+    if (url.startsWith('https://api.github.com/repos/good/travel-skills/contents/')) return new Response('# Trip planner\nPlan day by day.');
     if (url.endsWith('/interactions')) {
       await wait(4000);
       return new Response(JSON.stringify({ steps: [{ type: 'video', uri: 'https://generativelanguage.googleapis.com/v1beta/files/dev' }] }));
