@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "apps": "node build-apps.mjs",
+    "apps": "node build-apps.mjs && node build-igskills.mjs",
     "test": "node --test"
   },
   "dependencies": {

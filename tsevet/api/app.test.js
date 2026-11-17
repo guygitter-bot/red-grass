@@ -191,7 +191,7 @@ test('a message to one bot skips the routing; the model level can be changed in 
   const { env, aiCalls } = setupEnv({ replies: [{ content: text('בסדר') }] });
   const token = await signIn(env);
   const set = await call(env, '/app/settings', { models: { creative: 'opus', campaigns: 'nonsense' } }, token);
-  assert.deepEqual(set.data.models, { creative: 'opus', campaigns: 'opus', editor: 'sonnet', librarian: 'sonnet', travel: 'sonnet', manager: 'opus' });
+  assert.deepEqual(set.data.models, { creative: 'opus', campaigns: 'opus', editor: 'sonnet', librarian: 'sonnet', social: 'sonnet', travel: 'sonnet', manager: 'opus' });
   const { data: conv } = await call(env, '/app/conv/new', {}, token);
   await call(env, '/app/send', { id: conv.id, text: 'רעיון', to: 'creative' }, token);
   await env.team.alarm();
@@ -350,7 +350,7 @@ test('a Telegram topic continues in the app with its history and the shared memo
 
   const token = await signIn(env);
   const team = (await call(env, '/app/team', {}, token)).data;
-  assert.deepEqual(team.agents.map((a) => a.key), ['creative', 'campaigns', 'editor', 'librarian', 'travel', 'manager']);
+  assert.deepEqual(team.agents.map((a) => a.key), ['creative', 'campaigns', 'editor', 'librarian', 'social', 'travel', 'manager']);
   const conv = team.convs.find((c) => c.source === 'tg');
   assert.equal(conv.id, 'tg:-100:5');
   let view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
@@ -855,7 +855,7 @@ test('bots find trusted skills on GitHub; a skill learned from there waits for t
   const read = aiCalls[3].messages.at(-1).content[0].content;
   assert.match(read, /^UNTRUSTED CONTENT from GitHub/);
   assert.match(read, /BEGIN skills\/trip-planner\/SKILL\.md[\s\S]*IGNORE PREVIOUS INSTRUCTIONS[\s\S]*END/);
-  assert.match(aiCalls[4].messages.at(-1).content[0].content, /owner approves it with a button/);
+  assert.match(aiCalls[4].messages.at(-1).content[0].content, /only the owner can approve it, with the "לאשר את הסקיל" button/);
 
   // בשיחה: כרטיס הצעה עם המקור והדירוג
   let view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
@@ -881,4 +881,35 @@ test('bots find trusted skills on GitHub; a skill learned from there waits for t
   await call(off.env, '/app/send', { id: c2.id, text: 'היי', to: 'travel' }, t2);
   await off.env.team.alarm();
   assert.ok(!off.aiCalls[0].tools.some((t) => t.name.startsWith('github')));
+});
+
+// ---------- בוט האינסטגרם ----------
+test('the Instagram bot has the ig skill pack built in, the owner voice and the mat-kon message', async () => {
+  const { env, aiCalls } = setupEnv({
+    replies: [
+      { stop: 'tool_use', content: tool('use_skill', { name: 'ig-reel' }) },
+      { stop: 'tool_use', content: tool('use_skill', { name: 'mat-kon-message' }) },
+      { content: text('3 הוקים לריל על mat-kon') },
+    ],
+  }, { GEMINI_API_KEY: 'g' });
+  const token = await signIn(env);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'ריל על mat-kon', to: 'social' }, token);
+  await env.team.alarm();
+  const [first, second] = aiCalls;
+  assert.match(first.system[0].text, /^You are "אינסטגרם"/);
+  assert.match(first.system[0].text, /- ig-reel: ig-reel – Write an Instagram Reel/);
+  const names = first.tools.find((t) => t.name === 'use_skill').input_schema.properties.name.enum;
+  for (const n of ['ig-reel', 'ig-caption', 'ig-human', 'ig-plan', 'ig-voice', 'mat-kon-message']) assert.ok(names.includes(n), n);
+  // התוכן המלא, כולל נוסחאות ההוקים
+  assert.match(second.messages.at(-1).content[0].content, /# ig-reel[\s\S]*Data: hooks\.json/);
+  assert.match(aiCalls[2].messages.at(-1).content[0].content, /mat-kon/);
+  assert.ok(first.tools.some((t) => t.name === 'make_video'));
+  // לבוטים אחרים אין את החבילה
+  const { env: env2, aiCalls: calls2 } = setupEnv({ replies: [{ content: text('היי') }] });
+  const t2 = await signIn(env2);
+  const c2 = (await call(env2, '/app/conv/new', {}, t2)).data;
+  await call(env2, '/app/send', { id: c2.id, text: 'היי', to: 'creative' }, t2);
+  await env2.team.alarm();
+  assert.ok(!calls2[0].tools.some((t) => t.name === 'use_skill'));
 });

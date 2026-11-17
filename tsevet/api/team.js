@@ -16,6 +16,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { AGENTS, AGENT_KEYS, MODELS, TG_KEYS, aiMessage, appInfo, label, pickAgent, priceOf, runAgent, temporary } from './agents.js';
 import { APP_PREFIX, addFile, checkFileUrl, getSettings, handleApp, newId as convIdNew } from './app.js';
+import { IG_SKILLS } from './igskills.js';
 import { readSkill as githubRead, searchSkills as githubSearch } from './github.js';
 import { addSkill, learnFrom, listItems, read as maagarRead, search as maagarSearch, skillsOf } from './maagar.js';
 import { genDone, genFail, genReady, genStart, proposeClip, runGenJob } from './gen.js';
@@ -32,6 +33,8 @@ const MAX_ENTRY_APP = 12_000;
 const MAX_HISTORY_BYTES = 1_200_000;
 const MAX_IMAGES = 4;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+// סקילים מובנים (נבנים מהמאגר בכל עלייה): בוט האינסטגרם מקבל את חבילת ig-*
+const builtinSkills = (agent) => (agent === 'social' ? IG_SKILLS : []);
 const MAX_TURNS = 4;
 // משימה של המנהל: תוכנית ראשונה + סבב תיקון אחד, ותקרת תורות כדי לא לרוץ סתם
 const MAX_PLAN_ROUNDS = 2;
@@ -446,7 +449,7 @@ export class Team {
         await this.storage.put('skills', r.skills);
         if (r.saved.pending) {
           proposed.push(r.saved.name);
-          return `Saved as a proposal: it comes from GitHub (${origin.repo}, ⭐ ${origin.stars}), so the owner approves it with a button before anyone uses it. Tell the owner briefly what it does and the source.`;
+          return `Saved as a proposal: it comes from GitHub (${origin.repo}, ⭐ ${origin.stars}), so only the owner can approve it, with the "לאשר את הסקיל" button on the card under your message (or in הגדרות ← "מה הצוות למד"); writing "מאשר" in the chat does not approve it. Tell the owner briefly what it does, the source, and where the button is.`;
         }
         return `Saved skill "${r.saved.name}" for ${r.saved.agents.join(', ')}.`;
       },
@@ -459,7 +462,8 @@ export class Team {
         return 'Removed.';
       },
       use_skill: async ({ name }) => {
-        const skill = ((await this.storage.get('skills')) || []).find((s) => s.name === name);
+        const skill = ((await this.storage.get('skills')) || []).find((s) => s.name === name && !s.pending)
+          || builtinSkills(current).find((s) => s.name === name);
         return skill ? `# ${skill.title}\n\n${skill.body}` : 'No such skill.';
       },
     };
@@ -485,7 +489,7 @@ export class Team {
       const r = await runAgent(client, {
         agent, notes, history: history.slice(-40), owner: owner?.name, images,
         model: MODELS[models[agent]], team, channel: app ? 'app' : 'tg',
-        maagar, skills: skillsOf((await this.storage.get('skills')) || [], agent),
+        maagar, skills: [...skillsOf((await this.storage.get('skills')) || [], agent), ...builtinSkills(agent)],
         github: app && Boolean(this.env.GITHUB_TOKEN),
         gen: app && genReady(this.env),
         task, assign: agent === 'manager' && (job.rounds || 0) < MAX_PLAN_ROUNDS,

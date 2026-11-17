@@ -19,6 +19,8 @@ on:
       - "ai_maagar/README.md"
       - "eretz_ir/README.md"
       - "rock_city/README.md"
+      - ".claude/skills/ig-*/**"
+      - ".claude/instagram/**"
   pull_request:
     paths: ["tsevet/**", ".github/workflows/tsevet.yml"]
   workflow_dispatch:
@@ -43,6 +45,7 @@ jobs:
         run: |
           npm ci
           node build-apps.mjs
+          node build-igskills.mjs
           npm test
       - name: App tests and build
         working-directory: tsevet/web
@@ -85,6 +88,7 @@ jobs:
         run: |
           npm ci
           node build-apps.mjs
+          node build-igskills.mjs
       - name: Create the files bucket (first run only)
         continue-on-error: true
         uses: cloudflare/wrangler-action@v3
