@@ -23,6 +23,7 @@ import { readSkill as githubRead, searchSkills as githubSearch } from './github.
 import { addSkill, learnFrom, listItems, pendingOf, read as maagarRead, search as maagarSearch, skillsOf } from './maagar.js';
 import { genDone, genFail, genReady, genStart, proposeClip, runGenJob } from './gen.js';
 import { CREATORS, imagesReady, makeFile, proposeImage } from './create.js';
+import { designSkills } from './design.js';
 import { DEFAULT_BUDGET, isDue, nextOf } from './schedule.js';
 import { notifyOwner } from './notify.js';
 import { renderDone, renderFail, renderInput, renderJob, startRender } from './render.js';
@@ -492,7 +493,7 @@ export class Team {
       },
       use_skill: async ({ name }) => {
         const skill = ((await this.storage.get('skills')) || []).find((s) => s.name === name && !s.pending)
-          || builtinSkills(current).find((s) => s.name === name);
+          || [...designSkills(current), ...builtinSkills(current)].find((s) => s.name === name);
         return skill ? `# ${skill.title}\n\n${skill.body}` : 'No such skill.';
       },
     };
@@ -522,7 +523,7 @@ export class Team {
       const r = await runAgent(client, {
         agent, notes, history: history.slice(-40), owner: owner?.name, images,
         model: MODELS[models[agent]], team, channel: app ? 'app' : 'tg',
-        maagar, skills: [...skillsOf(allSkills, agent), ...builtinSkills(agent)], pending: app ? pendingOf(allSkills, agent) : [],
+        maagar, skills: [...designSkills(agent), ...skillsOf(allSkills, agent), ...builtinSkills(agent)], pending: app ? pendingOf(allSkills, agent) : [],
         // לפני משימה חדשה: לבדוק אם יש סקיל טוב יותר (רק בשיחה רגילה באפליקציה, לא בשלב של תוכנית)
         check: app && !task && SELF_LEARNERS.includes(agent) && Boolean(this.env.GITHUB_TOKEN || this.env.MAAGAR),
         github: app && Boolean(this.env.GITHUB_TOKEN),
