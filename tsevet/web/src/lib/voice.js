@@ -31,7 +31,8 @@ export function listen({ continuous = false, onText, onEnd, onError }) {
   };
   rec.onerror = (e) => {
     if (e.error === 'no-speech' || e.error === 'aborted') return;
-    onError?.(e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'צריך לאשר גישה למיקרופון' : 'זיהוי הדיבור לא הצליח');
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') micOk = false;
+    onError?.(e.error === 'not-allowed' || e.error === 'service-not-allowed' ? MIC_BLOCKED : 'זיהוי הדיבור לא הצליח', e.error);
   };
   rec.onend = () => onEnd?.(done);
   try {
@@ -42,6 +43,24 @@ export function listen({ continuous = false, onText, onEnd, onError }) {
   }
   return rec;
 }
+
+// בקשת רשות למיקרופון (החלון של כרום "לאפשר?"). זיהוי הדיבור לבדו לא תמיד מקפיץ את השאלה,
+// בעיקר כשההקשבה מתחילה לבד אחרי הקראה – לכן מבקשים מראש, בלחיצה של המשתמש.
+let micOk = false;
+export async function askMic() {
+  if (micOk) return true;
+  const md = typeof navigator !== 'undefined' ? navigator.mediaDevices : null;
+  if (!md?.getUserMedia) return true; // אין דרך לשאול – ננסה בכל זאת
+  try {
+    const stream = await md.getUserMedia({ audio: true });
+    stream.getTracks().forEach((t) => t.stop());
+    micOk = true;
+    return true;
+  } catch {
+    return false;
+  }
+}
+export const MIC_BLOCKED = 'המיקרופון חסום. בכרום: לוחצים על הסמל שמשמאל לכתובת ← הרשאות ← מיקרופון ← לאפשר, ומרעננים.';
 
 export const joinText = (a, b) => [a, b].map((s) => (s || '').trim()).filter(Boolean).join(' ');
 
