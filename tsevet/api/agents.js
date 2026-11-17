@@ -1,5 +1,6 @@
 // הצוות: הבוטים, התפקידים והכלים שלהם, והרצה של תור אחד של בוט מול Claude.
 import { APPS } from './apps.js';
+import { BURSA_TOOLS } from './bursa.js';
 
 // שלוש רמות מודל. לכל בוט ברירת מחדל (tier), ואפשר לשנות אותה בהגדרות של האפליקציה.
 export const MODELS = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5', opus: 'claude-opus-5-5' };
@@ -133,6 +134,30 @@ medicines), then answer.
 - Privacy: health details are personal. Don't save them with remember unless the owner explicitly asks you to.
 - Learning: you can look for skills that make you better (e.g. reading blood tests, triage, nutrition) in the AI \
 repository and on GitHub, like the rest of the team.`,
+  },
+  // רק באפליקציה: יועץ בורסה שמחובר לאפליקציית "בורסאי" – נתונים חיים, המלצות, ופעולות שהבעלים מבקש
+  bursai: {
+    name: 'בורסאי',
+    emoji: '📈',
+    tier: 'opus',
+    appOnly: true,
+    short: 'יועץ בורסה: נתונים חיים והמלצות מאפליקציית בורסאי, ופעולות בתיק לפי בקשה',
+    role: `You are "בורסאי" – the owner's stock-market advisor, connected to their own app "בורסאי" (live market data from \
+Yahoo Finance, a score and forecast for each stock, a backtest, news, their real portfolio record, a demo portfolio \
+with virtual money, a watch list and price alerts).
+How to work:
+- Always use the app's live data (bursa_market, bursa_stock, bursa_portfolio…) before giving numbers – never guess \
+prices. Use web_search for news and context. Say when data may be delayed (15-20 minutes).
+- Recommendations: explain simply, for a beginner – what the score and forecast mean, the main reasons, the risks, \
+and a clear suggestion (e.g. "worth watching", "maybe a small position", "I'd wait"). Forecasts are ranges, never \
+promises. End every recommendation with one short line: "זה לא ייעוץ השקעות".
+- Actions (bursa_action): do what the owner asked in their message – add/remove from the watch list, buy/sell in \
+the demo portfolio, record a real purchase they made, set or delete price alerts. Don't do actions they didn't ask \
+for: suggest them and wait. If something is unclear (demo or real? how many? which price?), ask first. After an \
+action, confirm in one or two lines what changed, with the numbers.
+- There is no real trading here: the app never buys or sells real shares. A "holding" only records a purchase the \
+owner made themselves at their broker. Never imply that you bought or sold real shares.
+- Never ask for bank or broker passwords.`,
   },
   // רק באפליקציה: מתכנן טיולים, משווה טיסות ומלונות, ולומד לעצמו שיטות (סקילים) מהרשת וממאגר AI
   travel: {
@@ -305,7 +330,7 @@ const webTools = (model, agent) => {
 };
 
 // בוטים שלומדים לעצמם: שומרים סקילים רק לעצמם (הספרן מלמד את כולם)
-export const SELF_LEARNERS = ['creative', 'campaigns', 'editor', 'social', 'travel', 'doctor'];
+export const SELF_LEARNERS = ['creative', 'campaigns', 'editor', 'social', 'travel', 'doctor', 'bursai'];
 // מי מחפש סקילים ב-GitHub (מי שיכול לשמור סקיל)
 export const SKILL_SEEKERS = [...SELF_LEARNERS, 'librarian'];
 // כלי שמחזיר את זה מסיים את התור (סקיל חדש מחכה לאישור)
@@ -444,7 +469,7 @@ const ASSIGN = (team) => ({
 });
 
 // assign = המנהל יכול לחלק משימה; noHandoff = בוט שעובד על שלב בתוכנית (לא מעביר הלאה)
-export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, skills = [], gen = false, assign = false, noHandoff = false, github = false } = {}) => [
+export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, skills = [], gen = false, assign = false, noHandoff = false, github = false, bursa = false } = {}) => [
   ...webTools(model, agent),
   ...(maagar ? MAAGAR_TOOLS : []),
   ...(maagar && agent === 'librarian' ? LIBRARIAN_TOOLS(team) : []),
@@ -471,6 +496,7 @@ export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, sk
     input_schema: { type: 'object', properties: { number: { type: 'integer' } }, required: ['number'] },
   },
   ...(agent === 'editor' ? [EDIT_VIDEO] : []),
+  ...(bursa && agent === 'bursai' ? BURSA_TOOLS : []),
   ...(gen && VIDEO_MAKERS.includes(agent) ? [MAKE_VIDEO] : []),
   ...(assign && agent === 'manager' ? [ASSIGN(team)] : []),
   ...(!noHandoff && agent !== 'manager' && team.filter((k) => k !== agent).length
@@ -517,7 +543,7 @@ export function transcript(history, owner = 'הבעלים') {
 // תור אחד של בוט. tools = { app_info, remember, forget, edit_video } (פונקציות שמחזירות טקסט).
 // model = המודל של הבוט, team = מי זמין בערוץ, images = תמונות מההודעה האחרונה. מחזיר { text, handoff, usage[] }
 // maagar = יש חיבור למאגר AI, skills = הסקילים שהבוט הזה למד
-export async function runAgent(client, { agent, notes, history, owner, image, images = image ? [image] : [], model = MODEL, team = TG_KEYS, channel = 'tg', maagar = false, skills = [], pending = [], gen = false, task = '', assign = false, github = false, check = false }, tools) {
+export async function runAgent(client, { agent, notes, history, owner, image, images = image ? [image] : [], model = MODEL, team = TG_KEYS, channel = 'tg', maagar = false, skills = [], pending = [], gen = false, task = '', assign = false, github = false, check = false, bursa = false }, tools) {
   // task = הוראה לתור הזה (שלב שהמנהל הקצה, או "סכם" למנהל). בשלב של תוכנית אין העברה הלאה
   const noHandoff = Boolean(task) && agent !== 'manager';
   const intro = `The conversation so far (latest at the bottom):\n\n${transcript(history, owner)}\n\n` +
@@ -535,7 +561,7 @@ export async function runAgent(client, { agent, notes, history, owner, image, im
       ...fallback,
       output_config: { effort: 'medium' },
       system: [{ type: 'text', text: systemPrompt(agent, notes, { team, channel, maagar, skills, pending, gen, github, check }), cache_control: { type: 'ephemeral' } }],
-      tools: TOOLS(agent, team, model, { maagar, skills, gen, assign, noHandoff, github }),
+      tools: TOOLS(agent, team, model, { maagar, skills, gen, assign, noHandoff, github, bursa }),
       messages,
     });
     usage.push({ model, ...(response.usage || {}) });

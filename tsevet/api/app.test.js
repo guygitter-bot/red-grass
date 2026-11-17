@@ -191,7 +191,7 @@ test('a message to one bot skips the routing; the model level can be changed in 
   const { env, aiCalls } = setupEnv({ replies: [{ content: text('בסדר') }] });
   const token = await signIn(env);
   const set = await call(env, '/app/settings', { models: { creative: 'opus', campaigns: 'nonsense' } }, token);
-  assert.deepEqual(set.data.models, { creative: 'opus', campaigns: 'opus', editor: 'sonnet', librarian: 'sonnet', social: 'sonnet', doctor: 'opus', travel: 'sonnet', manager: 'opus' });
+  assert.deepEqual(set.data.models, { creative: 'opus', campaigns: 'opus', editor: 'sonnet', librarian: 'sonnet', social: 'sonnet', doctor: 'opus', bursai: 'opus', travel: 'sonnet', manager: 'opus' });
   const { data: conv } = await call(env, '/app/conv/new', {}, token);
   await call(env, '/app/send', { id: conv.id, text: 'רעיון', to: 'creative' }, token);
   await env.team.alarm();
@@ -350,7 +350,7 @@ test('a Telegram topic continues in the app with its history and the shared memo
 
   const token = await signIn(env);
   const team = (await call(env, '/app/team', {}, token)).data;
-  assert.deepEqual(team.agents.map((a) => a.key), ['creative', 'campaigns', 'editor', 'librarian', 'social', 'doctor', 'travel', 'manager']);
+  assert.deepEqual(team.agents.map((a) => a.key), ['creative', 'campaigns', 'editor', 'librarian', 'social', 'doctor', 'bursai', 'travel', 'manager']);
   const conv = team.convs.find((c) => c.source === 'tg');
   assert.equal(conv.id, 'tg:-100:5');
   let view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
@@ -982,4 +982,54 @@ test('the doctor bot: careful medical rules, more research, the strong model, an
   assert.equal(d.tools.find((t) => t.name === 'web_search').max_uses, 12);
   assert.deepEqual(d.tools.find((t) => t.name === 'teach').input_schema.properties.agents.items.enum, ['doctor']);
   assert.ok(d.tools.some((t) => t.name === 'github_skills_search'));
+});
+
+// ---------- בורסאי ----------
+test('the stock advisor reads live data from the בורסאי app and does what the owner asks there', async () => {
+  const bursaCalls = [];
+  const BURSA = {
+    async fetch(url, init) {
+      const path = new URL(url).pathname;
+      bursaCalls.push({ path, body: JSON.parse(init.body), link: init.headers['x-team-link'] });
+      if (path === '/stock') return Response.json({ quote: { symbol: 'TEVA', price: 17.2 }, analysis: { score: 42 }, candles: new Array(500).fill({ c: 1 }), news: new Array(9).fill({ title: 'n' }) });
+      if (path === '/demo/trade') return Response.json({ demo: { cash: 99000, holdings: [{ symbol: 'TEVA', qty: 10 }], trades: new Array(30).fill({}) } });
+      if (path === '/settings') return Response.json({ error: 'אסור' }, { status: 403 });
+      return Response.json({});
+    },
+  };
+  const { env, aiCalls } = setupEnv({
+    replies: [
+      { stop: 'tool_use', content: tool('bursa_stock', { symbol: 'TEVA' }) },
+      { stop: 'tool_use', content: tool('bursa_action', { action: 'demo_buy', symbol: 'TEVA', qty: 10 }) },
+      { content: text('קניתי 10 מניות טבע בתיק הדמה. זה לא ייעוץ השקעות') },
+    ],
+  }, { BURSA, ANTHROPIC_API_KEY: 'sk-test' });
+  const token = await signIn(env);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'מה דעתך על טבע? ותקנה 10 בתיק הדמה', to: 'bursai' }, token);
+  await env.team.alarm();
+
+  const b = aiCalls[0];
+  assert.match(b.system[0].text, /^You are "בורסאי"/);
+  assert.match(b.system[0].text, /There is no real trading here/);
+  assert.ok(b.tools.some((t) => t.name === 'bursa_action'));
+  // הנתונים מגיעים בלי נרות הגרף, ועם עד 5 חדשות
+  const stock = aiCalls[1].messages.at(-1).content[0].content;
+  assert.match(stock, /"score":42/);
+  assert.doesNotMatch(stock, /candles/);
+  assert.equal(JSON.parse(stock).news.length, 5);
+  // הפעולה נשלחה עם המפתח המשותף
+  const trade = bursaCalls.find((c) => c.path === '/demo/trade');
+  assert.deepEqual(trade.body, { symbol: 'TEVA', side: 'buy', qty: 10 });
+  const { teamKey } = await import('./bursa.js');
+  assert.equal(trade.link, await teamKey('sk-test'));
+  assert.match(aiCalls[2].messages.at(-1).content[0].content, /^Done \(demo_buy\)/);
+
+  // לבוטים אחרים אין כלים של בורסאי
+  const { env: env2, aiCalls: calls2 } = setupEnv({ replies: [{ content: text('היי') }] }, { BURSA, ANTHROPIC_API_KEY: 'sk-test' });
+  const t2 = await signIn(env2);
+  const c2 = (await call(env2, '/app/conv/new', {}, t2)).data;
+  await call(env2, '/app/send', { id: c2.id, text: 'היי', to: 'creative' }, t2);
+  await env2.team.alarm();
+  assert.ok(!calls2[0].tools.some((t) => t.name.startsWith('bursa')));
 });
