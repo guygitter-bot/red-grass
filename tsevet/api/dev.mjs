@@ -3,6 +3,7 @@
 // הבוטים עונים תשובות קבועות; עורך הווידאו באמת עורך (מריץ את tsevet/render/run.py על המחשב הזה).
 import http from 'node:http';
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import worker, { Team } from './worker.js';
@@ -75,6 +76,7 @@ const ai = {
           }
           return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'מצאתי במאגר את **"עריכת רילס מהירה"** ולימדתי את זה את 🎬 עורך הווידאו ואת 🎨 קריאייטיב.\n\n• הוק בשתי השניות הראשונות\n• חיתוך כל 2 שניות\n\nאפשר לראות ולמחוק בהגדרות ← "מה הצוות למד".' }], usage };
         }
+        if (Array.isArray(results) && results[0]?.type === 'tool_result' && /proposal/i.test(results[0].content)) return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'אחרי שתאשר, הסרטון יופיע כאן תוך דקה-שתיים.' }], usage };
         if (Array.isArray(results) && results[0]?.type === 'tool_result') {
           return { stop_reason: 'end_turn', content: [{ type: 'text', text: /started/i.test(results[0].content) ? 'התחלתי לערוך 🎬 בחרתי **גוון קולנועי**. הסרטון יופיע כאן כשיהיה מוכן.' : 'לא הצלחתי להתחיל את העריכה. אפשר לנסות שוב?' }], usage };
         }
@@ -82,6 +84,10 @@ const ai = {
           const video = [...prompt.matchAll(/\[file (\w+): video/g)].pop();
           if (video) return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 't1', name: 'edit_video', input: { op: 'color_grade', files: [video[1]], preset: 'cinematic' } }], usage };
           return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'בשמחה! צריך **להעלות סרטון** (הכפתור עם האטב), ולכתוב מה לעשות איתו.' }], usage };
+        }
+        // הקריאייטיב: כשמבקשים "תייצר סרטון" – מציע סרטון מהמחולל
+        if (role.startsWith('You are "קריאייטיב"') && /תייצר|לייצר/.test(prompt)) {
+          return { stop_reason: 'tool_use', content: [{ type: 'text', text: 'הכנתי הצעה לסרטון פתיחה. מחכה לאישור שלך 👇' }, { type: 'tool_use', id: 'g1', name: 'make_video', input: { prompt: 'A slow dolly-in on a tidy kitchen table with a phone showing a to-do list, warm morning light, soft ambience', summary: 'שולחן מטבח מסודר, טלפון עם רשימת משימות, אור בוקר חם', aspect: '9:16' } }], usage };
         }
         if (role.startsWith('You are "קמפיינים"') && !prompt.includes('↪️')) {
           return { stop_reason: 'tool_use', content: [{ type: 'text', text: 'הנה מבנה ראשוני:\n\n• **קמפיין בדיקה** – ₪30 ליום, שבוע\n• קהל: הורים בישראל, 28-45\n• מדידה: התקנות\n\nעוד פרטים: https://example.com' }, { type: 'tool_use', id: 't2', name: 'handoff', input: { to: 'creative', request: 'צריך 3 כותרות למודעה' } }], usage };
@@ -105,6 +111,7 @@ const MAAGAR = {
 
 const env = {
   MAAGAR,
+  GEMINI_API_KEY: 'dev',
   ALLOWED_ORIGINS: 'http://localhost:5173,http://localhost:4173',
   GITHUB_TOKEN: TOKEN,
   GITHUB_REPO: 'local/dev',
@@ -117,6 +124,15 @@ const env = {
       const script = fileURLToPath(new URL('../render/run.py', import.meta.url));
       spawn('python3', [script, client_payload.id], { stdio: 'inherit', env: { ...process.env, TSEVET_API: `http://localhost:${PORT}`, TSEVET_TOKEN: TOKEN } });
       return new Response(null, { status: 204 });
+    }
+    // מחולל וידאו מדומה: מחכה כמה שניות ומחזיר את סרטון הבדיקה (DEV_CLIP), אם יש
+    if (url.endsWith('/interactions')) {
+      await wait(4000);
+      return new Response(JSON.stringify({ steps: [{ type: 'video', uri: 'https://generativelanguage.googleapis.com/v1beta/files/dev' }] }));
+    }
+    if (url.startsWith('https://generativelanguage.googleapis.com/v1beta/files/dev')) {
+      const bytes = process.env.DEV_CLIP ? readFileSync(process.env.DEV_CLIP) : new Uint8Array(1000);
+      return new Response(bytes, { headers: { 'content-type': 'video/mp4' } });
     }
     return new Response(JSON.stringify({ ok: true, result: true }));
   },

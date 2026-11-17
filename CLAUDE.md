@@ -178,6 +178,7 @@
 - בדיקה: `cd tsevet/api && npm test` · `cd tsevet/web && npm test && npm run build`. מסכים: `node api/dev.mjs` (שרת מקומי בזיכרון). טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 - בוט חדש = מפתח ב-`AGENTS` (`api/agents.js`, עם `tier`); ל-Telegram גם סוד `TG_<KEY>_TOKEN` ב-workflow (`appOnly: true` = רק באפליקציה).
 - מחובר ל"מאגר AI" (service binding `MAAGAR`, `api/maagar.js`): כל הבוטים מחפשים וקוראים שם; הספרן שומר "סקילים של הצוות" (ידע, לא כלים) שהבוטים טוענים עם `use_skill`. שינוי במבנה פריט ב-`ai_maagar` – לבדוק גם כאן.
+- יצירת סרטון חדש (`api/gen.js`, מחולל הווידאו של Google כמו ב-`nadlan_video`, סוד `GEMINI_API_KEY`): הבוט רק מציע (`make_video`), והסרטון נוצר **רק אחרי אישור בכפתור**; תקרה `DAILY_CLIPS`. לא לעקוף את האישור.
 - עריכת וידאו רצה ב-GitHub Actions (`tsevet-render.yml` + `tsevet/render/run.py`, כלים מ-`.claude/skills`). **המאגר ציבורי – לא להדפיס שם תוכן של המשתמש.**
 - המשתמש ביקש: **תמיד למזג לבד** את ה-PR (אחרי שהבדיקות ירוקות), לבדוק שהעלייה (`tsevet.yml` על main) הצליחה, ולדווח.
 - הבוטים לא מוציאים כסף בלי אישור מפורש של הבעלים (בכפתור). רק הבעלים מדבר איתם (באפליקציה: סיסמה שנקבעת בכניסה הראשונה).

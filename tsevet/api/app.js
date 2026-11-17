@@ -11,9 +11,11 @@
 //   settings        -> { models: { <agent>: 'haiku' | 'sonnet' | 'opus' } }
 //   busy            -> { <מפתח שיחה>: { agent } } מי כותב עכשיו
 //   r:<id>          -> עריכת וידאו ברקע (render.js)
+//   g:<id>          -> סרטון שנוצר במחולל הווידאו, אחרי אישור (gen.js)
 //   skills          -> הסקילים שהספרן לימד את הצוות ממאגר AI (maagar.js)
 import { AGENTS, AGENT_KEYS, TIERS } from './agents.js';
 import * as auth from './auth.js';
+import { approve as approveGen, cancel as cancelGen, dailyLimit, genReady, genView } from './gen.js';
 import { renderView } from './render.js';
 
 const { fail } = auth;
@@ -137,12 +139,19 @@ async function convView(t, id, origin) {
       if (r) renders.push(r);
       if (r?.status === 'queued') pending = true;
     }
+    const gens = [];
+    for (const gid of h.gens || []) {
+      const g = await genView(t, gid, origin);
+      if (g) gens.push(g);
+      if (g?.status === 'working') pending = true;
+    }
     messages.push({
       i, who: h.who, text: h.text || '', at: h.at || 0,
       ...(h.photo ? { photo: true } : {}),
       ...(h.handoff ? { handoff: h.handoff } : {}),
       ...(files.length ? { files } : {}),
       ...(renders.length ? { renders } : {}),
+      ...(gens.length ? { gens } : {}),
     });
   }
   const job = ((await storage.get('q')) || []).find((j) => t.jobKey(j) === key);
@@ -186,6 +195,11 @@ async function deleteConv(t, id) {
     for (const f of h.files || []) {
       ids.add(f.id);
       if (f.poster) ids.add(f.poster);
+    }
+    for (const gid of h.gens || []) {
+      const g = await storage.get(`g:${gid}`);
+      if (g?.file) ids.add(g.file);
+      await storage.delete(`g:${gid}`);
     }
     for (const rid of h.renders || []) {
       const r = await storage.get(`r:${rid}`);
@@ -239,16 +253,16 @@ async function send(t, body) {
 }
 
 // ---------- עלויות ----------
-async function costs(storage) {
+async function costs(storage, clipsLimit = 0) {
   const date = israelDate();
   const month = date.slice(0, 7);
   const prev = israelDate(new Date(`${month}-01T12:00:00Z`).getTime() - 5 * 24 * HOUR).slice(0, 7);
   const read = async (m) => {
     const c = (await storage.get(`cost:${m}`)) || {};
-    return { month: m, usd: c.usd || 0, days: c.days || {}, agents: c.agents || {} };
+    return { month: m, usd: c.usd || 0, days: c.days || {}, agents: c.agents || {}, clips: c.clips || 0 };
   };
   const now = await read(month);
-  return { today: now.days[date.slice(8)] || 0, now, prev: await read(prev), ils: ILS };
+  return { today: now.days[date.slice(8)] || 0, now, prev: await read(prev), ils: ILS, clipsToday: (await storage.get(`clips:${date}`)) || 0, clipsLimit };
 }
 
 // ---------- הכתובות ----------
@@ -279,6 +293,7 @@ export async function handleApp(t, path, body, headers, origin) {
         costs: { today: c.today, month: c.now.usd, ils: ILS },
         video: Boolean(t.env.GITHUB_TOKEN && t.env.FILES),
         maagar: Boolean(t.env.MAAGAR),
+        gen: genReady(t.env),
       };
     }
     case '/app/conv':
@@ -322,6 +337,12 @@ export async function handleApp(t, path, body, headers, origin) {
       return { notes };
     }
 
+    // יצירת סרטון: רק אחרי אישור בכפתור (עולה כסף)
+    case '/app/gen/approve':
+      return approveGen(t, body.id);
+    case '/app/gen/cancel':
+      return cancelGen(storage, body.id);
+
     // מה שהספרן לימד את הצוות ממאגר AI
     case '/app/skills':
       return { skills: (await storage.get('skills')) || [] };
@@ -332,7 +353,7 @@ export async function handleApp(t, path, body, headers, origin) {
     }
 
     case '/app/costs':
-      return costs(storage);
+      return costs(storage, dailyLimit(t.env));
     case '/app/settings': {
       if (body.models && typeof body.models === 'object') {
         const current = await getSettings(storage);

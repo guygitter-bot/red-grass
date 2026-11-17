@@ -5,6 +5,7 @@ import { clock } from '../lib/format';
 import Avatar from './Avatar';
 import Markdown from './Markdown';
 import { FileView, RenderCard } from './Files';
+import { GenCard } from './Gen';
 
 function Body({ m }) {
   return (
@@ -22,6 +23,13 @@ function Body({ m }) {
         <div className="mt-2 space-y-2">
           {m.renders.map((r) => (
             <RenderCard key={r.id} render={r} />
+          ))}
+        </div>
+      )}
+      {m.gens?.length > 0 && (
+        <div className="mt-2 space-y-2">
+          {m.gens.map((g) => (
+            <GenCard key={g.id} gen={g} />
           ))}
         </div>
       )}

@@ -74,6 +74,18 @@ export default function Costs({ agents }) {
         </ul>
       </section>
 
+      {data.clipsLimit > 0 && (
+        <section className="rounded-2xl border border-line bg-card p-4 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-muted">סרטונים שנוצרו החודש</span>
+            <span className="num font-bold">{data.now?.clips || 0}</span>
+          </div>
+          <p className="mt-1 text-xs text-muted">
+            היום: {data.clipsToday || 0} מתוך {data.clipsLimit}. סרטונים מחויבים בחשבון Google, ולא נכללים בסכומים שלמעלה.
+          </p>
+        </section>
+      )}
+
       <section className="flex items-center justify-between rounded-2xl border border-line bg-card p-4 text-sm">
         <span className="text-muted">החודש שעבר</span>
         <span className="num font-bold">

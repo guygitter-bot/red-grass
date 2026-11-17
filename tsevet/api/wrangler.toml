@@ -8,6 +8,10 @@ workers_dev = true
 ALLOWED_ORIGINS = "https://tsevet-ai.pages.dev,https://*.tsevet-ai.pages.dev,http://localhost:5173,http://localhost:4173"
 # עריכת וידאו רצה ב-GitHub Actions של המאגר הזה (tsevet-render.yml); הטוקן: הסוד GITHUB_TOKEN (מ-POINTS_GITHUB_TOKEN)
 GITHUB_REPO = "guygitter-bot/red-grass"
+# מחולל הווידאו של Google (Gemini Omni). אם השם כבר לא קיים – השרת מנסה את הגרסאות המוכרות (gen.js)
+VIDEO_MODEL = "gemini-omni-1.2-flash"
+# תקרה יומית של סרטונים שנוצרים (כל אחד גם מאושר בכפתור)
+DAILY_CLIPS = "10"
 
 # קבצים שמעלים בשיחה (תמונות, סרטונים, שירים) וסרטונים ערוכים
 [[r2_buckets]]
@@ -33,4 +37,5 @@ new_sqlite_classes = ["Team"]
 #   TG_CREATIVE_TOKEN   – הבוט 🎨 קריאייטיב (מ-BotFather)
 #   TG_CAMPAIGNS_TOKEN  – הבוט 📊 קמפיינים (מ-BotFather)
 #   TEAM_OWNER_CODE     – הקוד שהבעלים שולח פעם אחת: /start <קוד>
+#   GEMINI_API_KEY      – לא חובה: מפעיל יצירת סרטונים (המפתח של Google AI Studio, כמו ב-nadlan_video)
 #   GITHUB_TOKEN        – לא חובה: מפעיל את עריכת הווידאו (נקבע מ-POINTS_GITHUB_TOKEN)

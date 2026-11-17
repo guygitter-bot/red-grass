@@ -8,6 +8,7 @@ import { usePoll } from '../lib/usePoll';
 import { mergeConv } from '../lib/stable';
 import { findAgent } from '../lib/agents';
 import Message from './Message';
+import { RELOAD } from './Gen';
 import Composer from './Composer';
 import { Button, Sheet, Spinner, inputCls } from './ui';
 
@@ -33,6 +34,14 @@ export default function Chat({ id, agents, refresh }) {
     [id],
   );
   usePoll(load, convInterval(conv));
+
+  // כרטיס בתוך הודעה (אישור יצירת סרטון) מבקש לרענן את השיחה
+  useEffect(() => {
+    window.addEventListener(RELOAD, load);
+    return () => {
+      window.removeEventListener(RELOAD, load);
+    };
+  }, [load]);
 
   // גלילה למטה רק אם המשתמשת כבר קרובה לתחתית, או כששלחה הודעה
   const count = conv?.messages?.length || 0;
