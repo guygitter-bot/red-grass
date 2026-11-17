@@ -2,13 +2,14 @@
 // "להוסיף את התפריט הקבוע" ותזכורת למדוד שעתיים אחרי ארוחה.
 import { useState } from 'react';
 import { BellRing, ChevronLeft, ChevronRight, ListPlus, Plus, Syringe, Trash2 } from 'lucide-react';
-import { templateFromMeal, SITES, SLOTS, TAGS, addDays, manualPoints, dayLabel, mealFromTemplate, missingFixed, nowTime, outcome, sensorUploadDue, waitingForCheck } from '../lib/diary';
+import { basalOn, templateFromMeal, SITES, SLOTS, TAGS, addDays, manualPoints, dayLabel, mealFromTemplate, missingFixed, nowTime, outcome, sensorUploadDue, waitingForCheck } from '../lib/diary';
 import { newId, remove, save } from '../lib/store';
 import { getMe } from '../lib/me';
 import { Button, Sheet } from './ui';
 import { DayChart, Glucose } from './bits';
 import MealEditor from './MealEditor';
 import ReadingEditor from './ReadingEditor';
+import BasalEditor from './BasalEditor';
 
 function MealCard({ meal, s, data, onOpen, onQuick }) {
   const o = outcome(meal, data);
@@ -106,11 +107,13 @@ export default function DayView({ data, date, go, openCal }) {
   const [editing, setEditing] = useState(null);
   const [quick, setQuick] = useState(null);
   const [reading, setReading] = useState(null);
+  const [basal, setBasal] = useState(false);
   const [picker, setPicker] = useState(false);
   const meals = data.meals.filter((m) => m.date === date);
   const loose = data.readings.filter((r) => r.date === date);
   const points = manualPoints(data, date, date);
   const cgm = data.cgm.get(date) || [];
+  const todayBasal = basalOn(data, date);
   const missing = missingFixed(data, date);
   const waiting = date === data.today ? waitingForCheck(data, date) : [];
 
@@ -173,8 +176,12 @@ export default function DayView({ data, date, go, openCal }) {
         <Button kind="ghost" onClick={() => setReading({ t: 'reading', date, time: date === data.today ? nowTime() : '08:00', value: '' })} className="flex items-center justify-center gap-1">
           <Plus size={18} /> מדידה בלי ארוחה
         </Button>
+        {/* הזריקה הלילית – ממולאת מראש (כמות ושעה מההגדרות); אם כבר נרשמה היום – פותח אותה */}
+        <Button kind="ghost" onClick={() => setBasal(true)} className="flex items-center justify-center gap-1">
+          {todayBasal ? `✓ 🌙 ${todayBasal.insulin} יח׳ · ${todayBasal.time}` : `🌙 זריקה לילית (${s.basalDose} יח׳)`}
+        </Button>
         {data.templates.length > 0 && (
-          <Button kind="ghost" onClick={() => setPicker(true)} className="col-span-2 flex items-center justify-center gap-1 lg:col-span-1">
+          <Button kind="ghost" onClick={() => setPicker(true)} className="flex items-center justify-center gap-1">
             <ListPlus size={18} /> מהתפריט הקבוע{missing.length ? ` (${missing.length})` : ''}
           </Button>
         )}
@@ -197,10 +204,11 @@ export default function DayView({ data, date, go, openCal }) {
           x.kind === 'meal' ? (
             <MealCard key={x.m.id} meal={x.m} s={s} data={data} onOpen={() => setEditing(x.m)} onQuick={() => setQuick(x.m)} />
           ) : (
-            <button key={x.r.id} onClick={() => setReading(x.r)} className="flex items-center gap-3 rounded-2xl bg-card p-4 text-right shadow-sm">
+            <button key={x.r.id} onClick={() => (x.r.basal ? setBasal(true) : setReading(x.r))} className="flex items-center gap-3 rounded-2xl bg-card p-4 text-right shadow-sm">
               <span className="num rounded-lg bg-soft px-2 py-0.5 text-sm font-bold text-accent-ink">{x.r.time}</span>
               <span className="flex-1">
-                מדידה{x.r.note ? ` · ${x.r.note}` : ''}
+                {x.r.basal ? <b>🌙 זריקה לילית</b> : 'מדידה'}
+                {x.r.note ? ` · ${x.r.note}` : ''}
                 {(x.r.insulin !== '' || x.r.site) && (
                   <span className="block text-xs text-muted">
                     {x.r.insulin !== '' && `💉 ${x.r.insulin} יח׳ `}
@@ -208,7 +216,7 @@ export default function DayView({ data, date, go, openCal }) {
                   </span>
                 )}
               </span>
-              <Glucose value={x.r.value} settings={s} />
+              {x.r.value !== '' && <Glucose value={x.r.value} settings={s} />}
             </button>
           ),
         )}
@@ -241,6 +249,7 @@ export default function DayView({ data, date, go, openCal }) {
       {editing && <MealEditor data={data} meal={editing} onClose={() => setEditing(null)} />}
       {quick && <QuickReading meal={quick} s={s} onClose={() => setQuick(null)} />}
       {reading && <ReadingEditor data={data} reading={reading} onClose={() => setReading(null)} />}
+      {basal && <BasalEditor data={data} date={date} existing={todayBasal} onClose={() => setBasal(false)} />}
     </div>
   );
 }

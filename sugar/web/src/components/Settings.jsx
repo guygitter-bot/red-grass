@@ -30,7 +30,7 @@ const str = (v) => (v === '' || v == null ? '' : String(v));
 export default function Settings({ data, records }) {
   const s = data.settings;
   const [me, setMeState] = useState(getMe());
-  const [f, setF] = useState({ person: s.person, low: str(s.low), high: str(s.high), dayHigh: str(s.dayHigh), icr: str(s.icr), cf: str(s.cf), target: str(s.target), note: s.note });
+  const [f, setF] = useState({ person: s.person, low: str(s.low), high: str(s.high), dayHigh: str(s.dayHigh), icr: str(s.icr), cf: str(s.cf), target: str(s.target), note: s.note, basalDose: str(s.basalDose), basalTime: s.basalTime });
   const [theme, setThemeState] = useState(getTheme());
   const [msg, setMsg] = useState('');
   const fileRef = useRef(null);
@@ -44,7 +44,7 @@ export default function Settings({ data, records }) {
     const dayHigh = numOrEmpty(f.dayHigh);
     if (!(low > 0) || !(high > low)) return setMsg('טווח היעד לא תקין');
     if (!(dayHigh > low)) return setMsg('הטווח לאורך היום לא תקין');
-    save({ id: 'settings', t: 'settings', person: f.person.trim(), low, high, dayHigh, icr: numOrEmpty(f.icr), cf: numOrEmpty(f.cf), target: numOrEmpty(f.target), note: f.note.trim().slice(0, 1000) });
+    save({ id: 'settings', t: 'settings', person: f.person.trim(), low, high, dayHigh, icr: numOrEmpty(f.icr), cf: numOrEmpty(f.cf), target: numOrEmpty(f.target), note: f.note.trim().slice(0, 1000), basalDose: numOrEmpty(f.basalDose), basalTime: /^\d{2}:\d{2}$/.test(f.basalTime) ? f.basalTime : '21:00' });
     setMsg('נשמר – אצל כל מי שמשתף');
   };
 
@@ -129,6 +129,18 @@ export default function Settings({ data, records }) {
           <Field label="טווח לאורך היום – עד (mg/dL)" hint={`מ־${f.low || 70} עד הערך הזה. לפיו נצבעים הסוכר אחרי ארוחות ונתוני החיישן, ולפיו מחושב "אחוז בטווח" במעקב. ברירת מחדל 180 – אם הצוות נתן ערך אחר, לשנות.`}>
             <input className={`${inputCls} num`} inputMode="numeric" value={f.dayHigh} onChange={(e) => set({ dayHigh: e.target.value })} />
           </Field>
+          <Button>שמירה</Button>
+        </Card>
+        <Card title="🌙 זריקה לילית">
+          <p className="mb-3 text-sm text-muted">הכמות והשעה הרגילות. בכל ערב הכפתור "זריקה לילית" במסך היום ממלא אותן מראש, ואפשר לשנות.</p>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="יחידות">
+              <input className={`${inputCls} num`} inputMode="decimal" value={f.basalDose} onChange={(e) => set({ basalDose: e.target.value })} />
+            </Field>
+            <Field label="שעה רגילה">
+              <input type="time" className={`${inputCls} num`} value={f.basalTime} onChange={(e) => set({ basalTime: e.target.value })} />
+            </Field>
+          </div>
           <Button>שמירה</Button>
         </Card>
         <Card title="נתונים למחשבון">
