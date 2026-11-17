@@ -1033,3 +1033,21 @@ test('the stock advisor reads live data from the בורסאי app and does what 
   await env2.team.alarm();
   assert.ok(!calls2[0].tools.some((t) => t.name.startsWith('bursa')));
 });
+
+// ---------- שיחות ריקות ----------
+test('a conversation with nothing written in it does not appear in the list', async () => {
+  const { env } = setupEnv({ replies: [{ content: text('שלום') }] });
+  const token = await signIn(env);
+  const { data: empty } = await call(env, '/app/conv/new', {}, token);
+  const { data: used } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: used.id, text: 'היי' }, token);
+  let ids = (await call(env, '/app/team', {}, token)).data.convs.map((c) => c.id);
+  assert.ok(ids.includes(used.id));
+  assert.ok(!ids.includes(empty.id));
+  // עדיין אפשר לפתוח אותה ולכתוב בה
+  assert.equal((await call(env, '/app/conv', { id: empty.id }, token)).status, 200);
+  await env.team.alarm();
+  await call(env, '/app/send', { id: empty.id, text: 'עכשיו כתבתי' }, token);
+  ids = (await call(env, '/app/team', {}, token)).data.convs.map((c) => c.id);
+  assert.ok(ids.includes(empty.id));
+});

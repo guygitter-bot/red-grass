@@ -133,7 +133,13 @@ async function convList(t) {
   const titles = (await storage.get('titles')) || {};
   const q = (await storage.get('q')) || [];
   const busy = (key) => q.some((j) => t.jobKey(j) === key);
-  const out = convs.map((c) => ({ id: c.id, title: c.title || 'שיחה חדשה', at: c.at, source: 'app', busy: busy(`${APP_PREFIX}${c.id}`) }));
+  const out = [];
+  for (const c of convs) {
+    const key = `${APP_PREFIX}${c.id}`;
+    // שיחה שנפתחה ולא נכתב בה כלום – לא מופיעה ברשימה
+    if (!busy(key) && !(await storage.get(key))?.length) continue;
+    out.push({ id: c.id, title: c.title || 'שיחה חדשה', at: c.at, source: 'app', busy: busy(key) });
+  }
   // שיחות שהתנהלו ב-Telegram – ממשיכות כאן עם כל ההיסטוריה
   const all = await storage.list({ prefix: 'h:' });
   for (const [key, history] of all) {
@@ -143,6 +149,15 @@ async function convList(t) {
     out.push({ id, title: titles[id] || (thread ? `Telegram · נושא ${thread}` : 'Telegram'), at: history[history.length - 1].at || 0, source: 'tg', busy: busy(key) });
   }
   return out.sort((a, b) => b.at - a.at);
+}
+
+// שיחות ריקות (נפתחו ולא נכתב בהן כלום) נמחקות כשפותחים שיחה חדשה, כדי שלא יתמלא המקום. שיחה מהשעה האחרונה נשארת.
+async function dropEmpty(storage, convs) {
+  const keep = [];
+  for (const c of convs) {
+    if (Date.now() - c.at < 3600e3 || (await storage.get(`${APP_PREFIX}${c.id}`))?.length) keep.push(c);
+  }
+  return keep;
 }
 
 async function convView(t, id, origin) {
@@ -329,7 +344,7 @@ export async function handleApp(t, path, body, headers, origin) {
     case '/app/conv':
       return convView(t, String(body.id || ''), origin);
     case '/app/conv/new': {
-      const convs = (await storage.get('convs')) || [];
+      const convs = await dropEmpty(storage, (await storage.get('convs')) || []);
       const conv = { id: newId(), title: String(body.title || '').replace(/\s+/g, ' ').trim().slice(0, MAX_TITLE), at: Date.now() };
       await storage.put('convs', [conv, ...convs].slice(0, MAX_CONVS));
       return { id: conv.id };
