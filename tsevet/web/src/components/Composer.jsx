@@ -1,13 +1,13 @@
 // שורת הכתיבה בתחתית הצ'אט: טקסט, הכתבה במיקרופון, צירוף קבצים עם התקדמות, בחירת מי עונה, שליחה
 import { useEffect, useRef, useState } from 'react';
 import { Mic, Paperclip, SendHorizontal, X } from 'lucide-react';
-import { MIC_BLOCKED, askMic, canListen, joinText, listen, stopSpeaking } from '../lib/voice';
+import { MIC_BLOCKED, askMic, canListen, joinText, listen } from '../lib/voice';
 import { MAX_FILES, checkFile, uploadFile } from '../lib/media';
 import { Spinner } from './ui';
 
 const isDesktop = () => window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
 
-// voice = מצב שיחה קולית: ההקשבה נגמרת לבד אחרי שתיקה וההודעה נשלחת מיד. listenTick = בקשה מהצ'אט להתחיל להקשיב (אחרי שהתשובה הוקראה)
+// voice = מצב שיחה קולית: ההקשבה נגמרת לבד אחרי שתיקה וההודעה נשלחת מיד. listenTick = בקשה מהצ'אט להתחיל להקשיב (אחרי שהבוט ענה)
 export default function Composer({ agents, to, setTo, onSend, sending, voice = false, listenTick = 0, onMicBlocked }) {
   const [text, setText] = useState('');
   const [items, setItems] = useState([]); // { key, name, kind, progress, id?, error? }
@@ -86,7 +86,6 @@ export default function Composer({ agents, to, setTo, onSend, sending, voice = f
   };
   const startListening = (auto) => {
     if (recRef.current) return;
-    stopSpeaking(); // מדברים – הבוט מפסיק להקריא
     setNotice('');
     const base = textRef.current;
     let finished = false; // אחרי הסיום (ובטח אחרי שליחה) – מתעלמים מתוצאות מאוחרות (כרום באנדרואיד שולח כאלה)
@@ -123,7 +122,6 @@ export default function Composer({ agents, to, setTo, onSend, sending, voice = f
   };
   const toggleMic = async () => {
     if (listening) return stopListening();
-    stopSpeaking();
     // קודם הרשאה למיקרופון (כאן כרום מקפיץ את השאלה)
     if (!(await askMic())) return setNotice(MIC_BLOCKED);
     startListening(voice);
