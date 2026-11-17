@@ -287,7 +287,7 @@
 - תיאור: `sidra_2k/README.md`. סדרת הטוב מ-7 (לייקרס 2010 נגד ספרס 2010) בסגנון גרפיקת שידור; לוחצים מי ניצח בכל משחק. בלי סיסמה.
 - `sidra_2k/web` → https://sidra-2k.pages.dev · `sidra_2k/api` → Worker `sidra-2k-api` (Durable Object `Series` אחד). עלייה: `sidra-2k.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd sidra_2k/api && npm test` · `cd sidra_2k/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
-- סמלי הקבוצות – ציור משלנו בצבעים (לא הלוגו הרשמי). **למזג לבד** אחרי שהבדיקות ירוקות ולבדוק שהעלייה הצליחה.
+- לוגואים אמיתיים מ-`cdn.nba.com` (ב-CSP של `_headers`), עם נפילה לציור משלנו. **למזג לבד** אחרי שהבדיקות ירוקות ולבדוק שהעלייה הצליחה.
 
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).

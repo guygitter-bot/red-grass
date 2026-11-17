@@ -173,3 +173,11 @@ input:focus-visible {
     transition: none !important;
   }
 }
+
+/* הלוגו של הספרס כהה – הילה עדינה כדי שיבלוט על הרקע השחור */
+.team-SAS .logo-shadow,
+.pick-SAS img,
+.won-SAS img,
+.champ-SAS img {
+  filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.7)) drop-shadow(0 10px 18px rgba(0, 0, 0, 0.5));
+}
