@@ -937,7 +937,7 @@ test('the Instagram bot has the ig skill pack built in, the owner voice and the 
   const c2 = (await call(env2, '/app/conv/new', {}, t2)).data;
   await call(env2, '/app/send', { id: c2.id, text: 'היי', to: 'creative' }, t2);
   await env2.team.alarm();
-  assert.ok(!calls2[0].tools.some((t) => t.name === 'use_skill'));
+  assert.doesNotMatch(calls2[0].system[0].text, /ig-reel/);
 });
 
 test('updating an installed skill keeps the old version working until approved; declining keeps it', async () => {
@@ -1231,4 +1231,17 @@ test('creative makes an image (only after approval) and a landing page file with
   await call(e2, '/app/send', { id: cv.id, text: 'היי', to: 'campaigns' }, t2);
   await e2.team.alarm();
   assert.ok(!c2[0].tools.some((t) => t.name === 'make_file' || t.name === 'make_image'));
+});
+
+test('the design skill is always active for creative and the developer only', async () => {
+  const { env, aiCalls } = setupEnv({ replies: [{ content: text('א') }, { content: text('ב') }] });
+  const token = await signIn(env);
+  for (const to of ['creative', 'campaigns']) {
+    const { data: c } = await call(env, '/app/conv/new', {}, token);
+    await call(env, '/app/send', { id: c.id, text: 'היי', to }, token);
+    await env.team.alarm();
+  }
+  assert.match(aiCalls[0].system[0].text, /design-system – עיצוב מקצועי/);
+  assert.match(aiCalls[0].system[0].text, /Landing page structure/);
+  assert.doesNotMatch(aiCalls[1].system[0].text, /design-system/);
 });
