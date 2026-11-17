@@ -191,7 +191,7 @@ test('a message to one bot skips the routing; the model level can be changed in 
   const { env, aiCalls } = setupEnv({ replies: [{ content: text('בסדר') }] });
   const token = await signIn(env);
   const set = await call(env, '/app/settings', { models: { creative: 'opus', campaigns: 'nonsense' } }, token);
-  assert.deepEqual(set.data.models, { creative: 'opus', campaigns: 'opus', editor: 'sonnet', librarian: 'sonnet', manager: 'opus' });
+  assert.deepEqual(set.data.models, { creative: 'opus', campaigns: 'opus', editor: 'sonnet', librarian: 'sonnet', travel: 'sonnet', manager: 'opus' });
   const { data: conv } = await call(env, '/app/conv/new', {}, token);
   await call(env, '/app/send', { id: conv.id, text: 'רעיון', to: 'creative' }, token);
   await env.team.alarm();
@@ -350,7 +350,7 @@ test('a Telegram topic continues in the app with its history and the shared memo
 
   const token = await signIn(env);
   const team = (await call(env, '/app/team', {}, token)).data;
-  assert.deepEqual(team.agents.map((a) => a.key), ['creative', 'campaigns', 'editor', 'librarian', 'manager']);
+  assert.deepEqual(team.agents.map((a) => a.key), ['creative', 'campaigns', 'editor', 'librarian', 'travel', 'manager']);
   const conv = team.convs.find((c) => c.source === 'tg');
   assert.equal(conv.id, 'tg:-100:5');
   let view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
@@ -751,4 +751,42 @@ test('a task stops when it reaches its spending cap', async () => {
   assert.equal(aiCalls.length, 1);
   const view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
   assert.match(view.messages.at(-1).text, /לתקרה של \$0\.001/);
+});
+
+// ---------- בוט הטיולים ----------
+test('the travel bot researches more, and saves skills only for itself', async () => {
+  const body = 'שיטה לחיפוש טיסות זולות: גמישות בתאריכים, השוואה ב-3 אתרים, בדיקת כבודה, והזמנה באתר החברה.';
+  const { env, aiCalls } = setupEnv({
+    replies: [
+      { stop: 'tool_use', content: tool('teach', { name: 'cheap-flights', title: 'טיסות זולות', when: 'כשמחפשים טיסות', body, agents: ['creative', 'editor'], source: 'אתר' }) },
+      { stop: 'tool_use', content: tool('unteach', { name: 'reels' }) },
+      { content: text('שמרתי לעצמי שיטה') },
+      { stop: 'tool_use', content: tool('use_skill', { name: 'cheap-flights' }) },
+      { content: text('מחפש לפי השיטה') },
+    ],
+  }, { MAAGAR: fakeMaagar() });
+  const token = await signIn(env);
+  await env.team.storage.put('skills', [{ name: 'reels', title: 'רילס', when: 'ריל', body: 'x'.repeat(50), agents: ['editor'], at: 1 }]);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'תלמד איך מוצאים טיסות זולות', to: 'travel' }, token);
+  await env.team.alarm();
+
+  const travel = aiCalls[0];
+  assert.match(travel.system[0].text, /^You are "טיולים"/);
+  assert.equal(travel.tools.find((t) => t.name === 'web_search').max_uses, 12);
+  assert.deepEqual(travel.tools.find((t) => t.name === 'teach').input_schema.properties.agents.items.enum, ['travel']);
+  assert.ok(travel.tools.some((t) => t.name === 'maagar_search'));
+  assert.ok(!travel.tools.some((t) => t.name === 'maagar_learn'));
+  // גם אם ביקש לבוטים אחרים – נשמר רק לו; ואת הסקיל של העורך הוא לא יכול למחוק
+  const skills = (await call(env, '/app/skills', {}, token)).data.skills;
+  assert.deepEqual(skills.map((s) => [s.name, s.agents]), [['reels', ['editor']], ['cheap-flights', ['travel']]]);
+  assert.match(aiCalls[2].messages.at(-1).content[0].content, /No such skill/);
+
+  // בתור הבא הוא רואה את הסקיל שלו
+  await call(env, '/app/send', { id: conv.id, text: 'טיסה לרומא באפריל', to: 'travel' }, token);
+  await env.team.alarm();
+  assert.match(aiCalls[3].system[0].text, /- cheap-flights: טיסות זולות/);
+  assert.match(aiCalls[4].messages.at(-1).content[0].content, /השוואה ב-3 אתרים/);
+  // לבוט אחר אין כלי לימוד
+  assert.equal(aiCalls[3].tools.filter((t) => t.name === 'teach').length, 1);
 });

@@ -391,6 +391,8 @@ export class Team {
     const maagar = Boolean(this.env.MAAGAR);
     let cache = null;
     const items = () => (cache ||= listItems(this.env));
+    // הבוט שבתור עכשיו (כלים כמו teach בודקים מי קורא להם)
+    let current = agent;
     const tools = {
       app_info: ({ app: name }) => appInfo(name),
       remember: async ({ note }) => {
@@ -419,15 +421,22 @@ export class Team {
         cache = null;
         return `Started. The repository is studying it in the background (1-2 minutes); the result will be item ${learnId} – search or read it again later.`;
       },
+      // הספרן מלמד את כולם; בוט שלומד לעצמו (טיולים) – רק את עצמו
       teach: async (input) => {
-        const r = addSkill((await this.storage.get('skills')) || [], input, AGENT_KEYS);
+        const own = current !== 'librarian';
+        const r = addSkill((await this.storage.get('skills')) || [], own ? { ...input, agents: [current] } : input, AGENT_KEYS);
+        if (!r.error && own) {
+          const before = ((await this.storage.get('skills')) || []).find((s) => s.name === r.saved.name);
+          if (before && String(before.agents) !== String([current])) return 'A team skill with this name already exists. Choose another name.';
+        }
         if (r.error) return r.error;
         await this.storage.put('skills', r.skills);
         return `Saved skill "${r.saved.name}" for ${r.saved.agents.join(', ')}.`;
       },
       unteach: async ({ name }) => {
         const skills = (await this.storage.get('skills')) || [];
-        const left = skills.filter((s) => s.name !== String(name || '').trim());
+        const mine = (s) => current === 'librarian' || String(s.agents) === String([current]);
+        const left = skills.filter((s) => s.name !== String(name || '').trim() || !mine(s));
         if (left.length === skills.length) return `No such skill. Existing: ${skills.map((s) => s.name).join(', ') || '-'}`;
         await this.storage.put('skills', left);
         return 'Removed.';
@@ -442,6 +451,7 @@ export class Team {
     const limit = () => (job.rounds ? MAX_PLAN_TURNS : MAX_TURNS);
     // job.budget = תקרת הוצאה למשימה (משימות קבועות); job.spent = כמה עלתה עד עכשיו
     while (agent && job.turns < limit() && !(job.budget && job.spent >= job.budget)) {
+      current = agent;
       const { token, prefix } = app ? {} : this.speaker(job, agent);
       if (app) await this.setBusy(key, agent);
       else await typing(this.env, token, job);
