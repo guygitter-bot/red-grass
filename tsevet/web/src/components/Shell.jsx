@@ -1,5 +1,5 @@
 // מסגרת האפליקציה: בטלפון – סרגל עליון ותפריט תחתון; במחשב – עמודה ימנית עם התפריט והשיחות
-import { Users, MessageSquare, Wallet, Settings as Cog, Moon, Sun, Plus, Clock } from 'lucide-react';
+import { Users, MessageSquare, Wallet, Settings as Cog, Moon, Sun, Plus, Clock, DoorOpen } from 'lucide-react';
 import { go } from '../lib/route';
 import { getTheme, isDark, setTheme } from '../lib/theme';
 import { useState } from 'react';
@@ -10,6 +10,7 @@ import Costs from './Costs';
 import Settings from './Settings';
 import Schedules from './Schedules';
 import { newConversation } from '../lib/convs';
+import RoomSheet from './RoomSheet';
 
 const NAV = [
   ['team', '/', 'צוות', Users],
@@ -40,6 +41,7 @@ export default function Shell({ route, team, error, refresh, onLogout }) {
   const inChat = route.name === 'chat';
   const agents = team?.agents || [];
   const convs = team?.convs || [];
+  const [roomOpen, setRoomOpen] = useState(false);
 
   return (
     <div className="flex h-dvh flex-col bg-page lg:flex-row">
@@ -62,12 +64,17 @@ export default function Shell({ route, team, error, refresh, onLogout }) {
           ))}
         </nav>
         <div className="px-3 pt-3">
-          <button onClick={() => newConversation(null)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 font-medium text-white hover:opacity-90">
-            <Plus size={18} /> שיחה חדשה
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => newConversation(null)} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-accent px-3 py-2.5 font-medium text-white hover:opacity-90">
+              <Plus size={18} /> שיחה חדשה
+            </button>
+            <button onClick={() => setRoomOpen(true)} className="flex items-center justify-center gap-1.5 rounded-xl border border-line px-3 py-2.5 font-medium hover:bg-soft">
+              <DoorOpen size={18} /> חדר
+            </button>
+          </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
-          <ConvList convs={convs} activeId={inChat ? route.id : null} refresh={refresh} compact />
+          <ConvList convs={convs} agents={agents} activeId={inChat ? route.id : null} refresh={refresh} compact />
         </div>
       </aside>
 
@@ -84,10 +91,15 @@ export default function Shell({ route, team, error, refresh, onLogout }) {
         {route.name === 'team' && <TeamBoard team={team} />}
         {route.name === 'chats' && (
           <div className="mx-auto max-w-2xl p-3">
-            <button onClick={() => newConversation(null)} className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 font-medium text-white">
-              <Plus size={18} /> שיחה חדשה
-            </button>
-            <ConvList convs={convs} refresh={refresh} />
+            <div className="mb-3 flex gap-2">
+              <button onClick={() => newConversation(null)} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-accent px-3 py-2.5 font-medium text-white">
+                <Plus size={18} /> שיחה חדשה
+              </button>
+              <button onClick={() => setRoomOpen(true)} className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-line bg-card px-3 py-2.5 font-medium">
+                <DoorOpen size={18} /> חדר חדש
+              </button>
+            </div>
+            <ConvList convs={convs} agents={agents} refresh={refresh} />
           </div>
         )}
         {route.name === 'chat' && <Chat key={route.id} id={route.id} agents={agents} refresh={refresh} />}
@@ -95,6 +107,15 @@ export default function Shell({ route, team, error, refresh, onLogout }) {
         {route.name === 'schedules' && <Schedules agents={agents} />}
         {route.name === 'settings' && <Settings team={team} onLogout={onLogout} />}
       </main>
+      {roomOpen && (
+        <RoomSheet
+          agents={agents}
+          onClose={() => {
+            setRoomOpen(false);
+            refresh();
+          }}
+        />
+      )}
 
       {/* טלפון: תפריט תחתון (לא בצ'אט, כדי שהשורה לכתיבה לא תוסתר) */}
       {!inChat && (

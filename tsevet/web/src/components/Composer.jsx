@@ -8,7 +8,7 @@ import { Spinner } from './ui';
 const isDesktop = () => window.matchMedia?.('(hover: hover) and (pointer: fine)').matches;
 
 // voice = מצב שיחה קולית: ההקשבה נגמרת לבד אחרי שתיקה וההודעה נשלחת מיד. listenTick = בקשה מהצ'אט להתחיל להקשיב (אחרי שהבוט ענה)
-export default function Composer({ agents, to, setTo, onSend, sending, voice = false, listenTick = 0, onMicBlocked }) {
+export default function Composer({ agents, room = false, to, setTo, onSend, sending, voice = false, listenTick = 0, onMicBlocked }) {
   const [text, setText] = useState('');
   const [items, setItems] = useState([]); // { key, name, kind, progress, id?, error? }
   const [notice, setNotice] = useState('');
@@ -162,7 +162,7 @@ export default function Composer({ agents, to, setTo, onSend, sending, voice = f
       <div className="mb-1.5 flex items-center gap-2 text-xs text-muted">
         <label htmlFor="to">מי עונה:</label>
         <select id="to" value={to || ''} onChange={(e) => setTo(e.target.value || null)} className="rounded-lg border border-line bg-page px-2 py-1 text-xs text-ink">
-          <option value="">כל הצוות</option>
+          <option value="">{room ? 'כל החדר' : 'כל הצוות'}</option>
           {agents.map((a) => (
             <option key={a.key} value={a.key}>
               {a.emoji} {a.name}
