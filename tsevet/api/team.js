@@ -15,9 +15,11 @@
 // ב-Telegram התשובה נשלחת לקבוצה; באפליקציה היא פשוט נשמרת בשיחה, והאפליקציה מרעננת.
 import Anthropic from '@anthropic-ai/sdk';
 import { AGENTS, AGENT_KEYS, MODELS, TG_KEYS, aiMessage, appInfo, label, pickAgent, priceOf, runAgent, temporary } from './agents.js';
-import { APP_PREFIX, addFile, checkFileUrl, getSettings, handleApp } from './app.js';
+import { APP_PREFIX, addFile, checkFileUrl, getSettings, handleApp, newId as convIdNew } from './app.js';
 import { addSkill, learnFrom, listItems, read as maagarRead, search as maagarSearch, skillsOf } from './maagar.js';
 import { genDone, genFail, genReady, genStart, proposeClip, runGenJob } from './gen.js';
+import { DEFAULT_BUDGET, isDue, nextOf } from './schedule.js';
+import { notifyOwner } from './notify.js';
 import { renderDone, renderFail, renderInput, renderJob, startRender } from './render.js';
 import { botIdOf, downloadImage, send, tokenOf, typing } from './telegram.js';
 
@@ -126,6 +128,44 @@ export class Team {
       default:
         throw Object.assign(new Error('not found'), { status: 404 });
     }
+  }
+
+  // ---------- משימות קבועות (schedule.js) ----------
+  // מה שהגיע זמנו נכנס לתור, כאילו הבעלים כתב אותו בשיחה של המשימה
+  async runSchedules(now = Date.now()) {
+    const schedules = (await this.storage.get('schedules')) || [];
+    const due = schedules.filter((s) => isDue(s, now));
+    for (const s of due) await this.startSchedule(s, now);
+  }
+
+  async startSchedule(s, now = Date.now()) {
+    const schedules = (await this.storage.get('schedules')) || [];
+    const item = schedules.find((x) => x.id === s.id);
+    if (!item) return null;
+    // שיחה משלה לכל משימה קבועה (נוצרת בפעם הראשונה, או מחדש אם נמחקה)
+    const convs = (await this.storage.get('convs')) || [];
+    let conv = convs.find((c) => c.id === item.conv);
+    if (!conv) {
+      conv = { id: convIdNew(), title: `⏰ ${item.title}`, at: now };
+      convs.unshift(conv);
+      item.conv = conv.id;
+    }
+    conv.at = now;
+    await this.storage.put('convs', convs);
+    item.lastRun = now;
+    await this.storage.put('schedules', schedules);
+    const key = `${APP_PREFIX}${conv.id}`;
+    await this.pushHistory(key, { who: 'owner', text: item.text, scheduled: item.title, at: now });
+    await this.enqueue({ id: newId(), chan: 'app', key, target: item.to, turns: 0, attempts: 0, budget: item.budget || DEFAULT_BUDGET, notify: item.title });
+    return conv.id;
+  }
+
+  // ההשכמה הבאה: המשימה הקבועה הקרובה (אם אין עבודה בתור)
+  async armSchedules() {
+    const next = nextOf((await this.storage.get('schedules')) || [], Date.now());
+    if (!next) return;
+    const current = await this.storage.getAlarm();
+    if (!current || current > next || current < Date.now()) await this.storage.setAlarm(next);
   }
 
   // ---------- התור והשיחות (משותף לשני הערוצים) ----------
@@ -285,11 +325,12 @@ export class Team {
   async alarm() {
     // במופע של יצירת סרטון ("gen:<id>") זו כל העבודה
     if (await runGenJob(this)) return;
+    await this.runSchedules();
     const started = Date.now();
     while (Date.now() - started < ALARM_BUDGET_MS) {
       const q = (await this.storage.get('q')) || [];
       const job = q[0];
-      if (!job) return;
+      if (!job) return this.armSchedules();
       try {
         await this.work(job);
       } catch (e) {
@@ -302,6 +343,8 @@ export class Team {
         await this.notice(job, `⚠️ ${aiMessage(e)}`).catch(() => {});
       }
       await this.setBusy(this.jobKey(job), null);
+      // התראה לטלפון כשמשימה הסתיימה (משימה קבועה – תמיד; רגילה – אם ביקשו בהגדרות)
+      if (job.chan === 'app') await notifyOwner(this, job).catch((e) => console.error('notify', e));
       await this.storage.put('q', ((await this.storage.get('q')) || []).filter((j) => j.id !== job.id));
     }
     await this.storage.setAlarm(Date.now() + 1000);
@@ -397,7 +440,8 @@ export class Team {
 
     // תוכנית של המנהל: job.plan = השלבים שנשארו, job.step / job.steps = איפה אנחנו, job.rounds = כמה תוכניות היו
     const limit = () => (job.rounds ? MAX_PLAN_TURNS : MAX_TURNS);
-    while (agent && job.turns < limit()) {
+    // job.budget = תקרת הוצאה למשימה (משימות קבועות); job.spent = כמה עלתה עד עכשיו
+    while (agent && job.turns < limit() && !(job.budget && job.spent >= job.budget)) {
       const { token, prefix } = app ? {} : this.speaker(job, agent);
       if (app) await this.setBusy(key, agent);
       else await typing(this.env, token, job);
@@ -418,7 +462,8 @@ export class Team {
         gen: app && genReady(this.env),
         task, assign: agent === 'manager' && (job.rounds || 0) < MAX_PLAN_ROUNDS,
       }, tools);
-      await this.addCost(r.usage, agent);
+      const usd = await this.addCost(r.usage, agent);
+      job = { ...job, spent: (job.spent || 0) + usd };
       // נעצר באמצע (מהאפליקציה)? התשובה לא נשמרת
       if (!(await this.alive(job))) return;
 
@@ -452,14 +497,16 @@ export class Team {
       agent = next;
     }
     if (agent) {
-      await this.notice(job, '⏸️ עצרנו כאן כדי לא לרוץ סתם. לכתוב "תמשיכו" כדי להמשיך.', job.private ? job.via : team[0]);
+      await this.notice(job, job.budget && job.spent >= job.budget
+        ? `⏸️ עצרנו כי המשימה הגיעה לתקרה של $${job.budget}. לכתוב "תמשיכו" כדי להמשיך.`
+        : '⏸️ עצרנו כאן כדי לא לרוץ סתם. לכתוב "תמשיכו" כדי להמשיך.', job.private ? job.via : team[0]);
     }
   }
 
   // who = הבוט שעבד (או 'router' – ההחלטה מי עונה), כדי לראות באפליקציה כמה כל אחד עולה
   async addCost(usage = [], who = '') {
     const usd = usage.reduce((s, u) => s + priceOf(u), 0);
-    if (!usd) return;
+    if (!usd) return 0;
     const date = israelDate();
     const key = `cost:${date.slice(0, 7)}`;
     const c = (await this.storage.get(key)) || { usd: 0, days: {} };
@@ -467,5 +514,6 @@ export class Team {
     c.days[date.slice(8)] = (c.days[date.slice(8)] || 0) + usd;
     if (who) c.agents = { ...(c.agents || {}), [who]: ((c.agents || {})[who] || 0) + usd };
     await this.storage.put(key, c);
+    return usd;
   }
 }

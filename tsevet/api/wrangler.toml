@@ -12,6 +12,8 @@ GITHUB_REPO = "guygitter-bot/red-grass"
 VIDEO_MODEL = "gemini-omni-1.2-flash"
 # תקרה יומית של סרטונים שנוצרים (כל אחד גם מאושר בכפתור)
 DAILY_CLIPS = "10"
+# כתובת האפליקציה (לקישור בהתראות לטלפון)
+APP_URL = "https://tsevet-ai.pages.dev/"
 
 # קבצים שמעלים בשיחה (תמונות, סרטונים, שירים) וסרטונים ערוכים
 [[r2_buckets]]
