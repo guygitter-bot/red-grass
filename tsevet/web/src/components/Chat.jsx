@@ -46,6 +46,13 @@ export default function Chat({ id, agents, refresh }) {
   // גלילה למטה רק אם המשתמשת כבר קרובה לתחתית, או כששלחה הודעה
   const count = conv?.messages?.length || 0;
   const busyKey = conv?.busy ? 'b' : '';
+
+  // כשהבוטים מסיימים – לרענן גם את רשימת השיחות ואת הלוח (שהסימון "עובד" ייעלם מיד)
+  const wasBusy = useRef(false);
+  useEffect(() => {
+    if (wasBusy.current && !busyKey) refresh();
+    wasBusy.current = Boolean(busyKey);
+  }, [busyKey, refresh]);
   useEffect(() => {
     const el = scroller.current;
     if (!el) return;
@@ -135,7 +142,10 @@ export default function Chat({ id, agents, refresh }) {
           {conv?.busy && (
             <div className="flex items-center gap-2 self-end rounded-full border border-line bg-card px-3.5 py-2 text-sm">
               <Spinner size={12} />
-              <span>{busyAgent ? `${busyAgent.emoji} ${busyAgent.name} כותב…` : 'הצוות מחליט מי עונה…'}</span>
+              <span>
+                {busyAgent ? `${busyAgent.emoji} ${busyAgent.name} כותב…` : 'הצוות מחליט מי עונה…'}
+                {conv.busy.step && <span className="text-muted"> (שלב {conv.busy.step.n} מתוך {conv.busy.step.of})</span>}
+              </span>
               <button onClick={stop} className="inline-flex items-center gap-1 rounded-full border border-line px-2.5 py-0.5 text-xs font-medium text-bad hover:bg-soft">
                 <Square size={10} fill="currentColor" /> עצור
               </button>

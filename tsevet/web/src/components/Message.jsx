@@ -57,10 +57,31 @@ function MessageBase({ m, agents }) {
     <div className="flex max-w-[92%] items-start gap-2 self-end lg:max-w-[75%]">
       <Avatar agent={agent} agents={agents} size={34} />
       <div className="min-w-0">
-        <div className="mb-0.5 px-1 text-xs font-bold text-muted">{agent.name}</div>
+        <div className="mb-0.5 px-1 text-xs font-bold text-muted">
+          {agent.name}
+          {m.step && <span className="ms-1.5 rounded-full bg-soft px-2 py-0.5 font-medium text-accent-ink">שלב {m.step.n} מתוך {m.step.of}</span>}
+        </div>
         <div className="rounded-2xl rounded-ss-md border border-line bg-card px-3.5 py-2.5">
           <Body m={m} />
         </div>
+        {m.plan?.length > 0 && (
+          <div className="mt-1 rounded-2xl border border-line bg-soft px-3 py-2 text-sm">
+            <div className="mb-1 text-xs font-bold text-accent-ink">📋 התוכנית</div>
+            <ol className="space-y-1">
+              {m.plan.map((s, n) => {
+                const who = findAgent(agents, s.to);
+                return (
+                  <li key={n} className="flex gap-1.5">
+                    <span className="num shrink-0 text-muted">{n + 1}.</span>
+                    <span className="min-w-0 break-words">
+                      <span className="font-medium">{who ? `${who.emoji} ${who.name}` : s.to}:</span> {s.request}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        )}
         {m.handoff && (
           <div className="mt-1 inline-block rounded-full bg-soft px-3 py-1 text-xs text-accent-ink">
             ↪️ ל{to ? `${to.emoji} ${to.name}` : m.handoff.to}: {m.handoff.request}

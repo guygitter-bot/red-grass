@@ -149,6 +149,8 @@ async function convView(t, id, origin) {
       i, who: h.who, text: h.text || '', at: h.at || 0,
       ...(h.photo ? { photo: true } : {}),
       ...(h.handoff ? { handoff: h.handoff } : {}),
+      ...(h.plan ? { plan: h.plan } : {}),
+      ...(h.step ? { step: h.step } : {}),
       ...(files.length ? { files } : {}),
       ...(renders.length ? { renders } : {}),
       ...(gens.length ? { gens } : {}),
@@ -162,7 +164,8 @@ async function convView(t, id, origin) {
     title: meta?.title || titles[id] || (id.startsWith('tg:') ? 'Telegram' : 'שיחה חדשה'),
     source: id.startsWith('tg:') ? 'tg' : 'app',
     messages,
-    busy: job ? { agent: now?.agent || job.target || null } : null,
+    // step = איפה התוכנית של המנהל עומדת (שלב n מתוך of)
+    busy: job ? { agent: now?.agent || job.target || null, ...(job.plan?.length ? { step: { n: job.step, of: job.steps } } : {}) } : null,
     pending,
   };
 }

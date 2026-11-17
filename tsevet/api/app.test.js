@@ -191,7 +191,7 @@ test('a message to one bot skips the routing; the model level can be changed in 
   const { env, aiCalls } = setupEnv({ replies: [{ content: text('בסדר') }] });
   const token = await signIn(env);
   const set = await call(env, '/app/settings', { models: { creative: 'opus', campaigns: 'nonsense' } }, token);
-  assert.deepEqual(set.data.models, { creative: 'opus', campaigns: 'opus', editor: 'sonnet', librarian: 'sonnet' });
+  assert.deepEqual(set.data.models, { creative: 'opus', campaigns: 'opus', editor: 'sonnet', librarian: 'sonnet', manager: 'opus' });
   const { data: conv } = await call(env, '/app/conv/new', {}, token);
   await call(env, '/app/send', { id: conv.id, text: 'רעיון', to: 'creative' }, token);
   await env.team.alarm();
@@ -350,7 +350,7 @@ test('a Telegram topic continues in the app with its history and the shared memo
 
   const token = await signIn(env);
   const team = (await call(env, '/app/team', {}, token)).data;
-  assert.deepEqual(team.agents.map((a) => a.key), ['creative', 'campaigns', 'editor', 'librarian']);
+  assert.deepEqual(team.agents.map((a) => a.key), ['creative', 'campaigns', 'editor', 'librarian', 'manager']);
   const conv = team.convs.find((c) => c.source === 'tg');
   assert.equal(conv.id, 'tg:-100:5');
   let view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
@@ -596,4 +596,71 @@ test('clip generation: cancel, daily limit, a Google error in Hebrew, and no too
   await call(off.env, '/app/send', { id: c2.id, text: 'היי', to: 'creative' }, t2);
   await off.env.team.alarm();
   assert.ok(!off.aiCalls[0].tools.some((t) => t.name === 'make_video'));
+});
+
+// ---------- המנהל ----------
+test('the manager splits a task, each teammate does its step in order, and the manager reviews and summarizes', async () => {
+  let release;
+  const wait = new Promise((r) => { release = r; });
+  const { env, aiCalls } = setupEnv({
+    replies: [
+      { stop: 'tool_use', content: [...text('הבנתי: ריל לסדר. התוכנית: תסריט ואז קמפיין.'), ...tool('assign', { steps: [
+        { to: 'creative', request: 'תסריט לריל של 20 שניות לסדר' },
+        { to: 'manager', request: 'לא אמור לעבור' },
+        { to: 'campaigns', request: 'תוכנית קמפיין קטנה לריל' },
+      ] })] },
+      { wait, content: [...text('הנה התסריט'), ...tool('handoff', { to: 'editor', request: 'לא אמור לעבור' })] },
+      { content: text('הנה הקמפיין') },
+      { content: text('סיכום: התסריט והקמפיין מוכנים') },
+    ],
+  });
+  const token = await signIn(env);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'תכין לי ריל וקמפיין לסדר', to: 'manager' }, token);
+  const running = env.team.alarm();
+  await new Promise((r) => setTimeout(r, 10));
+  // באמצע: מי עובד ובאיזה שלב
+  assert.deepEqual((await call(env, '/app/conv', { id: conv.id }, token)).data.busy, { agent: 'creative', step: { n: 1, of: 2 } });
+  release();
+  await running;
+
+  const view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  assert.deepEqual(view.messages.map((m) => m.who), ['owner', 'manager', 'creative', 'campaigns', 'manager'], view.messages.at(-1).text);
+  // המנהל לא מקצה לעצמו; שלבים בסדר; העברה של בוט בתוך שלב לא נלקחת
+  assert.deepEqual(view.messages[1].plan.map((s) => s.to), ['creative', 'campaigns']);
+  assert.deepEqual(view.messages[2].step, { n: 1, of: 2 });
+  assert.equal(view.messages[2].handoff, undefined);
+  assert.deepEqual(view.messages[3].step, { n: 2, of: 2 });
+  assert.equal(view.messages[4].text, 'סיכום: התסריט והקמפיין מוכנים');
+  assert.equal(view.busy, null);
+
+  const [manager, creative, campaigns, review] = aiCalls;
+  assert.equal(manager.model, MODELS.opus);
+  assert.ok(manager.tools.some((t) => t.name === 'assign'));
+  assert.ok(!manager.tools.some((t) => t.name === 'handoff'));
+  // הבוט בשלב מקבל את ההוראה שלו, ובלי כלי העברה
+  assert.match(creative.messages[0].content, /step 1 of 2: "תסריט לריל של 20 שניות לסדר"/);
+  assert.ok(!creative.tools.some((t) => t.name === 'handoff'));
+  // השלב השני רואה את התוכנית ואת התוצאה של הראשון
+  assert.match(campaigns.messages[0].content, /📋 התוכנית:\n1\. ל🎨 קריאייטיב: תסריט/);
+  assert.match(campaigns.messages[0].content, /הנה התסריט/);
+  assert.match(review.messages[0].content, /All the steps of your plan are done/);
+  // אפשר סבב תיקון אחד בלבד
+  assert.ok(review.tools.some((t) => t.name === 'assign'));
+});
+
+test('the manager gets one fix-up round at most, and stop ends the plan', async () => {
+  const assign = (who) => ({ stop: 'tool_use', content: tool('assign', { steps: [{ to: who, request: 'עוד משהו' }] }) });
+  const { env, aiCalls } = setupEnv({
+    replies: [assign('creative'), { content: text('1') }, assign('editor'), { content: text('2') }, { content: text('סיכום סופי') }],
+  });
+  const token = await signIn(env);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'משימה', to: 'manager' }, token);
+  await env.team.alarm();
+  const view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  assert.deepEqual(view.messages.map((m) => m.who), ['owner', 'manager', 'creative', 'manager', 'editor', 'manager']);
+  // בסבב השני כבר אין assign
+  assert.ok(!aiCalls[4].tools.some((t) => t.name === 'assign'));
+  assert.equal(view.messages.at(-1).text, 'סיכום סופי');
 });

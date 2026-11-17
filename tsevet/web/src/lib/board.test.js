@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { circlePositions, pairs, avatarSize } from './board';
+import { boardLayout, circlePositions, pairs, avatarSize } from './board';
 
 describe('board', () => {
   it('הראשון למעלה במרכז', () => {
@@ -17,5 +17,20 @@ describe('board', () => {
   });
   it('עיגול קטן יותר עם יותר בוטים', () => {
     expect(avatarSize(10)).toBeLessThan(avatarSize(3));
+  });
+  it('המנהל באמצע, מחובר לכולם', () => {
+    const agents = ['creative', 'campaigns', 'editor', 'librarian', 'manager'].map((key) => ({ key }));
+    const { pos, lines, mid } = boardLayout(agents);
+    expect(mid).toBe(4);
+    expect(pos[4]).toEqual({ x: 50, y: 50 });
+    expect(Math.round(pos[0].x)).toBe(50);
+    expect(lines).toHaveLength(6 + 4);
+    expect(lines.filter(([a, b]) => a === 4 || b === 4)).toHaveLength(4);
+  });
+  it('בלי מנהל – מעגל רגיל', () => {
+    const { pos, lines, mid } = boardLayout([{ key: 'a' }, { key: 'b' }, { key: 'c' }]);
+    expect(mid).toBe(-1);
+    expect(lines).toHaveLength(3);
+    expect(pos[0].y).toBeLessThan(30);
   });
 });
