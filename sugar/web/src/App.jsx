@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, Camera, Calculator as CalcIcon, CalendarDays, CalendarRange, ChevronLeft, Cloud, CloudOff, Droplet, Menu, MessageCircle, Moon, Presentation, RefreshCw, Settings as Gear, Sun, UtensilsCrossed } from 'lucide-react';
 import { prepare, today } from './lib/diary';
-import { sync, useStore } from './lib/store';
+import { basalMigration } from './lib/migrate';
+import { save, sync, useStore } from './lib/store';
 import { isDark, setTheme } from './lib/theme';
 import { getMe } from './lib/me';
 import Login from './components/Login';
@@ -89,6 +90,13 @@ export default function App() {
   const [dark, setDark] = useState(isDark());
   const day = today();
   const data = useMemo(() => ({ ...prepare(records), today: day }), [records, day]);
+
+  // המרות של נתונים ישנים (למשל הערות "זריקה לילית" → זריקה לילית) – אחרי סנכרון, כדי לעבוד על הנתונים המלאים
+  useEffect(() => {
+    if (status !== 'ok') return;
+    const changes = basalMigration(records);
+    if (changes.length) save(changes);
+  }, [status, records]);
 
   useEffect(() => {
     const onHash = () => {
