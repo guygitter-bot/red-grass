@@ -7,6 +7,7 @@ import Markdown from './Markdown';
 import { FileView, RenderCard } from './Files';
 import { GenCard } from './Gen';
 import { DevCard } from './DevCard';
+import { ImageCard } from './ImageCard';
 import { SkillCard } from './SkillCard';
 
 function Body({ m }) {
@@ -32,6 +33,13 @@ function Body({ m }) {
         <div className="mt-2 space-y-2">
           {m.skills.map((s) => (
             <SkillCard key={s.name} skill={s} />
+          ))}
+        </div>
+      )}
+      {m.images?.length > 0 && (
+        <div className="mt-2 space-y-2">
+          {m.images.map((g) => (
+            <ImageCard key={g.id} image={g} />
           ))}
         </div>
       )}

@@ -41,7 +41,7 @@ function fakeBucket() {
       const offset = m ? Number(m[1]) : 0;
       const end = m && m[2] ? Number(m[2]) : o.bytes.length - 1;
       const part = o.bytes.slice(offset, end + 1);
-      return { size: o.bytes.length, body: part, range: m ? { offset, length: part.length } : undefined, arrayBuffer: async () => o.bytes.buffer };
+      return { size: o.bytes.length, body: part, range: m ? { offset, length: part.length } : undefined, arrayBuffer: async () => o.bytes.buffer, text: async () => new TextDecoder().decode(o.bytes) };
     },
     async delete(key) { map.delete(key); },
   };
@@ -1165,4 +1165,70 @@ test('the developer reads the code, proposes a change, and nothing runs or merge
   assert.ok(gh.includes('PUT /repos/me/repo/pulls/7/merge'));
   view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
   assert.equal(view.messages.flatMap((m) => m.devs || []).find((d) => d.id === card.id).status, 'merged');
+});
+
+// ---------- קבצים ותמונות ----------
+test('creative makes an image (only after approval) and a landing page file with it, served safely', async () => {
+  const google = [];
+  const PNG = btoa('fake-png-bytes');
+  const FETCH = async (url, init = {}) => {
+    if (url.includes('generativelanguage.googleapis.com')) {
+      google.push(JSON.parse(init.body));
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { mimeType: 'image/png', data: PNG } }] } }] }));
+    }
+    return new Response('{}');
+  };
+  let imageFile = '';
+  const { env, aiCalls } = setupEnv({
+    replies: [
+      { stop: 'tool_use', content: tool('make_image', { prompt: 'A warm kitchen table with a phone showing a recipe app, soft morning light', summary: 'שולחן מטבח עם הטלפון והאפליקציה', aspect: '4:5' }) },
+      { content: text('הכנתי הצעה לתמונה – מחכה לאישור.') },
+    ],
+  }, { FETCH, GEMINI_API_KEY: 'g-key' });
+  const token = await signIn(env);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'תכין לי תמונה לדף נחיתה', to: 'creative' }, token);
+  await env.team.alarm();
+  assert.ok(aiCalls[0].tools.some((t) => t.name === 'make_file'));
+  assert.ok(aiCalls[0].tools.some((t) => t.name === 'make_image'));
+
+  // הצעה בלבד – שום פנייה ל-Google עד האישור
+  let view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  const card = view.messages.flatMap((m) => m.images || [])[0];
+  assert.equal(card.status, 'proposed');
+  assert.equal(google.length, 0);
+  assert.equal((await call(env, '/app/image/approve', { id: card.id }, token)).status, 200);
+  assert.equal(google.length, 1);
+  assert.equal(google[0].generationConfig.imageConfig.aspectRatio, '4:5');
+  view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  const done = view.messages.flatMap((m) => m.images || [])[0];
+  assert.equal(done.status, 'done');
+  assert.equal(done.file.kind, 'image');
+  imageFile = done.file.id;
+  assert.equal((await call(env, '/app/costs', {}, token)).data.now.images, 1);
+
+  // דף נחיתה עם התמונה
+  env.AI_CLIENT = setupEnv({ replies: [
+    { stop: 'tool_use', content: tool('make_file', { kind: 'html', name: 'דף נחיתה', content: `<!doctype html><html dir="rtl"><body><h1>סדר</h1><img src="{{file:${imageFile}}}"></body></html>` }) },
+    { content: text('הנה דף הנחיתה.') },
+  ] }, {}).env.AI_CLIENT;
+  await call(env, '/app/send', { id: conv.id, text: 'ועכשיו דף נחיתה', to: 'creative' }, token);
+  await env.team.alarm();
+  view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  const page = view.messages.flatMap((m) => m.files || []).find((f) => f.kind === 'doc');
+  assert.equal(page.name, 'דף נחיתה.html');
+  const res = await worker.fetch(new Request(page.url), env);
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-security-policy'), /^sandbox/);
+  const html = await res.text();
+  assert.match(html, new RegExp(`/file/${imageFile}\\?e=\\d+&s=`));
+  assert.doesNotMatch(html, /\{\{file:/);
+
+  // בוט אחר לא מקבל את הכלים
+  const { env: e2, aiCalls: c2 } = setupEnv({ replies: [{ content: text('היי') }] }, { GEMINI_API_KEY: 'g-key' });
+  const t2 = await signIn(e2);
+  const cv = (await call(e2, '/app/conv/new', {}, t2)).data;
+  await call(e2, '/app/send', { id: cv.id, text: 'היי', to: 'campaigns' }, t2);
+  await e2.team.alarm();
+  assert.ok(!c2[0].tools.some((t) => t.name === 'make_file' || t.name === 'make_image'));
 });

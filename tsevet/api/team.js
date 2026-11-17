@@ -15,13 +15,14 @@
 // ב-Telegram התשובה נשלחת לקבוצה; באפליקציה היא פשוט נשמרת בשיחה, והאפליקציה מרעננת.
 import Anthropic from '@anthropic-ai/sdk';
 import { AGENTS, AGENT_KEYS, MODELS, SELF_LEARNERS, STOP, TG_KEYS, aiMessage, appInfo, label, pickAgent, priceOf, runAgent, temporary } from './agents.js';
-import { APP_PREFIX, addFile, checkFileUrl, getSettings, handleApp, newId as convIdNew } from './app.js';
+import { APP_PREFIX, addFile, fileUrl as fileUrlOf, checkFileUrl, getSettings, handleApp, newId as convIdNew } from './app.js';
 import { IG_SKILLS } from './igskills.js';
 import { bursaReady, bursaTools } from './bursa.js';
 import { appsOf, appsText, codeTools, devDone, devFail, devJob, devQuestion, devReady, proposeChange } from './dev.js';
 import { readSkill as githubRead, searchSkills as githubSearch } from './github.js';
 import { addSkill, learnFrom, listItems, pendingOf, read as maagarRead, search as maagarSearch, skillsOf } from './maagar.js';
 import { genDone, genFail, genReady, genStart, proposeClip, runGenJob } from './gen.js';
+import { CREATORS, imagesReady, makeFile, proposeImage } from './create.js';
 import { DEFAULT_BUDGET, isDue, nextOf } from './schedule.js';
 import { notifyOwner } from './notify.js';
 import { renderDone, renderFail, renderInput, renderJob, startRender } from './render.js';
@@ -114,7 +115,10 @@ export class Team {
       case '/internal/file-check': {
         const f = await checkFileUrl(storage, body.id, body.e, body.s);
         if (!f) throw Object.assign(new Error('forbidden'), { status: 403 });
-        return { type: f.type, name: f.name };
+        // קובץ שהצוות יצר עם תמונות בתוכו: קישורים חתומים ועדכניים לתמונות
+        const links = {};
+        for (const id of f.links || []) links[id] = await fileUrlOf(storage, body.origin, id);
+        return { type: f.type, name: f.name, kind: f.kind, ...(f.links?.length ? { links } : {}) };
       }
       case '/internal/render-job':
         return renderJob(storage, body.id);
@@ -408,6 +412,8 @@ export class Team {
     const renders = [];
     const gens = [];
     const devs = [];
+    const made = [];
+    const imgs = [];
     const maagar = Boolean(this.env.MAAGAR);
     // סקילים מ-GitHub: מה שנמצא בחיפוש (רק אותו אפשר לקרוא), ומה שנקרא אחרון (מקור הסקיל שיישמר)
     const githubFound = new Map();
@@ -442,6 +448,9 @@ export class Team {
       ...(devReady(this.env) ? codeTools(this) : {}),
       code_change: (input) => proposeChange(this, job, input, devs),
       make_video: (input) => proposeClip(this, job, input, gens),
+      // קבצים ותמונות (רק קריאייטיב והמתכנת; התמונה רק באישור – create.js)
+      make_file: (input) => makeFile(this, input, made),
+      make_image: (input) => proposeImage(this, job, input, imgs),
       // מאגר AI: הרשימה נטענת פעם אחת לכל עבודה
       maagar_search: async ({ query, area }) => maagarSearch(await items(), query, area),
       maagar_read: async ({ id }) => maagarRead(await items(), id),
@@ -519,7 +528,14 @@ export class Team {
         github: app && Boolean(this.env.GITHUB_TOKEN),
         bursa: app && bursaReady(this.env),
         code: app && devReady(this.env),
-        extra: agent === 'coder' && app && devReady(this.env) ? `The apps (folders in the repository):\n${appsText(await appsOf(this))}` : '',
+        create: app && CREATORS.includes(agent) && Boolean(this.env.FILES),
+        imageGen: app && imagesReady(this.env),
+        extra: [
+          agent === 'coder' && app && devReady(this.env) ? `The apps (folders in the repository):\n${appsText(await appsOf(this))}` : '',
+          app && CREATORS.includes(agent) && this.env.FILES
+            ? 'Deliver work as files in the chat: when the owner (or a teammate) wants a landing page, an illustration, a document or a table – create it with make_file (a complete, polished file), not just a description. For new images use make_image (created only after the owner approves), then place them in pages with {{file:<id>}}.'
+            : '',
+        ].filter(Boolean).join('\n\n'),
         gen: app && genReady(this.env),
         task, assign: agent === 'manager' && (job.rounds || 0) < MAX_PLAN_ROUNDS,
       }, tools);
@@ -546,6 +562,8 @@ export class Team {
         ...(renders.length ? { renders: renders.splice(0) } : {}),
         ...(gens.length ? { gens: gens.splice(0) } : {}),
         ...(devs.length ? { devs: devs.splice(0) } : {}),
+        ...(made.length ? { files: made.splice(0) } : {}),
+        ...(imgs.length ? { images: imgs.splice(0) } : {}),
         ...(proposed.length ? { skillsProposed: proposed.splice(0) } : {}),
         at: Date.now(),
       });

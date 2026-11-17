@@ -18,6 +18,7 @@ import { AGENTS, AGENT_KEYS, TIERS } from './agents.js';
 import * as auth from './auth.js';
 import { approve as approveGen, cancel as cancelGen, dailyLimit, genReady, genView } from './gen.js';
 import { approveDev, cancelDev, devView, discardDev, mergeDev } from './dev.js';
+import { approveImage, cancelImage, dailyImages, imageView } from './create.js';
 import { renderView } from './render.js';
 import { approveSkill, declineSkill } from './maagar.js';
 import { BUDGETS, MAX_SCHEDULES, cleanSchedule, nextRun } from './schedule.js';
@@ -86,7 +87,7 @@ async function schedulesView(storage) {
 
 // ---------- קבצים ----------
 // קישור זמני לקובץ (חתום). התוקף מעוגל לשעה, כדי שהקישור לא ישתנה בכל רענון והסרטון לא ייטען מחדש
-async function fileUrl(storage, origin, id) {
+export async function fileUrl(storage, origin, id) {
   let secret = await storage.get('fileKey');
   if (!secret) {
     secret = auth.randomHex();
@@ -199,6 +200,12 @@ async function convView(t, id, origin) {
       if (g) gens.push(g);
       if (g?.status === 'working') pending = true;
     }
+    const images = [];
+    for (const iid of h.images || []) {
+      const g = await imageView(t, iid, origin, fileView);
+      if (g) images.push(g);
+      if (g?.status === 'working') pending = true;
+    }
     const devs = [];
     // אותה בקשה בכמה הודעות (הצעה, ואז "מוכן") – הכרטיס מוצג רק בהודעה האחרונה
     const later = new Set(history.slice(i + 1).flatMap((x) => x.devs || []));
@@ -218,6 +225,7 @@ async function convView(t, id, origin) {
       ...(renders.length ? { renders } : {}),
       ...(gens.length ? { gens } : {}),
       ...(devs.length ? { devs } : {}),
+      ...(images.length ? { images } : {}),
     });
   }
   const job = ((await storage.get('q')) || []).find((j) => t.jobKey(j) === key);
@@ -327,7 +335,7 @@ async function costs(storage, clipsLimit = 0) {
   const prev = israelDate(new Date(`${month}-01T12:00:00Z`).getTime() - 5 * 24 * HOUR).slice(0, 7);
   const read = async (m) => {
     const c = (await storage.get(`cost:${m}`)) || {};
-    return { month: m, usd: c.usd || 0, days: c.days || {}, agents: c.agents || {}, clips: c.clips || 0, devs: c.devs || 0, devUsd: c.devUsd || 0 };
+    return { month: m, usd: c.usd || 0, days: c.days || {}, agents: c.agents || {}, clips: c.clips || 0, devs: c.devs || 0, devUsd: c.devUsd || 0, images: c.images || 0 };
   };
   const now = await read(month);
   return { today: now.days[date.slice(8)] || 0, now, prev: await read(prev), ils: ILS, clipsToday: (await storage.get(`clips:${date}`)) || 0, clipsLimit };
@@ -422,6 +430,12 @@ export async function handleApp(t, path, body, headers, origin) {
       return cancelGen(storage, body.id);
 
     // המתכנת: שינוי בקוד רק אחרי אישור, ומיזוג רק אחרי לחיצה נוספת (dev.js)
+    // תמונה חדשה: רק אחרי אישור בכפתור (עולה כסף – create.js)
+    case '/app/image/approve':
+      return approveImage(t, body.id);
+    case '/app/image/cancel':
+      return cancelImage(storage, body.id);
+
     case '/app/dev/approve':
       return approveDev(t, body.id);
     case '/app/dev/cancel':
