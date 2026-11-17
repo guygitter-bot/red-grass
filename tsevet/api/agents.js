@@ -193,16 +193,52 @@ ${gen ? `- New video clips: קריאייטיב and עורך וידאו can propo
 each one with a button, because it costs money). A longer video is several clips; the editor can then edit a \
 finished clip like any uploaded file. Propose one clip at a time unless the owner asked for more.\n` : ''}- Never spend money and never ask for passwords or API keys in the chat.`;
 
+// כמה טקסט של סקילים מותקנים נכנס להנחיות (מעבר לזה – רק שם, ונטען עם use_skill)
+const MAX_INSTALLED_TEXT = 14_000;
+
+// הסקילים בהנחיות: מותקנים (מאושרים) – הטקסט המלא, תמיד פעילים; מובנים – רשימה; מחכים לאישור – לא מתחילים לעבוד
+function skillsSection(skills, pending) {
+  const installed = skills.filter((s) => !s.builtin);
+  const builtin = skills.filter((s) => s.builtin);
+  const parts = [];
+  if (installed.length) {
+    let room = MAX_INSTALLED_TEXT;
+    const full = [];
+    const more = [];
+    for (const s of installed) {
+      if (s.body.length <= room) {
+        full.push(`### ${s.name} – ${s.title}\nUse for: ${s.when}\n${s.body}`);
+        room -= s.body.length;
+      } else more.push(`- ${s.name}: ${s.title} – ${s.when}`);
+    }
+    parts.push(`Your installed skills – always active: whenever a task fits one, work by it (unless the owner asks for a different or additional skill).\n\n${full.join('\n\n')}${more.length ? `\n\nMore installed skills (load with use_skill):\n${more.join('\n')}` : ''}`);
+  }
+  if (builtin.length) parts.push(`Your built-in skill pack (before a task that fits one, load it with use_skill and follow it):\n${builtin.map((s) => `- ${s.name}: ${s.title} – ${s.when}`).join('\n')}`);
+  if (pending.length) {
+    parts.push(`Waiting for the owner's approval: ${pending.map((s) => `"${(s.next || s).title}" (${s.name})`).join(', ')}. \
+Until the owner presses "לאשר" (or declines), don't start the task it is for – no plan, no draft, no suggestions. Remind them \
+in one or two lines that the button is above the message box in this chat, then stop. You'll continue automatically after approval.`);
+  }
+  return parts.length ? `\n\n${parts.join('\n\n')}` : '';
+}
+
+// לפני משימה חדשה: לבדוק אם יש סקיל טוב יותר (במאגר וב-GitHub), ואם כן – להציע ולחכות לאישור
+const CHECK_SKILLS = `Before you start a new task (not a short follow-up in a task you're already doing):
+1. Check for a better skill first – before writing any plan or draft. Search the AI repository (maagar_search, area \
+"learn") and GitHub (github_skills_search) with 2-4 good words.
+2. If you find one that is clearly better than what you have (or you have none and one fits), read it, write your \
+own version with teach, and stop: tell the owner in a few lines what you found, the source and its rating, and that \
+you'll start as soon as they approve it. Don't start the task.
+3. If there's nothing better: say in one short line which installed skill you're working by (or that no fitting \
+skill was found), and do the task.`;
+
 // team = הבוטים שזמינים בערוץ הזה (ב-Telegram רק מי שיש לו בוט), channel = 'tg' | 'app'
-// skills = הסקילים שהבוט הזה למד (רק השם ומתי להשתמש; את התוכן הוא טוען עם use_skill)
-export function systemPrompt(agent, notes = [], { team = TG_KEYS, channel = 'tg', maagar = false, skills = [], gen = false, github = false } = {}) {
+// skills = הסקילים הפעילים של הבוט (מותקנים + מובנים); pending = מחכים לאישור; check = לבדוק סקיל טוב יותר לפני משימה
+export function systemPrompt(agent, notes = [], { team = TG_KEYS, channel = 'tg', maagar = false, skills = [], pending = [], gen = false, github = false, check = false } = {}) {
   const memory = notes.length
     ? `What the team remembers (numbered):\n${notes.map((n, i) => `${i + 1}. ${n}`).join('\n')}`
     : 'The team has no saved notes yet.';
-  const learned = skills.length
-    ? `\n\nSkills you were taught (before a task that fits one, load it with use_skill and follow it):\n${skills.map((s) => `- ${s.name}: ${s.title} – ${s.when}`).join('\n')}`
-    : '';
-  return `${AGENTS[agent].role}\n\n${common(team, channel, maagar, gen, github && SKILL_SEEKERS.includes(agent))}${learned}\n\n${memory}`;
+  return `${AGENTS[agent].role}\n\n${common(team, channel, maagar, gen, github && SKILL_SEEKERS.includes(agent))}${skillsSection(skills, pending)}${check ? `\n\n${CHECK_SKILLS}` : ''}\n\n${memory}`;
 }
 
 // הכלי של עורך הווידאו: מתחיל עריכה ברקע (render.js). הקבצים לפי המזהה שמופיע בשיחה.
@@ -240,6 +276,8 @@ const webTools = (model, agent) => {
 export const SELF_LEARNERS = ['creative', 'campaigns', 'editor', 'social', 'travel'];
 // מי מחפש סקילים ב-GitHub (מי שיכול לשמור סקיל)
 export const SKILL_SEEKERS = [...SELF_LEARNERS, 'librarian'];
+// כלי שמחזיר את זה מסיים את התור (סקיל חדש מחכה לאישור)
+export const STOP = '[[stop]]';
 const GITHUB_TOOLS = [
   {
     name: 'github_skills_search',
@@ -447,7 +485,7 @@ export function transcript(history, owner = 'הבעלים') {
 // תור אחד של בוט. tools = { app_info, remember, forget, edit_video } (פונקציות שמחזירות טקסט).
 // model = המודל של הבוט, team = מי זמין בערוץ, images = תמונות מההודעה האחרונה. מחזיר { text, handoff, usage[] }
 // maagar = יש חיבור למאגר AI, skills = הסקילים שהבוט הזה למד
-export async function runAgent(client, { agent, notes, history, owner, image, images = image ? [image] : [], model = MODEL, team = TG_KEYS, channel = 'tg', maagar = false, skills = [], gen = false, task = '', assign = false, github = false }, tools) {
+export async function runAgent(client, { agent, notes, history, owner, image, images = image ? [image] : [], model = MODEL, team = TG_KEYS, channel = 'tg', maagar = false, skills = [], pending = [], gen = false, task = '', assign = false, github = false, check = false }, tools) {
   // task = הוראה לתור הזה (שלב שהמנהל הקצה, או "סכם" למנהל). בשלב של תוכנית אין העברה הלאה
   const noHandoff = Boolean(task) && agent !== 'manager';
   const intro = `The conversation so far (latest at the bottom):\n\n${transcript(history, owner)}\n\n` +
@@ -464,7 +502,7 @@ export async function runAgent(client, { agent, notes, history, owner, image, im
       max_tokens: 8000,
       ...fallback,
       output_config: { effort: 'medium' },
-      system: [{ type: 'text', text: systemPrompt(agent, notes, { team, channel, maagar, skills, gen, github }), cache_control: { type: 'ephemeral' } }],
+      system: [{ type: 'text', text: systemPrompt(agent, notes, { team, channel, maagar, skills, pending, gen, github, check }), cache_control: { type: 'ephemeral' } }],
       tools: TOOLS(agent, team, model, { maagar, skills, gen, assign, noHandoff, github }),
       messages,
     });
@@ -504,6 +542,11 @@ export async function runAgent(client, { agent, notes, history, owner, image, im
         out = `Error: ${e.message}`;
       }
       results.push({ type: 'tool_result', tool_use_id: c.id, content: String(out) });
+    }
+    // סקיל חדש הוצע ומחכה לאישור: התור נגמר כאן (לא מתחילים לעבוד לפני האישור).
+    // הבוט כבר כתב לבעלים; אם לא – הודעה קצרה במקומו
+    if (results.some((x) => x.content.startsWith(STOP))) {
+      return { text: texts.join('\n\n') || 'מצאתי סקיל שמתאים למשימה, והוא מחכה לאישור שלך (הכפתור מעל שורת הכתיבה). אחרי האישור אתחיל לעבוד.', usage };
     }
     // הטקסט שכבר נכתב לפני הכלים נשאר בתשובה; ממשיכים
     messages.push({ role: 'assistant', content: response.content });

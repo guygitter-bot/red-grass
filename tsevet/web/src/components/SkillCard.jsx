@@ -1,4 +1,4 @@
-// כרטיס של סקיל שבוט למד מ-GitHub: מחכה לאישור לפני שהבוטים משתמשים בו
+// כרטיס של סקיל חדש שבוט הציע: מחכה לאישור; אחרי האישור הבוט ממשיך לעבוד לפיו
 import { useState } from 'react';
 import { BadgeCheck, ExternalLink, Star } from 'lucide-react';
 import { api } from '../lib/api';
@@ -52,19 +52,21 @@ export function SkillCard({ skill }) {
       </div>
       {skill.status === 'pending' && (
         <div className="mt-3">
-          <p className="mb-2 text-xs text-muted">נלמד מ-GitHub. הבוטים ישתמשו בו רק אחרי שתאשר (אפשר לקרוא אותו בהגדרות ← "מה הצוות למד").</p>
+          <p className="mb-2 text-xs text-muted">
+            {skill.update ? 'עדכון לסקיל קיים – הגרסה הנוכחית ממשיכה לעבוד עד שתאשר.' : 'הבוט לא מתחיל לעבוד עד שתאשר.'} אחרי האישור הוא ממשיך לבד. אפשר לקרוא את הסקיל בהגדרות ← "מה הצוות למד".
+          </p>
           <div className="flex flex-wrap gap-2">
             <Button disabled={busy} onClick={() => act('/app/skills/approve')}>
               לאשר את הסקיל
             </Button>
-            <Button kind="ghost" disabled={busy} onClick={() => act('/app/skills/delete')}>
+            <Button kind="ghost" disabled={busy} onClick={() => act('/app/skills/decline')}>
               לא צריך
             </Button>
           </div>
         </div>
       )}
-      {skill.status === 'approved' && <div className="mt-2 text-ok">אושר – הבוטים משתמשים בו</div>}
-      {skill.status === 'removed' && <div className="mt-2 text-muted">נמחק</div>}
+      {skill.status === 'approved' && <div className="mt-2 text-ok">אושר – הבוט עובד לפיו</div>}
+      {skill.status === 'removed' && <div className="mt-2 text-muted">לא אושר</div>}
       {error && <div className="mt-2 text-bad">{error}</div>}
     </div>
   );

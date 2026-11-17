@@ -92,6 +92,8 @@ const ai = {
         // טיולים: מוצא סקיל ב-GitHub, קורא ושומר (מחכה לאישור)
         if (role.startsWith('You are "טיולים"')) {
           const done = JSON.stringify(req.messages);
+          if (done.includes('just approved your skill')) return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'תודה! עובד לפי **תכנון טיול יום-יום**:\n\n• יום 1 – הגעה ושכונה אחת\n• יום 2 – העיר העתיקה\n• יום 3 – יום רגוע' }], usage };
+          if (/רומא|טיול ל/.test(done) && !done.includes('"id":"h1"') && done.includes('Waiting for')) return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'מחכה לאישור הסקיל – הכפתור מעל שורת הכתיבה.' }], usage };
           if (!done.includes('"id":"h1"')) return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'h1', name: 'github_skills_search', input: { query: 'travel itinerary' } }], usage };
           if (!done.includes('"id":"h2"')) return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'h2', name: 'github_skill_read', input: { ref: 'good/travel-skills:skills/trip-planner/SKILL.md' } }], usage };
           if (!done.includes('"id":"h3"')) return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'h3', name: 'teach', input: { name: 'trip-planner', title: 'תכנון טיול יום-יום', when: 'כשמתכננים טיול', agents: ['travel'], body: '**השיטה:**\n\n• מסלול יום-יום עם זמני נסיעה אמיתיים\n• מלון אחד במיקום מרכזי\n• יום מנוחה כל 4 ימים' } }], usage };

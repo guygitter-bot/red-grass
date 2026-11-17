@@ -18,6 +18,7 @@ import { AGENTS, AGENT_KEYS, TIERS } from './agents.js';
 import * as auth from './auth.js';
 import { approve as approveGen, cancel as cancelGen, dailyLimit, genReady, genView } from './gen.js';
 import { renderView } from './render.js';
+import { approveSkill, declineSkill } from './maagar.js';
 import { BUDGETS, MAX_SCHEDULES, cleanSchedule, nextRun } from './schedule.js';
 import { pushAll, subscribe, unsubscribe, vapidKeys } from './notify.js';
 
@@ -56,7 +57,8 @@ function proposedView(names, skills) {
   return names.map((name) => {
     const s = skills.find((x) => x.name === name);
     if (!s) return { name, status: 'removed' };
-    return { name, title: s.title, when: s.when, agents: s.agents, origin: s.origin || null, status: s.pending ? 'pending' : 'approved' };
+    const v = s.next || s;
+    return { name, title: v.title, when: v.when, agents: v.agents, origin: v.origin || null, update: Boolean(s.next), status: s.pending || s.next ? 'pending' : 'approved' };
   });
 }
 
@@ -413,13 +415,28 @@ export async function handleApp(t, path, body, headers, origin) {
     case '/app/skills':
       return { skills: (await storage.get('skills')) || [] };
     // סקיל מ-GitHub מחכה לאישור; אחרי האישור הבוטים משתמשים בו
+    // סקיל חדש מחכה לאישור; אחרי האישור הבוט שהציע אותו ממשיך לעבוד באותה שיחה, לפיו
     case '/app/skills/approve': {
-      const skills = (await storage.get('skills')) || [];
-      const s = skills.find((x) => x.name === String(body.name || ''));
-      if (!s) throw fail(404, 'הסקיל לא נמצא');
-      delete s.pending;
-      await storage.put('skills', skills);
-      return { skills };
+      const r = approveSkill((await storage.get('skills')) || [], String(body.name || ''));
+      if (!r) throw fail(404, 'אין סקיל כזה שמחכה לאישור');
+      await storage.put('skills', r.skills);
+      const p = r.proposedIn;
+      if (p?.key && AGENTS[p.agent] && (await storage.get(p.key))) {
+        await t.pushHistory(p.key, { who: 'system', text: `✅ הסקיל "${r.skill.title}" אושר – ${AGENTS[p.agent].emoji} ${AGENTS[p.agent].name} ממשיך לעבוד לפיו`, at: Date.now() });
+        await t.enqueue({ id: newId(), chan: 'app', key: p.key, target: p.agent, turns: 0, attempts: 0, resume: r.skill.name });
+      }
+      return { skills: r.skills };
+    }
+    // "לא צריך": סקיל חדש נמחק, עדכון – הגרסה הקיימת נשארת
+    case '/app/skills/decline': {
+      const r = declineSkill((await storage.get('skills')) || [], String(body.name || ''));
+      if (!r) throw fail(404, 'אין סקיל כזה שמחכה לאישור');
+      await storage.put('skills', r.skills);
+      const p = r.proposedIn;
+      if (p?.key && AGENTS[p.agent] && (await storage.get(p.key))) {
+        await t.pushHistory(p.key, { who: 'system', text: `❌ הסקיל "${r.skill.title}" לא אושר. אפשר לבקש מ${AGENTS[p.agent].name} להמשיך בלעדיו, או לחפש סקיל אחר.`, at: Date.now() });
+      }
+      return { skills: r.skills };
     }
     case '/app/skills/delete': {
       const skills = ((await storage.get('skills')) || []).filter((s) => s.name !== String(body.name || ''));
