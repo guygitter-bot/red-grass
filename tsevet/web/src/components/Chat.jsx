@@ -1,6 +1,6 @@
 // מסך שיחה: הודעות, מחוון "כותב…", ושורת כתיבה. רענון לפי מצב השיחה
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowRight, Send, Square } from 'lucide-react';
+import { ArrowRight, Headphones, Send, Square } from 'lucide-react';
 import { api } from '../lib/api';
 import { go, getPreset } from '../lib/route';
 import { convInterval } from '../lib/polling';
@@ -10,6 +10,7 @@ import { findAgent } from '../lib/agents';
 import Message from './Message';
 import { RELOAD } from './Gen';
 import Composer from './Composer';
+import { canListen, canSpeak, hasHebrewVoice, speak, stopSpeaking } from '../lib/voice';
 import { Button, Sheet, Spinner, inputCls } from './ui';
 
 export default function Chat({ id, agents, refresh }) {
@@ -22,6 +23,19 @@ export default function Chat({ id, agents, refresh }) {
   const scroller = useRef(null);
   const nearBottom = useRef(true);
   const justSent = useRef(false);
+
+  // שיחה קולית: התשובות של הבוטים מוקראות, ואחרי שהבוט סיים – המיקרופון נפתח שוב לבד
+  const [voice, setVoice] = useState(() => {
+    try {
+      return localStorage.getItem('tsevet-voice') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [listenTick, setListenTick] = useState(0);
+  const [voiceNote, setVoiceNote] = useState('');
+  const spokenUpTo = useRef(null); // ההודעה האחרונה שכבר הוקראה (או שהייתה לפני שהמצב הופעל)
+  const busyRef = useRef(false);
 
   const load = useCallback(
     () =>
@@ -42,6 +56,51 @@ export default function Chat({ id, agents, refresh }) {
       window.removeEventListener(RELOAD, load);
     };
   }, [load]);
+
+  busyRef.current = Boolean(conv?.busy);
+  const lastI = conv?.messages?.length ? conv.messages[conv.messages.length - 1].i : -1;
+
+  // הודעות חדשות של הבוטים – להקראה
+  useEffect(() => {
+    if (!conv) return;
+    if (!voice || spokenUpTo.current === null) {
+      spokenUpTo.current = lastI;
+      return;
+    }
+    const fresh = conv.messages.filter((m) => m.i > spokenUpTo.current && m.who !== 'owner' && m.who !== 'system' && m.text);
+    spokenUpTo.current = lastI;
+    if (!fresh.length) return;
+    const text = fresh.map((m) => m.text).join('\n');
+    speak(text, () => {
+      if (!busyRef.current) setListenTick((n) => n + 1);
+    });
+  }, [lastI, voice]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // יציאה מהשיחה – מפסיקים להקריא
+  useEffect(() => {
+    return () => {
+      stopSpeaking();
+    };
+  }, [id]);
+
+  const toggleVoice = () => {
+    const on = !voice;
+    setVoice(on);
+    try {
+      localStorage.setItem('tsevet-voice', on ? '1' : '0');
+    } catch {
+      /* לא נשמר – לא נורא */
+    }
+    spokenUpTo.current = lastI;
+    if (!on) {
+      stopSpeaking();
+      setVoiceNote('');
+      return;
+    }
+    setVoiceNote(canSpeak() && !hasHebrewVoice() ? 'אין במכשיר הזה קול בעברית – ההקראה עלולה להישמע לא טוב.' : '');
+    // פתיחה בלחיצה (בטלפון ההקראה והמיקרופון חייבים להתחיל מלחיצה)
+    speak('מצב שיחה קולית. דברו.', () => setListenTick((n) => n + 1));
+  };
 
   // גלילה למטה רק אם המשתמשת כבר קרובה לתחתית, או כששלחה הודעה
   const count = conv?.messages?.length || 0;
@@ -132,6 +191,17 @@ export default function Chat({ id, agents, refresh }) {
         >
           {conv?.title || 'שיחה'}
         </button>
+        {(canListen() || canSpeak()) && (
+          <button
+            onClick={toggleVoice}
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium ${voice ? 'bg-accent text-white' : 'border border-line text-muted hover:bg-soft'}`}
+            aria-pressed={voice}
+            title="שיחה קולית: מדברים, והתשובות מוקראות"
+          >
+            <Headphones size={16} />
+            <span className="hidden sm:inline">{voice ? 'שיחה קולית פעילה' : 'שיחה קולית'}</span>
+          </button>
+        )}
         {conv?.source === 'tg' && (
           <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-soft px-2.5 py-1 text-xs text-accent-ink">
             <Send size={11} /> Telegram
@@ -178,7 +248,8 @@ export default function Chat({ id, agents, refresh }) {
           ))}
         </div>
       )}
-          <Composer agents={agents} to={to} setTo={setTo} onSend={send} sending={sending} />
+          {voice && <p className="px-4 pt-2 text-xs text-muted">🎧 שיחה קולית: מדברים, ההודעה נשלחת לבד, והתשובה מוקראת. {voiceNote}</p>}
+          <Composer agents={agents} to={to} setTo={setTo} onSend={send} sending={sending} voice={voice} listenTick={listenTick} />
         </div>
       </div>
 
