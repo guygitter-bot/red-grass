@@ -25,9 +25,19 @@ function fakeEnv() {
 }
 
 const ORIGIN = 'https://sidra-2k.pages.dev';
-async function call(env, path, body = {}, origin = ORIGIN) {
-  const res = await worker.fetch(new Request(`https://api${path}`, { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: JSON.stringify(body) }), env);
+async function call(env, path, body = {}, origin = ORIGIN, token = env.token) {
+  const headers = { origin, 'content-type': 'application/json' };
+  if (token) headers.authorization = `Bearer ${token}`;
+  const res = await worker.fetch(new Request(`https://api${path}`, { method: 'POST', headers, body: JSON.stringify(body) }), env);
   return { status: res.status, data: await res.json() };
+}
+
+// סביבה עם מאסטר מחובר (סיסמה נקבעה)
+async function masterEnv() {
+  const env = fakeEnv();
+  const { data } = await call(env, '/setup', { password: '1234' });
+  env.token = data.token;
+  return env;
 }
 
 test('סדרה ריקה בהתחלה', async () => {
@@ -37,7 +47,7 @@ test('סדרה ריקה בהתחלה', async () => {
 });
 
 test('רישום משחקים לפי הסדר, ומשחק כפול לא נרשם פעמיים', async () => {
-  const env = fakeEnv();
+  const env = await masterEnv();
   await call(env, '/game', { n: 0, winner: 'LAL', lal: 102, sas: 98 });
   let { data } = await call(env, '/game', { n: 0, winner: 'SAS' }); // מכשיר שני לחץ על אותו משחק
   assert.equal(data.games.length, 1);
@@ -51,7 +61,7 @@ test('רישום משחקים לפי הסדר, ומשחק כפול לא נרשם
 });
 
 test('אחרי 4 ניצחונות הסדרה נגמרת', async () => {
-  const env = fakeEnv();
+  const env = await masterEnv();
   for (let n = 0; n < 4; n++) await call(env, '/game', { n, winner: 'SAS' });
   const { data } = await call(env, '/game', { n: 4, winner: 'LAL' });
   assert.equal(data.games.length, 4);
@@ -59,7 +69,7 @@ test('אחרי 4 ניצחונות הסדרה נגמרת', async () => {
 });
 
 test('ביטול המשחק האחרון רק כשהמספר תואם', async () => {
-  const env = fakeEnv();
+  const env = await masterEnv();
   await call(env, '/game', { n: 0, winner: 'LAL' });
   await call(env, '/game', { n: 1, winner: 'LAL' });
   let { data } = await call(env, '/undo', { n: 1 });
@@ -69,7 +79,7 @@ test('ביטול המשחק האחרון רק כשהמספר תואם', async ()
 });
 
 test('שמות שחקנים וסדרה חדשה', async () => {
-  const env = fakeEnv();
+  const env = await masterEnv();
   let r = await call(env, '/players', { LAL: 'אבא', SAS: '' });
   assert.equal(r.status, 400);
   r = await call(env, '/players', { LAL: ' אבא ', SAS: 'הבן' });
@@ -78,6 +88,43 @@ test('שמות שחקנים וסדרה חדשה', async () => {
   r = await call(env, '/reset');
   assert.equal(r.data.games.length, 0);
   assert.equal(r.data.players.LAL, 'אבא');
+});
+
+test('רק המאסטר משנה; כולם רואים', async () => {
+  const env = fakeEnv();
+  let r = await call(env, '/game', { n: 0, winner: 'LAL' });
+  assert.equal(r.status, 403, 'לפני שנקבעה סיסמה אי אפשר לשנות');
+  r = await call(env, '/setup', { password: '12' });
+  assert.equal(r.status, 400);
+  r = await call(env, '/setup', { password: 'abcd' });
+  assert.ok(r.data.token);
+  assert.equal(r.data.master, true);
+  const token = r.data.token;
+  assert.equal((await call(env, '/setup', { password: 'other' })).status, 409, 'אי אפשר לקבוע סיסמה פעמיים');
+  await call(env, '/game', { n: 0, winner: 'SAS' }, ORIGIN, token);
+  // צופה (בלי סוד, או עם סוד מזויף)
+  r = await call(env, '/get');
+  assert.equal(r.data.games.length, 1);
+  assert.equal(r.data.master, false);
+  assert.equal(r.data.locked, true);
+  assert.equal(JSON.stringify(r.data).includes('salt'), false, 'הסיסמה לא נשלחת');
+  for (const path of ['/game', '/undo', '/players', '/reset']) {
+    assert.equal((await call(env, path, { n: 1, winner: 'LAL', LAL: 'a', SAS: 'b' }, ORIGIN, 'fake')).status, 403, path);
+  }
+  // כניסה ממכשיר אחר
+  assert.equal((await call(env, '/login', { password: 'nope' })).status, 401);
+  r = await call(env, '/login', { password: 'abcd' });
+  assert.equal(r.data.master, true);
+  env.restart();
+  assert.equal((await call(env, '/get', {}, ORIGIN, r.data.token)).data.master, true, 'נשאר מחובר גם אחרי הפעלה מחדש');
+  await call(env, '/logout', {}, ORIGIN, r.data.token);
+  assert.equal((await call(env, '/get', {}, ORIGIN, r.data.token)).data.master, false);
+});
+
+test('נעילה אחרי 10 ניסיונות שגויים', async () => {
+  const env = await masterEnv();
+  for (let i = 0; i < 10; i++) await call(env, '/login', { password: 'bad' });
+  assert.equal((await call(env, '/login', { password: '1234' })).status, 429);
 });
 
 test('אתר זר נחסם', async () => {

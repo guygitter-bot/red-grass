@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { HOME, champion, headline, safeSeries, wins } from './series';
+import { HOME, champion, headline, safeSeries, shareText, wins } from './series';
 
 const g = (...ws) => ws.map((winner) => ({ winner }));
 
@@ -18,8 +18,11 @@ describe('series', () => {
     expect(headline(g('LAL', 'LAL', 'LAL')).text).toContain('נקודת מאצ');
     expect(headline(g('LAL', 'LAL', 'LAL', 'SAS', 'LAL')).text).toBe('הלייקרס זוכים בסדרה 4–1');
   });
+  it('טקסט לשיתוף', () => {
+    expect(shareText({ players: { LAL: 'אבא', SAS: 'הבן' }, games: g('LAL', 'SAS') })).toBe('🏀 הסדרה ב-2K: אבא (לייקרס) נגד הבן (ספרס)\nהסדרה שוויונית 1–1');
+  });
   it('נתונים חסרים או שבורים לא מפילים', () => {
-    expect(safeSeries(null)).toEqual({ players: { LAL: '', SAS: '' }, games: [], rev: 0 });
+    expect(safeSeries(null)).toEqual({ players: { LAL: '', SAS: '' }, games: [], rev: 0, locked: false, master: false });
     expect(safeSeries({ games: [{ winner: 'X' }, { winner: 'SAS', lal: '5' }] }).games).toEqual([{ winner: 'SAS', lal: null, sas: null, at: 0 }]);
   });
 });

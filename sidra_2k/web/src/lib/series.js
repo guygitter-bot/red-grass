@@ -17,7 +17,8 @@ export function safeSeries(d) {
     .filter((g) => g && (g.winner === 'LAL' || g.winner === 'SAS'))
     .slice(0, 7)
     .map((g) => ({ winner: g.winner, lal: Number.isFinite(g.lal) ? g.lal : null, sas: Number.isFinite(g.sas) ? g.sas : null, at: Number(g.at) || 0 }));
-  return { players, games, rev: Number(d?.rev) || 0 };
+  // locked = כבר נקבעה סיסמת מאסטר; master = המכשיר הזה מחובר כמאסטר (השרת בודק בכל שינוי)
+  return { players, games, rev: Number(d?.rev) || 0, locked: !!d?.locked, master: !!d?.master };
 }
 
 export function wins(games) {
@@ -48,4 +49,11 @@ export function gameDate(at) {
   if (!at) return '';
   const d = new Date(at);
   return `${d.getDate()}.${d.getMonth() + 1}`;
+}
+
+// טקסט לשיתוף: מצב הסדרה במשפט אחד
+export function shareText(series) {
+  const p = series.players;
+  const vs = p.LAL && p.SAS ? `${p.LAL} (לייקרס) נגד ${p.SAS} (ספרס)` : 'לייקרס נגד ספרס';
+  return `🏀 הסדרה ב-2K: ${vs}\n${headline(series.games).text}`;
 }
