@@ -10,7 +10,7 @@ import { findAgent } from '../lib/agents';
 import Message from './Message';
 import { RELOAD } from './Gen';
 import Composer from './Composer';
-import { MIC_BLOCKED, askMic, canListen, canSpeak, hasHebrewVoice, speak, stopSpeaking } from '../lib/voice';
+import { MIC_BLOCKED, askMic, canListen } from '../lib/voice';
 import { Button, Sheet, Spinner, inputCls } from './ui';
 
 export default function Chat({ id, agents, refresh }) {
@@ -24,7 +24,7 @@ export default function Chat({ id, agents, refresh }) {
   const nearBottom = useRef(true);
   const justSent = useRef(false);
 
-  // שיחה קולית: התשובות של הבוטים מוקראות, ואחרי שהבוט סיים – המיקרופון נפתח שוב לבד
+  // שיחה קולית: מדברים, ההודעה נשלחת לבד, והתשובה מגיעה בכתב. אחרי שהבוט ענה – המיקרופון נפתח שוב לבד
   const [voice, setVoice] = useState(() => {
     try {
       return localStorage.getItem('tsevet-voice') === '1';
@@ -34,7 +34,7 @@ export default function Chat({ id, agents, refresh }) {
   });
   const [listenTick, setListenTick] = useState(0);
   const [voiceNote, setVoiceNote] = useState('');
-  const spokenUpTo = useRef(null); // ההודעה האחרונה שכבר הוקראה (או שהייתה לפני שהמצב הופעל)
+  const seenUpTo = useRef(null); // ההודעה האחרונה שכבר ראינו (או שהייתה לפני שהמצב הופעל)
   const busyRef = useRef(false);
   const micBlocked = useRef(false); // המיקרופון נחסם – לא פותחים אותו לבד אחרי כל תשובה
 
@@ -61,28 +61,18 @@ export default function Chat({ id, agents, refresh }) {
   busyRef.current = Boolean(conv?.busy);
   const lastI = conv?.messages?.length ? conv.messages[conv.messages.length - 1].i : -1;
 
-  // הודעות חדשות של הבוטים – להקראה
+  // תשובה חדשה של בוט (והצוות סיים) – פותחים שוב את המיקרופון
   useEffect(() => {
     if (!conv) return;
-    if (!voice || spokenUpTo.current === null) {
-      spokenUpTo.current = lastI;
+    if (!voice || seenUpTo.current === null) {
+      seenUpTo.current = lastI;
       return;
     }
-    const fresh = conv.messages.filter((m) => m.i > spokenUpTo.current && m.who !== 'owner' && m.who !== 'system' && m.text);
-    spokenUpTo.current = lastI;
-    if (!fresh.length) return;
-    const text = fresh.map((m) => m.text).join('\n');
-    speak(text, () => {
-      if (!busyRef.current && !micBlocked.current) setListenTick((n) => n + 1);
-    });
-  }, [lastI, voice]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // יציאה מהשיחה – מפסיקים להקריא
-  useEffect(() => {
-    return () => {
-      stopSpeaking();
-    };
-  }, [id]);
+    const fresh = conv.messages.some((m) => m.i > seenUpTo.current && m.who !== 'owner' && m.who !== 'system');
+    if (!fresh || conv.busy) return;
+    seenUpTo.current = lastI;
+    if (!micBlocked.current) setListenTick((n) => n + 1);
+  }, [lastI, voice, Boolean(conv?.busy)]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleVoice = () => {
     const on = !voice;
@@ -92,25 +82,15 @@ export default function Chat({ id, agents, refresh }) {
     } catch {
       /* לא נשמר – לא נורא */
     }
-    spokenUpTo.current = lastI;
-    if (!on) {
-      stopSpeaking();
-      setVoiceNote('');
-      return;
-    }
-    setVoiceNote(canSpeak() && !hasHebrewVoice() ? 'אין במכשיר הזה קול בעברית – ההקראה עלולה להישמע לא טוב.' : '');
-    // פתיחה בלחיצה (בטלפון ההקראה והמיקרופון חייבים להתחיל מלחיצה): ההקראה מתחילה מיד,
-    // ובמקביל כרום שואל על המיקרופון. מקשיבים רק אחרי שהרשות ניתנה.
+    seenUpTo.current = lastI;
+    setVoiceNote('');
+    if (!on) return;
+    // בלחיצה: כרום שואל על המיקרופון, ואחרי שהרשות ניתנה מתחילים להקשיב
     micBlocked.current = false;
-    const mic = canListen() ? askMic() : Promise.resolve(false);
-    speak('מצב שיחה קולית. דברו.', async () => {
-      if (await mic) setListenTick((n) => n + 1);
-    });
-    mic.then((ok) => {
-      if (!ok && canListen()) {
-        micBlocked.current = true;
-        setVoiceNote(MIC_BLOCKED);
-      }
+    askMic().then((ok) => {
+      if (ok) return setListenTick((n) => n + 1);
+      micBlocked.current = true;
+      setVoiceNote(MIC_BLOCKED);
     });
   };
 
@@ -203,12 +183,12 @@ export default function Chat({ id, agents, refresh }) {
         >
           {conv?.title || 'שיחה'}
         </button>
-        {(canListen() || canSpeak()) && (
+        {canListen() && (
           <button
             onClick={toggleVoice}
             className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium ${voice ? 'bg-accent text-white' : 'border border-line text-muted hover:bg-soft'}`}
             aria-pressed={voice}
-            title="שיחה קולית: מדברים, והתשובות מוקראות"
+            title="שיחה קולית: מדברים, וההודעה נשלחת לבד"
           >
             <Headphones size={16} />
             <span className="hidden sm:inline">{voice ? 'שיחה קולית פעילה' : 'שיחה קולית'}</span>
@@ -260,7 +240,7 @@ export default function Chat({ id, agents, refresh }) {
           ))}
         </div>
       )}
-          {voice && <p className="px-4 pt-2 text-xs text-muted">🎧 שיחה קולית: מדברים, ההודעה נשלחת לבד, והתשובה מוקראת. {voiceNote}</p>}
+          {voice && <p className="px-4 pt-2 text-xs text-muted">🎧 שיחה קולית: מדברים, ההודעה נשלחת לבד, והמיקרופון נפתח שוב אחרי התשובה. {voiceNote}</p>}
           <Composer agents={agents} to={to} setTo={setTo} onSend={send} sending={sending} voice={voice} listenTick={listenTick} onMicBlocked={() => {
             micBlocked.current = true;
             setVoiceNote(MIC_BLOCKED);
