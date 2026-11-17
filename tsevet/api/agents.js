@@ -90,7 +90,7 @@ export const label = (key) => `${AGENTS[key].emoji} ${AGENTS[key].name}`;
 
 const appsList = APPS.map((a) => `- ${a.key}: ${a.name} – ${a.about} (${a.url})`).join('\n');
 
-const common = (team, channel, maagar) => `You are part of a small AI team ${channel === 'app' ? "in the owner's private team app (a group chat on the phone or computer)" : 'in a Telegram group'}. You work for the owner – an Israeli who \
+const common = (team, channel, maagar, gen) => `You are part of a small AI team ${channel === 'app' ? "in the owner's private team app (a group chat on the phone or computer)" : 'in a Telegram group'}. You work for the owner – an Israeli who \
 builds web apps (installable on the phone) and now wants to market each of them, with a dedicated business page \
 per app for advertising.
 
@@ -113,18 +113,20 @@ request. Don't hand off when the owner only needs your answer, and never hand ba
 - What the team can't do yet (it will come in the next stages): generate images${team.includes('editor') ? '' : ' or videos'}, publish posts, open pages \
 or ad accounts, create or launch campaigns, or read ad results. You prepare everything so the owner can do it in \
 a few minutes, with exact step-by-step instructions. Never claim you did something you can't do.
-- Never spend money and never ask for passwords or API keys in the chat.`;
+${gen ? `- New video clips: קריאייטיב and עורך וידאו can propose an AI-generated 8-second clip with make_video (the owner approves \
+each one with a button, because it costs money). A longer video is several clips; the editor can then edit a \
+finished clip like any uploaded file. Propose one clip at a time unless the owner asked for more.\n` : ''}- Never spend money and never ask for passwords or API keys in the chat.`;
 
 // team = הבוטים שזמינים בערוץ הזה (ב-Telegram רק מי שיש לו בוט), channel = 'tg' | 'app'
 // skills = הסקילים שהבוט הזה למד (רק השם ומתי להשתמש; את התוכן הוא טוען עם use_skill)
-export function systemPrompt(agent, notes = [], { team = TG_KEYS, channel = 'tg', maagar = false, skills = [] } = {}) {
+export function systemPrompt(agent, notes = [], { team = TG_KEYS, channel = 'tg', maagar = false, skills = [], gen = false } = {}) {
   const memory = notes.length
     ? `What the team remembers (numbered):\n${notes.map((n, i) => `${i + 1}. ${n}`).join('\n')}`
     : 'The team has no saved notes yet.';
   const learned = skills.length
     ? `\n\nSkills you were taught (before a task that fits one, load it with use_skill and follow it):\n${skills.map((s) => `- ${s.name}: ${s.title} – ${s.when}`).join('\n')}`
     : '';
-  return `${AGENTS[agent].role}\n\n${common(team, channel, maagar)}${learned}\n\n${memory}`;
+  return `${AGENTS[agent].role}\n\n${common(team, channel, maagar, gen)}${learned}\n\n${memory}`;
 }
 
 // הכלי של עורך הווידאו: מתחיל עריכה ברקע (render.js). הקבצים לפי המזהה שמופיע בשיחה.
@@ -207,7 +209,25 @@ const USE_SKILL = (skills) => ({
   input_schema: { type: 'object', properties: { name: { type: 'string', enum: skills.map((s) => s.name) } }, required: ['name'] },
 });
 
-export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, skills = [] } = {}) => [
+// יצירת סרטון חדש במחולל הווידאו (gen.js). רק מציע – הבעלים מאשר בכפתור
+const MAKE_VIDEO = {
+  name: 'make_video',
+  description: 'Propose generating a new 8-second video clip with the AI video generator. It costs money, so this only shows the owner a card with a "create" button; the clip is generated after they approve and then appears in the chat as a file.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      prompt: { type: 'string', description: 'The full generation prompt in English: subject, action, setting, one camera move, lighting / look, sound. One continuous shot.' },
+      summary: { type: 'string', description: 'One Hebrew sentence for the owner: what the clip will show' },
+      image: { type: 'string', description: 'Optional file id of an uploaded photo to use as the exact first frame' },
+      aspect: { type: 'string', enum: ['9:16', '16:9', '1:1'], description: '9:16 for reels / stories (default)' },
+      quality: { type: 'string', enum: ['final', 'draft'], description: 'draft = fast, low resolution, about half the price' },
+    },
+    required: ['prompt', 'summary'],
+  },
+};
+const VIDEO_MAKERS = ['creative', 'editor'];
+
+export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, skills = [], gen = false } = {}) => [
   ...webTools(model),
   ...(maagar ? MAAGAR_TOOLS : []),
   ...(maagar && agent === 'librarian' ? LIBRARIAN_TOOLS(team) : []),
@@ -232,6 +252,7 @@ export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, sk
     input_schema: { type: 'object', properties: { number: { type: 'integer' } }, required: ['number'] },
   },
   ...(agent === 'editor' ? [EDIT_VIDEO] : []),
+  ...(gen && VIDEO_MAKERS.includes(agent) ? [MAKE_VIDEO] : []),
   ...(team.filter((k) => k !== agent).length
     ? [{
       name: 'handoff',
@@ -262,10 +283,12 @@ export function transcript(history, owner = 'הבעלים') {
     .map((h) => {
       const who = h.who === 'owner' ? owner : AGENTS[h.who] ? label(h.who) : 'מערכת';
       const pic = h.photo ? ' [תמונה]' : '';
-      const files = h.files?.length ? `\n${h.files.map(fileLine).join('\n')}` : '';
+      const all = [...(h.files || []), ...(h.made || [])];
+      const files = all.length ? `\n${all.map(fileLine).join('\n')}` : '';
+      const gen = h.gens?.length && !h.made?.length ? ' [proposed a generated clip – it is created only after the owner approves]' : '';
       const render = h.renders?.length ? ' [started a video render – the result appears in the chat when ready]' : '';
       const to = h.handoff ? `\n↪️ ל${label(h.handoff.to)}: ${h.handoff.request}` : '';
-      return `${who}:${pic} ${h.text || ''}${render}${files}${to}`;
+      return `${who}:${pic} ${h.text || ''}${render}${gen}${files}${to}`;
     })
     .join('\n\n');
 }
@@ -273,7 +296,7 @@ export function transcript(history, owner = 'הבעלים') {
 // תור אחד של בוט. tools = { app_info, remember, forget, edit_video } (פונקציות שמחזירות טקסט).
 // model = המודל של הבוט, team = מי זמין בערוץ, images = תמונות מההודעה האחרונה. מחזיר { text, handoff, usage[] }
 // maagar = יש חיבור למאגר AI, skills = הסקילים שהבוט הזה למד
-export async function runAgent(client, { agent, notes, history, owner, image, images = image ? [image] : [], model = MODEL, team = TG_KEYS, channel = 'tg', maagar = false, skills = [] }, tools) {
+export async function runAgent(client, { agent, notes, history, owner, image, images = image ? [image] : [], model = MODEL, team = TG_KEYS, channel = 'tg', maagar = false, skills = [], gen = false }, tools) {
   const intro = `The conversation so far (latest at the bottom):\n\n${transcript(history, owner)}\n\n` +
     `Now it's your turn as ${label(agent)}. Reply to the latest message.`;
   const content = images.length ? [...images, { type: 'text', text: intro }] : intro;
@@ -288,8 +311,8 @@ export async function runAgent(client, { agent, notes, history, owner, image, im
       max_tokens: 8000,
       ...fallback,
       output_config: { effort: 'medium' },
-      system: [{ type: 'text', text: systemPrompt(agent, notes, { team, channel, maagar, skills }), cache_control: { type: 'ephemeral' } }],
-      tools: TOOLS(agent, team, model, { maagar, skills }),
+      system: [{ type: 'text', text: systemPrompt(agent, notes, { team, channel, maagar, skills, gen }), cache_control: { type: 'ephemeral' } }],
+      tools: TOOLS(agent, team, model, { maagar, skills, gen }),
       messages,
     });
     usage.push({ model, ...(response.usage || {}) });

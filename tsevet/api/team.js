@@ -17,6 +17,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { AGENTS, AGENT_KEYS, MODELS, TG_KEYS, aiMessage, appInfo, label, pickAgent, priceOf, runAgent, temporary } from './agents.js';
 import { APP_PREFIX, addFile, checkFileUrl, getSettings, handleApp } from './app.js';
 import { addSkill, learnFrom, listItems, read as maagarRead, search as maagarSearch, skillsOf } from './maagar.js';
+import { genDone, genFail, genReady, genStart, proposeClip, runGenJob } from './gen.js';
 import { renderDone, renderFail, renderInput, renderJob, startRender } from './render.js';
 import { botIdOf, downloadImage, send, tokenOf, typing } from './telegram.js';
 
@@ -112,6 +113,13 @@ export class Team {
         return renderDone(storage, body.id, body.file || {});
       case '/internal/render-fail':
         return renderFail(storage, body.id);
+      // יצירת סרטון: gen-start מגיע למופע של העבודה, gen-done / gen-fail חוזרים ממנו למופע הראשי
+      case '/internal/gen-start':
+        return genStart(storage, body);
+      case '/internal/gen-done':
+        return genDone(this, body.id, body.file || {});
+      case '/internal/gen-fail':
+        return genFail(storage, body.id, body.error);
       default:
         throw Object.assign(new Error('not found'), { status: 404 });
     }
@@ -272,6 +280,8 @@ export class Team {
 
   // ---------- עבודה ברקע ----------
   async alarm() {
+    // במופע של יצירת סרטון ("gen:<id>") זו כל העבודה
+    if (await runGenJob(this)) return;
     const started = Date.now();
     while (Date.now() - started < ALARM_BUDGET_MS) {
       const q = (await this.storage.get('q')) || [];
@@ -331,6 +341,7 @@ export class Team {
     if (!app && job.photo) image = await downloadImage(this.env, tokenOf(this.env, job.via), job.photo).catch(() => null);
 
     const renders = [];
+    const gens = [];
     const maagar = Boolean(this.env.MAAGAR);
     let cache = null;
     const items = () => (cache ||= listItems(this.env));
@@ -353,6 +364,7 @@ export class Team {
         return 'Deleted';
       },
       edit_video: (input) => startRender(this, job, input, renders),
+      make_video: (input) => proposeClip(this, job, input, gens),
       // מאגר AI: הרשימה נטענת פעם אחת לכל עבודה
       maagar_search: async ({ query, area }) => maagarSearch(await items(), query, area),
       maagar_read: async ({ id }) => maagarRead(await items(), id),
@@ -391,6 +403,7 @@ export class Team {
         agent, notes, history: history.slice(-30), owner: owner?.name, images,
         model: MODELS[models[agent]], team, channel: app ? 'app' : 'tg',
         maagar, skills: skillsOf((await this.storage.get('skills')) || [], agent),
+        gen: app && genReady(this.env),
       }, tools);
       await this.addCost(r.usage, agent);
       // נעצר באמצע (מהאפליקציה)? התשובה לא נשמרת
@@ -401,6 +414,7 @@ export class Team {
         who: agent, text: r.text || '',
         ...(r.handoff ? { handoff: r.handoff } : {}),
         ...(renders.length ? { renders: renders.splice(0) } : {}),
+        ...(gens.length ? { gens: gens.splice(0) } : {}),
         at: Date.now(),
       });
       job = { ...job, target: next, turns: job.turns + 1, attempts: 0 };

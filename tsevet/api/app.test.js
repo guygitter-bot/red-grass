@@ -494,3 +494,106 @@ test('repository tools: learn-from, bad skills, and no tools when the repository
   assert.ok(!off.aiCalls[0].tools.some((t) => /maagar|teach/.test(t.name)));
   assert.doesNotMatch(off.aiCalls[0].system[0].text, /maagar_search \/ maagar_read/);
 });
+
+// ---------- יצירת סרטון במחולל הווידאו ----------
+function googleFetch(calls, { status = 200 } = {}) {
+  return async (url, init = {}) => {
+    calls.push({ url, body: init.body ? JSON.parse(init.body) : null, key: init.headers?.['x-goog-api-key'] });
+    if (url.endsWith('/interactions')) {
+      if (status !== 200) return new Response(JSON.stringify({ error: { message: 'quota exceeded for billing' } }), { status });
+      return new Response(JSON.stringify({ steps: [{ type: 'text', text: 'ok' }, { type: 'video', uri: 'https://generativelanguage.googleapis.com/v1beta/files/abc' }] }));
+    }
+    if (url.startsWith('https://generativelanguage.googleapis.com/v1beta/files/abc')) return new Response(new Uint8Array(50).fill(3), { headers: { 'content-type': 'video/mp4' } });
+    return new Response(null, { status: 204 });
+  };
+}
+const PROMPT = 'A slow dolly-in on a tidy kitchen table with a phone showing a to-do list, warm morning light, soft ambience';
+
+test('a new clip is only proposed; it is generated after the owner approves, and then the bots see it as a file', async () => {
+  const google = [];
+  const { env, aiCalls } = setupEnv({
+    replies: [
+      { stop: 'tool_use', content: tool('make_video', { prompt: PROMPT, summary: 'שולחן מטבח מסודר עם האפליקציה', aspect: '16:9', quality: 'draft' }) },
+      { content: text('הכנתי הצעה לסרטון, מחכה לאישור שלך') },
+      { content: text('רואה את הסרטון') },
+    ],
+  }, { GEMINI_API_KEY: 'g-key', DAILY_CLIPS: '2' });
+  env.FETCH = googleFetch(google);
+  const token = await signIn(env);
+  assert.equal((await call(env, '/app/team', {}, token)).data.gen, true);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'תייצר סרטון קצר לסדר', to: 'creative' }, token);
+  await env.team.alarm();
+
+  // רק הצעה: שום פנייה ל-Google
+  assert.equal(google.length, 0);
+  assert.ok(aiCalls[0].tools.some((t) => t.name === 'make_video'));
+  let view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  const card = view.messages[1].gens[0];
+  assert.deepEqual([card.status, card.summary, card.aspect, card.quality, card.seconds], ['proposed', 'שולחן מטבח מסודר עם האפליקציה', '16:9', 'draft', 8]);
+  assert.equal(view.pending, false);
+
+  // אישור -> עבודה ברקע -> קובץ
+  assert.equal((await call(env, '/app/gen/approve', { id: card.id }, token)).status, 200);
+  assert.equal((await call(env, '/app/gen/approve', { id: card.id }, token)).status, 409);
+  view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  assert.equal(view.messages[1].gens[0].status, 'working');
+  assert.equal(view.pending, true);
+  await env.team.alarm();
+
+  const req = google.find((g) => g.url.endsWith('/interactions'));
+  assert.equal(req.key, 'g-key');
+  assert.equal(req.body.response_format.aspect_ratio, '16:9');
+  assert.equal(req.body.response_format.resolution, '360p');
+  assert.match(req.body.input[0].text, /A slow dolly-in/);
+  view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  const done = view.messages[1].gens[0];
+  assert.equal(done.status, 'done');
+  assert.equal(done.file.kind, 'video');
+  assert.equal((await (await worker.fetch(new Request(done.file.url), env)).arrayBuffer()).byteLength, 50);
+  const costs = (await call(env, '/app/costs', {}, token)).data;
+  assert.deepEqual([costs.now.clips, costs.clipsToday, costs.clipsLimit], [1, 1, 2]);
+
+  // הבוט הבא רואה את הסרטון כקובץ (ואפשר לערוך אותו)
+  await call(env, '/app/send', { id: conv.id, text: 'מה דעתך?', to: 'editor' }, token);
+  await env.team.alarm();
+  assert.match(aiCalls.at(-1).messages[0].content, new RegExp(`\\[file ${done.file.id}: video "generated.mp4", 8s\\]`));
+});
+
+test('clip generation: cancel, daily limit, a Google error in Hebrew, and no tool without a key', async () => {
+  const google = [];
+  const propose = (n) => ({ stop: 'tool_use', content: tool('make_video', { prompt: `${PROMPT} ${n}`, summary: `סרטון ${n}` }) });
+  const { env } = setupEnv({ replies: [propose(1), { content: text('א') }, propose(2), { content: text('ב') }, propose(3), { content: text('ג') }] }, { GEMINI_API_KEY: 'g-key', DAILY_CLIPS: '1' });
+  env.FETCH = googleFetch(google, { status: 429 });
+  const token = await signIn(env);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  for (let i = 0; i < 3; i++) {
+    await call(env, '/app/send', { id: conv.id, text: 'עוד סרטון', to: 'editor' }, token);
+    await env.team.alarm();
+  }
+  let view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  const cards = view.messages.filter((m) => m.gens).map((m) => m.gens[0]);
+  assert.equal(cards.length, 3);
+
+  assert.equal((await call(env, '/app/gen/cancel', { id: cards[0].id }, token)).status, 200);
+  assert.equal((await call(env, '/app/gen/approve', { id: cards[0].id }, token)).status, 409);
+  assert.equal((await call(env, '/app/gen/approve', { id: cards[1].id }, token)).status, 200);
+  const over = await call(env, '/app/gen/approve', { id: cards[2].id }, token);
+  assert.equal(over.status, 429);
+  assert.match(over.data.error, /תקרה של 1 סרטונים ליום/);
+  await env.team.alarm();
+  view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  const after = view.messages.filter((m) => m.gens).map((m) => m.gens[0]);
+  assert.deepEqual(after.map((g) => g.status), ['cancelled', 'failed', 'proposed']);
+  assert.match(after[1].error, /חיוב פעיל/);
+  assert.equal(env.FILES.map.size, 0);
+
+  // בלי מפתח: אין כלי ואין כפתור
+  const off = setupEnv({ replies: [{ content: text('היי') }] });
+  const t2 = await signIn(off.env);
+  assert.equal((await call(off.env, '/app/team', {}, t2)).data.gen, false);
+  const c2 = (await call(off.env, '/app/conv/new', {}, t2)).data;
+  await call(off.env, '/app/send', { id: c2.id, text: 'היי', to: 'creative' }, t2);
+  await off.env.team.alarm();
+  assert.ok(!off.aiCalls[0].tools.some((t) => t.name === 'make_video'));
+});

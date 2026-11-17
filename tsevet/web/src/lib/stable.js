@@ -8,6 +8,7 @@ function collectUrls(messages) {
   for (const m of messages) {
     m.files?.forEach(add);
     m.renders?.forEach((r) => add(r.file));
+    m.gens?.forEach((g) => add(g.file));
   }
   return urls;
 }
@@ -27,6 +28,7 @@ export function mergeConv(prev, next) {
     const fixed = { ...m };
     if (m.files) fixed.files = m.files.map(fix);
     if (m.renders) fixed.renders = m.renders.map((r) => (r.file ? { ...r, file: fix(r.file) } : r));
+    if (m.gens) fixed.gens = m.gens.map((g) => (g.file ? { ...g, file: fix(g.file) } : g));
     const old = before.get(m.i);
     return old && JSON.stringify(old) === JSON.stringify(fixed) ? old : fixed;
   });
