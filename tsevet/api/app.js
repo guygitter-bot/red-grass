@@ -12,11 +12,14 @@
 //   busy            -> { <מפתח שיחה>: { agent } } מי כותב עכשיו
 //   r:<id>          -> עריכת וידאו ברקע (render.js)
 //   g:<id>          -> סרטון שנוצר במחולל הווידאו, אחרי אישור (gen.js)
+//   schedules       -> משימות קבועות (schedule.js); vapid / subs -> התראות לטלפון (notify.js)
 //   skills          -> הסקילים שהספרן לימד את הצוות ממאגר AI (maagar.js)
 import { AGENTS, AGENT_KEYS, TIERS } from './agents.js';
 import * as auth from './auth.js';
 import { approve as approveGen, cancel as cancelGen, dailyLimit, genReady, genView } from './gen.js';
 import { renderView } from './render.js';
+import { BUDGETS, MAX_SCHEDULES, cleanSchedule, nextRun } from './schedule.js';
+import { pushAll, subscribe, unsubscribe, vapidKeys } from './notify.js';
 
 const { fail } = auth;
 export const APP_PREFIX = 'h:app:';
@@ -44,7 +47,18 @@ export async function getSettings(storage) {
   const s = (await storage.get('settings')) || {};
   const models = {};
   for (const k of AGENT_KEYS) models[k] = TIERS.includes(s.models?.[k]) ? s.models[k] : AGENTS[k].tier;
-  return { models };
+  // notifyAll = התראה לטלפון גם כשמשימה רגילה מסתיימת (קבועות – תמיד)
+  return { models, notifyAll: Boolean(s.notifyAll) };
+}
+
+// משימות קבועות, עם הפעם הבאה שהן ירוצו
+async function schedulesView(storage) {
+  const now = Date.now();
+  const list = (await storage.get('schedules')) || [];
+  return {
+    schedules: list.map((s) => ({ ...s, next: s.enabled ? nextRun(s, Math.max(now, s.lastRun || 0)) : null })),
+    budgets: BUDGETS,
+  };
 }
 
 // ---------- קבצים ----------
@@ -346,6 +360,44 @@ export async function handleApp(t, path, body, headers, origin) {
     case '/app/gen/cancel':
       return cancelGen(storage, body.id);
 
+    // משימות קבועות (schedule.js; ההרצה עצמה ב-team.js)
+    case '/app/schedules':
+      return schedulesView(storage);
+    case '/app/schedules/save': {
+      const list = (await storage.get('schedules')) || [];
+      const old = body.id ? list.find((s) => s.id === body.id) : null;
+      if (body.id && !old) throw fail(404, 'המשימה לא נמצאה');
+      if (!old && list.length >= MAX_SCHEDULES) throw fail(400, `עד ${MAX_SCHEDULES} משימות קבועות`);
+      const s = cleanSchedule(body, old || {});
+      if (s.error) throw fail(400, s.error);
+      // משימה חדשה (או שהזמן שלה השתנה) לא רצה מיד על "פעמים שפוספסו" – רק מהפעם הבאה
+      const fresh = !old || old.time !== s.time || String(old.days) !== String(s.days) || (!old.enabled && s.enabled);
+      const saved = old ? { ...s, ...(fresh ? { lastRun: Date.now() } : {}) } : { ...s, id: newId(), createdAt: Date.now(), lastRun: Date.now() };
+      await storage.put('schedules', old ? list.map((x) => (x.id === old.id ? saved : x)) : [...list, saved]);
+      await t.armSchedules();
+      return schedulesView(storage);
+    }
+    case '/app/schedules/delete':
+      await storage.put('schedules', ((await storage.get('schedules')) || []).filter((s) => s.id !== String(body.id || '')));
+      return schedulesView(storage);
+    case '/app/schedules/run': {
+      const s = ((await storage.get('schedules')) || []).find((x) => x.id === String(body.id || ''));
+      if (!s) throw fail(404, 'המשימה לא נמצאה');
+      return { conv: await t.startSchedule(s) };
+    }
+
+    // התראות לטלפון (notify.js)
+    case '/app/push/key':
+      return { key: (await vapidKeys(storage)).publicKey };
+    case '/app/push/subscribe':
+      await subscribe(storage, body.sub);
+      return { ok: true };
+    case '/app/push/unsubscribe':
+      await unsubscribe(storage, String(body.endpoint || ''));
+      return { ok: true };
+    case '/app/push/test':
+      return { sent: await pushAll(t, { title: '🔔 התראות מהצוות פועלות', body: 'כשמשימה תסתיים – תקבל הודעה כאן', url: (t.env.APP_URL || 'https://tsevet-ai.pages.dev/'), tag: 'tsevet-test' }) };
+
     // מה שהספרן לימד את הצוות ממאגר AI
     case '/app/skills':
       return { skills: (await storage.get('skills')) || [] };
@@ -361,8 +413,9 @@ export async function handleApp(t, path, body, headers, origin) {
       if (body.models && typeof body.models === 'object') {
         const current = await getSettings(storage);
         for (const k of AGENT_KEYS) if (TIERS.includes(body.models[k])) current.models[k] = body.models[k];
-        await storage.put('settings', current);
+        await storage.put('settings', { ...((await storage.get('settings')) || {}), models: current.models });
       }
+      if (typeof body.notifyAll === 'boolean') await storage.put('settings', { ...((await storage.get('settings')) || {}), notifyAll: body.notifyAll });
       return getSettings(storage);
     }
     default:

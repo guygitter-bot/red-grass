@@ -664,3 +664,91 @@ test('the manager gets one fix-up round at most, and stop ends the plan', async 
   assert.ok(!aiCalls[4].tools.some((t) => t.name === 'assign'));
   assert.equal(view.messages.at(-1).text, 'סיכום סופי');
 });
+
+// ---------- משימות קבועות והתראות ----------
+test('a scheduled task runs on time in its own conversation, notifies the phone, and stops at its budget', async () => {
+  const pushes = [];
+  const { env, aiCalls } = setupEnv({
+    replies: [
+      { content: [...text('עבדתי על זה'), ...tool('handoff', { to: 'creative', request: 'תמשיך' })] },
+      { content: text('לא אמור לרוץ – עברנו את התקרה') },
+    ],
+  });
+  env.FETCH = async (url, init) => {
+    pushes.push({ url, headers: init.headers });
+    return new Response(null, { status: 201 });
+  };
+  const token = await signIn(env);
+
+  // יצירה: שגיאות בעברית, ואז משימה תקינה
+  assert.match((await call(env, '/app/schedules/save', { text: 'תבדוק', days: [], time: '02:00' }, token)).data.error, /לפחות יום אחד/);
+  const saved = await call(env, '/app/schedules/save', { title: 'סקירת לילה', text: 'תבדוק מה חדש במאגר', days: [0, 1, 2, 3, 4, 5, 6], time: '02:00', to: 'librarian', budget: 0.5 }, token);
+  assert.equal(saved.status, 200);
+  const s = saved.data.schedules[0];
+  assert.deepEqual([s.title, s.to, s.budget, s.enabled], ['סקירת לילה', 'librarian', 0.5, true]);
+  assert.ok(s.next > Date.now());
+  // השרת יתעורר בזמן הבא
+  assert.equal(await env.team.storage.getAlarm(), s.next);
+  // עדיין לא הגיע הזמן – שום דבר לא רץ
+  await env.team.alarm();
+  assert.equal(aiCalls.length, 0);
+
+  // מכשיר שנרשם להתראות
+  const key = (await call(env, '/app/push/key', {}, token)).data.key;
+  assert.ok(key.length > 60);
+  assert.equal((await call(env, '/app/push/subscribe', { sub: { endpoint: 'https://evil.example/x', keys: {} } }, token)).status, 400);
+  const p256 = Buffer.from(new Uint8Array(65).fill(4)).toString('base64url');
+  const pub = await crypto.subtle.exportKey('raw', (await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])).publicKey);
+  const sub = { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: { p256dh: Buffer.from(pub).toString('base64url'), auth: Buffer.from(new Uint8Array(16).fill(1)).toString('base64url') } };
+  assert.ok(p256);
+  assert.equal((await call(env, '/app/push/subscribe', { sub }, token)).status, 200);
+
+  // "הלילה": הפעם האחרונה הייתה לפני יומיים
+  const list = await env.team.storage.get('schedules');
+  await env.team.storage.put('schedules', list.map((x) => ({ ...x, lastRun: Date.now() - 2 * 24 * 3600 * 1000 })));
+  await env.team.alarm();
+
+  const team = (await call(env, '/app/team', {}, token)).data;
+  const conv = team.convs.find((c) => c.title === '⏰ סקירת לילה');
+  assert.ok(conv);
+  const view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  assert.ok(view.messages, JSON.stringify(view));
+  // ההודעה של המשימה, והבוט שנבחר (ספרן, במודל שלו)
+  assert.equal(view.messages[0].who, 'owner');
+  assert.equal(view.messages[0].text, 'תבדוק מה חדש במאגר');
+  assert.equal(aiCalls[0].model, MODELS.sonnet);
+  assert.match(aiCalls[0].system[0].text, /^You are "ספרן"/);
+  // פעם אחת בלבד, גם אחרי שפוספסו כמה לילות
+  assert.equal(view.messages.filter((m) => m.who === 'owner').length, 1);
+  // התראה אחת לטלפון, עם קישור לשיחה
+  assert.equal(pushes.filter((p) => p.url.startsWith('https://fcm.googleapis.com/')).length, 1);
+  assert.match(pushes[0].headers.authorization, /^vapid t=/);
+  // והשרת מתוזמן ללילה הבא
+  const after = (await call(env, '/app/schedules', {}, token)).data.schedules[0];
+  assert.equal(await env.team.storage.getAlarm(), after.next);
+
+  // "להריץ עכשיו" – לאותה שיחה
+  const again = await call(env, '/app/schedules/run', { id: s.id }, token);
+  assert.equal(again.data.conv, conv.id);
+  await call(env, '/app/schedules/delete', { id: s.id }, token);
+  assert.deepEqual((await call(env, '/app/schedules', {}, token)).data.schedules, []);
+});
+
+test('a task stops when it reaches its spending cap', async () => {
+  const { env, aiCalls } = setupEnv({
+    replies: [
+      { content: [...text('שלב ראשון'), ...tool('handoff', { to: 'creative', request: 'תמשיך' })] },
+      { content: text('לא אמור לרוץ') },
+    ],
+  });
+  const token = await signIn(env);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'משימה', to: 'campaigns' }, token);
+  // תקרה קטנה מאוד (כמו משימה קבועה)
+  const q = await env.team.storage.get('q');
+  await env.team.storage.put('q', q.map((j) => ({ ...j, budget: 0.001 })));
+  await env.team.alarm();
+  assert.equal(aiCalls.length, 1);
+  const view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  assert.match(view.messages.at(-1).text, /לתקרה של \$0\.001/);
+});

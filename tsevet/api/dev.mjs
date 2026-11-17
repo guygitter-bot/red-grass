@@ -14,13 +14,16 @@ const TOKEN = 'dev-token';
 function memoryStorage() {
   const map = new Map();
   let timer = null;
+  let alarmAt = null;
   const clone = (v) => (v === undefined ? v : structuredClone(v));
   return {
     async get(k) { return clone(map.get(k)); },
     async put(k, v) { map.set(k, clone(v)); },
     async delete(k) { map.delete(k); },
     async list({ prefix = '' } = {}) { return new Map([...map].filter(([k]) => k.startsWith(prefix)).map(([k, v]) => [k, clone(v)])); },
+    async getAlarm() { return alarmAt; },
     async setAlarm(t) {
+      alarmAt = t;
       clearTimeout(timer);
       timer = setTimeout(() => env.team.alarm().catch((e) => console.error('alarm', e)), Math.max(0, t - Date.now()));
     },

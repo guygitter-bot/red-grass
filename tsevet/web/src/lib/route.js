@@ -1,10 +1,11 @@
-// ניווט לפי # בכתובת (בלי ספריית ניווט): #/ · #/chats · #/c/<id> · #/costs · #/settings
+// ניווט לפי # בכתובת (בלי ספריית ניווט): #/ · #/chats · #/c/<id> · #/costs · #/schedules · #/settings
 export function parseRoute(hash) {
   const h = String(hash || '').replace(/^#/, '') || '/';
   const m = h.match(/^\/c\/(.+)$/);
   if (m) return { name: 'chat', id: decodeURIComponent(m[1]) };
   if (h === '/chats') return { name: 'chats' };
   if (h === '/costs') return { name: 'costs' };
+  if (h === '/schedules') return { name: 'schedules' };
   if (h === '/settings') return { name: 'settings' };
   return { name: 'team' };
 }

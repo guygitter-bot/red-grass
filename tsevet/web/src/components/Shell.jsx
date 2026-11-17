@@ -1,5 +1,5 @@
 // מסגרת האפליקציה: בטלפון – סרגל עליון ותפריט תחתון; במחשב – עמודה ימנית עם התפריט והשיחות
-import { Users, MessageSquare, Wallet, Settings as Cog, Moon, Sun, Plus } from 'lucide-react';
+import { Users, MessageSquare, Wallet, Settings as Cog, Moon, Sun, Plus, Clock } from 'lucide-react';
 import { go } from '../lib/route';
 import { getTheme, isDark, setTheme } from '../lib/theme';
 import { useState } from 'react';
@@ -8,11 +8,13 @@ import ConvList from './ConvList';
 import Chat from './Chat';
 import Costs from './Costs';
 import Settings from './Settings';
+import Schedules from './Schedules';
 import { newConversation } from '../lib/convs';
 
 const NAV = [
   ['team', '/', 'צוות', Users],
   ['chats', '/chats', 'שיחות', MessageSquare],
+  ['schedules', '/schedules', 'קבועות', Clock],
   ['costs', '/costs', 'עלויות', Wallet],
   ['settings', '/settings', 'הגדרות', Cog],
 ];
@@ -90,6 +92,7 @@ export default function Shell({ route, team, error, refresh, onLogout }) {
         )}
         {route.name === 'chat' && <Chat key={route.id} id={route.id} agents={agents} refresh={refresh} />}
         {route.name === 'costs' && <Costs agents={agents} />}
+        {route.name === 'schedules' && <Schedules agents={agents} />}
         {route.name === 'settings' && <Settings team={team} onLogout={onLogout} />}
       </main>
 

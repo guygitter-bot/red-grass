@@ -5,11 +5,12 @@ import { api, setToken } from '../lib/api';
 import { TIERS } from '../lib/agents';
 import { getTheme, setTheme } from '../lib/theme';
 import Skills from './Skills';
+import { currentSubscription, disablePush, enablePush, pushSupported } from '../lib/push';
 import { Button, Segmented, inputCls } from './ui';
 
-function Card({ title, children }) {
+function Card({ title, id, children }) {
   return (
-    <section className="rounded-2xl border border-line bg-card p-4">
+    <section id={id} className="rounded-2xl border border-line bg-card p-4">
       <h2 className="mb-3 font-bold">{title}</h2>
       {children}
     </section>
@@ -110,6 +111,99 @@ function Memory() {
   );
 }
 
+// התראות לטלפון: הפעלה במכשיר הזה, בדיקה, והאם גם משימה רגילה שולחת
+function Notifications() {
+  const [on, setOn] = useState(false);
+  const [notifyAll, setNotifyAll] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [bad, setBad] = useState(false);
+  const supported = pushSupported();
+
+  useEffect(() => {
+    if (supported) currentSubscription().then((s) => setOn(!!s));
+    api('/app/settings', {})
+      .then((r) => setNotifyAll(!!r.notifyAll))
+      .catch(() => {});
+  }, [supported]);
+
+  const run = async (fn, ok) => {
+    setBusy(true);
+    setMsg('');
+    try {
+      await fn();
+      setBad(false);
+      setMsg(ok || '');
+    } catch (e) {
+      setBad(true);
+      setMsg(e.message);
+    }
+    setBusy(false);
+  };
+
+  const toggleAll = async () => {
+    const next = !notifyAll;
+    setNotifyAll(next);
+    try {
+      const r = await api('/app/settings', { notifyAll: next });
+      setNotifyAll(!!r.notifyAll);
+    } catch (e) {
+      setNotifyAll(!next);
+      setBad(true);
+      setMsg(e.message);
+    }
+  };
+
+  return (
+    <Card title="התראות לטלפון" id="notifications">
+      {!supported ? (
+        <p className="text-sm text-muted">בטלפון צריך קודם להוסיף את האפליקציה למסך הבית (באייפון – חובה), ואז לפתוח אותה משם ולחזור לכאן.</p>
+      ) : (
+        <>
+          <p className="mb-3 text-sm text-muted">{on ? 'ההתראות פועלות במכשיר הזה.' : 'כדי לדעת כשמשימה הסתיימה, גם כשהאפליקציה סגורה.'}</p>
+          <div className="flex flex-wrap gap-2">
+            {on ? (
+              <Button kind="ghost" disabled={busy} onClick={() => run(async () => { await disablePush(); setOn(false); }, 'ההתראות כובו')}>
+                לכבות
+              </Button>
+            ) : (
+              <Button disabled={busy} onClick={() => run(async () => { await enablePush(); setOn(true); }, 'ההתראות הופעלו')}>
+                להפעיל התראות במכשיר הזה
+              </Button>
+            )}
+            {on && (
+              <Button
+                kind="ghost"
+                disabled={busy}
+                onClick={() => run(async () => { const r = await api('/app/push/test', {}); setMsg(r.sent ? 'נשלחה התראה' : 'לא נשלחה התראה – כדאי לכבות ולהפעיל שוב'); }, '')}
+              >
+                לשלוח התראת בדיקה
+              </Button>
+            )}
+          </div>
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-medium">גם כשמשימה רגילה מסתיימת</div>
+              <div className="text-xs text-muted">משימות קבועות שולחות התראה תמיד</div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={notifyAll}
+              aria-label="גם כשמשימה רגילה מסתיימת"
+              onClick={toggleAll}
+              className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${notifyAll ? 'bg-accent' : 'bg-line'}`}
+            >
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-card shadow transition-all ${notifyAll ? 'right-0.5' : 'right-[1.375rem]'}`} />
+            </button>
+          </div>
+        </>
+      )}
+      {msg && <p className={`mt-2 text-sm ${bad ? 'text-bad' : 'text-ok'}`}>{msg}</p>}
+    </Card>
+  );
+}
+
 function Password() {
   const [open, setOpen] = useState(false);
   const [cur, setCur] = useState('');
@@ -173,6 +267,7 @@ export default function Settings({ team, onLogout }) {
       <Models agents={team?.agents || []} />
       <Skills agents={team?.agents || []} connected={team?.maagar} />
       <Memory />
+      <Notifications />
       <Card title="תצוגה">
         <Segmented
           value={theme}
