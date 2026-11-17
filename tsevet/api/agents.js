@@ -82,6 +82,26 @@ the owner to run there – say that plainly instead of promising the team will p
 When asked to "learn everything" about a topic, search with several words (Hebrew and English), read the best few \
 items, and teach a small number of solid skills rather than many thin ones. Then list what you taught and to whom.`,
   },
+  // רק באפליקציה: אינסטגרם אורגני – רילס, כיתובים, קרוסלות, סטוריז, תגובות ותוכנית שבועית (סקילי ig-* שבמאגר)
+  social: {
+    name: 'אינסטגרם',
+    emoji: '📱',
+    tier: 'sonnet',
+    appOnly: true,
+    short: 'אינסטגרם: רילס, כיתובים, קרוסלות, סטוריז, תגובות ותוכנית שבועית',
+    role: `You are "אינסטגרם" (Social) – the owner's Instagram manager for organic content (not paid ads – that is קמפיינים).
+You have a full Instagram skill pack (ig-reel, ig-caption, ig-carousel, ig-story, ig-plan, ig-comment, ig-reply, \
+ig-dm, ig-profile, ig-audit, ig-repurpose, ig-viral, ig-human) plus the owner's voice (ig-voice) and the mat-kon \
+message (mat-kon-message). Before a task, load the fitting skill with use_skill and follow its method – and before \
+showing any caption, script, comment or DM, apply ig-human (no AI-sounding text, no em dashes).
+- Write in the owner's voice (ig-voice). For mat-kon content load mat-kon-message first; for other apps read app_info.
+- A reel: hook options, the spoken script, the on-screen text and a timed beat sheet. When the owner wants the \
+video itself: show the full text first (speech + on-screen text) and wait for their OK. Then either propose a clip \
+with make_video, or ask עורך וידאו (handoff) to edit footage the owner uploaded.
+- You can't post, log in to Instagram, or read insights by yourself – the owner pastes numbers or comments, and \
+you write everything ready to copy. Never ask for passwords.
+- Use web_search / web_fetch for what's current (trends, audio, formats in Israel).`,
+  },
   // רק באפליקציה: מתכנן טיולים, משווה טיסות ומלונות, ולומד לעצמו שיטות (סקילים) מהרשת וממאגר AI
   travel: {
     name: 'טיולים',
@@ -215,7 +235,7 @@ const webTools = (model, agent) => {
 };
 
 // בוטים שלומדים לעצמם: שומרים סקילים רק לעצמם (הספרן מלמד את כולם)
-export const SELF_LEARNERS = ['creative', 'campaigns', 'editor', 'travel'];
+export const SELF_LEARNERS = ['creative', 'campaigns', 'editor', 'social', 'travel'];
 // מי מחפש סקילים ב-GitHub (מי שיכול לשמור סקיל)
 export const SKILL_SEEKERS = [...SELF_LEARNERS, 'librarian'];
 const GITHUB_TOOLS = [
@@ -324,7 +344,7 @@ const MAKE_VIDEO = {
     required: ['prompt', 'summary'],
   },
 };
-const VIDEO_MAKERS = ['creative', 'editor'];
+const VIDEO_MAKERS = ['creative', 'editor', 'social'];
 
 // המנהל מחלק משימה לשלבים. השלבים רצים לפי הסדר (team.js), וכל בוט רואה את מה שנעשה לפניו
 export const MAX_STEPS_IN_PLAN = 6;

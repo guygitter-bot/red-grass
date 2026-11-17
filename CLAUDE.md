@@ -173,12 +173,13 @@
 - ספק לא נמחק – רק "מורד מהרשימה" (`active: false`). ספק רואה רק את הלידים שלו (נבדק בשרת). צבעי הלוגו ב-`web/src/index.css`.
 
 ### צוות – צוות בוטים מומחים (`tsevet/`)
-- תיאור: `tsevet/README.md`. בוטים עם תפקידים (🎨 קריאייטיב, 📊 קמפיינים, 🎬 עורך וידאו, 📚 ספרן, ✈️ טיולים, 🧭 מנהל) שמדברים ביניהם (`handoff`; המנהל מחלק משימה לשלבים עם `assign`) וחולקים זיכרון; אפליקציה משלהם, וגם Telegram.
+- תיאור: `tsevet/README.md`. בוטים עם תפקידים (🎨 קריאייטיב, 📊 קמפיינים, 🎬 עורך וידאו, 📚 ספרן, 📱 אינסטגרם, ✈️ טיולים, 🧭 מנהל) שמדברים ביניהם (`handoff`; המנהל מחלק משימה לשלבים עם `assign`) וחולקים זיכרון; אפליקציה משלהם, וגם Telegram.
 - `tsevet/web` → https://tsevet-ai.pages.dev · `tsevet/api` → Worker `tsevet-api` (Durable Object `Team` אחד, עבודה ברקע ב-alarm; קבצים ב-R2 `tsevet-files`). עלייה: `tsevet.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd tsevet/api && npm test` · `cd tsevet/web && npm test && npm run build`. מסכים: `node api/dev.mjs` (שרת מקומי בזיכרון). טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 - בוט חדש = מפתח ב-`AGENTS` (`api/agents.js`, עם `tier`); ל-Telegram גם סוד `TG_<KEY>_TOKEN` ב-workflow (`appOnly: true` = רק באפליקציה).
 - מחובר ל"מאגר AI" (service binding `MAAGAR`, `api/maagar.js`): כל הבוטים מחפשים וקוראים שם; הספרן שומר "סקילים של הצוות" (ידע, לא כלים) שהבוטים טוענים עם `use_skill`; בוטים אחרים שומרים רק לעצמם. סקיל מ-GitHub (`api/github.js`, רק מאגרים אמינים) מחכה לאישור הבעלים – לא לעקוף. שינוי במבנה פריט ב-`ai_maagar` – לבדוק גם כאן.
 - יצירת סרטון חדש (`api/gen.js`, מחולל הווידאו של Google כמו ב-`nadlan_video`, סוד `GEMINI_API_KEY`): הבוט רק מציע (`make_video`), והסרטון נוצר **רק אחרי אישור בכפתור**; תקרה `DAILY_CLIPS`. לא לעקוף את האישור.
+- בוט האינסטגרם משתמש בסקילי `.claude/skills/ig-*` ובקבצים שב-`.claude/instagram/` (נבנים ל-`api/igskills.js` בכל עלייה) – שינוי שם משפיע גם עליו.
 - עריכת וידאו רצה ב-GitHub Actions (`tsevet-render.yml` + `tsevet/render/run.py`, כלים מ-`.claude/skills`). **המאגר ציבורי – לא להדפיס שם תוכן של המשתמש.**
 - המשתמש ביקש: **תמיד למזג לבד** את ה-PR (אחרי שהבדיקות ירוקות), לבדוק שהעלייה (`tsevet.yml` על main) הצליחה, ולדווח.
 - משימות קבועות (`api/schedule.js`, שעון ישראל, alarm) עם תקרת הוצאה לכל הפעלה (`job.budget`), והתראות לטלפון (`api/notify.js`).
