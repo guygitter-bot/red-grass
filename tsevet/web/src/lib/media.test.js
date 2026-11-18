@@ -8,7 +8,8 @@ describe('media', () => {
   });
   it('סוג קובץ', () => {
     expect(kindOf({ type: 'video/mp4' })).toBe('video');
-    expect(kindOf({ type: 'application/pdf' })).toBe(null);
+    expect(kindOf({ type: 'application/pdf', name: 'a.pdf' })).toBe('doc');
+    expect(kindOf({ type: 'application/zip', name: 'a.zip' })).toBe(null);
   });
   it('קובץ גדול מדי', () => {
     const msg = checkFile({ name: 'a.mp4', type: 'video/mp4', size: 100 * 1024 * 1024 });

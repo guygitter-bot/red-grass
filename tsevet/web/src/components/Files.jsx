@@ -18,13 +18,13 @@ export function FileView({ file }) {
 }
 
 // קובץ שהצוות יצר: דף נחיתה / איור / מסמך / טבלה. דף ואיור – גם תצוגה מקדימה (בלי גישה לאפליקציה: sandbox)
-const DOC_LABEL = { html: 'דף', svg: 'איור', md: 'מסמך', csv: 'טבלה', json: 'נתונים', txt: 'טקסט' };
+const DOC_LABEL = { html: 'דף', svg: 'איור', md: 'מסמך', csv: 'טבלה', json: 'נתונים', txt: 'טקסט', pdf: 'PDF', docx: 'Word', doc: 'Word', xlsx: 'Excel', pptx: 'מצגת' };
 function DocView({ file }) {
   const ext = (file.name.split('.').pop() || '').toLowerCase();
   const [show, setShow] = useState(ext === 'html' || ext === 'svg');
   const kb = file.size ? `${Math.max(1, Math.round(file.size / 1024))}KB` : '';
   return (
-    <div className="rounded-xl border border-line bg-card p-2.5 text-sm">
+    <div className="rounded-xl border border-line bg-card p-2.5 text-sm text-ink">
       <div className="flex items-center gap-2">
         <FileText size={18} className="shrink-0 text-accent-ink" />
         <div className="min-w-0 flex-1">
@@ -39,10 +39,10 @@ function DocView({ file }) {
         <iframe title={file.name} src={file.url} sandbox="allow-scripts allow-popups" loading="lazy" className="mt-2 h-96 w-full rounded-lg border border-line bg-white" />
       )}
       <div className="mt-2 flex flex-wrap gap-2">
-        <a href={file.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-page px-3 py-1.5 font-medium hover:bg-soft">
+        <a href={file.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-page px-3 py-1.5 font-medium !text-ink hover:bg-soft">
           <ExternalLink size={15} /> לפתוח
         </a>
-        <a href={`${file.url}&dl=1`} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-page px-3 py-1.5 font-medium hover:bg-soft">
+        <a href={`${file.url}&dl=1`} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-page px-3 py-1.5 font-medium !text-ink hover:bg-soft">
           <Download size={15} /> הורדה
         </a>
         {(ext === 'html' || ext === 'svg') && (

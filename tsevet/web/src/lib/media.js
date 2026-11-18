@@ -1,10 +1,12 @@
 // הכנת קבצים לפני ההעלאה: תמונה מוקטנת, וסרטון עם תמונה ממוזערת (poster)
 import { API, getToken } from './api';
+import { PDF, docKind, docToText } from './docs';
 
 export const LIMITS = {
   image: { bytes: 8 * 1024 * 1024, label: '8MB' },
   video: { bytes: 95 * 1024 * 1024, label: '95MB' },
   audio: { bytes: 30 * 1024 * 1024, label: '30MB' },
+  doc: { bytes: 20 * 1024 * 1024, label: '20MB' },
 };
 export const MAX_FILES = 6;
 
@@ -13,15 +15,16 @@ export function kindOf(file) {
   if (t.startsWith('image/')) return 'image';
   if (t.startsWith('video/')) return 'video';
   if (t.startsWith('audio/')) return 'audio';
+  if (docKind(file)) return 'doc';
   return null;
 }
 
 // הודעת שגיאה בעברית אם הקובץ לא מתאים, אחרת null
 export function checkFile(file, kind = kindOf(file), size = file.size) {
-  if (!kind) return `"${file.name}" – אפשר לצרף רק תמונה, סרטון או הקלטה`;
+  if (!kind) return `"${file.name}" – אפשר לצרף תמונה, סרטון, הקלטה או מסמך (PDF, Word, Excel, CSV, טקסט)`;
   const lim = LIMITS[kind];
   if (size > lim.bytes) {
-    const what = { image: 'תמונה', video: 'סרטון', audio: 'הקלטה' }[kind];
+    const what = { image: 'תמונה', video: 'סרטון', audio: 'הקלטה', doc: 'מסמך' }[kind];
     return `"${file.name}" גדול מדי – ${what} יכולה להיות עד ${lim.label}`;
   }
   return null;
@@ -151,6 +154,15 @@ export async function uploadFile(file, onProgress) {
       }
     }
     return uploadBlob(file, { name: file.name, type: file.type, dur: info.dur, w: info.w, h: info.h, poster }, onProgress);
+  }
+  if (kind === 'doc') {
+    // PDF – כמו שהוא; שאר המסמכים – טקסט (נקרא כאן בטלפון)
+    if (docKind(file) === 'pdf') return uploadBlob(file, { name: file.name, type: PDF }, onProgress);
+    const text = await docToText(file).catch(() => {
+      throw new Error(`"${file.name}" – לא הצלחנו לקרוא את הקובץ`);
+    });
+    if (!text.trim()) throw new Error(`"${file.name}" – לא נמצא טקסט בקובץ`);
+    return uploadBlob(new Blob([text], { type: 'text/plain;charset=utf-8' }), { name: file.name, type: 'text/plain' }, onProgress);
   }
   return uploadBlob(file, { name: file.name, type: file.type }, onProgress);
 }

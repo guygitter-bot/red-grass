@@ -160,7 +160,7 @@ async function upload(request, env, url, reply) {
   const q = url.searchParams;
   const type = String(q.get('type') || '').toLowerCase().slice(0, 80);
   const kind = kindOf(type);
-  if (!kind) return reply(415, { error: 'אפשר להעלות תמונה, סרטון או שיר' });
+  if (!kind) return reply(415, { error: 'אפשר להעלות תמונה, סרטון, שיר או מסמך' });
   const max = MAX_BYTES[kind];
   const mb = Math.round(max / 1024 / 1024);
   const declared = Number(request.headers.get('content-length'));

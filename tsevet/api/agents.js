@@ -529,7 +529,20 @@ const ASSIGN = (team) => ({
 });
 
 // assign = המנהל יכול לחלק משימה; noHandoff = בוט שעובד על שלב בתוכנית (לא מעביר הלאה)
-export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, skills = [], gen = false, assign = false, noHandoff = false, github = false, bursa = false, code = false, create = false, imageGen = false } = {}) => [
+// קריאת מסמך שהועלה לשיחה (באפליקציה): PDF / Word / Excel / PowerPoint / CSV / טקסט
+const READ_FILE = {
+  name: 'read_file',
+  description: 'Read a document uploaded to this conversation (PDF, Word, Excel, PowerPoint, CSV, text) by its file id. Documents in the latest message are already attached; use this for earlier ones or to continue a long one.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', description: 'The file id, as in [file <id>: document ...]' },
+      from: { type: 'number', description: 'For long text documents: the character to continue from' },
+    },
+    required: ['id'],
+  },
+};
+export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, skills = [], gen = false, assign = false, noHandoff = false, github = false, bursa = false, code = false, create = false, imageGen = false, docs = false } = {}) => [
   ...webTools(model, agent),
   ...(maagar ? MAAGAR_TOOLS : []),
   ...(maagar && agent === 'librarian' ? LIBRARIAN_TOOLS(team) : []),
@@ -556,6 +569,7 @@ export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, sk
     input_schema: { type: 'object', properties: { number: { type: 'integer' } }, required: ['number'] },
   },
   ...(agent === 'editor' ? [EDIT_VIDEO] : []),
+  ...(docs ? [READ_FILE] : []),
   ...(bursa && agent === 'bursai' ? BURSA_TOOLS : []),
   ...(code && agent === 'coder' ? CODE_TOOLS : []),
   ...(create && FILE_MAKERS.includes(agent) ? CREATE_TOOLS(imageGen && CREATORS.includes(agent)) : []),
@@ -579,7 +593,7 @@ export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, sk
 
 // תיאור קובץ שהועלה, כמו שהבוטים רואים אותו בשיחה
 export function fileLine(f) {
-  const kind = { image: 'photo', video: 'video', audio: 'audio' }[f.kind] || 'file';
+  const kind = { image: 'photo', video: 'video', audio: 'audio', doc: 'document' }[f.kind] || 'file';
   const dur = f.dur ? `, ${Math.round(f.dur)}s` : '';
   const size = f.w && f.h ? `, ${f.w}x${f.h}` : '';
   return `[file ${f.id}: ${kind} "${f.name || ''}"${dur}${size}]`;
@@ -623,7 +637,7 @@ export async function runAgent(client, { agent, notes, history, owner, image, im
       ...fallback,
       output_config: { effort: 'medium' },
       system: [{ type: 'text', text: systemPrompt(agent, notes, { team, channel, maagar, skills, pending, gen, github, check, extra }), cache_control: { type: 'ephemeral' } }],
-      tools: TOOLS(agent, team, model, { maagar, skills, gen, assign, noHandoff, github, bursa, code, create, imageGen }),
+      tools: TOOLS(agent, team, model, { maagar, skills, gen, assign, noHandoff, github, bursa, code, create, imageGen, docs: channel === 'app' }),
       messages,
     });
     usage.push({ model, ...(response.usage || {}) });
@@ -661,11 +675,12 @@ export async function runAgent(client, { agent, notes, history, owner, image, im
       } catch (e) {
         out = `Error: ${e.message}`;
       }
-      results.push({ type: 'tool_result', tool_use_id: c.id, content: String(out) });
+      // בלוקים (מסמך שנקרא) עוברים כמו שהם; כל השאר כטקסט
+      results.push({ type: 'tool_result', tool_use_id: c.id, content: Array.isArray(out) ? out : String(out) });
     }
     // סקיל חדש הוצע ומחכה לאישור: התור נגמר כאן (לא מתחילים לעבוד לפני האישור).
     // הבוט כבר כתב לבעלים; אם לא – הודעה קצרה במקומו
-    if (results.some((x) => x.content.startsWith(STOP))) {
+    if (results.some((x) => typeof x.content === 'string' && x.content.startsWith(STOP))) {
       return { text: texts.join('\n\n') || 'מצאתי סקיל שמתאים למשימה, והוא מחכה לאישור שלך (הכפתור מעל שורת הכתיבה). אחרי האישור אתחיל לעבוד.', usage };
     }
     // הטקסט שכבר נכתב לפני הכלים נשאר בתשובה; ממשיכים
