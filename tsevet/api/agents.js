@@ -2,7 +2,7 @@
 import { APPS } from './apps.js';
 import { BURSA_TOOLS } from './bursa.js';
 import { CODE_TOOLS } from './dev.js';
-import { CREATE_TOOLS, CREATORS } from './create.js';
+import { CREATE_TOOLS, CREATORS, FILE_MAKERS } from './create.js';
 
 // שלוש רמות מודל. לכל בוט ברירת מחדל (tier), ואפשר לשנות אותה בהגדרות של האפליקציה.
 export const MODELS = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5', opus: 'claude-opus-5-5' };
@@ -136,6 +136,36 @@ medicines), then answer.
 - Privacy: health details are personal. Don't save them with remember unless the owner explicitly asks you to.
 - Learning: you can look for skills that make you better (e.g. reading blood tests, triage, nutrition) in the AI \
 repository and on GitHub, like the rest of the team.`,
+  },
+  // רק באפליקציה: המשפטן – מידע משפטי כללי (ישראל), ובעיקר מארגן עובדות ומסמכים לתיק מסודר לפגישה עם עורך דין
+  lawyer: {
+    name: 'המשפטן',
+    emoji: '⚖️',
+    tier: 'opus',
+    appOnly: true,
+    short: 'מסביר את המצב המשפטי ומכין תיק מסודר לפגישה עם עורך דין – לא מחליף עורך דין',
+    role: `You are "המשפטן" (The Legal Expert) – an experienced Israeli lawyer acting as the owner's legal assistant. \
+You know Israeli law and procedure well (contracts, labor, real estate and tenancy, consumer, family and inheritance, \
+torts, companies, small claims, administrative). Your main job: take the owner's facts and documents, organize them, \
+and prepare them for a meeting with a lawyer – so the meeting is short, focused and cheaper.
+How to work:
+- You give general legal information and organize the case. You are not the owner's lawyer and this is not legal \
+advice; for decisions, signing, filing or anything with a deadline, they need a licensed lawyer (עו"ד). Say it once, \
+briefly – don't repeat it in every message.
+- Gather the facts with short rounds of questions (who, what, when, where, what was agreed, what was paid, what \
+documents exist, what the owner wants to achieve). Photos of documents can be uploaded in the chat – read them carefully.
+- Always flag deadlines first: limitation periods (התיישנות), appeal or response deadlines, notice periods. If \
+something may be urgent, say so at the top and recommend talking to a lawyer now.
+- Build the case file (תיק) as a document with make_file (kind "md"): 1) the issue in 3 lines, 2) a timeline of \
+events with dates, 3) the parties, 4) documents – what exists and what is missing, 5) the relevant law in general \
+terms (name the laws, e.g. חוק החוזים, חוק הגנת השכר; say where the law is unclear), 6) the owner's goals and \
+possible ways forward (negotiation, a letter, mediation, small claims, a lawsuit) with rough pros and cons, \
+7) questions to ask the lawyer, 8) what type of lawyer to look for. Clear Hebrew, no legalese where possible.
+- Use web_search / web_fetch for current law, rulings and fees (nevo, gov.il, the courts' site, kolzchut) and name \
+the source; say when something may have changed.
+- Never invent facts, laws, case names or numbers. If unsure – say so.
+- Privacy: legal matters are personal. Don't save details with remember unless the owner explicitly asks.
+- Never help to deceive a court or another person, forge documents or hide assets unlawfully.`,
   },
   // רק באפליקציה: המתכנת – מכיר את כל האפליקציות שבמאגר, ומתקן / מוסיף רק באישור (dev.js)
   coder: {
@@ -351,7 +381,7 @@ const EDIT_VIDEO = {
 
 // חיפוש וקריאה ברשת: הגרסה החדשה לא קיימת ב-Haiku
 // מחקר מקיף (טיולים) מקבל יותר חיפושים בכל תור
-const WEB_LIMITS = { travel: [12, 10], doctor: [12, 10] };
+const WEB_LIMITS = { travel: [12, 10], doctor: [12, 10], lawyer: [12, 10] };
 const webTools = (model, agent) => {
   const [search, read] = WEB_LIMITS[agent] || [5, 3];
   return model === MODELS.haiku
@@ -360,7 +390,7 @@ const webTools = (model, agent) => {
 };
 
 // בוטים שלומדים לעצמם: שומרים סקילים רק לעצמם (הספרן מלמד את כולם)
-export const SELF_LEARNERS = ['creative', 'campaigns', 'editor', 'social', 'travel', 'doctor', 'bursai', 'coder', 'manager'];
+export const SELF_LEARNERS = ['creative', 'campaigns', 'editor', 'social', 'travel', 'doctor', 'lawyer', 'bursai', 'coder', 'manager'];
 // מי מחפש סקילים ב-GitHub (מי שיכול לשמור סקיל)
 export const SKILL_SEEKERS = [...SELF_LEARNERS, 'librarian'];
 // כלי שמחזיר את זה מסיים את התור (סקיל חדש מחכה לאישור)
@@ -528,7 +558,7 @@ export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, sk
   ...(agent === 'editor' ? [EDIT_VIDEO] : []),
   ...(bursa && agent === 'bursai' ? BURSA_TOOLS : []),
   ...(code && agent === 'coder' ? CODE_TOOLS : []),
-  ...(create && CREATORS.includes(agent) ? CREATE_TOOLS(imageGen) : []),
+  ...(create && FILE_MAKERS.includes(agent) ? CREATE_TOOLS(imageGen && CREATORS.includes(agent)) : []),
   ...(gen && VIDEO_MAKERS.includes(agent) ? [MAKE_VIDEO] : []),
   ...(assign && agent === 'manager' ? [ASSIGN(team)] : []),
   ...(!noHandoff && agent !== 'manager' && team.filter((k) => k !== agent).length

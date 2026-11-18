@@ -191,7 +191,7 @@ test('a message to one bot skips the routing; the model level can be changed in 
   const { env, aiCalls } = setupEnv({ replies: [{ content: text('בסדר') }] });
   const token = await signIn(env);
   const set = await call(env, '/app/settings', { models: { creative: 'opus', campaigns: 'nonsense' } }, token);
-  assert.deepEqual(set.data.models, { creative: 'opus', campaigns: 'opus', editor: 'sonnet', librarian: 'sonnet', social: 'sonnet', doctor: 'opus', coder: 'opus', bursai: 'opus', travel: 'sonnet', manager: 'opus' });
+  assert.deepEqual(set.data.models, { creative: 'opus', campaigns: 'opus', editor: 'sonnet', librarian: 'sonnet', social: 'sonnet', doctor: 'opus', lawyer: 'opus', coder: 'opus', bursai: 'opus', travel: 'sonnet', manager: 'opus' });
   const { data: conv } = await call(env, '/app/conv/new', {}, token);
   await call(env, '/app/send', { id: conv.id, text: 'רעיון', to: 'creative' }, token);
   await env.team.alarm();
@@ -350,7 +350,7 @@ test('a Telegram topic continues in the app with its history and the shared memo
 
   const token = await signIn(env);
   const team = (await call(env, '/app/team', {}, token)).data;
-  assert.deepEqual(team.agents.map((a) => a.key), ['creative', 'campaigns', 'editor', 'librarian', 'social', 'doctor', 'coder', 'bursai', 'travel', 'manager']);
+  assert.deepEqual(team.agents.map((a) => a.key), ['creative', 'campaigns', 'editor', 'librarian', 'social', 'doctor', 'lawyer', 'coder', 'bursai', 'travel', 'manager']);
   const conv = team.convs.find((c) => c.source === 'tg');
   assert.equal(conv.id, 'tg:-100:5');
   let view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
@@ -1298,4 +1298,26 @@ test('creative has the design toolbox from the video and the code word picks fro
   assert.ok(names.includes('image-to-code') && names.includes('taste-skill'));
   // התוכן המלא נטען לפי בקשה
   assert.match(aiCalls[1].messages.at(-1).content[0].content, /web-interface-guidelines\/main\/command\.md/);
+});
+
+test('the legal expert organizes a case file for a lawyer meeting (a file, no images)', async () => {
+  const { env, aiCalls } = setupEnv({
+    replies: [
+      { stop: 'tool_use', content: tool('make_file', { kind: 'md', name: 'תיק לפגישה', content: '# הנושא\nפיטורים בלי שימוע\n## ציר זמן\n- 1.3 – הודעה' }) },
+      { content: text('הכנתי תיק מסודר לפגישה') },
+    ],
+  }, { GEMINI_API_KEY: 'g' });
+  const token = await signIn(env);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'פיטרו אותי בלי שימוע, תכין לי תיק לעורך דין', to: 'lawyer' }, token);
+  await env.team.alarm();
+  const sys = aiCalls[0].system[0].text;
+  assert.match(sys, /^You are "המשפטן"/);
+  assert.match(sys, /התיישנות/);
+  assert.match(sys, /not legal\s+advice/);
+  const names = aiCalls[0].tools.map((t) => t.name);
+  assert.ok(names.includes('make_file'));
+  assert.ok(!names.includes('make_image'));
+  const view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  assert.equal(view.messages.flatMap((m) => m.files || []).find((f) => f.kind === 'doc').name, 'תיק לפגישה.md');
 });
