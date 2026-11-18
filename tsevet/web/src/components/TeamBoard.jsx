@@ -30,9 +30,9 @@ function Node({ agent, agents, pos, size, many, onClick }) {
         {!agent.busy && <span className="absolute bottom-[6%] end-[6%] h-[18%] w-[18%] rounded-full border-2 border-card bg-ok" title="פנוי" />}
       </span>
       {/* רקע לשם, כדי שהקווים לא יחתכו את הטקסט */}
-      <span className="mt-1 flex w-max max-w-[30cqw] flex-col items-center rounded-lg bg-card/90 px-1.5 py-0.5">
+      <span className="mt-1 flex w-max max-w-[30cqw] flex-col lg:max-w-[19cqw] items-center rounded-lg bg-card/90 px-1.5 py-0.5">
         <span className={`font-bold leading-tight lg:text-base ${many ? 'text-xs' : 'text-sm'}`}>{agent.name}</span>
-        <span className={`text-[11px] leading-tight text-muted lg:text-xs ${many ? 'hidden sm:block' : ''}`}>{agent.short}</span>
+        <span className={`text-[11px] leading-tight text-muted lg:line-clamp-2 lg:text-xs ${many ? 'hidden sm:block' : ''}`}>{agent.short}</span>
         {agent.busy && (
           <span className="inline-flex items-center gap-1 text-xs font-medium text-accent-ink">
             <Spinner size={10} /> עובד…
@@ -53,9 +53,9 @@ export default function TeamBoard({ team }) {
   const manager = mid >= 0 ? agents[mid] : null;
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col items-center px-4 pb-8 pt-4">
+    <div className="mx-auto flex max-w-3xl flex-col items-center px-4 pb-8 pt-4 lg:min-h-full lg:max-w-none lg:flex-row lg:items-center lg:justify-center lg:gap-10 lg:px-8 lg:py-6">
       <div
-        className="relative aspect-square w-full max-w-[620px] rounded-[2rem] border border-line bg-card"
+        className="relative aspect-square w-full max-w-[620px] shrink-0 rounded-[2rem] lg:w-[min(calc(100dvh-3rem),calc(100vw-20rem-26rem))] lg:max-w-[900px] border border-line bg-card"
         style={{ containerType: 'inline-size', backgroundImage: 'radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--color-accent) 14%, transparent), transparent 65%)' }}
       >
         <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full" aria-hidden="true">
@@ -80,15 +80,17 @@ export default function TeamBoard({ team }) {
         ))}
       </div>
 
+      {/* במחשב: טור לצד הלוח */}
+      <div className="flex w-full max-w-[620px] flex-col lg:w-80 lg:max-w-none">
       {manager && (
-        <button onClick={() => newConversation(manager.key)} className="mt-5 w-full max-w-[620px] rounded-2xl bg-accent px-4 py-3.5 text-base font-bold text-white hover:opacity-90">
+        <button onClick={() => newConversation(manager.key)} className="mt-5 w-full rounded-2xl bg-accent lg:mt-0 lg:py-5 px-4 py-3.5 text-base font-bold text-white hover:opacity-90">
           {manager.emoji} משימה חדשה למנהל
           <span className="block text-sm font-normal opacity-90">הוא מתכנן, מחלק בין הבוטים ומסכם</span>
         </button>
       )}
       <button
         onClick={() => newConversation(null)}
-        className={`mt-3 w-full max-w-[620px] rounded-2xl px-4 py-3 font-bold ${manager ? 'border border-line bg-card hover:bg-soft' : 'bg-accent py-3.5 text-base text-white hover:opacity-90'}`}
+        className={`mt-3 w-full rounded-2xl lg:py-4 px-4 py-3 font-bold ${manager ? 'border border-line bg-card hover:bg-soft' : 'bg-accent py-3.5 text-base text-white hover:opacity-90'}`}
       >
         שיחה עם כל הצוות
       </button>
@@ -102,6 +104,7 @@ export default function TeamBoard({ team }) {
             <Video size={14} /> עריכת וידאו עוד לא מחוברת
           </span>
         )}
+      </div>
       </div>
     </div>
   );
