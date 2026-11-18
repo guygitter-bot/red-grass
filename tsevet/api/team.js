@@ -23,7 +23,7 @@ import { appsOf, appsText, codeTools, devDone, devFail, devJob, devQuestion, dev
 import { readSkill as githubRead, searchSkills as githubSearch } from './github.js';
 import { addSkill, learnFrom, listItems, pendingOf, read as maagarRead, search as maagarSearch, skillsOf } from './maagar.js';
 import { genDone, genFail, genReady, genStart, proposeClip, runGenJob } from './gen.js';
-import { CREATORS, imagesReady, makeFile, proposeImage } from './create.js';
+import { CREATORS, FILE_MAKERS, imagesReady, makeFile, proposeImage } from './create.js';
 import { designSkills } from './design.js';
 import { FIND_SKILLS } from './findskills.js';
 import { DEFAULT_BUDGET, isDue, nextOf } from './schedule.js';
@@ -460,7 +460,7 @@ export class Team {
       make_video: (input) => proposeClip(this, job, input, gens),
       // קבצים ותמונות (רק קריאייטיב והמתכנת; התמונה רק באישור – create.js)
       make_file: (input) => makeFile(this, input, made),
-      make_image: (input) => proposeImage(this, job, input, imgs),
+      make_image: (input) => (CREATORS.includes(job.target) ? proposeImage(this, job, input, imgs) : 'Not available for you.'),
       // מאגר AI: הרשימה נטענת פעם אחת לכל עבודה
       maagar_search: async ({ query, area }) => maagarSearch(await items(), query, area),
       maagar_read: async ({ id }) => maagarRead(await items(), id),
@@ -538,7 +538,7 @@ export class Team {
         github: app && Boolean(this.env.GITHUB_TOKEN),
         bursa: app && bursaReady(this.env),
         code: app && devReady(this.env),
-        create: app && CREATORS.includes(agent) && Boolean(this.env.FILES),
+        create: app && FILE_MAKERS.includes(agent) && Boolean(this.env.FILES),
         imageGen: app && imagesReady(this.env),
         extra: [
           agent === 'coder' && app && devReady(this.env) ? `The apps (folders in the repository):\n${appsText(await appsOf(this))}` : '',
