@@ -1279,3 +1279,23 @@ test('skill search starts from the skills.sh index (find-skills): most installed
   assert.match(results, /\[anthropics\/skills:skills\/frontend-design\/SKILL\.md\] 📦 150K installs · OFFICIAL/);
   assert.doesNotMatch(results, /tiny\/scam|good\/few/);
 });
+
+test('creative has the design toolbox from the video and the code word picks from it', async () => {
+  const { env, aiCalls } = setupEnv({
+    replies: [
+      { stop: 'tool_use', content: tool('use_skill', { name: 'web-design-guidelines' }) },
+      { content: text('בחרתי Web Design Guidelines כדי לבדוק את הדף') },
+    ],
+  });
+  const token = await signIn(env);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'סטודיו – תבדוק לי את דף הנחיתה', to: 'creative' }, token);
+  await env.team.alarm();
+  const sys = aiCalls[0].system[0].text;
+  assert.match(sys, /Code word "סטודיו"/);
+  for (const n of ['taste-skill', 'web-design-guidelines', 'awesome-design', 'image-to-code']) assert.match(sys, new RegExp(`- ${n}:`));
+  const names = aiCalls[0].tools.find((t) => t.name === 'use_skill').input_schema.properties.name.enum;
+  assert.ok(names.includes('image-to-code') && names.includes('taste-skill'));
+  // התוכן המלא נטען לפי בקשה
+  assert.match(aiCalls[1].messages.at(-1).content[0].content, /web-interface-guidelines\/main\/command\.md/);
+});
