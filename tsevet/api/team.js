@@ -17,6 +17,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { AGENTS, AGENT_KEYS, MODELS, SELF_LEARNERS, SKILL_SEEKERS, STOP, TG_KEYS, aiMessage, appInfo, label, pickAgent, priceOf, runAgent, temporary } from './agents.js';
 import { APP_PREFIX, addFile, fileUrl as fileUrlOf, checkFileUrl, getSettings, handleApp, newId as convIdNew } from './app.js';
 import { IG_SKILLS } from './igskills.js';
+import { CODE_WORD, DESIGN_PACK } from './designpack.js';
 import { bursaReady, bursaTools } from './bursa.js';
 import { appsOf, appsText, codeTools, devDone, devFail, devJob, devQuestion, devReady, proposeChange } from './dev.js';
 import { readSkill as githubRead, searchSkills as githubSearch } from './github.js';
@@ -39,7 +40,14 @@ const MAX_HISTORY_BYTES = 1_200_000;
 const MAX_IMAGES = 4;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 // סקילים מובנים (נבנים מהמאגר בכל עלייה): בוט האינסטגרם מקבל את חבילת ig-*
-const builtinSkills = (agent) => (agent === 'social' ? IG_SKILLS.map((s) => ({ ...s, builtin: true })) : []);
+// חבילות סקילים קבועות: האינסטגרם – ig-*; הקריאייטיב – ארגז כלי העיצוב (designpack.js)
+const BUILTIN = { social: IG_SKILLS, creative: DESIGN_PACK };
+const builtinSkills = (agent) => (BUILTIN[agent] || []).map((s) => ({ ...s, builtin: true }));
+// מילת הקוד של הקריאייטיב: בוחר סקיל מתאים מארגז הכלים
+const CODE_WORD_NOTE = `Code word "${CODE_WORD}": when the owner's message contains it, use your design toolbox. Pick the skill that fits the request – \
+taste-skill (build a premium landing page / site), web-design-guidelines (review/audit a page), awesome-design (the look of a known brand), \
+image-to-code (design as an image first, then build) – or two of them when it clearly helps (e.g. build, then review). \
+Load it with use_skill, tell the owner in one line which one you chose and why, and follow it. Without the code word, use them only when clearly useful.`;
 const MAX_TURNS = 4;
 // משימה של המנהל: תוכנית ראשונה + סבב תיקון אחד, ותקרת תורות כדי לא לרוץ סתם
 const MAX_PLAN_ROUNDS = 2;
@@ -534,6 +542,7 @@ export class Team {
         imageGen: app && imagesReady(this.env),
         extra: [
           agent === 'coder' && app && devReady(this.env) ? `The apps (folders in the repository):\n${appsText(await appsOf(this))}` : '',
+          app && agent === 'creative' ? CODE_WORD_NOTE : '',
           app && CREATORS.includes(agent) && this.env.FILES
             ? 'Deliver work as files in the chat: when the owner (or a teammate) wants a landing page, an illustration, a document or a table – create it with make_file (a complete, polished file), not just a description. For new images use make_image (created only after the owner approves), then place them in pages with {{file:<id>}}.'
             : '',
