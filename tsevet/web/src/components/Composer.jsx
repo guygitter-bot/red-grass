@@ -171,7 +171,7 @@ export default function Composer({ agents, room = false, to, setTo, onSend, send
         </select>
       </div>
       <div className="flex items-end gap-2">
-        <input ref={fileRef} type="file" accept="image/*,video/*,audio/*" multiple hidden onChange={(e) => addFiles(e.target.files)} />
+        <input ref={fileRef} type="file" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xlsx,.pptx,.csv,.txt,.md,.json" multiple hidden onChange={(e) => addFiles(e.target.files)} />
         <button onClick={() => fileRef.current?.click()} className="rounded-full p-2.5 text-muted hover:bg-soft" aria-label="צירוף קובץ">
           <Paperclip size={22} />
         </button>

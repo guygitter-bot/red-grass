@@ -113,8 +113,9 @@ export async function fileView(storage, origin, f) {
   };
 }
 
-const KINDS = { image: /^image\/(jpeg|png|webp|gif)$/, video: /^video\//, audio: /^audio\// };
-export const MAX_BYTES = { image: 8 * 1024 * 1024, video: 95 * 1024 * 1024, audio: 30 * 1024 * 1024 };
+// doc = מסמך: PDF כמו שהוא, או טקסט (Word / Excel / CSV שהאפליקציה כבר הפכה לטקסט)
+const KINDS = { image: /^image\/(jpeg|png|webp|gif)$/, video: /^video\//, audio: /^audio\//, doc: /^(application\/pdf|text\/plain)$/ };
+export const MAX_BYTES = { image: 8 * 1024 * 1024, video: 95 * 1024 * 1024, audio: 30 * 1024 * 1024, doc: 20 * 1024 * 1024 };
 
 // סוג הקובץ לפי ה-type שהדפדפן שלח (null = לא מקבלים)
 export const kindOf = (type) => Object.keys(KINDS).find((k) => KINDS[k].test(String(type || ''))) || null;

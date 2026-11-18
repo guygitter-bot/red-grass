@@ -39,6 +39,9 @@ const MAX_ENTRY_APP = 12_000;
 const MAX_HISTORY_BYTES = 1_200_000;
 const MAX_IMAGES = 4;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_DOCS = 3;
+const MAX_PDF_BYTES = 20 * 1024 * 1024;
+const MAX_DOC_TEXT = 60_000;
 // סקילים מובנים (נבנים מהמאגר בכל עלייה): בוט האינסטגרם מקבל את חבילת ig-*
 // חבילות סקילים קבועות: האינסטגרם – ig-*; הקריאייטיב – ארגז כלי העיצוב (designpack.js)
 const BUILTIN = { social: IG_SKILLS, creative: DESIGN_PACK };
@@ -264,7 +267,32 @@ export class Team {
       for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
       out.push({ type: 'image', source: { type: 'base64', media_type: rec.type, data: btoa(bin) } });
     }
+    // מסמכים (PDF / טקסט) מההודעה האחרונה – הבוט קורא אותם מיד
+    for (const f of (last?.files || []).filter((x) => x.kind === 'doc').slice(0, MAX_DOCS)) {
+      const block = await this.docBlock(f.id);
+      if (block) out.push(block);
+    }
     return out;
+  }
+
+  // מסמך שהועלה -> בלוק לבוט: PDF כמסמך (Claude קורא גם סרוק), טקסט כטקסט. from = מאיפה להמשיך בטקסט ארוך
+  async docBlock(id, from = 0) {
+    const rec = await this.storage.get(`f:${String(id || '')}`);
+    if (rec?.kind !== 'doc' || !this.env.FILES) return null;
+    const obj = await this.env.FILES.get(`files/${rec.id}`).catch(() => null);
+    if (!obj) return null;
+    if (rec.type === 'application/pdf') {
+      const bytes = new Uint8Array(await obj.arrayBuffer());
+      if (bytes.length > MAX_PDF_BYTES) return { type: 'text', text: `[document ${rec.id} "${rec.name}" is too large to read (over 20MB)]` };
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      return { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: btoa(bin) }, title: rec.name || 'document.pdf' };
+    }
+    const text = await obj.text();
+    const start = Math.max(Number(from) || 0, 0);
+    const part = text.slice(start, start + MAX_DOC_TEXT);
+    const more = start + MAX_DOC_TEXT < text.length ? `\n…[more – read_file with from: ${start + MAX_DOC_TEXT}]` : '';
+    return { type: 'text', text: `[document ${rec.id} "${rec.name}" – content${start ? ` from character ${start}` : ''}]\n${part}${more}` };
   }
 
   // ---------- הודעה חדשה מ-Telegram ----------
@@ -452,6 +480,11 @@ export class Team {
         return 'Deleted';
       },
       edit_video: (input) => startRender(this, job, input, renders),
+      // קריאת מסמך מהשיחה (PDF / Word / Excel / טקסט)
+      read_file: async ({ id, from }) => {
+        const block = await this.docBlock(id, from);
+        return block ? [block] : 'No such document. Use an id that appears as [file <id>: document ...].';
+      },
       // אפליקציית בורסאי (רק לבוט 📈 בורסאי; הכלים מוצעים לו רק כשיש חיבור)
       ...(bursaReady(this.env) ? bursaTools(this.env) : {}),
       // המתכנת: קריאת הקוד במאגר, והצעת שינוי (שרץ רק אחרי אישור)

@@ -1321,3 +1321,36 @@ test('the legal expert organizes a case file for a lawyer meeting (a file, no im
   const view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
   assert.equal(view.messages.flatMap((m) => m.files || []).find((f) => f.kind === 'doc').name, 'תיק לפגישה.md');
 });
+
+test('bots read uploaded documents: PDF as a document, Word/Excel text, and read_file for earlier ones', async () => {
+  const script = { replies: [{ content: text('קראתי את החוזה') }, { content: text('קיבלתי') }] };
+  const { env, aiCalls } = setupEnv(script);
+  const token = await signIn(env);
+  assert.equal((await upload(env, token, { type: 'application/zip', name: 'a.zip' })).status, 415);
+  const pdf = await upload(env, token, { type: 'application/pdf', name: 'חוזה.pdf', bytes: new TextEncoder().encode('%PDF-1.4 test') });
+  assert.equal(pdf.data.kind, 'doc');
+  const xls = await upload(env, token, { type: 'text/plain', name: 'תקציב.xlsx', bytes: new TextEncoder().encode('## הוצאות\nחשמל,300\nמים,120') });
+  assert.equal(xls.data.kind, 'doc');
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'תקרא את החוזה', files: [pdf.data.id], to: 'lawyer' }, token);
+  await env.team.alarm();
+  const first = aiCalls[0].messages[0].content;
+  const doc = first.find((b) => b.type === 'document');
+  assert.equal(doc.source.media_type, 'application/pdf');
+  assert.equal(atob(doc.source.data), '%PDF-1.4 test');
+  assert.ok(aiCalls[0].tools.some((t) => t.name === 'read_file'));
+  assert.match(first.at(-1).text, /document "חוזה\.pdf"/);
+
+  // גיליון (כבר טקסט) מצורף להודעה – נשלח כטקסט
+  await call(env, '/app/send', { id: conv.id, text: 'מצרף גיליון', files: [xls.data.id], to: 'lawyer' }, token);
+  await env.team.alarm();
+  assert.match(aiCalls[1].messages[0].content.find((b) => b.type === 'text').text, /חשמל,300/);
+
+  // מסמך מהודעה קודמת – הבוט קורא אותו עם read_file
+  script.replies.push({ stop: 'tool_use', content: tool('read_file', { id: xls.data.id }) }, { content: text('יש 2 שורות') });
+  await call(env, '/app/send', { id: conv.id, text: 'כמה שורות יש בגיליון?', to: 'lawyer' }, token);
+  await env.team.alarm();
+  const result = aiCalls[3].messages.at(-1).content[0];
+  assert.equal(result.type, 'tool_result');
+  assert.match(result.content[0].text, /חשמל,300/);
+});
