@@ -20,6 +20,27 @@ async function gh(env, path, accept = 'application/vnd.github+json') {
   return accept.includes('raw') ? res.text() : res.json();
 }
 
+// skills.sh – האינדקס של סקילים (מאחורי "find-skills" של vercel-labs/skills): לפי מספר ההתקנות.
+// מחזיר [{ repo, name, installs }] של סקילים עם לפחות MIN_INSTALLS התקנות, מהנפוץ לפחות נפוץ
+export const SKILLS_SH = 'https://skills.sh';
+export const MIN_INSTALLS = 100;
+async function skillsSh(env, query) {
+  try {
+    const res = await (env.FETCH || fetch)(`${SKILLS_SH}/api/search?q=${encodeURIComponent(query)}`, { headers: { 'user-agent': 'tsevet' } });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.skills || [])
+      .map((s) => ({ repo: String(s.source || ''), name: String(s.name || ''), installs: Number(s.installs) || 0 }))
+      .filter((s) => /^[\w.-]+\/[\w.-]+$/.test(s.repo) && /^[\w.-]+$/.test(s.name) && s.installs >= MIN_INSTALLS)
+      .sort((a, b) => b.installs - a.installs)
+      .slice(0, MAX_REPOS);
+  } catch {
+    return [];
+  }
+}
+
+const installsText = (n) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}K` : String(n));
+
 const words = (q) => String(q || '').toLowerCase().split(/[^a-z0-9א-ת]+/).filter((w) => w.length > 2).slice(0, 6);
 
 // פרטי המאגר -> מה שמוצג לבעלים, או null אם הוא לא עומד בסף
@@ -62,20 +83,35 @@ export async function searchSkills(env, query, found) {
     }
   }
   const results = [];
+  // קודם האינדקס של skills.sh (הכי מותקנים), ואז מה שחיפוש הקבצים מצא
+  for (const s of await skillsSh(env, w.join(' '))) {
+    const repo = await gh(env, `/repos/${s.repo}`).catch(() => null);
+    const trust = trustOf(repo);
+    if (!trust) continue;
+    const tree = await gh(env, `/repos/${s.repo}/git/trees/HEAD?recursive=1`).catch(() => null);
+    const path = (tree?.tree || []).map((t) => t.path).find((p) => new RegExp(`(^|/)${s.name.replace(/[.]/g, '\\.')}/SKILL\\.md$`, 'i').test(p));
+    if (!path) continue;
+    const ref = `${s.repo}:${path}`;
+    if (found.has(ref)) continue;
+    found.set(ref, { repo: s.repo, path, trust, installs: s.installs });
+    results.push({ ref, trust, path, installs: s.installs });
+  }
   for (const [repoName, paths] of [...candidates].slice(0, MAX_REPOS)) {
     const repo = await gh(env, `/repos/${repoName}`).catch(() => null);
     const trust = trustOf(repo);
     if (!trust) continue;
     for (const path of paths) {
       const ref = `${repoName}:${path}`;
+      if (found.has(ref)) continue;
       found.set(ref, { repo: repoName, path, trust });
       results.push({ ref, trust, path });
     }
   }
   if (!results.length) return `No trusted skills found on GitHub for "${query}" (official, or ${MIN_STARS}+ stars and maintained). Try other English words, or build the method from the web yourself.`;
-  results.sort((a, b) => Number(b.trust.official) - Number(a.trust.official) || b.trust.stars - a.trust.stars);
-  return `Trusted GitHub skills (read one with github_skill_read):\n${results.slice(0, MAX_RESULTS).map((r) =>
-    `- [${r.ref}] ${r.trust.official ? 'OFFICIAL · ' : ''}⭐ ${r.trust.stars} · updated ${r.trust.updated}${r.trust.license ? ` · ${r.trust.license}` : ' · no license'}`).join('\n')}`;
+  // הנפוצים ביותר (התקנות ב-skills.sh) קודם, אחר כך רשמי, אחר כך כוכבים
+  results.sort((a, b) => (b.installs || 0) - (a.installs || 0) || Number(b.trust.official) - Number(a.trust.official) || b.trust.stars - a.trust.stars);
+  return `Trusted skills (read one with github_skill_read):\n${results.slice(0, MAX_RESULTS).map((r) =>
+    `- [${r.ref}] ${r.installs ? `📦 ${installsText(r.installs)} installs · ` : ''}${r.trust.official ? 'OFFICIAL · ' : ''}⭐ ${r.trust.stars} · updated ${r.trust.updated}${r.trust.license ? ` · ${r.trust.license}` : ' · no license'}`).join('\n')}`;
 }
 
 export async function readSkill(env, ref, found) {

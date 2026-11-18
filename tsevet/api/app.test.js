@@ -476,7 +476,8 @@ test('the librarian searches the AI repository, reads an item and teaches a skil
   // העורך לומד רק לעצמו
   assert.deepEqual(editor.tools.find((t) => t.name === 'teach').input_schema.properties.agents.items.enum, ['editor']);
   assert.ok(editor.tools.some((t) => t.name === 'maagar_search'));
-  assert.deepEqual(editor.tools.find((t) => t.name === 'use_skill').input_schema.properties.name.enum, ['reels-editor']);
+  assert.deepEqual(editor.tools.find((t) => t.name === 'use_skill').input_schema.properties.name.enum, ['find-skills', 'reels-editor']);
+  assert.match(editor.system[0].text, /find-skills – איך מוצאים סקיל מתאים/);
   assert.match(aiCalls[5].messages.at(-1).content[0].content, /חיתוך כל 2 שניות/);
 
   // מחיקה מההגדרות: הסקיל נעלם גם מהבוט
@@ -1244,4 +1245,37 @@ test('the design skill is always active for creative and the developer only', as
   assert.match(aiCalls[0].system[0].text, /design-system – עיצוב מקצועי/);
   assert.match(aiCalls[0].system[0].text, /Landing page structure/);
   assert.doesNotMatch(aiCalls[1].system[0].text, /design-system/);
+});
+
+test('skill search starts from the skills.sh index (find-skills): most installed, trusted only', async () => {
+  const FETCH = async (url) => {
+    const u = new URL(url);
+    if (u.host === 'skills.sh') {
+      assert.equal(u.pathname, '/api/search');
+      return new Response(JSON.stringify({ skills: [
+        { id: 'anthropics/skills/frontend-design', name: 'frontend-design', installs: 150000, source: 'anthropics/skills' },
+        { id: 'tiny/scam/x', name: 'x', installs: 5000, source: 'tiny/scam' },
+        { id: 'good/few/y', name: 'y', installs: 12, source: 'good/few' },
+      ] }));
+    }
+    if (u.pathname === '/search/code') return new Response(JSON.stringify({ items: [] }));
+    if (u.pathname === '/repos/anthropics/skills') return new Response(JSON.stringify({ full_name: 'anthropics/skills', owner: { login: 'anthropics' }, stargazers_count: 40000, pushed_at: new Date().toISOString(), license: { spdx_id: 'Apache-2.0' }, html_url: 'https://github.com/anthropics/skills' }));
+    if (u.pathname === '/repos/tiny/scam') return new Response(JSON.stringify({ full_name: 'tiny/scam', owner: { login: 'tiny' }, stargazers_count: 3, pushed_at: new Date().toISOString() }));
+    if (u.pathname === '/repos/anthropics/skills/git/trees/HEAD') return new Response(JSON.stringify({ tree: [{ type: 'blob', path: 'skills/frontend-design/SKILL.md' }, { type: 'blob', path: 'README.md' }] }));
+    return new Response('{}', { status: 404 });
+  };
+  const { env, aiCalls } = setupEnv({
+    replies: [
+      { stop: 'tool_use', content: tool('github_skills_search', { query: 'landing page design' }) },
+      { content: text('מצאתי') },
+    ],
+  }, { FETCH });
+  const token = await signIn(env);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'תמצא סקיל לעיצוב דפי נחיתה', to: 'coder' }, token);
+  await env.team.alarm();
+  assert.match(aiCalls[0].system[0].text, /find-skills/);
+  const results = aiCalls[1].messages.at(-1).content[0].content;
+  assert.match(results, /\[anthropics\/skills:skills\/frontend-design\/SKILL\.md\] 📦 150K installs · OFFICIAL/);
+  assert.doesNotMatch(results, /tiny\/scam|good\/few/);
 });

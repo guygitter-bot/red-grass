@@ -360,7 +360,7 @@ const webTools = (model, agent) => {
 };
 
 // בוטים שלומדים לעצמם: שומרים סקילים רק לעצמם (הספרן מלמד את כולם)
-export const SELF_LEARNERS = ['creative', 'campaigns', 'editor', 'social', 'travel', 'doctor', 'bursai'];
+export const SELF_LEARNERS = ['creative', 'campaigns', 'editor', 'social', 'travel', 'doctor', 'bursai', 'coder', 'manager'];
 // מי מחפש סקילים ב-GitHub (מי שיכול לשמור סקיל)
 export const SKILL_SEEKERS = [...SELF_LEARNERS, 'librarian'];
 // כלי שמחזיר את זה מסיים את התור (סקיל חדש מחכה לאישור)

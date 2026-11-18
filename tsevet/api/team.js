@@ -14,7 +14,7 @@
 // הודעה חדשה רק נכנסת לתור; Durable Object alarm מריץ את הבוטים ברקע (תשובה יכולה לקחת דקה-שתיים).
 // ב-Telegram התשובה נשלחת לקבוצה; באפליקציה היא פשוט נשמרת בשיחה, והאפליקציה מרעננת.
 import Anthropic from '@anthropic-ai/sdk';
-import { AGENTS, AGENT_KEYS, MODELS, SELF_LEARNERS, STOP, TG_KEYS, aiMessage, appInfo, label, pickAgent, priceOf, runAgent, temporary } from './agents.js';
+import { AGENTS, AGENT_KEYS, MODELS, SELF_LEARNERS, SKILL_SEEKERS, STOP, TG_KEYS, aiMessage, appInfo, label, pickAgent, priceOf, runAgent, temporary } from './agents.js';
 import { APP_PREFIX, addFile, fileUrl as fileUrlOf, checkFileUrl, getSettings, handleApp, newId as convIdNew } from './app.js';
 import { IG_SKILLS } from './igskills.js';
 import { bursaReady, bursaTools } from './bursa.js';
@@ -24,6 +24,7 @@ import { addSkill, learnFrom, listItems, pendingOf, read as maagarRead, search a
 import { genDone, genFail, genReady, genStart, proposeClip, runGenJob } from './gen.js';
 import { CREATORS, imagesReady, makeFile, proposeImage } from './create.js';
 import { designSkills } from './design.js';
+import { FIND_SKILLS } from './findskills.js';
 import { DEFAULT_BUDGET, isDue, nextOf } from './schedule.js';
 import { notifyOwner } from './notify.js';
 import { renderDone, renderFail, renderInput, renderJob, startRender } from './render.js';
@@ -493,7 +494,7 @@ export class Team {
       },
       use_skill: async ({ name }) => {
         const skill = ((await this.storage.get('skills')) || []).find((s) => s.name === name && !s.pending)
-          || [...designSkills(current), ...builtinSkills(current)].find((s) => s.name === name);
+          || [...designSkills(current), FIND_SKILLS, ...builtinSkills(current)].find((s) => s.name === name);
         return skill ? `# ${skill.title}\n\n${skill.body}` : 'No such skill.';
       },
     };
@@ -523,7 +524,7 @@ export class Team {
       const r = await runAgent(client, {
         agent, notes, history: history.slice(-40), owner: owner?.name, images,
         model: MODELS[models[agent]], team, channel: app ? 'app' : 'tg',
-        maagar, skills: [...designSkills(agent), ...skillsOf(allSkills, agent), ...builtinSkills(agent)], pending: app ? pendingOf(allSkills, agent) : [],
+        maagar, skills: [...designSkills(agent), ...(app && SKILL_SEEKERS.includes(agent) ? [FIND_SKILLS] : []), ...skillsOf(allSkills, agent), ...builtinSkills(agent)], pending: app ? pendingOf(allSkills, agent) : [],
         // לפני משימה חדשה: לבדוק אם יש סקיל טוב יותר (רק בשיחה רגילה באפליקציה, לא בשלב של תוכנית)
         check: app && !task && SELF_LEARNERS.includes(agent) && Boolean(this.env.GITHUB_TOKEN || this.env.MAAGAR),
         github: app && Boolean(this.env.GITHUB_TOKEN),
