@@ -226,6 +226,13 @@
   · שרת `api` → Worker `milim-api` (תוצאות סיבובים, סיסמת ניהול שנקבעת בכניסה הראשונה). עלייה: `english-words.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd english_words/api && npm test` · `cd english_words/web && npm test` · `cd english_words/admin && npm test`. טלפון + מחשב + מצב לילה.
 
+### חשבון לכיתה ד' (`math_test/`)
+- תיאור: `math_test/README.md`. תרגול למבחן בחשבון לפי 18 נושאי המורה (סדרות עד שברים, גיאומטריה ודיאגרמות): סיבוב של 10 שאלות, 80% לעבור, הסבר אחרי טעות, פתיחה הדרגתית בכל פרק ומבחן מסכם של 20 שאלות.
+- `math_test/web/public` (HTML+JS בלי בנייה) → https://cheshbon-dalet.pages.dev · ניהול להורים `admin/public` → Pages `cheshbon-admin` · שרת `api` → Worker `cheshbon-api`. עלייה: `cheshbon.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd math_test/api && npm test` · `cd math_test/web && npm test` · `cd math_test/admin && npm test`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- השאלות במחוללים טהורים ב-`web/public/gen/` (קובץ לכל פרק) עם ציורי SVG ב-`svg.js`; הרשימה ב-`web/public/topics.js`. סוג תרגול חדש – להוסיף גם ל-`MODES` בשרת (`api/stats.js`) ול-`STAGES` בניהול (`admin/public/view.js`).
+- מקדימים בכל מחולל: התשובה ממוחשבת ולא מוקלדת, מסיחים שונים זה מזה, חילוק ב-0 לעולם לא תשובה. מספרים בעברית משמאל לימין (`rich.js`).
+
 ### בורסאי – השקעות במניות (`bursa/`)
 - תיאור: `bursa/README.md`. נתוני שוק חיים (Yahoo Finance), ניתוח + תחזית + בדיקה לאחור, תיק אמיתי ותיק דמה, התראות לטלפון, צ'אט AI, מילון ומדריך.
 - `bursa/web` → https://bursa-app.pages.dev · `bursa/api` → Worker `bursa-api` (Durable Object `Market` אחד; alarm סורק ושולח התראות). עלייה: `bursa.yml` אחרי מיזוג ל-main.

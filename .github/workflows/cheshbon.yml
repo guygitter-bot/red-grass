@@ -1,0 +1,118 @@
+name: cheshbon
+
+# חשבון לכיתה ד' (math_test/):
+# math_test/web/public   -> Cloudflare Pages "cheshbon-dalet" -> https://cheshbon-dalet.pages.dev
+# math_test/admin/public -> Cloudflare Pages "cheshbon-admin"    -> ניהול להורים
+# math_test/api          -> Worker "cheshbon-api"                -> https://cheshbon-api.guygitter.workers.dev
+on:
+  push:
+    branches: [main]
+    paths: ["math_test/**", ".github/workflows/cheshbon.yml"]
+  pull_request:
+    paths: ["math_test/**", ".github/workflows/cheshbon.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cheshbon-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Server tests
+        working-directory: math_test/api
+        run: npm test
+      - name: App tests
+        working-directory: math_test/web
+        run: npm test
+      - name: Admin tests
+        working-directory: math_test/admin
+        run: npm test
+      - name: Same server address in both apps
+        run: cmp math_test/web/public/config.js math_test/admin/public/config.js
+
+  api:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy worker
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: math_test/api
+          wranglerVersion: "4.146.0"
+      - name: Summary
+        env:
+          URL: ${{ steps.deploy.outputs.deployment-url }}
+        run: |
+          echo "Worker: $URL" >> "$GITHUB_STEP_SUMMARY"
+
+  web:
+    needs: api
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create the Pages project (first run only)
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: math_test/web
+          wranglerVersion: "4.146.0"
+          command: pages project create cheshbon-dalet --production-branch=main
+      - name: Publish
+        id: publish
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: math_test/web
+          wranglerVersion: "4.146.0"
+          command: pages deploy public --project-name=cheshbon-dalet --branch=main --commit-dirty=true
+      - name: Summary
+        env:
+          URL: ${{ steps.publish.outputs.deployment-url }}
+        run: |
+          echo "Published: https://cheshbon-dalet.pages.dev ($URL)" >> "$GITHUB_STEP_SUMMARY"
+
+  admin:
+    needs: api
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create the Pages project (first run only)
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: math_test/admin
+          wranglerVersion: "4.146.0"
+          command: pages project create cheshbon-admin --production-branch=main
+      - name: Publish
+        id: publish
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: math_test/admin
+          wranglerVersion: "4.146.0"
+          command: pages deploy public --project-name=cheshbon-admin --branch=main --commit-dirty=true
+      - name: Summary
+        env:
+          URL: ${{ steps.publish.outputs.deployment-url }}
+        run: |
+          echo "Admin: $URL" >> "$GITHUB_STEP_SUMMARY"
