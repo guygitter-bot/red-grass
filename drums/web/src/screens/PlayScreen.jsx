@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import KitStage from '../components/KitStage';
+import SongList from '../components/SongList';
 import { setMetronomeBpm, startMetronome, stopMetronome } from '../lib/sounds';
 
 // מסך הנגינה: סרגל קטן למעלה (שם הסט, עוצמה, מטרונום) והסט עצמו על כל השאר
-export default function PlayScreen({ kit, drumVol, onDrumVol, onPickKit }) {
+export default function PlayScreen({ kit, drumVol, onDrumVol, onPickKit, songs = [], currentSong, onLoadSong }) {
   const [metro, setMetro] = useState(false);
   const [bpm, setBpm] = useState(100);
   const [tipOff, setTipOff] = useState(false);
+  const [songsOpen, setSongsOpen] = useState(false);
 
   useEffect(() => {
     if (metro) startMetronome(bpm);
@@ -42,7 +44,16 @@ export default function PlayScreen({ kit, drumVol, onDrumVol, onPickKit }) {
             </span>
           )}
         </div>
+        {songs.length > 0 && (
+          <button type="button" className={`chip !min-h-10 ${songsOpen ? 'on' : ''}`} onClick={() => setSongsOpen(!songsOpen)} aria-pressed={songsOpen} aria-label="שירים של הסט">🎵<span className="hidden sm:inline"> שירים</span></button>
+        )}
       </div>
+      {songsOpen && songs.length > 0 && (
+        <div className="shrink-0 max-h-[45%] overflow-y-auto px-3 py-2 bg-card border-b border-line">
+          <p className="text-sm font-bold mb-1">שירים של <bdi dir="ltr">{songs[0].artist}</bdi></p>
+          <SongList songs={songs} current={currentSong} onPlay={(s) => { onLoadSong(s.youtubeId); setSongsOpen(false); }} />
+        </div>
+      )}
       {!tipOff && (
         <div className="rotate-tip shrink-0 items-center gap-2 px-3 py-1.5 bg-soft text-sm">
           <span aria-hidden>📱↔️</span>

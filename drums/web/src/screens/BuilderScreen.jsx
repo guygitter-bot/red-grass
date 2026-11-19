@@ -44,6 +44,8 @@ export default function BuilderScreen({ base, onSave }) {
       desc: base && !editing ? `התחיל מ${base.name}` : editing?.desc || '',
       options: opts,
       baseVoice,
+      // הסט המפורסם שממנו התחלנו (לרשימת השירים שלו)
+      baseId: editing ? editing.baseId : base?.id,
     });
     onSave(kit);
   };

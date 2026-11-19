@@ -16,6 +16,7 @@
 - `lib/kit.js` – החלקים, בניית סט מאפשרויות (`buildPieces`), `safeKit` (ברירות מחדל לנתונים ישנים).
 - `lib/layout.js` – מיקום החלקים על הבמה (רחב / גבוה). בדיקה מוודאת שאין חפיפה.
 - `lib/youtube.js` – `parseYouTubeId` וטעינת ה-IFrame API. `lib/storage.js` – שמירה ב-localStorage.
+- `data/songs.js` – 5 שירים של הלהקה לכל סט מפורסם (`KIT_SONGS`, מזהי יוטיוב שנבדקו ב-oEmbed). מוצגים במסך הסטים ובמסך הנגינה (כפתור 🎵); סט אישי שנבנה מסט מפורסם מציג את שיריו (`baseId`).
 - `data/kits.js` – הסטים המפורסמים. `screens/` – נגינה, סטים, בונה, שיר. `components/` – במת התופים, נגן, תפריט.
 - `public/_headers` – כותרות אבטחה. **ה-CSP כולל את יוטיוב** (`script-src`, `frame-src`, `img-src`) – שירות חיצוני נוסף מחייב עדכון שם.
 
