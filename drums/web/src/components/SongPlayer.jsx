@@ -3,7 +3,7 @@ import { loadYouTubeApi } from '../lib/youtube';
 
 // נגן יוטיוב קטן (IFrame API) מעל הסט: נגן/השהה, עוצמת שיר ועוצמת תופים בנפרד, מתקפל.
 // נשאר פעיל כל הזמן שהשיר טעון, גם כשעוברים בין מסכים (אז הוא מוסתר)
-export default function SongPlayer({ videoId, hidden, songVol, drumVol, onSongVol, onDrumVol, onTitle, onClose }) {
+export default function SongPlayer({ videoId, hidden, songVol, drumVol, onSongVol, onDrumVol, onTitle, onClose, apiRef }) {
   const holder = useRef(null);
   const player = useRef(null);
   const volRef = useRef(songVol);
@@ -41,6 +41,15 @@ export default function SongPlayer({ videoId, hidden, songVol, drumVol, onSongVo
           events: {
             onReady: (e) => {
               setReady(true);
+              // גישה לזמן ולקצב הנגינה, למצב הלימוד (הסנכרון של ההדגשות עם השיר)
+              if (apiRef) {
+                apiRef.current = {
+                  getTime: () => e.target.getCurrentTime(),
+                  isPlaying: () => e.target.getPlayerState() === 1,
+                  getRate: () => e.target.getPlaybackRate(),
+                  setRate: (r) => e.target.setPlaybackRate(r),
+                };
+              }
               e.target.setVolume(Math.round(volRef.current * 100));
               const t = e.target.getVideoData?.().title;
               if (t) {
@@ -76,7 +85,9 @@ export default function SongPlayer({ videoId, hidden, songVol, drumVol, onSongVo
         // כבר נהרס
       }
       player.current = null;
+      if (apiRef) apiRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

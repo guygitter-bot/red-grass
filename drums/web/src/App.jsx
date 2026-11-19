@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Nav from './components/Nav';
 import SongPlayer from './components/SongPlayer';
 import { KITS, kitById } from './data/kits';
@@ -26,6 +26,9 @@ export default function App() {
   const [builderBase, setBuilderBase] = useState(null);
   const [builderKey, setBuilderKey] = useState(0);
   const [samples, setSamples] = useState(getSamplesStatus);
+  // מצב לימוד: מזהה השיר שלומדים (או null) + גישה לנגן השיר (זמן וקצב) לסנכרון
+  const [lessonId, setLessonId] = useState(null);
+  const songApi = useRef(null);
 
   const active = custom.find((k) => k.id === activeId) || (kitById(activeId) && resolveFamous(kitById(activeId))) || resolveFamous(KITS[0]);
 
@@ -57,6 +60,14 @@ export default function App() {
     setActiveId(kitId);
     saveActiveId(kitId);
     loadSong(videoId);
+    setScreen('play');
+  };
+
+  // 🎓 ללמוד שיר מרשימת הסט: בוחר את הסט (בלי לטעון את הווידאו – הוא יטען כשבוחרים "עם השיר")
+  const learnSong = (kitId, videoId) => {
+    setActiveId(kitId);
+    saveActiveId(kitId);
+    setLessonId(videoId);
     setScreen('play');
   };
 
@@ -121,12 +132,13 @@ export default function App() {
             onDrumVol={(v) => setVol((o) => ({ ...o, drums: v }))}
             onTitle={setTitle}
             onClose={() => setSongId(null)}
+            apiRef={songApi}
           />
         )}
         {screen === 'play' && (
-          <PlayScreen kit={active} drumVol={vol.drums} onDrumVol={(v) => setVol((o) => ({ ...o, drums: v }))} onPickKit={() => setScreen('kits')} songs={kitSongs} currentSong={songId} onLoadSong={loadSong} />
+          <PlayScreen kit={active} drumVol={vol.drums} onDrumVol={(v) => setVol((o) => ({ ...o, drums: v }))} onPickKit={() => setScreen('kits')} songs={kitSongs} currentSong={songId} onLoadSong={loadSong} lessonId={lessonId} onLesson={setLessonId} songApi={songApi} />
         )}
-        {screen === 'kits' && <KitsScreen activeId={activeId} custom={custom} onPick={pick} onPickSong={pickWithSong} onBuild={build} onDelete={remove} />}
+        {screen === 'kits' && <KitsScreen activeId={activeId} custom={custom} onPick={pick} onPickSong={pickWithSong} onLearnSong={learnSong} onBuild={build} onDelete={remove} />}
         {screen === 'builder' && <BuilderScreen key={builderKey} base={builderBase} onSave={saveCustom} />}
         {screen === 'song' && <SongScreen current={songId} recent={songs} onLoad={loadSong} onGoPlay={() => setScreen('play')} />}
       </main>

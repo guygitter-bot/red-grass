@@ -61,3 +61,17 @@ export function loadVolumes() {
 export function saveVolumes(vol) {
   write(K.vol, vol);
 }
+
+// היסט סנכרון לכל שיר (שניות), לפי מזהה היוטיוב – למצב "ללמוד את השיר"
+const SYNC_KEY = 'mf_sync';
+export function loadSyncOffset(id) {
+  const all = read(SYNC_KEY);
+  const v = all && typeof all === 'object' ? all[id] : null;
+  return typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 3600 ? v : 0;
+}
+export function saveSyncOffset(id, offset) {
+  const all = read(SYNC_KEY);
+  const next = all && typeof all === 'object' ? { ...all } : {};
+  next[id] = Math.round(offset * 1000) / 1000;
+  write(SYNC_KEY, next);
+}

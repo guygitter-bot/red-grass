@@ -69,3 +69,12 @@ export function songsForKit(kitId) {
 export function youtubeUrl(id) {
   return `https://www.youtube.com/watch?v=${id}`;
 }
+
+// שיר לפי מזהה יוטיוב (מכל הסטים), או null
+export function songById(id) {
+  for (const list of Object.values(KIT_SONGS)) {
+    const s = list.find((x) => x.youtubeId === id);
+    if (s) return s;
+  }
+  return null;
+}

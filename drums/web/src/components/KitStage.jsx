@@ -1,22 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PIECES, pieceForCode } from '../lib/kit';
 import { layoutFor, STAGE_HEIGHT } from '../lib/layout';
+import { flashEl } from '../lib/padfx';
 import { ensureAudio, playPiece } from '../lib/sounds';
 
-// הבהוב קצר של חלק שהוכה (בלי רינדור מחדש – מוסיפים מחלקה ומאתחלים את האנימציה)
-function flash(el) {
-  if (!el) return;
-  el.classList.remove('hit');
-  void el.offsetWidth;
-  el.classList.add('hit');
-}
 
 const GROUP = { kick: 'kick', snare: 'drum', hihat: 'cym', hihatOpen: 'cym', tom: 'drum', floor: 'drum', crash: 'cym', ride: 'cym', china: 'cym', splash: 'cym', cowbell: 'bell' };
 
-// במת התופים: חלקים לחיצים (מגע מרובה) במבנה שמותאם ליחס המסך. keys = גם מקלדת
-export default function KitStage({ kit, keys = false }) {
+// במת התופים: חלקים לחיצים (מגע מרובה) במבנה שמותאם ליחס המסך. keys = גם מקלדת.
+// boxRef (לא חובה) = גישה לאלמנט הסט מבחוץ (מצב הלימוד מדגיש עליו חלקים); onUserHit(id) = מכה של המשתמש
+export default function KitStage({ kit, keys = false, boxRef: outerRef, onUserHit }) {
   const wrapRef = useRef(null);
-  const boxRef = useRef(null);
+  const ownRef = useRef(null);
+  const boxRef = outerRef || ownRef;
+  const hitCb = useRef(onUserHit);
+  hitCb.current = onUserHit;
   const [mode, setMode] = useState('wide');
 
   // רחב או גבוה – לפי היחס של האזור הפנוי
@@ -37,9 +35,10 @@ export default function KitStage({ kit, keys = false }) {
     (id) => {
       ensureAudio();
       playPiece(id, kit.voice);
-      flash(boxRef.current?.querySelector(`[data-pad="${id}"]`));
+      flashEl(boxRef.current?.querySelector(`[data-pad="${id}"]`));
+      hitCb.current?.(id);
     },
-    [kit],
+    [kit, boxRef],
   );
 
   // מקלדת במחשב (לפי e.code – עובד גם כשהמקלדת בעברית)

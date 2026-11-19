@@ -178,11 +178,12 @@ function playSample(group, s, strength, t) {
 }
 
 // מנגן חלק אחד של הסט. strength (0..1, לא חובה) = עוצמת המכה; בלי זה – קצת אקראי, בעיקר בינוני-חזק
-export function playPiece(id, voice, strength) {
+// when (לא חובה) = זמן עתידי בשעון האודיו (audioTime) – למצב הלימוד, שמתזמן מכות מראש
+export function playPiece(id, voice, strength, when) {
   const spec = PIECES[id];
   if (!spec || !ensureAudio()) return;
   const v = { ...DEFAULT_VOICE, ...(voice || {}) };
-  const t = ctx.currentTime + 0.001;
+  const t = typeof when === 'number' ? Math.max(when, ctx.currentTime + 0.001) : ctx.currentTime + 0.001;
   const power = typeof strength === 'number' ? strength : 0.5 + Math.random() * 0.5;
   const s = pieceSample(id, v);
   const isHat = spec.type === 'hihat' || spec.type === 'hihatOpen';
@@ -202,6 +203,23 @@ export function playPiece(id, voice, strength) {
     return;
   }
   if (spec.type === 'hihatOpen') openHat = played;
+}
+
+// ---- שעון האודיו (למצב לימוד) ----
+// הזמן הנוכחי בשעון האודיו, או 0 אם עוד אין הקשר אודיו
+export function audioTime() {
+  return ctx ? ctx.currentTime : 0;
+}
+// השהיית היציאה בשניות (בין "מנגן" ל"נשמע") – כדי ליישר חזותית ודירוג לצליל שנשמע
+export function audioLatency() {
+  if (!ctx) return 0;
+  const l = (ctx.outputLatency || 0) + (ctx.baseLatency || 0);
+  return Number.isFinite(l) ? Math.min(l, 0.3) : 0;
+}
+// קליק של מטרונום בזמן מדויק (שעון האודיו)
+export function playClick(when, accent) {
+  if (!ensureAudio()) return;
+  synth.click(Math.max(when, ctx.currentTime), !!accent);
 }
 
 // ---- מטרונום: מתזמן קדימה בדיוק של שעון האודיו (הקליק מסונתז) ----
