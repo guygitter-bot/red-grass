@@ -1,0 +1,9 @@
+Drum samples in this folder are derived from "Virtuosity Drums"
+by Versilian Studios and Karoryfer Samples
+(recorded at Virtuosity Musical Instruments, Boston; drummer Austin McMahon).
+Source: https://github.com/sfzinstruments/virtuosity_drums
+License: CC0 1.0 Universal (public domain dedication)
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Changes: several microphone positions were mixed together, trimmed, faded,
+loudness-matched and encoded to AAC (.m4a) for use on the web.

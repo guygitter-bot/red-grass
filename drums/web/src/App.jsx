@@ -3,7 +3,7 @@ import Nav from './components/Nav';
 import SongPlayer from './components/SongPlayer';
 import { KITS, kitById } from './data/kits';
 import { safeVoice } from './lib/kit';
-import { setMasterVolume } from './lib/sounds';
+import { getSamplesStatus, onSamplesStatus, preloadSamples, setMasterVolume } from './lib/sounds';
 import { addSong, loadActiveId, loadKits, loadSongs, loadVolumes, saveActiveId, saveKits, saveSongs, saveVolumes } from './lib/storage';
 import BuilderScreen from './screens/BuilderScreen';
 import KitsScreen from './screens/KitsScreen';
@@ -24,8 +24,18 @@ export default function App() {
   const [songId, setSongId] = useState(null);
   const [builderBase, setBuilderBase] = useState(null);
   const [builderKey, setBuilderKey] = useState(0);
+  const [samples, setSamples] = useState(getSamplesStatus);
 
   const active = custom.find((k) => k.id === activeId) || (kitById(activeId) && resolveFamous(kitById(activeId))) || resolveFamous(KITS[0]);
+
+  // טעינת הצלילים האמיתיים ברקע כבר בפתיחה (אפשר לנגן מיד – עד שהם מוכנים עובד צליל גיבוי)
+  useEffect(() => {
+    const off = onSamplesStatus(setSamples);
+    preloadSamples();
+    return () => {
+      off();
+    };
+  }, []);
 
   useEffect(() => {
     setMasterVolume(vol.drums);
@@ -83,7 +93,12 @@ export default function App() {
   return (
     <div className="h-dvh flex flex-col-reverse lg:flex-row short:flex-row bg-page text-ink">
       <Nav screen={screen} onGo={setScreen} />
-      <main className="flex-1 min-w-0 min-h-0 flex flex-col">
+      <main className="flex-1 min-w-0 min-h-0 flex flex-col relative">
+        {samples === 'loading' && (
+          <div className="absolute top-2 start-2 z-10 rounded-full bg-card/90 px-3 py-1 text-xs text-muted pointer-events-none" role="status">
+            טוען צלילים…
+          </div>
+        )}
         {songId && (
           <SongPlayer
             videoId={songId}
