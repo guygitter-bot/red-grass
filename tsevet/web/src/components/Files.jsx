@@ -1,7 +1,9 @@
 // קבצים בהודעה (תמונה / סרטון / הקלטה) וכרטיס עריכת סרטון ברקע
 import { useState } from 'react';
-import { Download, ExternalLink, FileText } from 'lucide-react';
-import { Spinner } from './ui';
+import { Clapperboard, Download, ExternalLink, FileText } from 'lucide-react';
+import { api } from '../lib/api';
+import { RELOAD } from './Gen';
+import { Button, Spinner } from './ui';
 
 export function FileView({ file }) {
   if (file.kind === 'image')
@@ -56,14 +58,16 @@ function DocView({ file }) {
 }
 
 export function RenderCard({ render }) {
+  const smart = render.op === 'smart_edit';
   return (
-    <div className="rounded-xl border border-line bg-page p-3">
+    <div className="rounded-xl border border-line bg-page p-3 text-ink">
+      {smart && render.status !== 'done' && <SmartPlan render={render} />}
       {render.status === 'queued' && (
-        <div className="flex items-center gap-2 text-sm">
+        <div className={`flex items-center gap-2 text-sm ${smart ? 'mt-3' : ''}`}>
           <Spinner />
           <div>
             <div className="font-medium">{render.label}</div>
-            <div className="text-xs text-muted">עורך… זה לוקח כמה דקות</div>
+            <div className="text-xs text-muted">{smart ? 'עורך… עריכה חכמה לוקחת 10-40 דקות, והסרטון יופיע כאן לבד' : 'עורך… זה לוקח כמה דקות'}</div>
           </div>
         </div>
       )}
@@ -74,14 +78,65 @@ export function RenderCard({ render }) {
           <a href={`${render.file.url}&dl=1`} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-3 py-1.5 text-sm font-medium hover:bg-soft">
             <Download size={15} /> הורדה
           </a>
+          {smart && render.usd > 0 && <div className="num text-xs text-muted">עלות העריכה: ${render.usd.toFixed(2)}</div>}
         </div>
       )}
       {render.status === 'failed' && (
-        <div className="text-sm">
-          <div className="font-medium">{render.label}</div>
+        <div className={`text-sm ${smart ? 'mt-3' : ''}`}>
+          {!smart && <div className="font-medium">{render.label}</div>}
           <div className="mt-0.5 text-bad">{render.error || 'העריכה נכשלה'}</div>
         </div>
       )}
+      {render.status === 'cancelled' && <div className="mt-2 text-sm text-muted">בוטל</div>}
+    </div>
+  );
+}
+
+// עריכה חכמה: מה תוכנן, ובהצעה – כפתור אישור (עולה כמה דולרים)
+function SmartPlan({ render }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const act = async (path) => {
+    setBusy(true);
+    setError('');
+    try {
+      await api(path, { id: render.id });
+    } catch (e) {
+      setError(e.message);
+    }
+    setBusy(false);
+    window.dispatchEvent(new Event(RELOAD));
+  };
+  return (
+    <div className="text-sm">
+      <div className="flex items-start gap-2">
+        <Clapperboard size={18} className="mt-0.5 shrink-0 text-accent-ink" />
+        <div className="min-w-0 flex-1">
+          <div className="font-medium">
+            {render.label} · {render.tool}
+          </div>
+          <div className="text-xs text-muted">
+            {render.files} {render.files === 1 ? 'קובץ' : 'קבצים'}
+          </div>
+          {render.brief && <p className="mt-1 whitespace-pre-line break-words">{render.brief}</p>}
+        </div>
+      </div>
+      {render.status === 'proposed' && (
+        <div className="mt-3">
+          <p className="mb-2 text-xs text-muted">
+            Claude Code עורך את הסרטון ברקע. עולה בערך 3-10 דולר (לכל היותר {render.maxUsd}$), לפי האורך. שום דבר לא מתחיל בלי אישור.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button disabled={busy} onClick={() => act('/app/render/approve')}>
+              {busy ? 'מתחיל…' : 'לערוך'}
+            </Button>
+            <Button kind="ghost" disabled={busy} onClick={() => act('/app/render/cancel')}>
+              לא עכשיו
+            </Button>
+          </div>
+        </div>
+      )}
+      {error && <div className="mt-2 text-bad">{error}</div>}
     </div>
   );
 }

@@ -1354,3 +1354,50 @@ test('bots read uploaded documents: PDF as a document, Word/Excel text, and read
   assert.equal(result.type, 'tool_result');
   assert.match(result.content[0].text, /חשמל,300/);
 });
+
+test('smart edit: only a proposal until the owner approves; cost recorded; daily cap', async () => {
+  const { env, outside } = setupEnv({ replies: [] }, { DAILY_SMART: '1' });
+  const token = await signIn(env);
+  const video = await upload(env, token, { type: 'video/mp4', name: 'talk.mp4', bytes: new Uint8Array(20).fill(7) });
+  env.AI_CLIENT = fakeAI({ replies: [
+    { stop: 'tool_use', content: tool('edit_video', { op: 'smart_edit', files: [video.data.id], tool: 'ghost-editor', brief: 'ריל של 30 שניות\nעם כתוביות' }) },
+    { content: text('הכנתי תוכנית') },
+  ] }, []);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'תעשה מזה ריל', files: [video.data.id], to: 'editor' }, token);
+  await env.team.alarm();
+  assert.equal(outside.filter((o) => o.url.endsWith('/dispatches')).length, 0);
+  let card = (await call(env, '/app/conv', { id: conv.id }, token)).data.messages[1].renders[0];
+  assert.equal(card.status, 'proposed');
+  assert.equal(card.tool, 'Ghost Editor');
+  assert.equal(card.brief, 'ריל של 30 שניות\nעם כתוביות');
+
+  assert.equal((await call(env, '/app/render/approve', { id: card.id }, token)).status, 200);
+  const dispatch = outside.find((o) => o.url.endsWith('/dispatches'));
+  assert.equal(dispatch.body.event_type, 'tsevet-smartedit');
+  assert.equal((await call(env, '/app/render/approve', { id: card.id }, token)).status, 409);
+
+  const gh = (path, init = {}) => worker.fetch(new Request(`${API}${path}`, { ...init, headers: { authorization: `Bearer ${GH}`, ...(init.headers || {}) } }), env);
+  const job = await (await gh(`/render/job?id=${card.id}`)).json();
+  assert.deepEqual(job.params, { tool: 'ghost-editor', brief: 'ריל של 30 שניות\nעם כתוביות' });
+  const res = await gh(`/render/result?id=${card.id}&usd=4.25`, { method: 'PUT', body: new Uint8Array(30).fill(1), duplex: 'half' });
+  assert.equal(res.status, 200);
+  card = (await call(env, '/app/conv', { id: conv.id }, token)).data.messages[1].renders[0];
+  assert.equal(card.status, 'done');
+  assert.equal(card.usd, 4.25);
+  const costs = (await call(env, '/app/costs', {}, token)).data;
+  assert.ok(costs.now.usd >= 4.25);
+  assert.equal(costs.now.smartEdits, 1);
+
+  // תקרה יומית (1): הצעה שנייה נדחית באישור
+  env.AI_CLIENT = fakeAI({ replies: [
+    { stop: 'tool_use', content: tool('edit_video', { op: 'smart_edit', files: [video.data.id], brief: 'עוד אחד' }) },
+    { content: text('שוב') },
+  ] }, []);
+  await call(env, '/app/send', { id: conv.id, text: 'עוד', to: 'editor' }, token);
+  await env.team.alarm();
+  const second = (await call(env, '/app/conv', { id: conv.id }, token)).data.messages.at(-1).renders[0];
+  assert.equal(second.tool, 'הכי מתאים');
+  assert.equal((await call(env, '/app/render/approve', { id: second.id }, token)).status, 429);
+  assert.equal((await call(env, '/app/render/cancel', { id: second.id }, token)).status, 200);
+});

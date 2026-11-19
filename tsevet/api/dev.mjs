@@ -122,6 +122,7 @@ const ai = {
         }
         if (role.startsWith('You are "עורך וידאו"')) {
           const video = [...prompt.matchAll(/\[file (\w+): video/g)].pop();
+          if (video && /ריל|כתוביות/.test(prompt)) return { stop_reason: 'tool_use', content: [{ type: 'text', text: 'הכנתי תוכנית לעריכה חכמה 👇' }, { type: 'tool_use', id: 't1', name: 'edit_video', input: { op: 'smart_edit', files: [video[1]], tool: 'ghost-editor', brief: 'ריל אנכי של 30 שניות: הטייקים הטובים, בלי שתיקות, כתוביות בעברית, זומים ואפקטים עדינים.' } }], usage };
           if (video) return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 't1', name: 'edit_video', input: { op: 'color_grade', files: [video[1]], preset: 'cinematic' } }], usage };
           return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'בשמחה! צריך **להעלות סרטון** (הכפתור עם האטב), ולכתוב מה לעשות איתו.' }], usage };
         }
@@ -166,6 +167,19 @@ const env = {
         setTimeout(() => {
           fetch(`http://localhost:${PORT}/dev/done?id=${client_payload.id}`, { method: 'POST', headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }, body: JSON.stringify({ pr: 99, summary: 'נוסף כפתור 🖨️ בדף המתכון, שמדפיס רק את המתכון.\nאחרי העלייה: לסגור ולפתוח את האפליקציה.' }) }).catch(() => {});
         }, 4000);
+        return new Response(null, { status: 204 });
+      }
+      // עריכה חכמה מדומה: בלי Claude Code – הקובץ הראשון חוזר כ"סרטון ערוך" אחרי כמה שניות
+      if (event_type === 'tsevet-smartedit') {
+        const smart = fileURLToPath(new URL('../render/smart.py', import.meta.url));
+        const env2 = { ...process.env, TSEVET_API: `http://localhost:${PORT}`, TSEVET_TOKEN: TOKEN, SMART_DIR: '/tmp/tsevet-smart' };
+        const step = (args) => new Promise((done) => spawn('python3', args, { stdio: 'inherit', env: env2 }).on('exit', done));
+        (async () => {
+          await step([smart, 'prepare', client_payload.id]);
+          await wait(3000);
+          await step(['-c', 'import shutil,glob;shutil.copy(sorted(glob.glob("/tmp/tsevet-smart/in/in0*"))[0],"/tmp/tsevet-smart/out/final.mp4")']);
+          await step([smart, 'finish', client_payload.id]);
+        })();
         return new Response(null, { status: 204 });
       }
       const script = fileURLToPath(new URL('../render/run.py', import.meta.url));

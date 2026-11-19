@@ -138,9 +138,9 @@ export class Team {
       case '/internal/render-input':
         return renderInput(storage, body.id, body.n);
       case '/internal/render-done':
-        return renderDone(storage, body.id, body.file || {});
+        return renderDone(this, body.id, body.file || {}, body.usd);
       case '/internal/render-fail':
-        return renderFail(storage, body.id);
+        return renderFail(this, body.id, body.usd);
       // יצירת סרטון: gen-start מגיע למופע של העבודה, gen-done / gen-fail חוזרים ממנו למופע הראשי
       case '/internal/gen-start':
         return genStart(storage, body);

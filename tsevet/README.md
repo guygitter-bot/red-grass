@@ -81,6 +81,14 @@
 
 המאגר ציבורי: ה-workflow לא מדפיס שמות קבצים או כותרות, והקבצים עוברים רק בין השרת ל-workflow (עם הטוקן).
 הבוט לא "רואה" סרטון – הוא מקבל פריים אחד ממנו (נלקח בטלפון בזמן ההעלאה) ואת האורך והגודל.
+## עריכה חכמה 🎬 (עורך הווידאו, באישור)
+- `edit_video` עם `op: 'smart_edit'` (`api/render.js`): Claude Code עורך סרטון שלם עם סקיל מקצועי – `ghost-editor` (הקלטת טוקינג-הד → ריל:
+  טייקים, שתיקות, כתוביות, זומים, אפקטים), `shorts` (Claude Shorts: קליפים קצרים מסרטון ארוך) או `ffmpeg` (ffmpeg-skill: עבודה טכנית מדויקת); `auto` = ghost-editor + ffmpeg.
+- עולה כמה דולרים, ולכן רק **הצעה** עם כפתור "לערוך" (`/app/render/approve`), תקרה יומית `DAILY_SMART` (3) ותקרה לעריכה `SMART_MAX_USD` / `--max-budget-usd` (12$).
+- `.github/workflows/tsevet-smartedit.yml` + `render/smart.py`: מתקין את הסקיל בגרסה קבועה (SHA), מוריד את הקבצים, מריץ `claude -p` ומעלה את התוצאה עם העלות (`?usd=`), שנרשמת במסך העלויות.
+  הטוקן של השרת לא זמין לשלב של Claude; הבריף והפלט לא מודפסים בלוג (המאגר ציבורי). מקומית (`dev.mjs`) – עריכה מדומה בלי Claude.
+- Higgsfield ו-OpenMontage לא הותקנו: Higgsfield דורש חשבון בתשלום והתחברות אישית, OpenMontage ברישיון AGPL וכבד מאוד.
+
 ## קריאת מסמכים 📄 (כל הבוטים, באפליקציה)
 - מצרפים בשיחה PDF, Word, Excel, PowerPoint, CSV, טקסט, Markdown או JSON (`kind: 'doc'`).
 - PDF עולה כמו שהוא ונשלח ל-Claude כמסמך (קורא גם סרוק). שאר הקבצים הופכים לטקסט **בטלפון** לפני ההעלאה (`web/src/lib/docs.js`, fflate; Excel – כל גיליון כ-CSV עם שמו).
