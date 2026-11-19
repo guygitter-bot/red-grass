@@ -1,12 +1,89 @@
-// כל הצלילים מסונתזים ב-Web Audio (בלי קובצי דגימות). voice = כוונון הסט (ראו DEFAULT_VOICE ב-kit.js).
+// הצלילים: דגימות אמיתיות של סט תופים אקוסטי (public/samples, Virtuosity Drums, CC0) שמנוגנות דרך Web Audio.
+// הסינתזה (synth.js) נשארת רק גיבוי: בזמן שהדגימות נטענות או אם הטעינה נכשלה – לא קורסים ולא שותקים.
+// voice = כוונון הסט (ראו DEFAULT_VOICE ב-kit.js) והופך את אותן דגימות לצלילים שונים (כוונון, קיצור, עמעום).
 // ה-AudioContext נוצר בנגיעה הראשונה ('interactive' = השהיה מינימלית).
 import { PIECES, DEFAULT_VOICE } from './kit';
+import { allSampleFiles, pieceSample, pickFile, NATURAL } from './samples';
+import { createSynth } from './synth';
 
 let ctx = null;
 let master = null;
-let noise = null;
+let synth = null;
 let volume = 0.8;
-let openHat = null; // היי-האט פתוח שמתנגן כרגע (נחנק כשסוגרים)
+
+// ---- טעינת הדגימות ----
+const raw = new Map(); // שם קובץ -> ArrayBuffer (הורד, עוד לא פוענח)
+const buffers = new Map(); // שם קובץ -> AudioBuffer
+let status = 'idle'; // idle | loading | ready | error
+let fetching = null;
+const listeners = new Set();
+
+function setStatus(s) {
+  status = s;
+  listeners.forEach((fn) => fn(s));
+}
+
+export function getSamplesStatus() {
+  return status;
+}
+
+// מאזין לשינוי מצב הטעינה (מחזיר פונקציית ביטול)
+export function onSamplesStatus(fn) {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
+}
+
+// פענוח עם נפילה לצורת ה-callback (ספארי ישן לא מחזיר Promise)
+function decode(buf) {
+  return new Promise((resolve, reject) => {
+    const p = ctx.decodeAudioData(buf, resolve, reject);
+    if (p && typeof p.catch === 'function') p.catch(reject);
+  });
+}
+
+// מפענח את מה שהורד ויש כבר AudioContext. כל קובץ שנכשל פשוט נשאר בלי דגימה (הגיבוי ינגן במקומו)
+async function decodeAll() {
+  if (!ctx) return;
+  const names = [...raw.keys()].filter((n) => !buffers.has(n));
+  await Promise.all(
+    names.map(async (n) => {
+      try {
+        buffers.set(n, await decode(raw.get(n).slice(0)));
+      } catch {
+        /* דגימה בעייתית – הגיבוי ינגן */
+      }
+    }),
+  );
+  if (fetching === null && buffers.size > 0) setStatus('ready');
+}
+
+// מוריד את כל הדגימות (פעם אחת). לא צריך AudioContext, אז אפשר להתחיל כבר בפתיחת האפליקציה
+export function preloadSamples() {
+  if (fetching || status === 'ready') return;
+  setStatus('loading');
+  const base = new URL('samples/', document.baseURI).href;
+  fetching = Promise.all(
+    allSampleFiles().map(async (name) => {
+      try {
+        const res = await fetch(base + name);
+        if (!res.ok) throw new Error(String(res.status));
+        raw.set(name, await res.arrayBuffer());
+      } catch {
+        /* קובץ שלא ירד – הגיבוי ינגן */
+      }
+    }),
+  ).then(async () => {
+    fetching = null;
+    if (raw.size === 0) {
+      setStatus('error');
+      return;
+    }
+    await decodeAll();
+    if (!ctx && status === 'loading') setStatus('ready'); // יפוענחו בנגיעה הראשונה
+  });
+}
 
 export function ensureAudio() {
   if (!ctx) {
@@ -22,10 +99,9 @@ export function ensureAudio() {
     const comp = ctx.createDynamicsCompressor(); // מונע עיוות כשמכים הרבה יחד
     master.connect(comp);
     comp.connect(ctx.destination);
-    // שנייה ומחצה של רעש לבן, משמשת את כל הצלילים
-    noise = ctx.createBuffer(1, ctx.sampleRate * 1.5, ctx.sampleRate);
-    const d = noise.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    synth = createSynth(ctx, master);
+    preloadSamples();
+    decodeAll();
   }
   if (ctx.state === 'suspended') ctx.resume().catch(() => {});
   return ctx;
@@ -36,181 +112,100 @@ export function setMasterVolume(v) {
   if (master && ctx) master.gain.setTargetAtTime(volume, ctx.currentTime, 0.01);
 }
 
-// מעטפת עוצמה: קפיצה מהירה למעלה וגמר אקספוננציאלי
-function env(g, t, peak, dur) {
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.linearRampToValueAtTime(peak, t + 0.002);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+// ---- ניגון דגימה ----
+const rrCounters = {}; // מונה סבבים לכל קבוצה, כדי שמכות חוזרות לא יישמעו כמו מכונה
+let openHat = null; // { src, gain } – היי-האט פתוח שמתנגן כרגע (נחנק כשסוגרים)
+
+function chokeOpenHat(t) {
+  if (!openHat) return;
+  try {
+    openHat.gain.gain.cancelScheduledValues(t);
+    openHat.gain.gain.setTargetAtTime(0, t, 0.008);
+    openHat.src.stop(t + 0.08);
+  } catch {
+    /* כבר נעצר */
+  }
+  openHat = null;
 }
 
-function osc(type, freq, t, dur) {
-  const o = ctx.createOscillator();
-  o.type = type;
-  o.frequency.setValueAtTime(freq, t);
-  o.start(t);
-  o.stop(t + dur + 0.05);
-  return o;
-}
-
-function noiseSrc(t, dur) {
-  const n = ctx.createBufferSource();
-  n.buffer = noise;
-  n.start(t, Math.random() * 0.4);
-  n.stop(t + dur + 0.05);
-  return n;
-}
-
-function filter(type, freq, q = 0.7) {
-  const f = ctx.createBiquadFilter();
-  f.type = type;
-  f.frequency.value = freq;
-  f.Q.value = q;
-  return f;
-}
-
-function gain(v = 1) {
+// מנגן דגימה לפי המפרט מ-pieceSample. מחזיר false אם אין דגימה (אז מנגנים בסינתזה)
+function playSample(group, s, strength, t) {
+  const file = pickFile(group, strength, (rrCounters[group] = (rrCounters[group] || 0) + 1));
+  const buffer = file && buffers.get(file);
+  if (!buffer) return null;
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  src.playbackRate.value = s.rate;
   const g = ctx.createGain();
-  g.gain.value = v;
-  return g;
-}
-
-// בס: סינוס שצלילו צונח מהר + נקישה קצרה של רעש
-function kick(t, v, detune = 1) {
-  const f = 52 * v.kickTune * detune;
-  const dur = 0.38 * v.kickDecay;
-  const o = osc('sine', f * 3.2, t, dur);
-  o.frequency.exponentialRampToValueAtTime(f, t + 0.07);
-  const g = gain(0);
-  env(g, t, 1, dur);
-  o.connect(g).connect(master);
-  if (v.kickClick > 0.01) {
-    const n = noiseSrc(t, 0.02);
-    const hp = filter('highpass', 2500);
-    const ng = gain(0);
-    env(ng, t, 0.5 * v.kickClick, 0.015);
-    n.connect(hp).connect(ng).connect(master);
+  g.gain.value = s.gain * (0.7 + 0.3 * strength);
+  let node = src;
+  const chain = (n) => {
+    node.connect(n);
+    node = n;
+  };
+  if (s.highpass) {
+    const f = ctx.createBiquadFilter();
+    f.type = 'highpass';
+    f.frequency.value = s.highpass;
+    chain(f);
   }
-}
-
-// סנר: גוף (שני צלילים) + רעש מסונן (החוטים)
-function snare(t, v) {
-  const f = 185 * v.snareTune;
-  const dur = 0.16 * v.snareDecay;
-  for (const [mul, level] of [[1, 0.55], [1.7, 0.25]]) {
-    const o = osc('triangle', f * mul * 1.25, t, dur);
-    o.frequency.exponentialRampToValueAtTime(f * mul, t + 0.04);
-    const g = gain(0);
-    env(g, t, level, dur * 0.7);
-    o.connect(g).connect(master);
+  if (s.peak) {
+    const f = ctx.createBiquadFilter();
+    f.type = 'peaking';
+    f.frequency.value = 3800;
+    f.Q.value = 0.8;
+    f.gain.value = s.peak;
+    chain(f);
   }
-  const n = noiseSrc(t, dur * 1.5);
-  const hp = filter('highpass', 1400);
-  const bp = filter('peaking', 4500, 0.8);
-  bp.gain.value = 5;
-  const ng = gain(0);
-  env(ng, t, 0.7 * v.snareSnap, dur * 1.4);
-  n.connect(hp).connect(bp).connect(ng).connect(master);
-}
-
-// טום וטום רצפה: סינוס עם צניחה קלה + נקישה
-function tom(t, v, base, floor) {
-  const f = base * v.tomTune;
-  const dur = (floor ? 0.55 : 0.4) * v.tomDecay;
-  const o = osc('sine', f * 1.5, t, dur);
-  o.frequency.exponentialRampToValueAtTime(f, t + 0.09);
-  const g = gain(0);
-  env(g, t, 0.95, dur);
-  o.connect(g).connect(master);
-  const n = noiseSrc(t, 0.03);
-  const bp = filter('bandpass', f * 6, 1);
-  const ng = gain(0);
-  env(ng, t, 0.25, 0.025);
-  n.connect(bp).connect(ng).connect(master);
-}
-
-// צליל מתכתי: ששה מרובעים בתדרים "לא הרמוניים" דרך מסנן, בצירוף רעש לנצנוץ
-const METAL = [2, 3, 4.16, 5.43, 6.79, 8.21];
-function metal(t, { base, dur, hp, level, noiseLevel = 0.3, bright }) {
-  const g = gain(0);
-  env(g, t, level, dur);
-  const high = filter('highpass', hp * bright);
-  const band = filter('bandpass', 9500 * bright, 0.6);
-  high.connect(band).connect(g).connect(master);
-  for (const r of METAL) osc('square', base * r, t, dur).connect(high);
-  if (noiseLevel > 0) {
-    const n = noiseSrc(t, dur);
-    const ng = gain(noiseLevel);
-    n.connect(ng).connect(high);
+  if (s.lowpass) {
+    const f = ctx.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = s.lowpass;
+    chain(f);
   }
-  return g;
-}
-
-function hihat(t, v, open) {
-  if (open) {
-    if (openHat) openHat.gain.setTargetAtTime(0, t, 0.01);
-    openHat = metal(t, { base: 40, dur: 0.5 * v.cymDecay, hp: 7000, level: 0.32, bright: v.cymBright });
-  } else {
-    // סגירה חונקת את הפתוח
-    if (openHat) openHat.gain.setTargetAtTime(0, t, 0.008);
-    openHat = null;
-    metal(t, { base: 40, dur: 0.07 * v.cymDecay, hp: 7000, level: 0.38, bright: v.cymBright });
+  chain(g);
+  g.connect(master);
+  // סט "מחונק" (למשל רינגו): הצליל נחתך מוקדם בדעיכה חלקה
+  const natural = (NATURAL[group] || 1) / s.rate;
+  if (s.decay < 0.98) {
+    const end = Math.max(0.06, natural * s.decay);
+    g.gain.setValueAtTime(g.gain.value, t + end * 0.25);
+    g.gain.setTargetAtTime(0, t + end * 0.25, end * 0.22);
+    src.stop(t + end * 1.6);
   }
+  src.start(t);
+  return { src, gain: g };
 }
 
-function cymbal(t, v, type) {
-  const d = v.cymDecay;
-  const b = v.cymBright;
-  if (type === 'crash') metal(t, { base: 32, dur: 1.7 * d, hp: 4500, level: 0.36, noiseLevel: 0.5, bright: b });
-  else if (type === 'ride') {
-    metal(t, { base: 36, dur: 1.2 * d, hp: 6000, level: 0.22, noiseLevel: 0.12, bright: b });
-    // "פינג" של הרייד
-    const o = osc('sine', 3100 * b, t, 0.35 * d);
-    const g = gain(0);
-    env(g, t, 0.16, 0.3 * d);
-    o.connect(g).connect(master);
-  } else if (type === 'china') metal(t, { base: 24, dur: 1.1 * d, hp: 2800, level: 0.38, noiseLevel: 0.7, bright: b });
-  else if (type === 'splash') metal(t, { base: 46, dur: 0.55 * d, hp: 6500, level: 0.3, noiseLevel: 0.35, bright: b });
-}
-
-function cowbell(t, v) {
-  const dur = 0.28 * v.cymDecay;
-  const bp = filter('bandpass', 800 * v.cymBright, 1.4);
-  const g = gain(0);
-  env(g, t, 0.5, dur);
-  bp.connect(g).connect(master);
-  for (const f of [562, 845]) osc('square', f, t, dur).connect(bp);
-}
-
-// גובה הטום לפי המספר (טום 1 הגבוה ביותר)
-const TOM_PITCH = { tom1: 210, tom2: 170, tom3: 145, tom4: 125, floor1: 100, floor2: 80 };
-
-// מנגן חלק אחד של הסט
-export function playPiece(id, voice) {
+// מנגן חלק אחד של הסט. strength (0..1, לא חובה) = עוצמת המכה; בלי זה – קצת אקראי, בעיקר בינוני-חזק
+export function playPiece(id, voice, strength) {
   const spec = PIECES[id];
   if (!spec || !ensureAudio()) return;
   const v = { ...DEFAULT_VOICE, ...(voice || {}) };
   const t = ctx.currentTime + 0.001;
-  switch (spec.type) {
-    case 'kick': kick(t, v, id === 'kick2' ? 1.04 : 1); break;
-    case 'snare': snare(t, v); break;
-    case 'hihat': hihat(t, v, false); break;
-    case 'hihatOpen': hihat(t, v, true); break;
-    case 'tom': tom(t, v, TOM_PITCH[id], false); break;
-    case 'floor': tom(t, v, TOM_PITCH[id], true); break;
-    case 'cowbell': cowbell(t, v); break;
-    default: cymbal(t, v, spec.type);
+  const power = typeof strength === 'number' ? strength : 0.5 + Math.random() * 0.5;
+  const s = pieceSample(id, v);
+  const isHat = spec.type === 'hihat' || spec.type === 'hihatOpen';
+  // סגירה חונקת את הפתוח (בכל מצב, גם בגיבוי)
+  if (isHat) {
+    chokeOpenHat(t);
+    synth.choke(t);
   }
+  let played = null;
+  try {
+    played = s && buffers.size > 0 ? playSample(s.group, s, power, t) : null;
+  } catch {
+    played = null;
+  }
+  if (!played) {
+    synth.play(id, v, t);
+    return;
+  }
+  if (spec.type === 'hihatOpen') openHat = played;
 }
 
-// ---- מטרונום: מתזמן קדימה בדיוק של שעון האודיו ----
+// ---- מטרונום: מתזמן קדימה בדיוק של שעון האודיו (הקליק מסונתז) ----
 const metro = { timer: null, bpm: 100, next: 0, beat: 0 };
-
-function click(t, accent) {
-  const o = osc('square', accent ? 1500 : 1000, t, 0.04);
-  const g = gain(0);
-  env(g, t, 0.25, 0.035);
-  o.connect(g).connect(master);
-}
 
 export function startMetronome(bpm) {
   if (!ensureAudio() || metro.timer) return;
@@ -219,7 +214,7 @@ export function startMetronome(bpm) {
   metro.next = ctx.currentTime + 0.05;
   metro.timer = setInterval(() => {
     while (metro.next < ctx.currentTime + 0.12) {
-      click(metro.next, metro.beat % 4 === 0);
+      synth.click(metro.next, metro.beat % 4 === 0);
       metro.next += 60 / metro.bpm;
       metro.beat += 1;
     }

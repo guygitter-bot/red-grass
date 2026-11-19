@@ -217,7 +217,7 @@
 
 ### מתופף – מערכת תופים בטלפון (`drums/`)
 - תיאור: `drums/README.md`. מערכת תופים על המסך: סטים בהשראת מתופפים מפורסמים (`web/src/data/kits.js`), בניית סט משלך (נשמר ב-localStorage, `safeKit`), ונגינה יחד עם שיר מיוטיוב (IFrame API).
-- הצלילים מסונתזים ב-Web Audio ב-`web/src/lib/sounds.js` (בלי קובצי דגימות); לכל סט `voice` משלו. ה-CSP של יוטיוב ב-`web/public/_headers` – שירות חיצוני נוסף מחייב עדכון שם.
+- הצלילים: דגימות אמיתיות (CC0, Virtuosity Drums) ב-`web/public/samples/`, מנוגנות ב-`web/src/lib/sounds.js` (מיפוי ב-`samples.js`); הסינתזה (`synth.js`) רק גיבוי. לכל סט `voice` משלו (כוונון, קיצור, עמעום). ה-CSP של יוטיוב ב-`web/public/_headers` – שירות חיצוני נוסף מחייב עדכון שם.
 - `drums/web` → https://matofef.pages.dev (בלי שרת). עלייה: `matofef.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd drums/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 - **תמיד למזג לבד** את ה-PR (אחרי שהבדיקות ירוקות), לבדוק שהעלייה (`matofef.yml` על main) הצליחה, ולדווח עם הקישור.
