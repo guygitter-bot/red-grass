@@ -110,7 +110,8 @@ const opsGens = [
     return calc(rng, `${a} × ${b}`, a * b, [a * b + a, a * b - a, a * b + b, a * b - b, a + b], `${a} × ${b} = ${a * b}. כך זה בלוח הכפל.`, 0.4);
   },
   (rng) => {
-    const a = rng.int(11, 99), b = rng.int(2, 9);
+    let a = rng.int(11, 99); if (a % 10 === 0) a += rng.int(1, 9);
+    const b = rng.int(2, 9);
     const t = Math.floor(a / 10) * 10, u = a % 10;
     return calc(rng, `${a} × ${b}`, a * b, [a * b + 10, a * b - 10, t * b + u, a * b + b], `מפרקים: ${t} × ${b} = ${t * b}, ו-${u} × ${b} = ${u * b}. ביחד ${a * b}.`);
   },
@@ -229,8 +230,7 @@ function timesReverse(rng) {
 function timesDouble(rng) {
   const base = rng.int(3, 25), k = rng.pick([2, 3, 4, 5, 10]);
   const ans = base * k;
-  const wording = k === 2 ? 'כפול' : `פי ${k}`;
-  return numQ(rng, { kind: 'times', text: `מה המספר שהוא ${wording} ${base}?`, explain: `${wording} ${base} זה ${base} × ${k} = ${ans}.` }, ans, [base + k, ans + base, ans - base]);
+  return numQ(rng, { kind: 'times', text: `איזה מספר גדול פי ${k} מ-${base}?`, explain: `גדול פי ${k} מ-${base} זה ${base} × ${k} = ${ans}.` }, ans, [base + k, ans + base, ans - base]);
 }
 
 // ---------- 7. בעיות מילוליות ----------

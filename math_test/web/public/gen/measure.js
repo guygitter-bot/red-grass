@@ -66,7 +66,7 @@ function ruler(rng) {
   }
   const c = rng.int(2, 8), m = rng.int(1, 9);
   const mm = c * 10 + m;
-  return numQ(rng, { kind: 'ruler', svg: rulerSvg(10, 0, mm), text: 'כמה מילימטרים אורך הפס הצבוע?', explain: `הפס עובר ${c} ס"מ שלמים ועוד ${m} קווים קטנים (מ"מ). ${c} ס"מ = ${c * 10} מ"מ, ועוד ${m}: ${mm} מ"מ.` }, mm, [c * 10, c + m, mm + 10, mm - 10, c * 100 + m], 0.5);
+  return numQ(rng, { kind: 'ruler', svg: rulerSvg(10, 0, mm), text: 'כמה מילימטרים אורך הפס הצבוע?', explain: `הפס עובר ${c} ס"מ שלמים ועוד ${m === 1 ? 'קו קטן אחד' : `${m} קווים קטנים`} (מ"מ). ${c} ס"מ = ${c * 10} מ"מ, ועוד ${m}: ${mm} מ"מ.` }, mm, [c * 10, c + m, mm + 10, mm - 10, c * 100 + m], 0.5);
 }
 
 // באיזו יחידה מודדים

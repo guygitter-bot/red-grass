@@ -233,7 +233,7 @@ const RIGHT_SHAPES = [
 ];
 function angleCountRight(rng) {
   const [name, n, pts] = rng.pick(RIGHT_SHAPES);
-  return numChoice(rng, { kind: 'angle-count', meta: { shape: name, count: n }, svg: svg(100, 84, poly(pts), name, 1.5), text: 'כמה זוויות ישרות יש בצורה שבציור?', explain: `${name === 'צורת האות L' ? 'בצורת האות L יש 5 פינות ישרות; בפינה הפנימית הזווית גדולה מזווית ישרה.' : name === 'מקבילית' || name === 'משולש שווה צלעות' ? `ב${name} אין אף פינה ישרה.` : `ב${name} יש ${n} פינות ישרות.`}` }, n, [n + 1, n - 1, 4, 2, 3, 0]);
+  return numChoice(rng, { kind: 'angle-count', meta: { shape: name, count: n }, svg: svg(100, 84, poly(pts), name, 1.5), text: 'כמה זוויות ישרות יש בצורה שבציור?', explain: `${name === 'צורת האות L' ? 'בצורת האות L יש 5 פינות ישרות; בפינה הפנימית הזווית גדולה מזווית ישרה.' : name === 'מקבילית' || name === 'משולש שווה צלעות' ? `ב${name} אין אף פינה ישרה.` : (n === 1 ? `ב${name} יש פינה ישרה אחת.` : `ב${name} יש ${n} פינות ישרות.`)}` }, n, [n + 1, n - 1, 4, 2, 3, 0]);
 }
 
 // ---------- 17. אלכסונים ----------
