@@ -90,6 +90,22 @@ export default function Costs({ agents }) {
         </section>
       )}
 
+      {(data.now?.smartEdits > 0 || data.now?.smartUsd > 0) && (
+        <section className="rounded-2xl border border-line bg-card p-4 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-muted">🎬 עריכות חכמות החודש</span>
+            <span className="num font-bold">{data.now?.smartEdits || 0}</span>
+          </div>
+          <div className="mt-1 flex items-center justify-between">
+            <span className="text-muted">עלות העריכה ב-GitHub</span>
+            <span className="num font-bold">
+              {ils(data.now?.smartUsd, rate)} <span className="font-normal text-muted">({usd(data.now?.smartUsd)})</span>
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-muted">כלול בסכומים שלמעלה (על חשבון עורך הווידאו).</p>
+        </section>
+      )}
+
       {data.clipsLimit > 0 && (
         <section className="rounded-2xl border border-line bg-card p-4 text-sm">
           <div className="flex items-center justify-between">

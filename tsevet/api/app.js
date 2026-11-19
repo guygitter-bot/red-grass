@@ -19,7 +19,7 @@ import * as auth from './auth.js';
 import { approve as approveGen, cancel as cancelGen, dailyLimit, genReady, genView } from './gen.js';
 import { approveDev, cancelDev, devView, discardDev, mergeDev } from './dev.js';
 import { approveImage, cancelImage, dailyImages, imageView } from './create.js';
-import { renderView } from './render.js';
+import { approveRender, cancelRender, renderView } from './render.js';
 import { approveSkill, declineSkill } from './maagar.js';
 import { BUDGETS, MAX_SCHEDULES, cleanSchedule, nextRun } from './schedule.js';
 import { pushAll, subscribe, unsubscribe, vapidKeys } from './notify.js';
@@ -336,7 +336,7 @@ async function costs(storage, clipsLimit = 0) {
   const prev = israelDate(new Date(`${month}-01T12:00:00Z`).getTime() - 5 * 24 * HOUR).slice(0, 7);
   const read = async (m) => {
     const c = (await storage.get(`cost:${m}`)) || {};
-    return { month: m, usd: c.usd || 0, days: c.days || {}, agents: c.agents || {}, clips: c.clips || 0, devs: c.devs || 0, devUsd: c.devUsd || 0, images: c.images || 0 };
+    return { month: m, usd: c.usd || 0, days: c.days || {}, agents: c.agents || {}, clips: c.clips || 0, devs: c.devs || 0, devUsd: c.devUsd || 0, images: c.images || 0, smartEdits: c.smartEdits || 0, smartUsd: c.smartUsd || 0 };
   };
   const now = await read(month);
   return { today: now.days[date.slice(8)] || 0, now, prev: await read(prev), ils: ILS, clipsToday: (await storage.get(`clips:${date}`)) || 0, clipsLimit };
@@ -432,6 +432,10 @@ export async function handleApp(t, path, body, headers, origin) {
 
     // המתכנת: שינוי בקוד רק אחרי אישור, ומיזוג רק אחרי לחיצה נוספת (dev.js)
     // תמונה חדשה: רק אחרי אישור בכפתור (עולה כסף – create.js)
+    case '/app/render/approve':
+      return approveRender(t, body.id);
+    case '/app/render/cancel':
+      return cancelRender(storage, body.id);
     case '/app/image/approve':
       return approveImage(t, body.id);
     case '/app/image/cancel':

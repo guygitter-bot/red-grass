@@ -5,16 +5,26 @@
 // ה-workflow מזדהה עם אותו טוקן של GitHub שיש גם לשרת (GITHUB_TOKEN). המאגר ציבורי: בלוג לא מודפס שום תוכן.
 //
 //   r:<id> -> { id, key, op, params, inputs: [file id], music, status: 'queued' | 'done' | 'failed', error, file, at }
+//
+// עריכה חכמה (smart_edit): Claude Code עורך את הסרטון עם הסקילים ghost-editor / Claude Shorts / ffmpeg-skill
+// (.github/workflows/tsevet-smartedit.yml). עולה כמה דולרים, ולכן רק הצעה: status 'proposed' עד שהבעלים לוחץ
+// "לערוך" (approveRender), עם תקרה יומית (DAILY_SMART). העלות האמיתית חוזרת מה-workflow ונרשמת במסך העלויות.
 import { fail } from './auth.js';
-import { addFile, fileView, newId } from './app.js';
+import { addFile, fileView, israelDate, newId } from './app.js';
 
 const STALE_MS = 40 * 60 * 1000;
+const SMART_STALE_MS = 100 * 60 * 1000;
+// תקרת הוצאה לעריכה חכמה אחת (דולר) ומספר עריכות ביום
+export const SMART_MAX_USD = 12;
+export const dailySmart = (env) => Number(env.DAILY_SMART) || 3;
+export const SMART_TOOLS = { auto: 'הכי מתאים', 'ghost-editor': 'Ghost Editor', shorts: 'Claude Shorts', ffmpeg: 'FFmpeg' };
 const OPS = {
   color_grade: { min: 1, max: 1, kinds: ['video'] },
   before_after: { min: 1, max: 2, kinds: ['video'] },
   hand_drawn: { min: 1, max: 1, kinds: ['video', 'image'] },
   motion_graphics: { min: 0, max: 6, kinds: ['video'] },
   beats_and_cuts: { min: 1, max: 8, kinds: ['video'], music: true },
+  smart_edit: { min: 1, max: 8, kinds: ['video', 'image'], smart: true },
 };
 export const OP_LABELS = {
   color_grade: 'צבעוניות קולנועית',
@@ -22,6 +32,7 @@ export const OP_LABELS = {
   hand_drawn: 'סגנון מצויר',
   motion_graphics: 'כותרות מונפשות',
   beats_and_cuts: 'חיתוך לפי הקצב',
+  smart_edit: 'עריכה חכמה',
 };
 
 const EXT = { 'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/webm': 'webm', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/wav': 'wav', 'audio/ogg': 'ogg', 'audio/aac': 'aac' };
@@ -38,6 +49,12 @@ function cleanParams(input) {
   if (Array.isArray(input.lines)) p.lines = input.lines.map((l) => text(l, 80)).filter(Boolean).slice(0, 8);
   if (['9:16', '16:9', '1:1'].includes(input.format)) p.format = input.format;
   if (Number(input.seconds)) p.seconds = Math.min(Math.max(Math.round(Number(input.seconds)), 2), 60);
+  if (input.op === 'smart_edit') {
+    p.tool = SMART_TOOLS[input.tool] ? input.tool : 'auto';
+    // הבריף נכתב לקובץ שה-workflow קורא (לא לשורת הפקודה), ולכן מותרות כמה שורות
+    p.brief = String(input.brief ?? '').replace(/[\u0000-\u0009\u000b-\u001f]/g, ' ').trim().slice(0, 2000);
+    if (Number(input.seconds)) p.seconds = Math.min(Math.max(Math.round(Number(input.seconds)), 5), 180);
+  }
   return p;
 }
 
@@ -66,14 +83,25 @@ export async function startRender(t, job, input, started) {
   if (spec.music && !music) return 'beats_and_cuts needs a song: ask the owner to upload an audio file.';
   const params = cleanParams(input);
   if (input.op === 'motion_graphics' && !params.lines?.length) return 'motion_graphics needs lines (one per scene).';
+  if (spec.smart && !params.brief) return 'smart_edit needs a brief: what the finished video should be.';
 
-  const rec = { id: newId(16), key: t.jobKey(job), op: input.op, params, inputs, music, status: 'queued', at: Date.now() };
+  const rec = { id: newId(16), key: t.jobKey(job), op: input.op, params, inputs, music, status: spec.smart ? 'proposed' : 'queued', at: Date.now() };
   await storage.put(`r:${rec.id}`, rec);
+  if (spec.smart) {
+    started.push(rec.id);
+    return `The smart edit proposal is shown to the owner with an approve button and its cost (a few dollars, at most $${SMART_MAX_USD}). Nothing runs or is charged until they approve; then it takes 10-40 minutes and the video appears in the chat by itself. Say briefly what you planned; do not propose the same edit again.`;
+  }
+  return dispatch(t, rec, 'tsevet-render', started);
+}
+
+// אות ל-GitHub שמתחיל את ה-workflow
+async function dispatch(t, rec, event, started) {
+  const { storage, env } = t;
   try {
     const res = await (env.FETCH || fetch)(`https://api.github.com/repos/${env.GITHUB_REPO}/dispatches`, {
       method: 'POST',
       headers: { authorization: `Bearer ${env.GITHUB_TOKEN}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28', 'user-agent': 'tsevet', 'content-type': 'application/json' },
-      body: JSON.stringify({ event_type: 'tsevet-render', client_payload: { id: rec.id } }),
+      body: JSON.stringify({ event_type: event, client_payload: { id: rec.id } }),
     });
     if (!res.ok) throw new Error(`github ${res.status}`);
   } catch (e) {
@@ -81,7 +109,7 @@ export async function startRender(t, job, input, started) {
     await storage.put(`r:${rec.id}`, { ...rec, status: 'failed', error: 'לא הצלחנו להתחיל את העריכה' });
     return 'Could not start the render (the render service did not answer). Tell the owner to try again later.';
   }
-  started.push(rec.id);
+  if (started) started.push(rec.id);
   return 'Render started. It takes a few minutes and the finished video appears in the chat by itself. Tell the owner briefly what you chose; do not promise an exact time.';
 }
 
@@ -90,7 +118,8 @@ export async function renderView(t, id, origin) {
   const r = await t.storage.get(`r:${id}`);
   if (!r) return null;
   const out = { id: r.id, op: r.op, label: OP_LABELS[r.op] || r.op, status: r.status, at: r.at };
-  if (r.status === 'queued' && Date.now() - r.at > STALE_MS) return { ...out, status: 'failed', error: 'העריכה לקחה יותר מדי זמן. אפשר לבקש שוב.' };
+  if (r.op === 'smart_edit') Object.assign(out, { tool: SMART_TOOLS[r.params?.tool] || SMART_TOOLS.auto, brief: r.params?.brief || '', files: r.inputs.length, maxUsd: SMART_MAX_USD, usd: r.usd || 0 });
+  if (r.status === 'queued' && Date.now() - r.at > (r.op === 'smart_edit' ? SMART_STALE_MS : STALE_MS)) return { ...out, status: 'failed', error: 'העריכה לקחה יותר מדי זמן. אפשר לבקש שוב.' };
   if (r.status === 'failed') out.error = r.error || 'העריכה לא הצליחה. אפשר לבקש שוב.';
   if (r.status === 'done' && r.file) out.file = await fileView(t.storage, origin, await t.storage.get(`f:${r.file}`));
   return out;
@@ -124,15 +153,51 @@ export async function renderInput(storage, id, n) {
   return { key: `files/${f.id}`, type: f.type };
 }
 
-export async function renderDone(storage, id, file) {
+// usd = מה שעלתה עריכה חכמה (Claude Code), נרשם במסך העלויות של עורך הווידאו
+const costOf = (usd) => Math.min(Math.max(Number(usd) || 0, 0), 100);
+
+export async function renderDone(t, id, file, usd) {
+  const { storage } = t;
   const r = await queued(storage, id);
   const rec = await addFile(storage, { id: file.id, kind: 'video', name: `${r.op}.mp4`, type: 'video/mp4', size: file.size, conv: 'render' });
-  await storage.put(`r:${r.id}`, { ...r, status: 'done', file: rec.id, doneAt: Date.now() });
+  await storage.put(`r:${r.id}`, { ...r, status: 'done', file: rec.id, doneAt: Date.now(), usd: costOf(usd) });
+  if (r.op === 'smart_edit') await t.addUsd(costOf(usd), 'editor', { smartEdits: 1, smartUsd: costOf(usd) });
   return { ok: true };
 }
 
-export async function renderFail(storage, id) {
+export async function renderFail(t, id, usd) {
+  const { storage } = t;
   const r = await queued(storage, id);
-  await storage.put(`r:${r.id}`, { ...r, status: 'failed' });
+  await storage.put(`r:${r.id}`, { ...r, status: 'failed', usd: costOf(usd) });
+  if (r.op === 'smart_edit' && costOf(usd)) await t.addUsd(costOf(usd), 'editor', { smartUsd: costOf(usd) });
+  return { ok: true };
+}
+
+// ---------- אישור / ביטול של עריכה חכמה (מהכרטיס בשיחה) ----------
+export async function approveRender(t, id) {
+  const { storage, env } = t;
+  const r = await storage.get(`r:${String(id || '')}`);
+  if (!r) throw fail(404, 'ההצעה לא נמצאה');
+  if (r.status !== 'proposed') throw fail(409, 'ההצעה הזאת כבר טופלה');
+  if (!env.GITHUB_TOKEN || !env.GITHUB_REPO || !env.FILES) throw fail(503, 'עריכת הווידאו עוד לא מחוברת');
+  const dayKey = `smart:${israelDate()}`;
+  const today = (await storage.get(dayKey)) || 0;
+  if (today >= dailySmart(env)) throw fail(429, `הגעת לתקרה של ${dailySmart(env)} עריכות חכמות ליום. אפשר להמשיך מחר.`);
+  await storage.put(dayKey, today + 1);
+  const rec = { ...r, status: 'queued', at: Date.now() };
+  await storage.put(`r:${r.id}`, rec);
+  const msg = await dispatch(t, rec, 'tsevet-smartedit', null);
+  if (msg.startsWith('Could not')) {
+    await storage.put(dayKey, today);
+    throw fail(502, 'לא הצלחנו להתחיל את העריכה. אפשר לנסות שוב.');
+  }
+  return { ok: true };
+}
+
+export async function cancelRender(storage, id) {
+  const r = await storage.get(`r:${String(id || '')}`);
+  if (!r) throw fail(404, 'ההצעה לא נמצאה');
+  if (r.status !== 'proposed') throw fail(409, 'ההצעה הזאת כבר טופלה');
+  await storage.put(`r:${r.id}`, { ...r, status: 'cancelled' });
   return { ok: true };
 }

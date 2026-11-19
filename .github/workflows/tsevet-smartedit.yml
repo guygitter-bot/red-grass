@@ -1,0 +1,102 @@
+name: tsevet smart edit
+
+# עריכה חכמה בשביל הבוט 🎬 באפליקציית "צוות" (tsevet/api/render.js, op = smart_edit).
+# הבעלים אישר בכפתור -> השרת שולח אות עם מזהה העבודה. כאן מתקינים את הסקיל שנבחר
+# (ghost-editor, Claude Shorts, ffmpeg-skill – בגרסה קבועה), ו-Claude Code עורך את הסרטון ומעלה אותו לשיחה.
+# המאגר ציבורי: הבריף והקבצים לא מודפסים, והפלט של Claude נשמר לקובץ ולא ללוג (tsevet/render/smart.py).
+# הטוקן של השרת ניתן רק לשלבי ההורדה וההעלאה – לא לשלב של Claude.
+on:
+  repository_dispatch:
+    types: [tsevet-smartedit]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tsevet-smartedit-${{ github.event.client_payload.id }}
+  cancel-in-progress: false
+
+env:
+  TSEVET_API: https://tsevet-api.guygitter.workers.dev
+  JOB_ID: ${{ github.event.client_payload.id }}
+  # גרסאות קבועות של הסקילים (לעדכן בכוונה, אחרי בדיקה)
+  GHOST_EDITOR_SHA: d71bdb62d8e8280f05d6271bb72610ca83d38d8a
+  SHORTS_SHA: a369fad9d84287edbb8fa3ab515f268e770f683b
+  FFMPEG_SKILL_VERSION: 3.15.1
+
+jobs:
+  edit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Check the request
+        env:
+          TOKEN: ${{ secrets.POINTS_GITHUB_TOKEN }}
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          [ -n "$TOKEN" ] || { echo "::error::Missing secret POINTS_GITHUB_TOKEN"; exit 1; }
+          [ -n "$KEY" ] || { echo "::error::Missing secret ANTHROPIC_API_KEY"; exit 1; }
+          printf '%s' "$JOB_ID" | grep -Eq '^[a-z0-9]{8,32}$' || { echo "::error::Bad id"; exit 1; }
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Download the job
+        id: job
+        env:
+          TSEVET_TOKEN: ${{ secrets.POINTS_GITHUB_TOKEN }}
+        run: python3 tsevet/render/smart.py prepare "$JOB_ID"
+      - name: Editing basics (ffmpeg, fonts, Claude Code)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-noto-core fonts-noto-color-emoji libfribidi0 libharfbuzz0b rsync > /dev/null
+          npm install -g --silent @anthropic-ai/claude-code
+          mkdir -p ~/.claude/skills
+      - name: Install ffmpeg-skill
+        if: steps.job.outputs.tool == 'ffmpeg' || steps.job.outputs.tool == 'auto'
+        run: npx -y "ffmpeg-skill@${FFMPEG_SKILL_VERSION}" --claude
+      - name: Install ghost-editor
+        if: steps.job.outputs.tool == 'ghost-editor' || steps.job.outputs.tool == 'auto'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          d=~/.claude/skills/ghost-editor
+          git clone -q https://github.com/kurbaitaev/ghost-editor "$d"
+          git -C "$d" checkout -q "$GHOST_EDITOR_SHA"
+          pip install --quiet openai-whisper numpy opencv-python pillow google-genai
+          python3 "$d/scripts/library_restore.py" > /dev/null || echo "::warning::sound library not complete"
+          # Gemini (בדיקת B-roll) – רק אם יש מפתח; הקובץ לא נכנס ל-git
+          if [ -n "$GEMINI_API_KEY" ]; then printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY" > "$d/.env"; fi
+          bash "$d/scripts/doctor.sh" | grep -E "MISS|missing" || true
+      - name: Install Claude Shorts
+        if: steps.job.outputs.tool == 'shorts'
+        run: |
+          d=~/.claude/skills/shorts
+          git clone -q https://github.com/AgriciDaniel/claude-shorts.git "$d"
+          git -C "$d" checkout -q "$SHORTS_SHA"
+          (cd "$d" && bash setup.sh > /dev/null)
+      - name: Claude edits the video
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MODEL: ${{ vars.TSEVET_SMART_MODEL || 'claude-opus-5-5' }}
+          MAX_USD: ${{ vars.TSEVET_SMART_MAX_USD || '12' }}
+        working-directory: .smart
+        run: |
+          claude -p "$(cat prompt.txt)" \
+            --model "$MODEL" \
+            --max-turns 250 \
+            --max-budget-usd "$MAX_USD" \
+            --permission-mode acceptEdits \
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash,Task" \
+            --add-dir ~/.claude/skills \
+            --output-format json > claude.json 2>/dev/null || echo "::warning::Claude exited with an error"
+      - name: Upload the result
+        if: always() && steps.job.outcome == 'success'
+        env:
+          TSEVET_TOKEN: ${{ secrets.POINTS_GITHUB_TOKEN }}
+        run: python3 tsevet/render/smart.py finish "$JOB_ID"

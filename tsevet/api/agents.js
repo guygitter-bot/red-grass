@@ -55,6 +55,14 @@ clips call it once per clip with the same preset, so they match.
 - motion_graphics: showreel-style animated Hebrew titles over the clips (or on a tech background with no clips). \
 Each line is one scene: "main title | sub title".
 - beats_and_cuts: cuts between the clips on the beat of a song the owner uploaded (needs a music file).
+- smart_edit: a full edit by Claude Code with professional editing skills – it watches and hears the video. Use it \
+for anything the quick tools can't do: a talking-head recording into a finished reel (best takes, pauses and false \
+starts removed, word-timed captions, zooms, sound effects, B-roll) – tool "ghost-editor"; the best short clips cut \
+out of a long video (podcast, lecture, live) with animated captions – tool "shorts"; precise technical work (trim, \
+join, reframe to 9:16, speed, silence removal, subtitles, loudness, platform export) – tool "ffmpeg"; or "auto". \
+Write the brief in detail from what the owner asked (style, length, captions language – Hebrew by default, what \
+to keep). It costs a few dollars, so it is only a proposal: the owner approves it with a button. The owner can \
+describe what they want without knowing editing terms – you pick the tool.
 You cannot watch a video – you only get its details and one frame from it – so don't describe what happens in it \
 beyond that frame, and ask when the request depends on the content. When the request is clear, start the render \
 right away with sensible defaults and say in one or two short sentences what you chose. If no file was uploaded, \
@@ -365,7 +373,7 @@ const EDIT_VIDEO = {
   input_schema: {
     type: 'object',
     properties: {
-      op: { type: 'string', enum: ['color_grade', 'before_after', 'hand_drawn', 'motion_graphics', 'beats_and_cuts'] },
+      op: { type: 'string', enum: ['color_grade', 'before_after', 'hand_drawn', 'motion_graphics', 'beats_and_cuts', 'smart_edit'] },
       files: { type: 'array', items: { type: 'string' }, description: 'File ids of the clips / photos, in order (may be empty only for motion_graphics)' },
       music: { type: 'string', description: 'File id of an uploaded song (required for beats_and_cuts, optional for motion_graphics)' },
       preset: { type: 'string', enum: ['cinematic', 'warm', 'clean', 'bw'], description: 'Color look (color_grade, before_after)' },
@@ -373,7 +381,9 @@ const EDIT_VIDEO = {
       title: { type: 'string', description: 'Hebrew title that writes itself (hand_drawn)' },
       lines: { type: 'array', items: { type: 'string' }, description: 'One line per scene, "main | sub" (motion_graphics)' },
       format: { type: 'string', enum: ['9:16', '16:9', '1:1'], description: 'Output shape (motion_graphics, beats_and_cuts)' },
-      seconds: { type: 'number', description: 'Target length in seconds (before_after, hand_drawn, beats_and_cuts)' },
+      seconds: { type: 'number', description: 'Target length in seconds (before_after, hand_drawn, beats_and_cuts, smart_edit)' },
+      tool: { type: 'string', enum: ['auto', 'ghost-editor', 'shorts', 'ffmpeg'], description: 'smart_edit: which skill (auto = the editor picks)' },
+      brief: { type: 'string', description: 'smart_edit: the full brief in the owner\'s words – what the finished video should be, style, length, captions language, what to keep or cut' },
     },
     required: ['op', 'files'],
   },
