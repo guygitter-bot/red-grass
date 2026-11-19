@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Nav from './components/Nav';
 import SongPlayer from './components/SongPlayer';
 import { KITS, kitById } from './data/kits';
+import { songsForKit } from './data/songs';
 import { safeVoice } from './lib/kit';
 import { getSamplesStatus, onSamplesStatus, preloadSamples, setMasterVolume } from './lib/sounds';
 import { addSong, loadActiveId, loadKits, loadSongs, loadVolumes, saveActiveId, saveKits, saveSongs, saveVolumes } from './lib/storage';
@@ -28,6 +29,9 @@ export default function App() {
 
   const active = custom.find((k) => k.id === activeId) || (kitById(activeId) && resolveFamous(kitById(activeId))) || resolveFamous(KITS[0]);
 
+  // שירי הסט הפעיל: של הסט המפורסם עצמו, או של הסט המפורסם שממנו נבנה סט אישי
+  const kitSongs = songsForKit(active.custom ? active.baseId : active.id);
+
   // טעינת הצלילים האמיתיים ברקע כבר בפתיחה (אפשר לנגן מיד – עד שהם מוכנים עובד צליל גיבוי)
   useEffect(() => {
     const off = onSamplesStatus(setSamples);
@@ -45,6 +49,14 @@ export default function App() {
   const pick = (id) => {
     setActiveId(id);
     saveActiveId(id);
+    setScreen('play');
+  };
+
+  // שיר מרשימת הסט: בוחר את הסט, טוען את השיר (נכנס לשירים האחרונים) ועובר לנגינה
+  const pickWithSong = (kitId, videoId) => {
+    setActiveId(kitId);
+    saveActiveId(kitId);
+    loadSong(videoId);
     setScreen('play');
   };
 
@@ -112,9 +124,9 @@ export default function App() {
           />
         )}
         {screen === 'play' && (
-          <PlayScreen kit={active} drumVol={vol.drums} onDrumVol={(v) => setVol((o) => ({ ...o, drums: v }))} onPickKit={() => setScreen('kits')} />
+          <PlayScreen kit={active} drumVol={vol.drums} onDrumVol={(v) => setVol((o) => ({ ...o, drums: v }))} onPickKit={() => setScreen('kits')} songs={kitSongs} currentSong={songId} onLoadSong={loadSong} />
         )}
-        {screen === 'kits' && <KitsScreen activeId={activeId} custom={custom} onPick={pick} onBuild={build} onDelete={remove} />}
+        {screen === 'kits' && <KitsScreen activeId={activeId} custom={custom} onPick={pick} onPickSong={pickWithSong} onBuild={build} onDelete={remove} />}
         {screen === 'builder' && <BuilderScreen key={builderKey} base={builderBase} onSave={saveCustom} />}
         {screen === 'song' && <SongScreen current={songId} recent={songs} onLoad={loadSong} onGoPlay={() => setScreen('play')} />}
       </main>

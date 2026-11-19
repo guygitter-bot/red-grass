@@ -155,6 +155,8 @@ export function safeKit(raw) {
     name: typeof r.name === 'string' && r.name.trim() ? r.name.trim().slice(0, 40) : 'הסט שלי',
     desc: typeof r.desc === 'string' ? r.desc.slice(0, 200) : '',
     custom: true,
+    // מזהה הסט המפורסם שממנו נבנה (חסר בסטים ישנים)
+    baseId: typeof r.baseId === 'string' ? r.baseId.slice(0, 40) : '',
     options,
     baseVoice,
     pieces: buildPieces(options),
