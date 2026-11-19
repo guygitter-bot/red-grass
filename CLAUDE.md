@@ -220,6 +220,7 @@
 - הצלילים מסונתזים ב-Web Audio ב-`web/src/lib/sounds.js` (בלי קובצי דגימות); לכל סט `voice` משלו. ה-CSP של יוטיוב ב-`web/public/_headers` – שירות חיצוני נוסף מחייב עדכון שם.
 - `drums/web` → https://matofef.pages.dev (בלי שרת). עלייה: `matofef.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd drums/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- **תמיד למזג לבד** את ה-PR (אחרי שהבדיקות ירוקות), לבדוק שהעלייה (`matofef.yml` על main) הצליחה, ולדווח עם הקישור.
 
 ### חנוכה לילדים (`hanukkah/`)
 - תיאור: `hanukkah/README.md`. אפליקציה בעברית לילדים בני 9-11: סיפור החג, מנהגים, חידון, 5 משחקים ותוספות. בלי שרת, ההתקדמות ב-localStorage.
