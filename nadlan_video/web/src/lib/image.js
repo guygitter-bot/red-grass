@@ -51,6 +51,9 @@ export async function fileToImage(file) {
   }
 }
 
+// עותק קטן יותר של תמונה שמורה, לשליחה לתכנון (הבמאי לא צריך 20 תמונות בגודל מלא)
+export const downscale = (im, max = 1280, quality = 0.82) => shrink(dataUrl(im), max, quality);
+
 // תמונה ממוזערת לרשימות (מחרוזת data:)
 export async function makeThumb(im) {
   return dataUrl(await shrink(dataUrl(im), THUMB_SIDE, 0.8));

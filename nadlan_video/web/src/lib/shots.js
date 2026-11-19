@@ -1,6 +1,6 @@
 // מצב של שוט, וההפקה שלו: פריים פתיחה -> סרטון (פעולה ארוכה אצל Google) -> הקובץ נשמר במכשיר.
 import { makeStill, startClip, clipStatus, clipFile } from './api';
-import { getMedia, putMedia } from './store';
+import { getMedia, putMedia, shotSources, imageKind } from './store';
 
 export const POLL_MS = 10_000;
 export const MAX_WAIT_MS = 15 * 60 * 1000;
@@ -32,9 +32,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // פריים הפתיחה של השוט. patch(שינויים) שומר את השוט
 export async function produceStill(project, shot, patch) {
-  const source = await getMedia(`${project.id}:${shot.source}`);
+  const keys = shotSources(shot);
+  const [source, ...extras] = await Promise.all(keys.slice(0, 3).map((k) => getMedia(`${project.id}:${k}`)));
   if (!source) throw new Error('התמונה המקורית לא נמצאת במכשיר הזה.');
-  const image = await makeStill(source, withExtra(shot.still, shot.extra), project.brief, shot.source);
+  const image = await makeStill(source, withExtra(shot.still, shot.extra), project.brief, imageKind(project, keys[0]), extras.filter(Boolean));
   await putMedia(`${shot.id}:still`, image);
   await patch({ hasStill: true, error: '', detail: '' });
 }
@@ -43,7 +44,7 @@ export async function produceStill(project, shot, patch) {
 export async function produceClip(project, shot, patch, alive = () => true) {
   let { op, opAt } = shot;
   if (!op) {
-    const frame = await getMedia(shot.still ? `${shot.id}:still` : `${project.id}:${shot.source}`);
+    const frame = await getMedia(shot.still ? `${shot.id}:still` : `${project.id}:${shotSources(shot)[0]}`);
     if (!frame) throw new Error('הפריים לא נמצא במכשיר הזה.');
     const started = await startClip(frame, withExtra(shot.motion, shot.extra), project.brief.aspect, project.quality, project.brief.style);
     op = started.op;

@@ -1,6 +1,6 @@
-// הבמאי: Claude מסתכל על הצילום ו/או השרטוט וכותב רשימת שוטים לסרטון תדמית.
+// הבמאי: Claude מסתכל על התמונות (עד 20: צילומים, הדמיות ושרטוטים) וכותב רשימת שוטים לסרטון תדמית.
 // לכל שוט: כותרת והסבר בעברית + הוראה באנגלית לפריים הפתיחה (מחולל התמונות) + הוראה באנגלית לתנועת המצלמה (מחולל הווידאו).
-import { KINDS, LOOKS, STYLES, SHOTS } from './brief.js';
+import { KINDS, LOOKS, STYLES, SHOTS, MAX_SHOTS, shotsFor } from './brief.js';
 
 export const MODEL = 'claude-opus-5-5';
 
@@ -14,20 +14,24 @@ export const PLAN_TOOL = {
       summary: { type: 'string', description: 'Hebrew, 1-2 sentences: what you see in the material (building type, floors, style, or the apartment layout) and the idea of the film' },
       shots: {
         type: 'array',
-        description: `Exactly ${SHOTS} shots, in the order they appear in the film`,
+        description: `Exactly the number of shots the system prompt asks for (${SHOTS} to ${MAX_SHOTS}), in the order they appear in the film`,
         items: {
           type: 'object',
           properties: {
             title: { type: 'string', description: 'Hebrew, 2-4 words' },
             why: { type: 'string', description: 'Hebrew, one sentence: what the viewer sees and feels in this shot' },
-            source: { type: 'string', enum: ['photo', 'plan'], description: 'Which supplied image the opening frame is built from' },
+            sources: {
+              type: 'array',
+              items: { type: 'integer' },
+              description: 'Numbers of the supplied images (IMAGE 1, IMAGE 2...) this opening frame is built from: the first is the main source, at most two more may follow as extra references of the same space. Use the image that really shows this space or angle.',
+            },
             still: {
               type: 'string',
-              description: 'English instruction for an image model that receives the source image and must return the photorealistic opening frame of this shot. Empty string ONLY when the source photo itself is already a finished, photorealistic, well-composed frame that should be used untouched.',
+              description: 'English instruction for an image model that receives the source image and must return the photorealistic opening frame of this shot. Empty string ONLY when the main source is a PHOTO that is already a finished, photorealistic, well-composed frame that should be used untouched.',
             },
             motion: { type: 'string', description: 'English prompt for an image-to-video model: one continuous camera move starting from the opening frame, plus the living details in the scene and the ambient sound' },
           },
-          required: ['title', 'why', 'source', 'still', 'motion'],
+          required: ['title', 'why', 'sources', 'still', 'motion'],
           additionalProperties: false,
         },
       },
@@ -37,17 +41,32 @@ export const PLAN_TOOL = {
   },
 };
 
-export function planSystem(brief, has) {
-  const material = [has.photo && 'a PHOTO (a real photograph or an existing render of the property)', has.plan && 'a PLAN (an architectural drawing: floor plan, elevation, section or sketch)'].filter(Boolean).join(' and ');
+// kinds: סוג כל תמונה לפי הסדר – 'photo' (צילום / הדמיה) או 'plan' (שרטוט)
+export function planSystem(brief, kinds) {
+  const photos = kinds.filter((k) => k !== 'plan').length;
+  const plans = kinds.length - photos;
+  const material = [
+    photos && `${photos === 1 ? 'a PHOTO' : `${photos} PHOTOS`} (real photographs or existing renders of the property)`,
+    plans && `${plans === 1 ? 'a PLAN' : `${plans} PLANS`} (architectural drawings: floor plan, elevation, section or sketch)`,
+  ].filter(Boolean).join(' and ');
+  const count = shotsFor(kinds.length);
   const style = STYLES[brief.style] || STYLES.classic;
   return `You are the director of high-end real-estate promotional films, the kind top developers in Israel use to launch \
 a luxury project: bold, cinematic camera work, perfect light, architecture shown truthfully and at its best. A film that \
 makes people stop scrolling, never a slideshow of slow zooms.
 
-A real-estate marketer sends you ${material} of ${KINDS[brief.kind]}. You plan a film of exactly ${SHOTS} shots, 8 seconds \
-each. For every shot an image model first produces a photorealistic opening frame from one of the supplied images, and an \
+A real-estate marketer sends you ${material} of ${KINDS[brief.kind]}${kinds.length > 1 ? `, numbered IMAGE 1 to IMAGE ${kinds.length}` : ''}. You plan a film of exactly ${count} shots, 8 seconds \
+each. For every shot an image model first produces a photorealistic opening frame from the supplied images, and an \
 image-to-video model then animates that frame with one camera move.
-
+${kinds.length > 1 ? `
+You have several images, so use them: build each shot from the image that really shows that building side, room or view, \
+and give every image that matters a shot (when there are more images than shots, choose the strongest, most different \
+ones). All images show the same property: never mix details between different buildings or rooms. In "sources" list the \
+main image first, and at most two more of the same space as extra references.
+` : ''}${count > SHOTS ? `
+The style below has four beats. With ${count} shots keep its first beat first and its last beat last, and spread the \
+middle beats over the extra shots, each one clearly different in subject and camera.
+` : ''}
 The style of this film, chosen by the marketer: ${style.arc}.
 Camera language for this style: ${style.camera}
 Every shot must be clearly different from the others in camera position, height and direction of travel. All shots share \
@@ -66,7 +85,7 @@ read from the drawing, surroundings and the light.
 a camera standing inside it at eye level: which walls, windows, doors and openings are where (read them from the plan), \
 contemporary high-end Israeli interior, real furniture at correct scale, the light. Say explicitly that it must be a \
 photograph-like interior view, not a top-down plan.
-- From a PHOTO: for the hero shot prefer the photo itself, cleaned and relit (remove clutter, cranes, wires, signs and \
+- From a PHOTO: when the main source is a photo that is already a good frame, prefer the photo itself, cleaned and relit (remove clutter, cranes, wires, signs and \
 people; set the light), same camera angle. For other shots you may ask for a new camera position of the same building \
 (closer on the entrance, an upper balcony, higher three-quarter aerial) while keeping its design identical.
 - Always end with: photorealistic, shot on a full-frame cinema camera, natural colours, no text, no logos, no watermark, \
@@ -98,19 +117,22 @@ export function aiMessage(status, text) {
   return 'הבמאי לא הצליח לענות. נסו שוב.';
 }
 
-// התשובה של Claude -> { summary, shots } נקי, או null. שוט שמבוסס על תמונה שלא נשלחה עובר לתמונה שכן נשלחה
-export function readPlan(input, has) {
-  const only = has.photo ? 'photo' : 'plan';
+// התשובה של Claude -> { summary, shots } נקי, או null. kinds: סוג כל תמונה שנשלחה לפי הסדר.
+// לכל שוט: sources = מספרי התמונות (מ-0) שהוא בנוי מהן, הראשונה היא הראשית. מספר שלא קיים נזרק; בלי כלום – התמונה הראשונה
+export function readPlan(input, kinds) {
+  const n = kinds.length;
+  const fallback = Math.max(0, kinds.findIndex((k) => k !== 'plan'));
   const shots = (Array.isArray(input?.shots) ? input.shots : [])
     .map((s) => {
-      const source = (s?.source === 'plan' && has.plan) || (s?.source === 'photo' && has.photo) ? s.source : only;
+      const picked = [...new Set((Array.isArray(s?.sources) ? s.sources : []).map((x) => Number(x) - 1).filter((i) => Number.isInteger(i) && i >= 0 && i < n))].slice(0, 3);
+      const sources = picked.length ? picked : [fallback];
       let still = clean(s?.still, 2500);
       // שרטוט לעולם לא הופך לסרטון כמו שהוא – חייב פריים פוטוריאליסטי
-      if (!still && source === 'plan') still = 'Turn this architectural drawing into a photorealistic architectural visualisation of exactly this design, eye-level view, natural light, no text.';
-      return { title: clean(s?.title, 60), why: clean(s?.why, 300), source, still, motion: clean(s?.motion, 2500) };
+      if (!still && kinds[sources[0]] === 'plan') still = 'Turn this architectural drawing into a photorealistic architectural visualisation of exactly this design, eye-level view, natural light, no text.';
+      return { title: clean(s?.title, 60), why: clean(s?.why, 300), sources, still, motion: clean(s?.motion, 2500) };
     })
     .filter((s) => s.title && s.motion)
-    .slice(0, SHOTS);
+    .slice(0, shotsFor(n));
   if (!shots.length) return null;
   return { summary: clean(input?.summary, 500), shots };
 }
@@ -146,24 +168,23 @@ async function ask(env, body) {
   try { return JSON.parse(raw); } catch { throw new Error('הבמאי לא הצליח לענות. נסו שוב.'); }
 }
 
-// brief: מ-cleanBrief. images: { photo?, plan? }. מחזיר { summary, shots } או זורק Error בעברית
+// brief: מ-cleanBrief. images: [{ media_type, data, kind: 'photo' | 'plan' }] (עד 20, לפי הסדר). מחזיר { summary, shots } או זורק Error בעברית
 export async function planFilm(env, brief, images) {
-  const has = { photo: Boolean(images.photo), plan: Boolean(images.plan) };
+  const kinds = images.map((im) => (im.kind === 'plan' ? 'plan' : 'photo'));
   const content = [];
-  if (has.photo) content.push({ type: 'text', text: 'PHOTO:' }, imagePart(images.photo));
-  if (has.plan) content.push({ type: 'text', text: 'PLAN:' }, imagePart(images.plan));
+  images.forEach((im, i) => content.push({ type: 'text', text: `IMAGE ${i + 1} (${kinds[i] === 'plan' ? 'PLAN' : 'PHOTO'}):` }, imagePart(im)));
   content.push({ type: 'text', text: `${brief.name ? `Project name: ${brief.name}\n` : ''}${brief.note ? `Note from the marketer (may be in Hebrew): ${brief.note}\n` : ''}Plan the film.` });
   // בלי tool_choice כפוי (המודל לא תומך בזה): אם Claude ענה בטקסט בלי לקרוא לכלי – מבקשים פעם אחת
   const messages = [{ role: 'user', content }];
   let use = null;
   for (let step = 0; step < 2 && !use; step++) {
-    const data = await ask(env, { max_tokens: 6000, system: planSystem(brief, has), tools: [PLAN_TOOL], messages });
+    const data = await ask(env, { max_tokens: 12000, system: planSystem(brief, kinds), tools: [PLAN_TOOL], messages });
     const got = data.content || [];
     use = got.find((b) => b.type === 'tool_use' && b.name === PLAN_TOOL.name) || null;
     if (use || data.stop_reason !== 'end_turn' || !got.length) break;
     messages.push({ role: 'assistant', content: got }, { role: 'user', content: `Now call ${PLAN_TOOL.name} with your final answer.` });
   }
-  const plan = readPlan(use?.input, has);
+  const plan = readPlan(use?.input, kinds);
   if (!plan) throw new Error('הבמאי לא הצליח לבנות רשימת שוטים. נסו שוב, או העלו תמונה ברורה יותר.');
   return plan;
 }

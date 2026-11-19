@@ -49,7 +49,11 @@ export const STYLES = {
 
 export const ASPECTS = ['16:9', '9:16'];
 export const QUALITIES = ['max', 'fast'];
-export const SHOTS = 4;
+export const SHOTS = 4; // המינימום
+// עד 20 תמונות לסרטון; ככל שיש יותר תמונות יש יותר שוטים (שוט לכל תמונה, עד 8) – כל שוט עולה כסף
+export const MAX_IMAGES = 20;
+export const MAX_SHOTS = 8;
+export const shotsFor = (images) => Math.min(MAX_SHOTS, Math.max(SHOTS, Number(images) || 0));
 
 const str = (s, max) => (typeof s === 'string' ? s.replace(/\s+/g, ' ').trim().slice(0, max) : '');
 const pick = (v, all, def) => (all.includes(v) ? v : def);
