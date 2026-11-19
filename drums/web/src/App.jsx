@@ -1,0 +1,108 @@
+import { useEffect, useState } from 'react';
+import Nav from './components/Nav';
+import SongPlayer from './components/SongPlayer';
+import { KITS, kitById } from './data/kits';
+import { safeVoice } from './lib/kit';
+import { setMasterVolume } from './lib/sounds';
+import { addSong, loadActiveId, loadKits, loadSongs, loadVolumes, saveActiveId, saveKits, saveSongs, saveVolumes } from './lib/storage';
+import BuilderScreen from './screens/BuilderScreen';
+import KitsScreen from './screens/KitsScreen';
+import PlayScreen from './screens/PlayScreen';
+import SongScreen from './screens/SongScreen';
+
+// סט מפורסם ← צורה אחידה עם הקול המלא
+function resolveFamous(k) {
+  return { ...k, voice: safeVoice(k.voice) };
+}
+
+export default function App() {
+  const [screen, setScreen] = useState('play');
+  const [custom, setCustom] = useState(loadKits);
+  const [activeId, setActiveId] = useState(() => loadActiveId() || KITS[0].id);
+  const [vol, setVol] = useState(loadVolumes);
+  const [songs, setSongs] = useState(loadSongs);
+  const [songId, setSongId] = useState(null);
+  const [builderBase, setBuilderBase] = useState(null);
+  const [builderKey, setBuilderKey] = useState(0);
+
+  const active = custom.find((k) => k.id === activeId) || (kitById(activeId) && resolveFamous(kitById(activeId))) || resolveFamous(KITS[0]);
+
+  useEffect(() => {
+    setMasterVolume(vol.drums);
+    saveVolumes(vol);
+  }, [vol]);
+
+  const pick = (id) => {
+    setActiveId(id);
+    saveActiveId(id);
+    setScreen('play');
+  };
+
+  const build = (base) => {
+    setBuilderBase(base);
+    setBuilderKey((k) => k + 1);
+    setScreen('builder');
+  };
+
+  const saveCustom = (kit) => {
+    const next = custom.some((k) => k.id === kit.id) ? custom.map((k) => (k.id === kit.id ? kit : k)) : [...custom, kit];
+    setCustom(next);
+    saveKits(next);
+    pick(kit.id);
+  };
+
+  const remove = (kit) => {
+    if (!window.confirm(`למחוק את "${kit.name}"?`)) return;
+    const next = custom.filter((k) => k.id !== kit.id);
+    setCustom(next);
+    saveKits(next);
+    if (activeId === kit.id) {
+      setActiveId(KITS[0].id);
+      saveActiveId(KITS[0].id);
+    }
+  };
+
+  const loadSong = (id) => {
+    setSongId(id);
+    setSongs((s) => {
+      const n = addSong(s, id);
+      saveSongs(n);
+      return n;
+    });
+  };
+
+  const setTitle = (title) => {
+    if (!songId) return;
+    setSongs((s) => {
+      const n = addSong(s, songId, title);
+      saveSongs(n);
+      return n;
+    });
+  };
+
+  return (
+    <div className="h-dvh flex flex-col-reverse lg:flex-row short:flex-row bg-page text-ink">
+      <Nav screen={screen} onGo={setScreen} />
+      <main className="flex-1 min-w-0 min-h-0 flex flex-col">
+        {songId && (
+          <SongPlayer
+            videoId={songId}
+            hidden={screen !== 'play' && screen !== 'song'}
+            songVol={vol.song}
+            drumVol={vol.drums}
+            onSongVol={(v) => setVol((o) => ({ ...o, song: v }))}
+            onDrumVol={(v) => setVol((o) => ({ ...o, drums: v }))}
+            onTitle={setTitle}
+            onClose={() => setSongId(null)}
+          />
+        )}
+        {screen === 'play' && (
+          <PlayScreen kit={active} drumVol={vol.drums} onDrumVol={(v) => setVol((o) => ({ ...o, drums: v }))} onPickKit={() => setScreen('kits')} />
+        )}
+        {screen === 'kits' && <KitsScreen activeId={activeId} custom={custom} onPick={pick} onBuild={build} onDelete={remove} />}
+        {screen === 'builder' && <BuilderScreen key={builderKey} base={builderBase} onSave={saveCustom} />}
+        {screen === 'song' && <SongScreen current={songId} recent={songs} onLoad={loadSong} onGoPlay={() => setScreen('play')} />}
+      </main>
+    </div>
+  );
+}

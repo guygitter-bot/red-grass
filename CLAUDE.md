@@ -215,6 +215,13 @@
 - **תמיד למזג לבד** את ה-PR (אחרי שהבדיקות ירוקות) ולעקוב שהעלייה (`music-teacher.yml` על main) הצליחה – ולדווח עם הקישור.
 - המורה מודול נפרד (`src/three/teacher.js`) כדי שאפשר יהיה להחליף בדמות קנויה. זיהוי צליל בטיונר: `src/lib/pitch.js` (פונקציה טהורה + בדיקות).
 
+### מתופף – מערכת תופים בטלפון (`drums/`)
+- תיאור: `drums/README.md`. מערכת תופים על המסך: סטים בהשראת מתופפים מפורסמים (`web/src/data/kits.js`), בניית סט משלך (נשמר ב-localStorage, `safeKit`), ונגינה יחד עם שיר מיוטיוב (IFrame API).
+- הצלילים מסונתזים ב-Web Audio ב-`web/src/lib/sounds.js` (בלי קובצי דגימות); לכל סט `voice` משלו. ה-CSP של יוטיוב ב-`web/public/_headers` – שירות חיצוני נוסף מחייב עדכון שם.
+- `drums/web` → https://matofef.pages.dev (בלי שרת). עלייה: `matofef.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd drums/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- **תמיד למזג לבד** את ה-PR (אחרי שהבדיקות ירוקות), לבדוק שהעלייה (`matofef.yml` על main) הצליחה, ולדווח עם הקישור.
+
 ### חנוכה לילדים (`hanukkah/`)
 - תיאור: `hanukkah/README.md`. אפליקציה בעברית לילדים בני 9-11: סיפור החג, מנהגים, חידון, 5 משחקים ותוספות. בלי שרת, ההתקדמות ב-localStorage.
 - `hanukkah/web` → https://chanuka-yeladim.pages.dev. עלייה: `hanukkah.yml` אחרי מיזוג ל-main (בודק ובונה גם ב-PR).

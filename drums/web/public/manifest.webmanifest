@@ -1,0 +1,15 @@
+{
+  "name": "מתופף",
+  "short_name": "מתופף",
+  "description": "מערכת תופים בטלפון – סטים של מתופפים מפורסמים, בניית סט ונגינה עם שיר מיוטיוב",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#17151c",
+  "theme_color": "#c2410c",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
