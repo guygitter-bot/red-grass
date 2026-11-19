@@ -55,7 +55,7 @@ let frame = { media_type: 'image/png', data: testPng().toString('base64') };
 // הבמאי (Claude): רשימת שוטים אמיתית מאותו שרטוט
 if (env.ANTHROPIC_API_KEY) {
   try {
-    const plan = await planFilm(env, brief, { plan: frame });
+    const plan = await planFilm(env, brief, [{ ...frame, kind: 'plan' }, { ...frame, kind: 'photo' }]);
     console.log(`plan: ok, ${plan.shots.length} shots, stills: ${plan.shots.filter((s) => s.still).length}`);
     if (plan.shots.length < 2) failed = true;
   } catch (e) {

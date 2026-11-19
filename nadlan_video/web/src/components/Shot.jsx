@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getMedia } from '../lib/store';
+import { getMedia, shotSources, imageKind } from '../lib/store';
 import { dataUrl, downloadBlob, shareBlob, fileName, videoExt } from '../lib/image';
 import { shotState, waitText } from '../lib/shots';
 
@@ -10,6 +10,7 @@ export default function Shot({ index, shot, project, busy, onStill, onClip, onRe
   const [frame, setFrame] = useState('');
   const [clip, setClip] = useState(null); // { url, blob }
   const state = shotState(shot, busy);
+  const mainKey = shotSources(shot)[0]; // התמונה הראשית של השוט
   const [now, setNow] = useState(Date.now());
 
   // שעון להמתנה לסרטון
@@ -27,11 +28,11 @@ export default function Shot({ index, shot, project, busy, onStill, onClip, onRe
   // הפריים שמוצג: זה שנוצר לשוט, או התמונה המקורית
   useEffect(() => {
     let on = true;
-    getMedia(shot.hasStill ? `${shot.id}:still` : `${project.id}:${shot.source}`).then((im) => { if (on) setFrame(dataUrl(im)); }).catch(() => {});
+    getMedia(shot.hasStill ? `${shot.id}:still` : `${project.id}:${mainKey}`).then((im) => { if (on) setFrame(dataUrl(im)); }).catch(() => {});
     return () => {
       on = false;
     };
-  }, [shot.id, shot.hasStill, shot.source, project.id]);
+  }, [shot.id, shot.hasStill, mainKey, project.id]);
 
   useEffect(() => {
     let url = '';
@@ -65,7 +66,7 @@ export default function Shot({ index, shot, project, busy, onStill, onClip, onRe
           <div className={box} />
         )}
         {(state === 'needs-still' || state === 'making-still') && (
-          <span className="absolute start-2 top-2 rounded-full bg-black/70 px-3 py-1 text-xs text-white">התמונה המקורית ({SOURCE[shot.source]})</span>
+          <span className="absolute start-2 top-2 rounded-full bg-black/70 px-3 py-1 text-xs text-white">התמונה המקורית ({SOURCE[imageKind(project, mainKey)]})</span>
         )}
       </div>
 

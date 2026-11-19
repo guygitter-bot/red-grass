@@ -73,9 +73,11 @@ export async function login(p) {
 }
 
 // הבמאי: רשימת השוטים לסרטון
-export const planFilm = (brief, photo, plan) => api('/plan', { brief, photo, plan });
+// images: [{ media_type, data, kind }] לפי הסדר; השוטים שחוזרים מצביעים על מקומות ברשימה הזאת
+export const planFilm = (brief, images) => api('/plan', { brief, images });
 // פריים הפתיחה של שוט
-export const makeStill = (image, instruction, brief, source) => api('/still', { image, instruction, brief, source }).then((d) => d.image);
+// image = התמונה הראשית של השוט; extras = עד שתי תמונות נוספות של אותו נכס (הפניה)
+export const makeStill = (image, instruction, brief, source, extras = []) => api('/still', { image, extras, instruction, brief, source }).then((d) => d.image);
 // מתחיל יצירת סרטון -> { op, resolution }
 export const startClip = (image, motion, aspect, quality, style) => api('/clip', { image, motion, aspect, quality, style });
 export const clipStatus = (op) => api('/clip/status', { op });

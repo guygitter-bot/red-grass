@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { blackAt, layerAlpha, outroAlpha, coverRect, pickMime, wrapLines, frameSize, FADE, OUTRO } from './film';
 import { fitSize, fileName, videoExt, fromDataUrl, dataUrl } from './image';
-import { safeProject, safeShot } from './store';
+import { safeProject, safeShot, projectImages, imageKind, shotSources } from './store';
 import { shotState, readyCount, withExtra, waitText } from './shots';
 
 describe('הסרט המלא', () => {
@@ -61,6 +61,26 @@ describe('תמונות וקבצים', () => {
     expect(videoExt('video/webm;codecs=vp9')).toBe('webm');
     expect(videoExt('video/mp4')).toBe('mp4');
     expect(fromDataUrl(dataUrl({ media_type: 'image/png', data: 'QUJD' }))).toEqual({ media_type: 'image/png', data: 'QUJD' });
+  });
+});
+
+describe('כמה תמונות', () => {
+  it('פרויקט ישן (צילום ושרטוט) מקבל רשימת תמונות מ-has, ושוט ישן את התמונה היחידה שלו', () => {
+    const old = safeProject({ id: 'a', has: { photo: true, plan: true }, shots: [{ id: 's', source: 'plan' }] });
+    expect(old.images).toEqual([{ key: 'photo', kind: 'photo' }, { key: 'plan', kind: 'plan' }]);
+    expect(imageKind(old, 'plan')).toBe('plan');
+    expect(imageKind(old, 'photo')).toBe('photo');
+    expect(shotSources(old.shots[0])).toEqual(['plan']);
+    expect(shotSources(safeShot({}))).toEqual(['photo']);
+    expect(safeProject({}).images).toEqual([]);
+  });
+
+  it('פרויקט חדש: התמונות שלו כמו ששמרנו, וסוג לא מוכר הוא צילום', () => {
+    const p = safeProject({ id: 'b', images: [{ key: 'i1', kind: 'plan' }, { key: 'i2', kind: 'x' }, { nokey: true }] });
+    expect(p.images).toEqual([{ key: 'i1', kind: 'plan' }, { key: 'i2', kind: 'photo' }]);
+    expect(projectImages({ images: [] })).toEqual([]);
+    expect(shotSources(safeShot({ sources: ['i2', 'i1'], source: 'photo' }))).toEqual(['i2', 'i1']);
+    expect(imageKind(p, 'i2')).toBe('photo');
   });
 });
 

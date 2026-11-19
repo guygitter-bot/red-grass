@@ -1,20 +1,22 @@
 // השרת של "סרטון נדל"ן" (Cloudflare Worker + Durable Object קטן לסיסמה ולתקרה היומית; התמונות והסרטונים נשמרים רק במכשיר):
 //   GET  /health                                   -> { ok, director, google, hasPassword }
 //   POST /login       { password }                 -> { ok, created? }  (הכניסה הראשונה קובעת את הסיסמה)
-//   POST /plan        { brief, photo?, plan? }     -> { summary, shots: [{ title, why, source, still, motion }] }   (Claude)
-//   POST /still       { image, instruction, brief, source } -> { image: {media_type, data}, model }                  (Google)
+//   POST /plan        { brief, images: [{ media_type, data, kind }] (עד 20) } -> { summary, shots: [{ title, why, sources, still, motion }] }   (Claude)
+//                     (גם בפורמט הישן: photo? ו-plan?)
+//   POST /still       { image, extras?, instruction, brief, source } -> { image: {media_type, data}, model }          (Google; extras = עד 2 תמונות הפניה)
 //   POST /clip        { image, motion, aspect, quality, style } -> { op }   (מתחיל עבודה ברקע; op = מזהה העבודה)        (Google Omni)
 //   POST /clip/status { op }                       -> { done, resolution?, error?, detail? }
 //   POST /clip/file   { op }                       -> הקובץ (video/mp4)
 // כל הפעולות (חוץ מ-/health ו-/login) דורשות authorization: Bearer <הסיסמה, מקודדת ב-encodeURIComponent>.
 // בשגיאה: { error (עברית), detail? (מה ש-Google / Anthropic ענו, לאבחון), code? }
-import { cleanBrief, ASPECTS, QUALITIES, STYLES } from './brief.js';
+import { cleanBrief, ASPECTS, QUALITIES, STYLES, MAX_IMAGES } from './brief.js';
 import { planFilm } from './director.js';
 import { makeStill } from './still.js';
 
 export { Studio } from './studio.js';
 
-const MAX_BODY = 15 * 1024 * 1024; // עד שתי תמונות (צילום + שרטוט)
+const MAX_BODY = 15 * 1024 * 1024; // פריים + עד שתי תמונות הפניה
+const MAX_PLAN_BODY = 40 * 1024 * 1024; // עד 20 תמונות לתכנון
 const MAX_IMAGE_B64 = 7 * 1024 * 1024;
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 // מזהה עבודה של סרטון (נוצר כאן, אקראי)
@@ -80,7 +82,7 @@ export default {
     if (request.method !== 'POST' || !POSTS.includes(pathname)) return reply(404, { error: 'לא נמצא' });
 
     const raw = await request.text();
-    if (raw.length > MAX_BODY) return reply(413, { error: 'התמונה גדולה מדי' });
+    if (raw.length > (pathname === '/plan' ? MAX_PLAN_BODY : MAX_BODY)) return reply(413, { error: 'התמונות גדולות מדי' });
     let body;
     try { body = JSON.parse(raw); } catch { return reply(400, { error: 'בקשה לא תקינה' }); }
 
@@ -116,8 +118,15 @@ export default {
       }
 
       if (pathname === '/plan') {
-        const images = { photo: cleanImage(body?.photo), plan: cleanImage(body?.plan) };
-        if (!images.photo && !images.plan) return reply(400, { error: 'צריך להעלות צילום או שרטוט' });
+        // images לפי הסדר (המספרים שהבמאי מחזיר הם מקומות ברשימה הזאת), ולכן תמונה לא תקינה פוסלת את הבקשה ולא נזרקת בשקט
+        const given = Array.isArray(body?.images) ? body.images : [{ ...body?.photo, kind: 'photo' }, { ...body?.plan, kind: 'plan' }].filter((x) => x.data);
+        if (given.length > MAX_IMAGES) return reply(400, { error: `אפשר עד ${MAX_IMAGES} תמונות` });
+        const images = given.map((im) => {
+          const ok = cleanImage(im);
+          return ok && { ...ok, kind: im.kind === 'plan' ? 'plan' : 'photo' };
+        });
+        if (!images.length) return reply(400, { error: 'צריך להעלות לפחות תמונה אחת' });
+        if (images.some((im) => !im)) return reply(400, { error: 'אחת התמונות לא תקינה. נסו להעלות אותה שוב.' });
         if (!env.ANTHROPIC_API_KEY) return noKey('הבמאי');
         return await metered('plans', () => planFilm(env, cleanBrief(body.brief), images));
       }
@@ -129,8 +138,9 @@ export default {
       if (pathname === '/still') {
         const instruction = cleanText(body.instruction);
         if (!instruction) return reply(400, { error: 'חסרה הוראה לפריים' });
+        const extras = (Array.isArray(body.extras) ? body.extras : []).slice(0, 6).map(cleanImage).filter(Boolean).slice(0, 2);
         return await metered('stills', async () => {
-          const { model, ...out } = await makeStill(env, image, instruction, cleanBrief(body.brief), body.source === 'plan' ? 'plan' : 'photo');
+          const { model, ...out } = await makeStill(env, image, instruction, cleanBrief(body.brief), body.source === 'plan' ? 'plan' : 'photo', extras);
           return { image: out, model };
         });
       }

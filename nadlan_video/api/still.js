@@ -8,7 +8,7 @@ let found = null;
 export const forgetStillModel = () => { found = null; };
 
 // ההוראה למחולל: מה הבמאי ביקש + כללי האמת האדריכלית
-export function stillPrompt(instruction, brief, source) {
+export function stillPrompt(instruction, brief, source, extras = 0) {
   const from = source === 'plan'
     ? 'The attached image is an architectural drawing (floor plan, elevation or sketch). Read it as the binding design.'
     : 'The attached image is a photograph or render of the real property. It is the binding reference for the design.';
@@ -16,7 +16,10 @@ export function stillPrompt(instruction, brief, source) {
 
 ${from}
 
-Produce this frame:
+${extras ? `${extras === 1 ? 'The second attached image shows' : 'The other attached images show'} the same property from other angles or spaces, as extra reference. The FIRST \
+attached image is the main source of this frame; use the others only to keep materials, colours and details faithful.
+
+` : ''}Produce this frame:
 """
 ${instruction}
 """
@@ -54,12 +57,12 @@ export function readImage(data) {
 }
 
 // withAspect: מבקשים את יחס התמונה גם בהגדרות (לא כל מודל מכיר את השדה – אז מנסים שוב בלעדיו)
-function generate(env, model, image, text, aspect, withAspect) {
+function generate(env, model, images, text, aspect, withAspect) {
   return fetch(`${BASE}/models/${encodeURIComponent(model)}:generateContent`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
     body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ inlineData: { mimeType: image.media_type, data: image.data } }, { text }] }],
+      contents: [{ role: 'user', parts: [...images.map((im) => ({ inlineData: { mimeType: im.media_type, data: im.data } })), { text }] }],
       generationConfig: { responseModalities: ['TEXT', 'IMAGE'], ...(withAspect ? { imageConfig: { aspectRatio: aspect } } : {}) },
     }),
   });
@@ -68,9 +71,10 @@ function generate(env, model, image, text, aspect, withAspect) {
 // שמות שהיו נכונים בעבר – מנסים אותם אם גם השם שבהגדרות וגם הרשימה של Google לא עזרו
 const KNOWN = ['gemini-3-pro-image-preview', 'gemini-2.5-flash-image'];
 
-// image: { media_type, data }. מחזיר { media_type, data, model } או זורק Error בעברית (ו-detail: מה Google ענה)
-export async function makeStill(env, image, instruction, brief, source) {
-  const text = stillPrompt(instruction, brief, source);
+// image: { media_type, data } – המקור הראשי; extras: עד שתי תמונות נוספות של אותו נכס (הפניה). מחזיר { media_type, data, model } או זורק Error בעברית (ו-detail: מה Google ענה)
+export async function makeStill(env, image, instruction, brief, source, extras = []) {
+  const text = stillPrompt(instruction, brief, source, extras.length);
+  const images = [image, ...extras];
   const queue = [...new Set([found, env.IMAGE_MODEL, ...KNOWN].filter(Boolean))];
   const tried = new Set();
   let listed = false;
@@ -80,10 +84,10 @@ export async function makeStill(env, image, instruction, brief, source) {
       model = queue.shift();
       if (tried.has(model)) continue;
       tried.add(model);
-      res = await generate(env, model, image, text, brief.aspect, true);
+      res = await generate(env, model, images, text, brief.aspect, true);
       raw = await res.text();
       if (res.status === 400 && /imageConfig|aspectRatio|unknown name|invalid json/i.test(raw)) {
-        res = await generate(env, model, image, text, brief.aspect, false);
+        res = await generate(env, model, images, text, brief.aspect, false);
         raw = await res.text();
       }
       if (res.ok) break;

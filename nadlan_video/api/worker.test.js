@@ -2,7 +2,7 @@ import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import worker, { cleanImage, Studio, OP_RE } from './worker.js';
-import { cleanBrief, KINDS, LOOKS, STYLES, ASPECTS, QUALITIES, SHOTS } from './brief.js';
+import { cleanBrief, KINDS, LOOKS, STYLES, ASPECTS, QUALITIES, SHOTS, MAX_IMAGES, MAX_SHOTS, shotsFor } from './brief.js';
 import { readPlan, planSystem, PLAN_TOOL, MODEL } from './director.js';
 import { stillPrompt, pickStillModel, forgetStillModel } from './still.js';
 import { clipPrompt, pickVideoModel, requestBodies, findVideo, resolutionFor, forgetVideoModel } from './video.js';
@@ -80,9 +80,9 @@ const login = () => worker.fetch(post('/login', { password: PASS }, null), env);
 const PLAN = {
   summary: 'בניין של 8 קומות',
   shots: [
-    { title: 'פתיחה מהאוויר', why: 'רואים את כל הבניין', source: 'photo', still: '', motion: 'slow drone push-in' },
-    { title: 'הכניסה', why: 'מתקרבים ללובי', source: 'plan', still: '', motion: 'dolly forward' },
-    { title: 'בלי תנועה', why: 'x', source: 'photo', still: 'x', motion: '' },
+    { title: 'פתיחה מהאוויר', why: 'רואים את כל הבניין', sources: [1], still: '', motion: 'slow drone push-in' },
+    { title: 'הכניסה', why: 'מתקרבים ללובי', sources: [2, 1], still: '', motion: 'dolly forward' },
+    { title: 'בלי תנועה', why: 'x', sources: [1], still: 'x', motion: '' },
   ],
 };
 
@@ -102,6 +102,7 @@ test('המזהים של הבריף זהים בשרת ובאפליקציה', asyn
   assert.deepEqual(Object.keys(web.KINDS), Object.keys(KINDS));
   assert.deepEqual(Object.keys(web.LOOKS), Object.keys(LOOKS));
   assert.deepEqual(web.STYLES.map((x) => x.id), Object.keys(STYLES));
+  assert.equal(web.MAX_IMAGES, MAX_IMAGES);
   assert.deepEqual(web.ASPECTS.map((a) => a.id), ASPECTS);
   assert.deepEqual(web.QUALITIES.map((q) => q.id), QUALITIES);
 });
@@ -113,28 +114,42 @@ test('תמונה: רק סוגים מותרים ו-base64 תקין', () => {
   assert.equal(cleanImage(null), null);
 });
 
-test('רשימת שוטים: שרטוט תמיד מקבל פריים, מקור שלא נשלח מוחלף, שוט בלי תנועה נופל', () => {
-  const both = readPlan(PLAN, { photo: true, plan: true });
+test('רשימת שוטים: שרטוט תמיד מקבל פריים, מספרי תמונות שלא קיימים נזרקים, שוט בלי תנועה נופל', () => {
+  const both = readPlan(PLAN, ['photo', 'plan']);
   assert.equal(both.shots.length, 2);
+  assert.deepEqual(both.shots[0].sources, [0]);
   assert.equal(both.shots[0].still, '');
+  assert.deepEqual(both.shots[1].sources, [1, 0], 'הראשונה היא הראשית');
   assert.match(both.shots[1].still, /photorealistic/);
-  const onlyPhoto = readPlan(PLAN, { photo: true, plan: false });
-  assert.equal(onlyPhoto.shots[1].source, 'photo');
-  assert.equal(onlyPhoto.shots[1].still, '');
-  assert.equal(readPlan({ shots: [] }, { photo: true }), null);
+  // תמונה אחת בלבד: ההפניה לתמונה 2 נזרקת, ושרטוט בלי הוראה לא נשאר בלי פריים
+  const one = readPlan(PLAN, ['photo']);
+  assert.deepEqual(one.shots[1].sources, [0]);
+  assert.equal(one.shots[1].still, '');
+  assert.deepEqual(readPlan({ shots: [{ title: 'א', motion: 'm', sources: [], still: '' }] }, ['plan', 'photo']).shots[0].sources, [1], 'בלי מקור – הצילום הראשון');
+  assert.deepEqual(readPlan({ shots: [{ title: 'א', motion: 'm', sources: [9, 'x', 2, 2, 1, 3, 4], still: 'x' }] }, ['photo', 'photo', 'photo', 'photo']).shots[0].sources, [1, 0, 2], 'בלי כפילויות ועד שלוש');
+  assert.equal(readPlan({ shots: [] }, ['photo']), null);
+});
+
+test('מספר השוטים גדל עם מספר התמונות, עד 8', () => {
+  assert.deepEqual([0, 1, 4, 5, 8, 20].map(shotsFor), [4, 4, 4, 5, 8, 8]);
+  assert.equal(MAX_SHOTS, 8);
+  assert.equal(MAX_IMAGES, 20);
+  const many = { shots: Array.from({ length: 12 }, (_, i) => ({ title: `ש${i}`, motion: 'm', sources: [i + 1], still: 'x' })) };
+  assert.equal(readPlan(many, Array(20).fill('photo')).shots.length, 8);
+  assert.equal(readPlan(many, Array(6).fill('photo')).shots.length, 6);
 });
 
 test('ההנחיות: אמת אדריכלית, האור שנבחר, והכלי קפדני', () => {
-  const sys = planSystem(cleanBrief({ kind: 'apartment', look: 'dusk', aspect: '9:16' }), { photo: false, plan: true });
+  const sys = planSystem(cleanBrief({ kind: 'apartment', look: 'dusk', aspect: '9:16' }), ['plan']);
   assert.match(sys, /never invent/);
   assert.match(sys, /blue-hour/);
   assert.match(sys, /vertical 9:16/);
   assert.doesNotMatch(sys, /a PHOTO \(/);
   // הסגנון קובע את שפת המצלמה אצל הבמאי ואת הקצב בהוראת הווידאו
-  const drone = planSystem(cleanBrief({ style: 'drone' }), { photo: true, plan: false });
+  const drone = planSystem(cleanBrief({ style: 'drone' }), ['photo']);
   assert.match(drone, /aerial drone moves only/);
   assert.doesNotMatch(drone, /steadicam/);
-  assert.match(planSystem(cleanBrief({ style: 'tour' }), { photo: true, plan: false }), /steadicam/);
+  assert.match(planSystem(cleanBrief({ style: 'tour' }), ['photo']), /steadicam/);
   assert.match(clipPrompt('fly in', 'drone'), /sweeping aerial drone/);
   assert.doesNotMatch(clipPrompt('fly in', 'dynamic'), /fast camera motion/);
   assert.match(clipPrompt('push', 'classic'), /Avoid: [^\n]*fast camera motion/);
@@ -143,6 +158,15 @@ test('ההנחיות: אמת אדריכלית, האור שנבחר, והכלי �
   assert.equal(PLAN_TOOL.strict, true);
   assert.equal(PLAN_TOOL.input_schema.additionalProperties, false);
   assert.match(stillPrompt('a lobby', cleanBrief({}), 'plan'), /architectural drawing/);
+  assert.doesNotMatch(stillPrompt('a lobby', cleanBrief({}), 'photo'), /extra reference/);
+  assert.match(stillPrompt('a lobby', cleanBrief({}), 'photo', 2), /extra reference[\s\S]*FIRST/);
+  // כמה תמונות: מספור, מקורות, ושוטים נוספים
+  const multi = planSystem(cleanBrief({}), ['photo', 'photo', 'plan', 'photo', 'photo', 'photo']);
+  assert.match(multi, /5 PHOTOS[\s\S]*a PLAN/);
+  assert.match(multi, /IMAGE 1 to IMAGE 6/);
+  assert.match(multi, /exactly 6 shots/);
+  assert.match(multi, /spread the middle beats/);
+  assert.doesNotMatch(planSystem(cleanBrief({}), ['photo']), /several images|spread the middle/);
   assert.match(clipPrompt('orbit'), /orbit[\s\S]*no morphing/);
 });
 
@@ -202,28 +226,53 @@ test('סיסמה: נעילה אחרי הרבה ניסיונות שגויים', a
   assert.equal((await res.json()).code, 'locked');
 });
 
-test('/plan: שולח את שתי התמונות ל-Claude ומחזיר רשימת שוטים; תקרה יומית', async () => {
+test('/plan: שולח את כל התמונות ל-Claude בסדר ומחזיר רשימת שוטים; פורמט ישן עדיין עובד; תקרה יומית', async () => {
   await login();
   // בפעם הראשונה Claude עונה בטקסט בלי הכלי – השרת מבקש שוב
   mock(() => (calls.length === 1
     ? json({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'הנה התוכנית' }] })
     : json({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'shot_list', input: PLAN }] })));
-  const res = await worker.fetch(post('/plan', { brief: { kind: 'building' }, photo: IMG, plan: IMG }), env);
+  const res = await worker.fetch(post('/plan', { brief: { kind: 'building' }, images: [{ ...IMG, kind: 'photo' }, { ...IMG, kind: 'plan' }] }), env);
   assert.equal(calls.length, 2);
   assert.match(calls[1].body.messages.at(-1).content, /call shot_list/);
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('access-control-allow-origin'), ORIGIN);
-  assert.equal((await res.json()).shots.length, 2);
+  const plan = await res.json();
+  assert.equal(plan.shots.length, 2);
+  assert.deepEqual(plan.shots[1].sources, [1, 0]);
   const sent = calls[0].body;
   assert.equal(sent.model, MODEL);
+  const labels = sent.messages[0].content.filter((c) => c.type === 'text' && /^IMAGE \d/.test(c.text)).map((c) => c.text);
+  assert.deepEqual(labels, ['IMAGE 1 (PHOTO):', 'IMAGE 2 (PLAN):']);
   assert.equal(sent.messages[0].content.filter((c) => c.type === 'image').length, 2);
   assert.equal(sent.tool_choice, undefined, 'המודל לא תומך ב-tool_choice כפוי');
   assert.equal(sent.tools[0].name, 'shot_list');
+  assert.equal(sent.tools[0].input_schema.properties.shots.items.properties.sources.items.type, 'integer');
   assert.equal((await worker.fetch(post('/plan', {}), env)).status, 400);
-  await worker.fetch(post('/plan', { photo: IMG }), env);
-  const over = await worker.fetch(post('/plan', { photo: IMG }), env);
+  // הפורמט הישן (צילום אחד + שרטוט אחד) ממשיך לעבוד, וגם זה סופר בתקרה
+  mock(() => json({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'shot_list', input: PLAN }] }));
+  const legacy = await worker.fetch(post('/plan', { photo: IMG, plan: IMG }), env);
+  assert.equal(legacy.status, 200);
+  assert.equal(calls.at(-1).body.messages[0].content.filter((c) => c.type === 'image').length, 2);
+  const over = await worker.fetch(post('/plan', { images: [IMG] }), env);
   assert.equal(over.status, 429);
   assert.equal(SHOTS, 4);
+});
+
+test('/plan: עד 20 תמונות, ותמונה לא תקינה פוסלת את הבקשה (כדי שהמספור לא יזוז)', async () => {
+  await login();
+  mock(() => json({ stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'shot_list', input: PLAN }] }));
+  const imgs = (n) => Array.from({ length: n }, () => ({ ...IMG, kind: 'photo' }));
+  assert.equal((await worker.fetch(post('/plan', { images: imgs(21) }), env)).status, 400);
+  const bad = await worker.fetch(post('/plan', { images: [...imgs(2), { media_type: 'image/gif', data: 'QUJD' }] }), env);
+  assert.equal(bad.status, 400);
+  assert.match((await bad.json()).error, /לא תקינה/);
+  assert.equal(calls.length, 0);
+  const ok = await worker.fetch(post('/plan', { brief: {}, images: imgs(20) }), env);
+  assert.equal(ok.status, 200);
+  const sent = calls[0].body;
+  assert.equal(sent.messages[0].content.filter((c) => c.type === 'image').length, 20);
+  assert.match(sent.system, /exactly 8 shots/);
 });
 
 test('/still: מודל שלא קיים -> מוצא אחר ברשימה; שדה יחס לא מוכר -> מנסה בלעדיו', async () => {
@@ -241,6 +290,12 @@ test('/still: מודל שלא קיים -> מוצא אחר ברשימה; שדה �
   assert.equal(out.image.data, 'UE5H');
   assert.match(calls.at(-1).body.contents[0].parts[1].text, /aerial view[\s\S]*bright clear/);
   assert.equal((await worker.fetch(post('/still', { image: IMG }), env)).status, 400);
+  // תמונות הפניה: הראשית קודם, עד שתיים, ורק תקינות
+  const withExtras = await worker.fetch(post('/still', { image: IMG, extras: [IMG, { media_type: 'image/gif', data: 'x' }, IMG, IMG], instruction: 'lobby', brief: {}, source: 'photo' }), env);
+  assert.equal(withExtras.status, 200);
+  const parts = calls.at(-1).body.contents[0].parts;
+  assert.equal(parts.filter((p) => p.inlineData).length, 3);
+  assert.match(parts.at(-1).text, /extra reference/);
 });
 
 const OUT = (part) => ({ id: 'i1', status: 'completed', steps: [{ type: 'model_output', content: [part] }] });

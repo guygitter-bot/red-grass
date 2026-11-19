@@ -22,7 +22,7 @@ Stills are cheap and fixable; video is expensive. Approve the frame first.
 
 ## Workflow
 
-1. **Look at what was attached.** A PHOTO (photograph or existing render) and/or a PLAN (elevation, sketch, floor plan).
+1. **Look at what was attached.** Up to 20 images: PHOTOS (photographs or existing renders) and/or PLANS (elevation, sketch, floor plan). With several images, build each shot from the image that really shows that side, room or view; 4 shots for up to 4 images, then one shot per image, at most 8 (each shot costs money - tell the user).
    Ask only what is missing: project name, format (16:9 for site / YouTube, 9:16 for Instagram / WhatsApp), light
    (golden hour / bright day / dusk), tagline and contact line for the closing card.
 2. **Write the shot list** (4 shots x 8 seconds) with the arc from `planSystem`: establishing hero -> approach or scale

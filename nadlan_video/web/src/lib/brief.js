@@ -11,6 +11,9 @@ export const LOOKS = {
   dusk: { label: 'דמדומים', hint: 'שמיים כחולים־כהים ואורות דולקים' },
 };
 
+// כמה תמונות אפשר להעלות לסרטון אחד (זהה ל-api/brief.js)
+export const MAX_IMAGES = 20;
+
 // סגנון הסרטון: איך המצלמה זזה ומה הקצב
 export const STYLES = [
   { id: 'drone', label: 'רחפן', hint: 'הכול מהאוויר: טיסה אל הבניין, סיבוב סביבו וחשיפה מלמעלה' },

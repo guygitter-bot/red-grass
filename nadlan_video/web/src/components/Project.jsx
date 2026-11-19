@@ -3,6 +3,7 @@ import Shot from './Shot';
 import Film from './Film';
 import { planFilm } from '../lib/api';
 import { QUALITIES, STYLES } from '../lib/brief';
+import { downscale } from '../lib/image';
 import { getMedia, saveProject, newId, safeShot } from '../lib/store';
 import { produceStill, produceClip, readyCount } from '../lib/shots';
 
@@ -38,9 +39,19 @@ export default function Project({ initial, onBack }) {
     setError(null);
     try {
       const p = ref.current;
-      const [photo, drawing] = await Promise.all([p.has.photo ? getMedia(`${p.id}:photo`) : null, p.has.plan ? getMedia(`${p.id}:plan`) : null]);
-      const out = await planFilm({ ...p.brief, name: p.name }, photo || undefined, drawing || undefined);
-      await update((cur) => ({ ...cur, summary: out.summary || '', shots: out.shots.map((s) => safeShot({ ...s, id: newId() })) }));
+      // כל התמונות לפי הסדר, בגודל קטן יותר. המקום של תמונה ברשימה הוא מה שהבמאי מחזיר, ולכן שומרים איתה את המפתח
+      const sent = [];
+      for (const img of p.images) {
+        const im = await getMedia(`${p.id}:${img.key}`);
+        if (im) sent.push({ key: img.key, payload: { ...(await downscale(im)), kind: img.kind } });
+      }
+      if (!sent.length) throw new Error('התמונות המקוריות לא נמצאות במכשיר הזה.');
+      const out = await planFilm({ ...p.brief, name: p.name }, sent.map((x) => x.payload));
+      const shots = out.shots.map((s) => {
+        const keys = (s.sources || []).map((i) => sent[i]?.key).filter(Boolean);
+        return safeShot({ ...s, id: newId(), sources: keys.length ? keys : [sent[0].key] });
+      });
+      await update((cur) => ({ ...cur, summary: out.summary || '', shots }));
     } catch (e) {
       setError(e);
     } finally {
@@ -116,6 +127,7 @@ export default function Project({ initial, onBack }) {
       <button className="text-muted underline" onClick={onBack}>→ כל הסרטונים</button>
       <h1 className="mt-2 text-2xl font-bold">{project.name || 'סרטון בלי שם'}</h1>
       {project.summary && <p className="mt-1 text-muted">{project.summary}</p>}
+      {project.images.length > 1 && project.shots.length > 0 && <p className="mt-1 text-sm text-muted">נבנה מ-{project.images.length} תמונות · {project.shots.length} שוטים</p>}
 
       {planning && (
         <div className="mt-6 flex items-center gap-3 rounded-2xl border border-line bg-card p-5">
