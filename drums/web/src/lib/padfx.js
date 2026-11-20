@@ -1,5 +1,6 @@
 // אפקטים על החלקים בלי רינדור מחדש של React (מוסיפים מחלקות ו-data-attributes ישירות על האלמנטים).
 // root = אלמנט הסט (kit-box); כל חלק הוא [data-pad="<מזהה>"].
+// בבמה התלת־ממדית החלקים הם כפתורים נסתרים, ול-root יש __fx – אותם אפקטים עוברים גם אליו (הילה וטבעת על התוף עצמו).
 
 // הבהוב קצר של חלק שהוכה (מוסיפים מחלקה ומאתחלים את האנימציה)
 export function flashEl(el, cls = 'hit') {
@@ -7,6 +8,7 @@ export function flashEl(el, cls = 'hit') {
   el.classList.remove('hit', 'fb-perfect', 'fb-good', 'fb-miss');
   void el.offsetWidth;
   el.classList.add(cls);
+  el.parentElement?.__fx?.flash(el.dataset.pad, cls);
 }
 
 export function padEl(root, id) {
@@ -30,6 +32,7 @@ export function setCues(root, now, soon) {
     else if (soon.has(id)) el.dataset.cue = 'soon';
     else delete el.dataset.cue;
   });
+  root.__fx?.cues(now, soon);
 }
 
 export function clearCues(root) {

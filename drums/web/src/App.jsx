@@ -118,7 +118,7 @@ export default function App() {
       <Nav screen={screen} onGo={setScreen} />
       <main className="flex-1 min-w-0 min-h-0 flex flex-col relative">
         {samples === 'loading' && (
-          <div className="absolute top-2 start-2 z-10 rounded-full bg-card/90 px-3 py-1 text-xs text-muted pointer-events-none" role="status">
+          <div className="lcd absolute bottom-3 start-3 z-10 px-3 py-1 text-xs pointer-events-none" role="status">
             טוען צלילים…
           </div>
         )}

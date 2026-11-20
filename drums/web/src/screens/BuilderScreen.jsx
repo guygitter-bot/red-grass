@@ -15,7 +15,7 @@ function Toggle({ label, on, onChange }) {
 function Chars({ title, chars, value, onChange }) {
   return (
     <div>
-      <h3 className="font-semibold mb-1.5">{title}</h3>
+      <h3 className="mb-2"><span className="tape text-xl">{title}</span></h3>
       <div className="flex flex-wrap gap-2">
         {Object.entries(chars).map(([id, c]) => (
           <button key={id} type="button" className={`chip ${value === id ? 'on' : ''}`} aria-pressed={value === id} onClick={() => onChange(id)}>{c.label}</button>
@@ -53,24 +53,24 @@ export default function BuilderScreen({ base, onSave }) {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col lg:flex-row short:flex-row">
-      <div className="h-[34%] min-h-[190px] lg:h-auto lg:flex-1 lg:order-2 flex flex-col short:h-auto short:flex-1 short:order-2 border-b lg:border-b-0 lg:border-e short:border-b-0 short:border-e border-line">
+      <div className="h-[36%] min-h-[200px] lg:h-auto lg:flex-1 lg:order-2 flex flex-col short:h-auto short:flex-1 short:order-2 border-b-2 lg:border-b-0 lg:border-e-2 short:border-b-0 short:border-e-2 border-black">
         <KitStage kit={preview} />
       </div>
-      <div className="flex-1 lg:flex-none lg:w-[380px] short:flex-none short:w-[330px] lg:order-1 short:order-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4">
+      <div className="floor flex-1 lg:flex-none lg:w-[400px] short:flex-none short:w-[340px] lg:order-1 short:order-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4">
         <header>
-          <h1 className="font-display text-5xl leading-none">{editing ? 'עריכת סט' : 'בניית סט'}</h1>
-          <p className="text-muted text-sm">בחרו חלקים וצליל. אפשר ללחוץ על החלקים בתצוגה ולשמוע.</p>
+          <h1 className="poster text-6xl">{editing ? 'עריכת סט' : 'בניית סט'}</h1>
+          <p className="text-muted text-sm mt-1">בחרו חלקים וצליל. אפשר להקיש על הסט בתצוגה ולשמוע.</p>
         </header>
         <label className="flex flex-col gap-1">
-          <span className="font-semibold">שם הסט</span>
+          <span className="tape text-xl self-start">שם הסט</span>
           <input className="input" value={name} maxLength={40} placeholder="הסט שלי" onChange={(e) => setName(e.target.value)} />
         </label>
-        <section className="rounded-2xl bg-card border border-line px-4 py-2 divide-y divide-line">
+        <section className="case px-4 py-2 divide-y divide-line">
           <Stepper label="טומים" value={opts.toms} min={0} max={4} onChange={(v) => set({ toms: v })} />
           <Stepper label="טומי רצפה" value={opts.floors} min={0} max={2} onChange={(v) => set({ floors: v })} />
           <Stepper label="קראש" value={opts.crashes} min={0} max={2} onChange={(v) => set({ crashes: v })} />
         </section>
-        <div className="flex flex-wrap gap-2">
+        <div className="case p-3 flex flex-wrap gap-2">
           <Toggle label="רייד" on={opts.ride} onChange={(v) => set({ ride: v })} />
           <Toggle label="צ׳יינה" on={opts.china} onChange={(v) => set({ china: v })} />
           <Toggle label="ספלאש" on={opts.splash} onChange={(v) => set({ splash: v })} />
@@ -79,7 +79,7 @@ export default function BuilderScreen({ base, onSave }) {
         </div>
         <Chars title="צליל הבס" chars={KICK_CHARS} value={opts.kickChar} onChange={(v) => set({ kickChar: v })} />
         <Chars title="צליל הסנר" chars={SNARE_CHARS} value={opts.snareChar} onChange={(v) => set({ snareChar: v })} />
-        <button type="button" className="btn btn-primary" onClick={save}><Icon name="save" size={18} /> שמירה ונגינה</button>
+        <button type="button" className="btn btn-primary !min-h-12 text-base" onClick={save}><Icon name="save" size={18} /> שמירה ונגינה</button>
       </div>
     </div>
   );

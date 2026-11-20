@@ -102,12 +102,12 @@ export default function SongPlayer({ videoId, hidden, songVol, drumVol, onSongVo
   };
 
   return (
-    <section className={`${hidden ? 'hidden' : ''} shrink-0 bg-card border-b border-line`} aria-label="נגן שיר">
+    <section className={`${hidden ? 'hidden' : ''} desk shrink-0 border-b-2 border-black`} aria-label="נגן שיר">
       <div className="flex items-center gap-2 px-3 py-1.5 flex-wrap">
         <button type="button" className="btn btn-primary !min-h-10 !px-3" onClick={toggle} disabled={!ready} aria-label={playing ? 'השהיה' : 'נגן'}>
           <Icon name={playing ? 'pause' : 'play'} size={18} />
         </button>
-        <div className="min-w-0 flex-1 basis-24 text-sm font-semibold truncate" title={title}>{title || 'טוען שיר…'}</div>
+        <div className="lcd min-w-0 flex-1 basis-24 text-sm font-semibold truncate px-2 py-1" title={title}>{title || 'טוען שיר…'}</div>
         <label className="flex items-center gap-1 text-xs text-muted">
           <Icon name="note" size={18} />
           <input type="range" min="0" max="100" value={Math.round(songVol * 100)} onChange={(e) => onSongVol(e.target.value / 100)} className="w-20 sm:w-28" aria-label="עוצמת השיר" />
@@ -121,7 +121,7 @@ export default function SongPlayer({ videoId, hidden, songVol, drumVol, onSongVo
       </div>
       {failed && <p className="px-3 pb-2 text-sm text-bad">{failed}</p>}
       <div className={open ? 'px-3 pb-2 flex justify-center' : 'h-0 overflow-hidden'}>
-        <div ref={holder} className="aspect-video w-full max-w-[220px] short:max-w-[160px] lg:max-w-[320px] rounded-lg overflow-hidden bg-black [&_iframe]:w-full [&_iframe]:h-full" />
+        <div ref={holder} className="aspect-video w-full max-w-[220px] short:max-w-[160px] lg:max-w-[320px] rounded-[3px] border-2 border-black overflow-hidden bg-black [&_iframe]:w-full [&_iframe]:h-full" />
       </div>
     </section>
   );
