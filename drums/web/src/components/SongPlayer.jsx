@@ -11,8 +11,8 @@ export default function SongPlayer({ videoId, hidden, songVol, drumVol, onSongVo
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [title, setTitle] = useState('');
-  // בטלפון לרוחב אין מקום לווידאו – מתחילים מקופל
-  const [open, setOpen] = useState(() => !window.matchMedia?.('(max-height: 520px) and (orientation: landscape)').matches);
+  // בטלפון (לאורך או לרוחב) אין מקום לווידאו – מתחילים מקופל; הנגן נשאר ב-DOM בגודל מלא, אז השיר ממשיך להתנגן
+  const [open, setOpen] = useState(() => !window.matchMedia?.('(max-width: 1023px), (max-height: 520px) and (orientation: landscape)').matches);
   const [failed, setFailed] = useState('');
   volRef.current = songVol;
 
@@ -103,25 +103,25 @@ export default function SongPlayer({ videoId, hidden, songVol, drumVol, onSongVo
 
   return (
     <section className={`${hidden ? 'hidden' : ''} desk shrink-0 border-b-2 border-black`} aria-label="נגן שיר">
-      <div className="flex items-center gap-2 px-3 py-1.5 flex-wrap">
+      <div className="flex items-center gap-2 px-3 py-1.5 phone:py-1 phone:gap-1.5 flex-wrap phone:flex-nowrap">
         <button type="button" className="btn btn-primary !min-h-10 !px-3" onClick={toggle} disabled={!ready} aria-label={playing ? 'השהיה' : 'נגן'}>
           <Icon name={playing ? 'pause' : 'play'} size={18} />
         </button>
-        <div className="lcd min-w-0 flex-1 basis-24 text-sm font-semibold truncate px-2 py-1" title={title}>{title || 'טוען שיר…'}</div>
+        <div className="lcd min-w-0 flex-1 basis-24 text-sm phone:text-[13px] font-semibold truncate px-2 py-1" title={title}>{title || 'טוען שיר…'}</div>
         <label className="flex items-center gap-1 text-xs text-muted">
           <Icon name="note" size={18} />
-          <input type="range" min="0" max="100" value={Math.round(songVol * 100)} onChange={(e) => onSongVol(e.target.value / 100)} className="w-20 sm:w-28" aria-label="עוצמת השיר" />
+          <input type="range" min="0" max="100" value={Math.round(songVol * 100)} onChange={(e) => onSongVol(e.target.value / 100)} className="w-20 phone:w-14 sm:w-28 phone:sm:w-24" aria-label="עוצמת השיר" />
         </label>
         <label className="flex items-center gap-1 text-xs text-muted">
           <Icon name="drum" size={18} />
-          <input type="range" min="0" max="100" value={Math.round(drumVol * 100)} onChange={(e) => onDrumVol(e.target.value / 100)} className="w-20 sm:w-28" aria-label="עוצמת התופים" />
+          <input type="range" min="0" max="100" value={Math.round(drumVol * 100)} onChange={(e) => onDrumVol(e.target.value / 100)} className="w-20 phone:w-14 sm:w-28 phone:sm:w-24" aria-label="עוצמת התופים" />
         </label>
-        <button type="button" className="btn !min-h-10 !px-3 text-sm" onClick={() => setOpen(!open)} aria-expanded={open}>{open ? 'הסתר וידאו' : 'הצג וידאו'}</button>
+        <button type="button" className="btn !min-h-10 !px-3 text-sm" onClick={() => setOpen(!open)} aria-expanded={open} aria-label={open ? 'הסתר וידאו' : 'הצג וידאו'}><Icon name="eye" size={18} className="phone:inline hidden" /><span className="phone:hidden">{open ? 'הסתר וידאו' : 'הצג וידאו'}</span></button>
         <button type="button" className="btn !min-h-10 !px-3 text-sm" onClick={onClose} aria-label="הסרת השיר"><Icon name="close" size={16} /></button>
       </div>
       {failed && <p className="px-3 pb-2 text-sm text-bad">{failed}</p>}
-      <div className={open ? 'px-3 pb-2 flex justify-center' : 'h-0 overflow-hidden'}>
-        <div ref={holder} className="aspect-video w-full max-w-[220px] short:max-w-[160px] lg:max-w-[320px] rounded-[3px] border-2 border-black overflow-hidden bg-black [&_iframe]:w-full [&_iframe]:h-full" />
+      <div className={open ? 'px-3 pb-2 phone:pb-1 flex justify-center' : 'h-0 overflow-hidden'}>
+        <div ref={holder} className="aspect-video w-full max-w-[220px] phone:max-w-[200px] short:max-w-[160px] lg:max-w-[320px] rounded-[3px] border-2 border-black overflow-hidden bg-black [&_iframe]:w-full [&_iframe]:h-full" />
       </div>
     </section>
   );

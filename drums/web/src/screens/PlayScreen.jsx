@@ -36,11 +36,11 @@ export default function PlayScreen({ kit, drumVol, onDrumVol, onPickKit, songs =
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <div className="lid shrink-0 flex items-center gap-2 px-3 py-1.5">
+      <div className="lid shrink-0 flex items-center gap-2 px-3 py-1 phone:py-0.5">
         <button type="button" className="gaffer text-[22px] min-h-10 px-3 flex items-center gap-1.5 min-w-0 shrink" onClick={onPickKit} aria-label={`החלפת סט – עכשיו ${kit.name}`}>
           <span className="truncate pt-0.5">{kit.name}</span> <Icon name="chevronDown" size={16} className="shrink-0" />
         </button>
-        <label className="flex items-center gap-1.5 text-sm text-muted ms-auto shrink-0">
+        <label className={`flex items-center gap-1.5 text-sm text-muted ms-auto shrink-0 ${currentSong ? 'phone:hidden' : ''}`}>
           <Icon name="volume" size={20} />
           <input type="range" min="0" max="100" value={Math.round(drumVol * 100)} onChange={(e) => onDrumVol(e.target.value / 100)} className="w-16 sm:w-32" aria-label="עוצמת התופים" />
         </label>
@@ -66,7 +66,7 @@ export default function PlayScreen({ kit, drumVol, onDrumVol, onPickKit, songs =
           <SongList heading={<>שירים של <bdi dir="ltr">{songs[0].artist}</bdi></>} songs={songs} current={currentSong} onPlay={(s) => { onLoadSong(s.youtubeId); setSongsOpen(false); }} onLearn={(s) => { onLesson(s.youtubeId); setSongsOpen(false); }} />
         </div>
       )}
-      {!tipOff && !lessonSong && (
+      {!tipOff && !lessonSong && !currentSong && (
         <div className="rotate-tip shrink-0 items-center gap-2 px-3 py-1.5 bg-gaffer text-[#efeae0] text-sm">
           <Icon name="rotate" size={20} />
           <span className="flex-1">סובבו את הטלפון לרוחב – הסט יהיה גדול יותר.</span>
@@ -75,7 +75,7 @@ export default function PlayScreen({ kit, drumVol, onDrumVol, onPickKit, songs =
       )}
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row short:flex-row">
         {lessonSong && (
-          <div className="desk shrink-0 lg:w-[390px] short:w-[340px] short:max-w-[45%] lg:overflow-y-auto short:overflow-y-auto lg:border-e-2 short:border-e-2 border-black">
+          <div className="desk shrink-0 phone:max-h-[38dvh] phone:overflow-y-auto lg:w-[390px] short:w-[340px] short:max-w-[45%] lg:overflow-y-auto short:overflow-y-auto lg:border-e-2 short:border-e-2 border-black">
             <LessonPanel song={lessonSong} kit={kit} boxRef={boxRef} hitRef={hitRef} songApi={songApi} songLoaded={currentSong === lessonSong.youtubeId} onLoadSong={onLoadSong} onClose={() => onLesson(null)} />
           </div>
         )}

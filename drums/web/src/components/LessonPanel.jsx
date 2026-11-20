@@ -24,8 +24,8 @@ export default function LessonPanel({ song, kit, boxRef, hitRef, songApi, songLo
   const [speed, setSpeed] = useState(1);
   const [loop, setLoop] = useState(true);
   const [countIn, setCountIn] = useState(true);
-  // בטלפון לרוחב אין מקום – מתחילים מקופל
-  const [more, setMore] = useState(() => !window.matchMedia?.('(max-height: 520px) and (orientation: landscape)').matches);
+  // "עוד" = הסברים והגדרות מורחבות; במחשב פתוח, בטלפון מקופל כדי שהסט תמיד יישאר גדול על המסך
+  const [more, setMore] = useState(() => !!window.matchMedia?.('(min-width: 1024px) and (min-height: 521px)').matches);
   const [offset, setOffset] = useState(() => loadSyncOffset(song.youtubeId));
   const playheadRef = useRef(null);
 
@@ -52,6 +52,9 @@ export default function LessonPanel({ song, kit, boxRef, hitRef, songApi, songLo
   const modeInfo = MODES.find((m) => m.id === mode);
   const showScore = mode !== 'demo' && (lesson.running || lesson.stats.perfect + lesson.stats.good + lesson.stats.missed > 0);
   const waitingSong = mode === 'song' && !songLoaded;
+  // בטלפון אנכי, בזמן ריצה, הפאנל מצטמצם לפס אחד (עצירה + ציון) – ההגדרות חוזרות כשעוצרים או כשלוחצים "עוד".
+  // מצב "עם השיר" בלי סנכרון עדיין צריך את פקדי הסנכרון, אז לא מצמצמים אותו
+  const compact = lesson.running && !more && !(mode === 'song' && offset === 0);
 
   const switchMode = (id) => {
     lesson.stop();
@@ -59,46 +62,51 @@ export default function LessonPanel({ song, kit, boxRef, hitRef, songApi, songLo
   };
 
   return (
-    <section className="desk short:w-full flex flex-col" aria-label="ללמוד את השיר">
-      <div className="px-3 py-2 border-b border-black flex flex-col gap-2">
+    <section className="lesson desk short:w-full flex flex-col" data-compact={compact} aria-label="ללמוד את השיר">
+      <div className="px-3 py-2 phone:py-1.5 border-b border-black flex flex-col gap-2 phone:gap-1.5">
         <div className="flex items-center gap-2">
-          <div className="min-w-0 flex-1">
-            <p className="flex items-center gap-2 min-w-0"><span className="tape text-xl truncate max-w-full"><bdi dir="ltr">{song.title}</bdi></span></p>
-            <p className="text-[11px] text-muted truncate mt-1 flex items-center gap-1.5"><Icon name="cap" size={14} className="text-accent shrink-0" />ביט מפושט, <span className="lcd px-1.5 tabular-nums" dir="ltr">{groove.bpm} BPM</span></p>
+          <div className="min-w-0 flex-1 flex flex-col phone:flex-row phone:items-center gap-2">
+            <p className="lesson-title flex items-center gap-2 min-w-0"><span className="tape text-xl phone:text-lg truncate max-w-full"><bdi dir="ltr">{song.title}</bdi></span></p>
+            {/* בטלפון אנכי: ה-BPM ליד הכותרת (במקום שורה נפרדת); בזמן ריצה – תקציר המצב */}
+            <span className="lcd px-1.5 text-[11px] tabular-nums shrink-0 hidden phone:inline lesson-bpm" dir="ltr">{groove.bpm} BPM</span>
+            <span className="lesson-compact-label text-xs text-muted truncate">{modeInfo.label} · <bdi dir="ltr">{Math.round(speed * 100)}%</bdi> · {section.name}</span>
+            <p className="text-[11px] text-muted truncate mt-1 flex items-center gap-1.5 phone:hidden"><Icon name="cap" size={14} className="text-accent shrink-0" />ביט מפושט, <span className="lcd px-1.5 tabular-nums" dir="ltr">{groove.bpm} BPM</span></p>
           </div>
           <button type="button" className="btn !min-h-9 !px-3 text-sm" onClick={() => setMore(!more)} aria-expanded={more}>{more ? 'פחות' : 'עוד'} <Icon name={more ? 'chevronUp' : 'chevronDown'} size={16} /></button>
           <button type="button" className="btn !min-h-9 !px-3 text-sm" onClick={() => { lesson.stop(); onClose(); }} aria-label="סגירת מצב הלימוד"><Icon name="close" size={16} /></button>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5 phone:gap-1">
           {waitingSong ? (
             <button type="button" className="btn btn-primary !min-h-9 !px-3 text-sm" onClick={() => onLoadSong(song.youtubeId)}>טעינת השיר</button>
           ) : (
-            <button type="button" className="btn btn-primary !min-h-9 !px-4 text-sm min-w-[84px]" onClick={lesson.running ? lesson.stop : lesson.start} aria-pressed={lesson.running}>
+            <button type="button" className="btn btn-primary !min-h-9 !px-4 phone:!px-3 text-sm min-w-[84px] phone:min-w-0" onClick={lesson.running ? lesson.stop : lesson.start} aria-pressed={lesson.running}>
               {lesson.running ? <><Icon name="stop" size={14} /> עצירה</> : <><Icon name="play" size={14} /> התחל</>}
             </button>
           )}
           {lesson.count > 0 && <span className="lcd font-extrabold text-xl w-9 text-center !text-cue tabular-nums" aria-live="polite">{lesson.count}</span>}
           {MODES.map((m) => (
-            <button key={m.id} type="button" className={`chip !min-h-9 !px-2.5 text-[13px] ${mode === m.id ? 'on' : ''}`} aria-pressed={mode === m.id} onClick={() => switchMode(m.id)}><Icon name={m.icon} size={16} />{m.label}</button>
-          ))}
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs text-muted">מהירות</span>
-          {SPEEDS.map((s) => (
-            <button key={s} type="button" className={`chip !min-h-9 !px-2.5 text-[13px] ${speed === s ? 'on' : ''}`} aria-pressed={speed === s} onClick={() => setSpeed(s)}><bdi dir="ltr">{Math.round(s * 100)}%</bdi></button>
+            <button key={m.id} type="button" className={`lesson-setup chip !min-h-9 !px-2.5 phone:!px-2 text-[13px] phone:text-[12.5px] ${mode === m.id ? 'on' : ''}`} aria-pressed={mode === m.id} onClick={() => switchMode(m.id)}><Icon name={m.icon} size={16} className="phone:hidden" />{m.label}</button>
           ))}
           {showScore && (
             <span className="ms-auto flex items-center gap-2 text-sm font-bold tabular-nums" aria-live="polite">
               <Vu value={lesson.stats.score} />
               <span className="lcd px-1.5 !text-good">{lesson.stats.score}%</span>
-              <span className="text-xs text-muted font-semibold">מושלם {lesson.stats.perfect}, טוב {lesson.stats.good}, החמצות {lesson.stats.missed}</span>
+              <span className="text-xs text-muted font-semibold hidden lg:inline short:inline">מושלם {lesson.stats.perfect}, טוב {lesson.stats.good}, החמצות {lesson.stats.missed}</span>
             </span>
           )}
         </div>
-        <div className="flex gap-1.5 overflow-x-auto pb-0.5" role="group" aria-label="חלק בשיר">
-          {groove.sections.map((s) => (
-            <button key={s.id} type="button" className={`chip !min-h-9 !px-2.5 text-[13px] shrink-0 ${s.id === section.id ? 'on' : ''}`} aria-pressed={s.id === section.id} onClick={() => setSectionId(s.id)}>{s.name}</button>
+        {/* מהירות + חלקי השיר באותה שורה (החלקים גוללים הצידה) */}
+        <div className="lesson-setup flex items-center gap-1.5 min-w-0">
+          <span className="text-xs text-muted phone:hidden">מהירות</span>
+          {SPEEDS.map((s) => (
+            <button key={s} type="button" className={`chip !min-h-9 !px-2.5 text-[13px] shrink-0 ${speed === s ? 'on' : ''}`} aria-pressed={speed === s} onClick={() => setSpeed(s)}><bdi dir="ltr">{Math.round(s * 100)}%</bdi></button>
           ))}
+          <span className="w-px self-stretch bg-black/60 mx-0.5 shrink-0" aria-hidden />
+          <div className="flex gap-1.5 overflow-x-auto min-w-0 flex-1 pb-0.5" role="group" aria-label="חלק בשיר">
+            {groove.sections.map((s) => (
+              <button key={s.id} type="button" className={`chip !min-h-9 !px-2.5 text-[13px] shrink-0 ${s.id === section.id ? 'on' : ''}`} aria-pressed={s.id === section.id} onClick={() => setSectionId(s.id)}>{s.name}</button>
+            ))}
+          </div>
         </div>
         {more && (
           <div className="flex flex-col gap-1.5 text-sm">
