@@ -1,21 +1,22 @@
 import { getTheme, setTheme } from '../lib/theme';
 import { useState } from 'react';
+import Icon from './Icon';
 
 const ITEMS = [
-  { id: 'play', icon: '🥁', label: 'נגינה' },
-  { id: 'kits', icon: '⭐', label: 'סטים' },
-  { id: 'builder', icon: '🛠️', label: 'בונה' },
-  { id: 'song', icon: '🎵', label: 'שיר' },
+  { id: 'play', icon: 'drum', label: 'נגינה' },
+  { id: 'kits', icon: 'sparkle', label: 'סטים' },
+  { id: 'builder', icon: 'sliders', label: 'בונה' },
+  { id: 'song', icon: 'note', label: 'שיר' },
 ];
-const THEME_ICON = { auto: '🌓', light: '☀️', dark: '🌙' };
+const THEME_ICON = { auto: 'auto', light: 'sun', dark: 'moon' };
 const NEXT = { auto: 'light', light: 'dark', dark: 'auto' };
 
-// תפריט תחתון בטלפון לאורך, ופס צדדי במחשב ובטלפון לרוחב
+// תפריט תחתון בטלפון לאורך, ופס צדדי במחשב ובטלפון לרוחב. הווילון הכהה (curtain) בשני המצבים
 export default function Nav({ screen, onGo }) {
   const [theme, setT] = useState(getTheme());
   return (
     <nav
-      className="shrink-0 flex flex-row lg:flex-col short:flex-col lg:w-24 short:w-[68px] bg-card border-t lg:border-t-0 lg:border-s short:border-t-0 short:border-s border-line pb-[env(safe-area-inset-bottom)] lg:pb-0 short:pb-0"
+      className="shrink-0 flex flex-row lg:flex-col short:flex-col lg:w-24 short:w-[68px] bg-curtain border-t lg:border-t-0 lg:border-s short:border-t-0 short:border-s border-line pb-[env(safe-area-inset-bottom)] lg:pb-0 short:pb-0"
       aria-label="ניווט"
     >
       {ITEMS.map((it) => (
@@ -24,11 +25,11 @@ export default function Nav({ screen, onGo }) {
           type="button"
           onClick={() => onGo(it.id)}
           aria-current={screen === it.id ? 'page' : undefined}
-          className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2 min-h-14 text-[11px] lg:text-xs short:text-[10px] font-bold ${
-            screen === it.id ? 'text-accent bg-soft' : 'text-muted'
-          }`}
+          className="nav-item flex-1 lg:flex-none short:flex-none flex flex-col items-center justify-center gap-1 py-2 lg:py-4 short:py-1.5 min-h-14 short:min-h-0 text-[11px] lg:text-xs short:text-[10px] font-bold"
         >
-          <span className="text-xl lg:text-2xl short:text-lg leading-none">{it.icon}</span>
+          <span className="nav-cap">
+            <Icon name={it.icon} size={22} />
+          </span>
           {it.label}
         </button>
       ))}
@@ -40,9 +41,11 @@ export default function Nav({ screen, onGo }) {
           setTheme(n);
           setT(n);
         }}
-        className="flex flex-col items-center justify-center w-14 lg:w-auto short:w-auto lg:flex-none short:flex-none lg:min-h-14 short:min-h-10 text-muted"
+        className="nav-item flex flex-col items-center justify-center w-14 lg:w-auto short:w-auto lg:flex-none short:flex-none lg:min-h-14 short:min-h-10 lg:mt-auto short:mt-auto lg:mb-2 short:mb-1"
       >
-        <span className="text-xl short:text-base">{THEME_ICON[theme]}</span>
+        <span className="nav-cap">
+          <Icon name={THEME_ICON[theme]} size={20} />
+        </span>
       </button>
     </nav>
   );

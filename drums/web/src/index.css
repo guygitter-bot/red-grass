@@ -5,51 +5,84 @@
 /* טלפון לרוחב: מעט גובה – התפריט עובר לצד */
 @custom-variant short (@media (max-height: 520px) and (orientation: landscape));
 
-/* כל הצבעים במקום אחד – במצב לילה מחליפים רק אותם:
+/* כל הצבעים במקום אחד – במצב לילה מחליפים רק אותם (זהות חזותית: drums/DESIGN.md):
    page = רקע, card = כרטיסים, ink = טקסט, muted = משני, line = מסגרות, soft = רקע מודגש,
-   stage = רקע הבמה, head = עור התוף, lacquer = צבע המעטפת, brass = המצילות */
+   curtain = הווילון (תפריט הניווט), accent = ג'ל טורקיז (פעולה ובחירה), cue = ג'ל מגנטה ("להכות עכשיו"),
+   stage = רצפת הבמה, head = עור התוף (head-ink = הטקסט עליו), brass = המצילות, hoop = חישוק התוף */
 @theme {
-  --color-page: #f4f1ec;
-  --color-card: #ffffff;
-  --color-ink: #1d1a17;
-  --color-muted: #625a52;
-  --color-line: #d9d1c7;
-  --color-soft: #f6e2c8;
-  --color-accent: #c2410c;
+  --color-page: #e9edf4;
+  --color-card: #fafbfd;
+  --color-ink: #14123a;
+  --color-muted: #4b4a6b;
+  --color-line: #c6cbdd;
+  --color-soft: #dae1f1;
+  --color-curtain: #1b1748;
+  --color-curtain-ink: #d9d7f5;
+  --color-accent: #00796f;
   --color-accent-ink: #ffffff;
-  --color-good: #1c7f46;
-  --color-bad: #b42318;
-  --color-cue: #0284c7;
-  --color-stage: #e6dfd5;
-  --color-head: #f6efe3;
-  --color-head-2: #d9cdb9;
-  --color-lacquer: #b8401f;
-  --color-brass-1: #f0cd6a;
-  --color-brass-2: #b8862b;
-  --font-sans: "Assistant", "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-display: "Rubik", "Assistant", system-ui, sans-serif;
+  --color-good: #0f7a46;
+  --color-bad: #b3173c;
+  --color-cue: #c8135a;
+  --color-tom: #5b3fd0;
+  --color-stage: #aebbdf;
+  --color-stage-hi: #cfd9f1;
+  --color-head: #fbfcff;
+  --color-head-2: #d3d9ec;
+  --color-head-ink: #14123a;
+  --color-hoop: #dfe3f0;
+  --color-brass-1: #f3e4b2;
+  --color-brass-2: #bc9d44;
+  --beam-a: rgba(0, 170, 158, 0.3);
+  --beam-b: rgba(214, 30, 104, 0.22);
+  --shaft-a: rgba(255, 255, 255, 0.55);
+  --shaft-b: rgba(255, 255, 255, 0.45);
+  --font-sans: "Heebo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Karantina", "Heebo", system-ui, sans-serif;
 }
 
 .dark {
   color-scheme: dark;
-  --color-page: #0e0d12;
-  --color-card: #1c1a22;
-  --color-ink: #f1ede6;
-  --color-muted: #b3aca1;
-  --color-line: #34303b;
-  --color-soft: #3a2414;
-  --color-accent: #ff8a3d;
-  --color-accent-ink: #1a0c02;
-  --color-good: #66d390;
-  --color-bad: #ff8a7a;
-  --color-cue: #38bdf8;
-  --color-stage: #17151c;
-  --color-head: #4a4656;
-  --color-head-2: #2c2a35;
-  --color-lacquer: #d9552b;
-  --color-brass-1: #f1cf6b;
-  --color-brass-2: #9c7121;
+  --color-page: #0e0b24;
+  --color-card: #1a1540;
+  --color-ink: #edebff;
+  --color-muted: #b4b0da;
+  --color-line: #3a3470;
+  --color-soft: #2a2360;
+  --color-curtain: #080618;
+  --color-curtain-ink: #c9c6ee;
+  --color-accent: #3fe6d2;
+  --color-accent-ink: #04201d;
+  --color-good: #5be39a;
+  --color-bad: #ff8aa5;
+  --color-cue: #ff4d8d;
+  --color-tom: #a08cff;
+  --color-stage: #130f33;
+  --color-stage-hi: #231c57;
+  --color-head: #d9ddf5;
+  --color-head-2: #8d94c6;
+  --color-hoop: #aab0d6;
+  --color-brass-2: #a98b3c;
+  --beam-a: rgba(63, 230, 210, 0.2);
+  --beam-b: rgba(255, 77, 141, 0.17);
+  --shaft-a: rgba(63, 230, 210, 0.2);
+  --shaft-b: rgba(255, 77, 141, 0.17);
 }
+
+/* גימורי התופים (נצנצים / לכה): a, b = שני גוונים של המעטפת, sp = כמה נצנצים (0 = לכה חלקה) */
+[data-finish] {
+  --shell-a: #2b3a9e;
+  --shell-b: #6f86ff;
+  --sp: 0.85;
+  --shell-grad: conic-gradient(from 25deg, var(--shell-a), var(--shell-b) 22%, var(--shell-a) 45%, var(--shell-b) 70%, var(--shell-a));
+}
+[data-finish='emerald'] { --shell-a: #0d6b45; --shell-b: #3fd48f; }
+[data-finish='pearl'] { --shell-a: #15131c; --shell-b: #5b5870; --sp: 0.45; }
+[data-finish='ruby'] { --shell-a: #8e0f2c; --shell-b: #f0476b; }
+[data-finish='chrome'] { --shell-a: #8e95ad; --shell-b: #f2f4fb; --sp: 0.3; }
+[data-finish='teal'] { --shell-a: #0b6a73; --shell-b: #38d6dc; }
+[data-finish='ivory'] { --shell-a: #c9bfa6; --shell-b: #fbf6e6; --sp: 0.4; }
+[data-finish='violet'] { --shell-a: #4a1fa3; --shell-b: #b48cff; }
+[data-finish='piano'] { --shell-a: #0a0912; --shell-b: #3a3850; --sp: 0; }
 
 html,
 body {
@@ -62,6 +95,7 @@ body {
   color: var(--color-ink);
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  caret-color: var(--color-accent);
 }
 #root {
   height: 100%;
@@ -70,16 +104,31 @@ button {
   font: inherit;
   cursor: pointer;
 }
+/* כותרות: Karantina צרה – גדולה מעט יותר מגופן רגיל כדי להיראות באותו משקל */
+.font-display {
+  font-weight: 700;
+  letter-spacing: 0;
+}
+::selection {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+}
+* {
+  scrollbar-color: var(--color-line) transparent;
+}
 :focus-visible {
   outline: 3px solid var(--color-accent);
   outline-offset: 2px;
 }
+.dark :focus-visible {
+  outline-color: var(--color-accent);
+}
 
-/* כפתורים */
+/* כפתורים: ראשי = ג'ל טורקיז עם קצה תחתון (כמו כפתור פיזי) שנלחץ פנימה */
 .btn {
   min-height: 44px;
   padding: 0 16px;
-  border-radius: 12px;
+  border-radius: 14px;
   border: 1.5px solid var(--color-line);
   background: var(--color-card);
   color: var(--color-ink);
@@ -88,9 +137,13 @@ button {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  transition: transform 0.08s, border-color 0.12s, background-color 0.12s;
 }
 .btn:hover:not(:disabled) {
   border-color: var(--color-accent);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
 }
 .btn:disabled {
   opacity: 0.4;
@@ -100,16 +153,34 @@ button {
   background: var(--color-accent);
   color: var(--color-accent-ink);
   border-color: var(--color-accent);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.22);
+}
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.btn-primary:active:not(:disabled) {
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.22);
 }
 .chip {
   min-height: 42px;
-  padding: 0 12px;
-  border-radius: 10px;
+  padding: 0 14px;
+  border-radius: 999px;
   border: 1.5px solid var(--color-line);
   background: var(--color-card);
   color: var(--color-ink);
   font-weight: 600;
   font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: transform 0.08s, border-color 0.12s;
+}
+.chip:hover {
+  border-color: var(--color-accent);
+}
+.chip:active {
+  transform: translateY(1px);
 }
 .chip.on {
   background: var(--color-accent);
@@ -122,26 +193,116 @@ input[type='range'] {
 }
 .input {
   min-height: 44px;
-  border-radius: 12px;
-  border: 1.5px solid var(--color-line);
+  border-radius: 14px;
+  /* גבול שדה טקסט – ניגודיות 3:1 לפחות */
+  border: 1.5px solid color-mix(in srgb, var(--color-muted) 60%, var(--color-card));
   background: var(--color-card);
   color: var(--color-ink);
   padding: 0 12px;
   font: inherit;
   width: 100%;
 }
+.input::placeholder {
+  color: var(--color-muted);
+  opacity: 0.8;
+}
+
+/* תפריט הניווט: וילון כהה בשני המצבים. הפריט הפעיל = קפסולה בג'ל טורקיז */
+.nav-item {
+  color: var(--color-curtain-ink);
+}
+.nav-item .nav-cap {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 30px;
+  border-radius: 999px;
+  transition: background-color 0.15s, color 0.15s, transform 0.1s;
+}
+@media (min-width: 1024px) {
+  .nav-item .nav-cap {
+    width: 56px;
+    height: 34px;
+  }
+}
+.nav-item:hover .nav-cap {
+  background: color-mix(in srgb, var(--color-curtain-ink) 14%, transparent);
+}
+.nav-item[aria-current='page'] {
+  color: #ffffff;
+}
+.nav-item[aria-current='page'] .nav-cap {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+}
+.nav-item:active .nav-cap {
+  transform: scale(0.94);
+}
+.nav-item:focus-visible {
+  outline-offset: -4px;
+  outline-color: #ffffff;
+}
+
+/* סמל תוף קטן בכרטיס סט: עור + חישוק + מעטפת בגימור של הסט */
+.emblem {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 30%, var(--color-head) 0%, var(--color-head-2) 100%);
+  box-shadow: 0 3px 8px rgba(10, 8, 40, 0.3);
+}
+.emblem::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle closest-side, transparent 0 62%, var(--color-hoop) 62% 70%, transparent 70%), var(--shell-grad);
+  -webkit-mask: radial-gradient(circle closest-side, transparent 0 62%, #000 62.5%);
+  mask: radial-gradient(circle closest-side, transparent 0 62%, #000 62.5%);
+}
 
 /* ---- הבמה והחלקים ---- */
+/* במה מוארת: רצפה, שני פנסי ג'ל (קרניים) ושטיח תופים מתחת לסט */
 .stage {
   container-type: size;
-  background: radial-gradient(ellipse 80% 70% at 50% 40%, color-mix(in srgb, var(--color-stage) 85%, white) 0%, var(--color-stage) 100%);
+  background:
+    radial-gradient(ellipse 50% 38% at 18% 0%, var(--beam-a), transparent 70%),
+    radial-gradient(ellipse 50% 38% at 82% 0%, var(--beam-b), transparent 70%),
+    radial-gradient(ellipse 85% 75% at 50% 45%, var(--color-stage-hi) 0%, var(--color-stage) 100%);
 }
-.dark .stage {
-  background: radial-gradient(ellipse 80% 70% at 50% 40%, #26222f 0%, var(--color-stage) 100%);
+.stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    conic-gradient(from 146deg at 14% -14%, transparent 0deg, var(--shaft-a) 6deg 12deg, transparent 19deg),
+    conic-gradient(from 195deg at 86% -14%, transparent 0deg, var(--shaft-b) 6deg 12deg, transparent 19deg);
+  -webkit-mask-image: linear-gradient(#000 0%, transparent 85%);
+  mask-image: linear-gradient(#000 0%, transparent 85%);
 }
 .kit-box {
   position: relative;
   container-type: inline-size;
+}
+/* שטיח התופים: טבעות דקות בצבע הגימור, דוהות לקצוות */
+.kit-box::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 54%;
+  width: 96%;
+  height: 78%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background:
+    repeating-radial-gradient(ellipse at 50% 50%, transparent 0 11px, color-mix(in srgb, var(--shell-b) 22%, transparent) 11px 12px),
+    radial-gradient(ellipse at 50% 50%, color-mix(in srgb, var(--shell-a) 38%, transparent), color-mix(in srgb, var(--shell-a) 18%, transparent));
+  -webkit-mask-image: radial-gradient(ellipse closest-side, #000 55%, transparent 100%);
+  mask-image: radial-gradient(ellipse closest-side, #000 55%, transparent 100%);
+  pointer-events: none;
 }
 .pad {
   position: absolute;
@@ -153,16 +314,17 @@ input[type='range'] {
   place-items: center;
   text-align: center;
   line-height: 1.05;
-  font-family: var(--font-display);
-  font-weight: 700;
+  font-family: var(--font-sans);
+  font-weight: 800;
   /* גודל הכתובת לפי גודל החלק (--s באחוזי רוחב הבמה) */
-  font-size: clamp(8px, calc(var(--s) * 0.17cqw), 17px);
+  font-size: clamp(8px, calc(var(--s) * 0.16cqw), 16px);
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-  color: var(--color-ink);
+  color: var(--color-head-ink);
   border: 0;
+  box-shadow: 0 0.8cqw 1.8cqw rgba(8, 6, 30, 0.38), 0 0 0 0 transparent;
 }
 .pad-label {
   pointer-events: none;
@@ -174,76 +336,85 @@ input[type='range'] {
 }
 .key-hint {
   display: none;
-  font: 700 0.8em var(--font-display);
+  font: 700 0.8em var(--font-sans);
   border: 1px solid currentColor;
   border-radius: 5px;
   padding: 0 4px;
-  opacity: 0.7;
+  opacity: 0.72;
 }
 @media (pointer: fine) {
   .key-hint {
     display: inline-block;
   }
 }
-/* תופים: עור + טבעת צבע */
-.pad-drum {
-  background: radial-gradient(circle at 38% 32%, var(--color-head) 0%, var(--color-head-2) 100%);
-  box-shadow:
-    0 0 0 calc(var(--s) * 0.035cqw) var(--color-lacquer),
-    0 0 0 calc(var(--s) * 0.06cqw) rgba(255, 255, 255, 0.35),
-    0 0.8cqw 1.6cqw rgba(0, 0, 0, 0.35);
-}
+/* תופים: עור לבן מצופה, חישוק כרום ומעטפת נצנצים/לכה (טבעת חיצונית) */
+.pad-drum,
 .pad-kick {
-  background: radial-gradient(circle at 50% 45%, var(--color-head) 0%, var(--color-head-2) 70%, var(--color-lacquer) 100%);
+  background: radial-gradient(circle at 38% 30%, var(--color-head) 0%, var(--color-head-2) 78%);
 }
-/* מצילות: פליז עם ברק */
-.pad-cym {
-  color: #2e2006;
-  background:
-    repeating-radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0) 0 4%, rgba(255, 255, 255, 0.16) 4.5% 5%),
-    radial-gradient(circle at 38% 30%, var(--color-brass-1) 0%, var(--color-brass-2) 100%);
-  box-shadow:
-    0 0 0 calc(var(--s) * 0.02cqw) rgba(255, 240, 180, 0.7),
-    0 0.8cqw 1.6cqw rgba(0, 0, 0, 0.35);
-}
-.pad-cym::after {
+.pad-drum::after,
+.pad-kick::after {
   content: '';
   position: absolute;
-  width: 14%;
-  height: 14%;
+  inset: 0;
   border-radius: 50%;
-  background: radial-gradient(circle, #f4e6b0, #8a6420);
-  inset-block-start: 50%;
-  inset-inline-start: 50%;
-  transform: translate(50%, -50%);
   pointer-events: none;
-  opacity: 0;
+  background:
+    radial-gradient(circle closest-side, transparent 0 76%, var(--color-hoop) 76% 81%, transparent 81%),
+    radial-gradient(circle at 20% 30%, rgba(255, 255, 255, var(--sp)) 0 0.7px, transparent 1.3px) 0 0 / 9px 9px,
+    radial-gradient(circle at 70% 60%, rgba(255, 255, 255, var(--sp)) 0 0.6px, transparent 1.2px) 3px 4px / 13px 13px,
+    var(--shell-grad),
+    transparent;
+  -webkit-mask: radial-gradient(circle closest-side, transparent 0 76%, #000 76.5%);
+  mask: radial-gradient(circle closest-side, transparent 0 76%, #000 76.5%);
+}
+/* הבס: עור עם טבעת פנימית דקה (כמו עור קדמי עם לוגו) */
+.pad-kick {
+  background:
+    radial-gradient(circle closest-side, transparent 0 50%, color-mix(in srgb, var(--shell-a) 40%, transparent) 50% 51.5%, transparent 51.5%),
+    radial-gradient(circle at 38% 30%, var(--color-head) 0%, var(--color-head-2) 78%);
+}
+/* מצילות: פליז מחרטה – טבעות עדינות וברק מתכתי שמסתובב */
+.pad-cym {
+  color: #2b1b05;
+  background:
+    repeating-radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0) 0 2.2%, rgba(255, 255, 255, 0.2) 2.5% 2.8%),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.5) 0 7%, transparent 22%),
+    conic-gradient(from 30deg, var(--color-brass-1), var(--color-brass-2) 16%, var(--color-brass-1) 33%, var(--color-brass-2) 52%, var(--color-brass-1) 70%, var(--color-brass-2) 86%, var(--color-brass-1));
+  box-shadow:
+    inset 0 0 0 calc(var(--s) * 0.02cqw) rgba(255, 245, 200, 0.75),
+    0 0.8cqw 1.8cqw rgba(8, 6, 30, 0.38),
+    0 0 0 0 transparent;
 }
 .pad-bell {
-  color: #1d1305;
+  color: var(--color-head-ink);
   border-radius: 28%;
-  background: linear-gradient(160deg, #d9d9dc, #7c7c84);
+  background: linear-gradient(160deg, #e3e6f2, #8a90ac);
 }
+/* הכאה: קפיצה קטנה, הבהוב, וגל ג'ל טורקיז שמתרחב מהחלק */
 .pad.hit {
-  animation: padhit 0.24s ease-out;
+  animation: padhit 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 @keyframes padhit {
   0% {
     transform: translate(-50%, -50%) scale(0.92);
-    filter: brightness(1.35) drop-shadow(0 0 1.4cqw var(--color-accent));
+    filter: brightness(1.25);
+    box-shadow: 0 0.8cqw 1.8cqw rgba(8, 6, 30, 0.38), 0 0 0 0.5cqw var(--color-accent);
   }
   100% {
     transform: translate(-50%, -50%) scale(1);
-    filter: brightness(1) drop-shadow(0 0 0 transparent);
+    filter: brightness(1);
+    box-shadow: 0 0.8cqw 1.8cqw rgba(8, 6, 30, 0.38), 0 0 0 3.6cqw transparent;
   }
 }
 .pad-cym.hit {
-  animation: cymhit 0.5s ease-out;
+  animation: cymhit 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 @keyframes cymhit {
   0% {
     transform: translate(-50%, -50%) rotate(-4deg) scale(0.95);
-    filter: brightness(1.3) drop-shadow(0 0 1.6cqw #ffd45e);
+    filter: brightness(1.2);
+    box-shadow: inset 0 0 0 calc(var(--s) * 0.02cqw) rgba(255, 245, 200, 0.75), 0 0.8cqw 1.8cqw rgba(8, 6, 30, 0.38), 0 0 0 0.3cqw var(--color-accent);
   }
   35% {
     transform: translate(-50%, -50%) rotate(3deg) scale(1);
@@ -253,7 +424,8 @@ input[type='range'] {
   }
   100% {
     transform: translate(-50%, -50%) rotate(0) scale(1);
-    filter: brightness(1) drop-shadow(0 0 0 transparent);
+    filter: brightness(1);
+    box-shadow: inset 0 0 0 calc(var(--s) * 0.02cqw) rgba(255, 245, 200, 0.75), 0 0.8cqw 1.8cqw rgba(8, 6, 30, 0.38), 0 0 0 4cqw transparent;
   }
 }
 
@@ -286,7 +458,7 @@ input[type='range'] {
   transition: opacity 0.08s;
 }
 .pad[data-cue='soon']::before {
-  opacity: 0.75;
+  opacity: 0.8;
   border-style: dashed;
 }
 .pad[data-cue='now']::before {
@@ -298,7 +470,7 @@ input[type='range'] {
 }
 .pad[data-cue='now'] {
   z-index: 3;
-  filter: brightness(1.15);
+  filter: brightness(1.12);
 }
 @keyframes cuepulse {
   to {
@@ -347,9 +519,9 @@ input[type='range'] {
 }
 .tl-kick { background: var(--color-accent); }
 .tl-snare { background: var(--color-ink); }
-.tl-tom { background: var(--color-lacquer); }
+.tl-tom { background: var(--color-tom); }
 .tl-cym { background: var(--color-brass-2); border-radius: 2px; transform: rotate(45deg); }
-.tl-bell { background: #7c7c84; border-radius: 2px; }
+.tl-bell { background: var(--color-muted); border-radius: 2px; }
 .tl-playhead {
   position: absolute;
   top: -2px;
@@ -371,4 +543,9 @@ input[type='range'] {
     margin-left: -5.5px;
     margin-top: -5.5px;
   }
+}
+
+/* כרטיס סט: גוון עדין בצבע הגימור של הסט, כדי שהסטים לא ייראו זהים */
+.kit-card {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--shell-b) 16%, var(--color-card)), var(--color-card) 60%);
 }

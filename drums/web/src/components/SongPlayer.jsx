@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadYouTubeApi } from '../lib/youtube';
+import Icon from './Icon';
 
 // נגן יוטיוב קטן (IFrame API) מעל הסט: נגן/השהה, עוצמת שיר ועוצמת תופים בנפרד, מתקפל.
 // נשאר פעיל כל הזמן שהשיר טעון, גם כשעוברים בין מסכים (אז הוא מוסתר)
@@ -104,19 +105,19 @@ export default function SongPlayer({ videoId, hidden, songVol, drumVol, onSongVo
     <section className={`${hidden ? 'hidden' : ''} shrink-0 bg-card border-b border-line`} aria-label="נגן שיר">
       <div className="flex items-center gap-2 px-3 py-1.5 flex-wrap">
         <button type="button" className="btn btn-primary !min-h-10 !px-3" onClick={toggle} disabled={!ready} aria-label={playing ? 'השהיה' : 'נגן'}>
-          {playing ? '⏸' : '▶'}
+          <Icon name={playing ? 'pause' : 'play'} size={18} />
         </button>
         <div className="min-w-0 flex-1 basis-24 text-sm font-semibold truncate" title={title}>{title || 'טוען שיר…'}</div>
         <label className="flex items-center gap-1 text-xs text-muted">
-          🎵
+          <Icon name="note" size={18} />
           <input type="range" min="0" max="100" value={Math.round(songVol * 100)} onChange={(e) => onSongVol(e.target.value / 100)} className="w-20 sm:w-28" aria-label="עוצמת השיר" />
         </label>
         <label className="flex items-center gap-1 text-xs text-muted">
-          🥁
+          <Icon name="drum" size={18} />
           <input type="range" min="0" max="100" value={Math.round(drumVol * 100)} onChange={(e) => onDrumVol(e.target.value / 100)} className="w-20 sm:w-28" aria-label="עוצמת התופים" />
         </label>
         <button type="button" className="btn !min-h-10 !px-3 text-sm" onClick={() => setOpen(!open)} aria-expanded={open}>{open ? 'הסתר וידאו' : 'הצג וידאו'}</button>
-        <button type="button" className="btn !min-h-10 !px-3 text-sm" onClick={onClose} aria-label="הסרת השיר">✕</button>
+        <button type="button" className="btn !min-h-10 !px-3 text-sm" onClick={onClose} aria-label="הסרת השיר"><Icon name="close" size={16} /></button>
       </div>
       {failed && <p className="px-3 pb-2 text-sm text-bad">{failed}</p>}
       <div className={open ? 'px-3 pb-2 flex justify-center' : 'h-0 overflow-hidden'}>

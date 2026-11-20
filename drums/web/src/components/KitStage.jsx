@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { PIECES, pieceForCode } from '../lib/kit';
 import { layoutFor, STAGE_HEIGHT } from '../lib/layout';
+import { finishOf } from '../lib/finish';
 import { flashEl } from '../lib/padfx';
 import { ensureAudio, playPiece } from '../lib/sounds';
 
@@ -67,6 +68,7 @@ export default function KitStage({ kit, keys = false, boxRef: outerRef, onUserHi
       <div
         ref={boxRef}
         className="kit-box"
+        data-finish={finishOf(kit)}
         dir="ltr"
         style={{ width: `min(100%, calc((100cqh) * 100 / ${H}))`, aspectRatio: `100 / ${H}` }}
       >
