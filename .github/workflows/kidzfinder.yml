@@ -71,7 +71,8 @@ jobs:
       - name: Summary
         env:
           URL: ${{ steps.deploy.outputs.deployment-url }}
-        run: echo "Worker: $URL" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo "Worker: $URL" >> "$GITHUB_STEP_SUMMARY"
 
   web:
     needs: test
@@ -138,4 +139,5 @@ jobs:
           command: pages deploy dist --project-name=kidzfinder --branch=main --commit-dirty=true
       - name: Summary
         if: github.event_name != 'pull_request'
-        run: echo "Published https://kidzfinder.pages.dev - APK https://kidzfinder.pages.dev/kidzfinder.apk" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo "Published https://kidzfinder.pages.dev - APK https://kidzfinder.pages.dev/kidzfinder.apk" >> "$GITHUB_STEP_SUMMARY"
