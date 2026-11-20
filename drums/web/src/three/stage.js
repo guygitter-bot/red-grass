@@ -1,5 +1,6 @@
 // מנוע הבמה התלת־ממדית: רנדרר, מצלמה מכיסא המתופף, האולם, התאורה, הסט, bloom, לולאת ציור והתאמת איכות לפי מהירות המכשיר.
 // ה-API (createStage) קטן: setKit, resize, hit, flash, cues, pick, anchors, setDark, setMotion, dispose.
+// opts: quality ('high' = נעול על הגבוהה, 'safe' = ישר לרמה הנמוכה בלי bloom), onBlank = הקנבס ריק / הציור נכשל שוב ושוב (הקורא בונה מחדש או חוזר לבמה שטוחה).
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
@@ -7,6 +8,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { finishOf } from '../lib/finish';
 import { cameraFor, modeFor } from '../lib/layout3d';
+import { BLANK_LIMIT, isBlank, nextQuality } from '../lib/quality';
 import { setCue, startFlash, startHit, stepPiece } from './hitfx';
 import { buildKit, disposeKit } from './kitModel';
 import { buildLights } from './lights';
@@ -46,7 +48,7 @@ export function createStage(canvas, opts = {}) {
 
   const coarse = window.matchMedia?.('(pointer: coarse)').matches;
   const locked = opts.quality === 'high';
-  let level = locked ? 0 : coarse ? 1 : 0;
+  let level = locked ? 0 : opts.quality === 'safe' ? LEVELS.length - 1 : coarse ? 2 : 0; // בטלפון מתחילים בלי זוהר (bloom) – פחות עומס ופחות סיכון למסך שחור
   let composer = null;
   let bloom = null;
   let size = { w: 1, h: 1 };
@@ -65,6 +67,36 @@ export function createStage(canvas, opts = {}) {
   let frames = 0;
   let frameSum = 0;
   const fps = { avg: 0 };
+  // ירידת איכות מתבצעת בתחילת הפריים הבא, מיד לפני הציור – כך הקנבס (שמתרוקן בשינוי גודל) לא מוצג ריק אפילו פריים אחד
+  let regrade = false;
+  let forceBlank = false; // לבדיקות בלבד (?debug)
+  let errors = 0;
+  let blankRun = 0;
+  let blankChecked = 0;
+  let reported = false;
+  const sample = new Uint8Array(4);
+
+  function report() {
+    if (reported || disposed) return;
+    reported = true;
+    opts.onBlank?.();
+  }
+
+  // דוגם 25 נקודות מהקנבס אחרי הציור (לפני הצגתו): אם כולן שחורות לגמרי – הבמה מתה (הקשר אבד / ציור לא מגיע למסך)
+  function readSamples() {
+    const gl = renderer.getContext();
+    if (gl.isContextLost()) return null;
+    const w = gl.drawingBufferWidth;
+    const h = gl.drawingBufferHeight;
+    const out = [];
+    for (let i = 1; i <= 5; i++) {
+      for (let j = 1; j <= 5; j++) {
+        gl.readPixels(Math.floor((w * i) / 6), Math.floor((h * j) / 6), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, sample);
+        out.push([sample[0], sample[1], sample[2], sample[3]]);
+      }
+    }
+    return out;
+  }
 
   function setupComposer() {
     const [, useBloom] = LEVELS[level];
@@ -142,8 +174,25 @@ export function createStage(canvas, opts = {}) {
   }
 
   // ---- לולאת הציור ----
+  // עטיפה: שגיאה באמצע ציור לא מפילה את הלולאה ולא משאירה יעד ציור שבור; אחרי כמה שגיאות רצופות מדווחים
   function tick(now) {
     raf = requestAnimationFrame(tick);
+    try {
+      frame(now);
+      errors = 0;
+    } catch (err) {
+      errors++;
+      console.error('Stage3D frame failed', err);
+      try {
+        renderer.setRenderTarget(null);
+      } catch {
+        // ממשיכים
+      }
+      if (errors >= 3) report();
+    }
+  }
+
+  function frame(now) {
     const dt = Math.min(0.05, last ? (now - last) / 1000 : 0.016);
     last = now;
     clock += dt;
@@ -161,7 +210,7 @@ export function createStage(canvas, opts = {}) {
         if (e.cue) cueOn = true;
       }
     }
-    if (!motion && !busy && !cueOn && !dirty) return;
+    if (!motion && !busy && !cueOn && !dirty && !regrade) return;
     dirty = false;
 
     lights.setDay(dayT);
@@ -189,24 +238,36 @@ export function createStage(canvas, opts = {}) {
       for (const e of model.pieces.values()) if (e.cue) e.ring.material.uniforms.uTime.value = clock;
     }
 
+    if (regrade) {
+      regrade = false;
+      setupComposer();
+      applySize();
+    }
+    if (renderer.getContext().isContextLost()) return;
     renderer.info.reset();
-    if (composer) composer.render();
+    if (forceBlank) {
+      renderer.setRenderTarget(null);
+      renderer.setClearColor(0x000000, 1);
+      renderer.clear();
+    } else if (composer) composer.render();
     else renderer.render(scene, camera);
+
+    // שומר מסך שחור: בדיקה בערך פעם בשנייה
+    if (model && size.w > 1 && now - blankChecked > 1000) {
+      blankChecked = now;
+      blankRun = isBlank(readSamples()) ? blankRun + 1 : 0;
+      if (blankRun >= BLANK_LIMIT) report();
+    }
 
     // התאמת איכות: אם הממוצע איטי מ-24ms (בערך 40 פריימים בשנייה) במשך כשתי שניות – יורדים רמה
     frames++;
     frameSum += dt;
     if (frameSum > 1) {
       fps.avg = frames / frameSum;
-      if (!locked && fps.avg < 42 && level < LEVELS.length - 1) {
-        slow++;
-        if (slow >= 2) {
-          level++;
-          slow = 0;
-          setupComposer();
-          applySize();
-        }
-      } else slow = 0;
+      const q = nextQuality({ level, slow }, fps.avg, LEVELS.length, locked);
+      level = q.level;
+      slow = q.slow;
+      if (q.changed) regrade = true;
       frames = 0;
       frameSum = 0;
     }
@@ -304,7 +365,7 @@ export function createStage(canvas, opts = {}) {
 
   function stats() {
     const i = renderer.info;
-    return { fps: Math.round(fps.avg), level, dpr: renderer.getPixelRatio(), bloom: !!composer, calls: i.render.calls, triangles: i.render.triangles, geometries: i.memory.geometries, textures: i.memory.textures };
+    return { fps: Math.round(fps.avg), level, dpr: renderer.getPixelRatio(), bloom: !!composer, blank: blankRun, errors, calls: i.render.calls, triangles: i.render.triangles, geometries: i.memory.geometries, textures: i.memory.textures };
   }
 
   function dispose() {
@@ -327,5 +388,5 @@ export function createStage(canvas, opts = {}) {
 
   setupComposer();
   start();
-  return { setKit, resize, hit, flash, cues, pick, anchors, setDark, setMotion: (m) => { motion = m; dirty = true; }, stats, dispose, renderer };
+  return { setKit, resize, hit, flash, cues, pick, anchors, setDark, setMotion: (m) => { motion = m; dirty = true; }, stats, debug: { blank: (v) => { forceBlank = v; dirty = true; }, level: (n) => { level = n; regrade = true; dirty = true; } }, dispose, renderer };
 }

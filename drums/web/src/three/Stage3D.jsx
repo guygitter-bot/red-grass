@@ -12,12 +12,14 @@ function loadLabels() {
   }
 }
 
-export default function Stage3D({ kit, keys = false, padsRef, onHit, onFail, onEngine }) {
+export default function Stage3D({ kit, keys = false, safe = false, padsRef, onHit, onFail, onTrouble, onEngine }) {
   const wrapRef = useRef(null);
   const canvasRef = useRef(null);
   const engineRef = useRef(null);
   const kitRef = useRef(kit);
   kitRef.current = kit;
+  const onTroubleRef = useRef(onTrouble);
+  onTroubleRef.current = onTrouble;
   const hitRef = useRef(onHit);
   hitRef.current = onHit;
   const [anchors, setAnchors] = useState([]);
@@ -32,14 +34,14 @@ export default function Stage3D({ kit, keys = false, padsRef, onHit, onFail, onE
     let engine;
     try {
       const q = new URLSearchParams(window.location.search).get('q');
-      engine = createStage(canvasRef.current, { quality: q });
+      engine = createStage(canvasRef.current, { quality: q || (safe ? 'safe' : undefined), onBlank: () => onTroubleRef.current?.() });
     } catch {
       onFail?.();
       return undefined;
     }
     engineRef.current = engine;
     onEngine?.(engine);
-    if (import.meta.env.DEV || new URLSearchParams(window.location.search).has('q')) window.__drumStage = engine;
+    if (import.meta.env.DEV || new URLSearchParams(window.location.search).has('q') || new URLSearchParams(window.location.search).has('debug')) window.__drumStage = engine;
     const el = wrapRef.current;
     const sync = () => {
       engine.setDark(document.documentElement.classList.contains('dark'));
@@ -54,9 +56,11 @@ export default function Stage3D({ kit, keys = false, padsRef, onHit, onFail, onE
       setAnchors(engine.anchors());
     });
     ro.observe(el);
+    // אובדן הקשר (זיכרון גרפי בטלפון): בונים מחדש באיכות נמוכה או חוזרים לבמה השטוחה – לא משאירים מסך שחור
     const lost = (e) => {
       e.preventDefault();
-      onFail?.();
+      if (onTroubleRef.current) onTroubleRef.current();
+      else onFail?.();
     };
     canvasRef.current.addEventListener('webglcontextlost', lost);
     const canvas = canvasRef.current;
