@@ -293,6 +293,8 @@ export function createStage(canvas, opts = {}) {
   const ray = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
   const tmp = new THREE.Vector3();
+  const local = new THREE.Vector3();
+  // מחזיר { id, r } – r = היכן על החלק פגעו (0 מרכז .. 1 שפה); בפגיעה "בערך" ליד החלק r = 0.85 (שפה)
   function pick(clientX, clientY) {
     if (!model) return null;
     const rect = canvas.getBoundingClientRect();
@@ -301,7 +303,13 @@ export function createStage(canvas, opts = {}) {
     const list = [...model.pieces.values()];
     for (const key of ['hitExact', 'hitWide']) {
       const hits = ray.intersectObjects(list.map((e) => e[key]), false);
-      if (hits.length) return hits[0].object.userData.pieceId;
+      if (hits.length) {
+        const o = hits[0].object;
+        // נקודת הפגיעה בקואורדינטות של גליל היחידה (ציר y = ציר החלק) ← רדיוס מנורמל 0 (מרכז) .. 1 (שפה)
+        const lp = o.worldToLocal(local.copy(hits[0].point));
+        const r = Math.min(1, Math.hypot(lp.x, lp.z) * (o.userData.rScale || 1));
+        return { id: o.userData.pieceId, r };
+      }
     }
     let best = null;
     let bestD = Infinity;
@@ -315,7 +323,7 @@ export function createStage(canvas, opts = {}) {
         best = e.id;
       }
     }
-    return bestD < Math.max(60, rect.width * 0.08) ? best : null;
+    return bestD < Math.max(60, rect.width * 0.08) ? { id: best, r: 0.85 } : null;
   }
 
   // נקודות לתוויות: מתחת למרכז כל חלק, בפיקסלים של הקנבס
@@ -336,11 +344,12 @@ export function createStage(canvas, opts = {}) {
     });
   }
 
-  function hit(id, amp = 1) {
+  // zone (לא חובה): 'bell' = פעמון הרייד – הילה קטנה וחזקה במרכז
+  function hit(id, amp = 1, zone) {
     const e = model?.pieces.get(id);
     if (!e) return;
     startHit(e, amp);
-    startFlash(e, 'hit', amp);
+    startFlash(e, 'hit', zone === 'bell' ? amp * 1.6 : amp, zone === 'bell');
     if (e.kind === 'kick') {
       lights.flash(0.45 * amp);
       venue.crowd.mesh.material.uniforms.uPulse.value = 1;
@@ -357,9 +366,10 @@ export function createStage(canvas, opts = {}) {
     dirty = true;
   }
 
-  function cues(now, soon) {
+  // hands (לא חובה) = { חלק: 'R' | 'L' } – צבע הטבעת לפי היד בתרגילי טכניקה
+  function cues(now, soon, hands) {
     if (!model) return;
-    for (const e of model.pieces.values()) setCue(e, now.has(e.id) ? 'now' : soon.has(e.id) ? 'soon' : null);
+    for (const e of model.pieces.values()) setCue(e, now.has(e.id) ? 'now' : soon.has(e.id) ? 'soon' : null, hands ? hands[e.id] : null);
     dirty = true;
   }
 

@@ -151,3 +151,28 @@ describe('התאמה לסט אישי', () => {
     expect(rowsFor(s16)).toEqual(['hihat', 'snare', 'kick']);
   });
 });
+
+describe('ידיים בתרגילי טכניקה', () => {
+  const ex = { id: 'e', steps: 16, bars: 1, hits: { snare: [0, 4], kick: [4] }, hands: { snare: { 0: 'R', 4: 'L' } }, soft: { snare: [4] } };
+  it('לוח הזמנים מוסיף ידיים רק כשהן מוגדרות', () => {
+    const ev = scheduleFor(ex, 120, 1);
+    expect(ev[0].hands).toEqual({ snare: 'R' });
+    expect(ev[1].hands).toEqual({ snare: 'L' }); // הבס בלי יד
+    expect(scheduleFor(s16, 120, 1)[0].hands).toBeUndefined();
+  });
+  it('ההדגשה מחזירה את היד של החלק שמכים עכשיו', () => {
+    const ev = scheduleFor(ex, 120, 1);
+    const c = cueAt(ev, 2, 0.5);
+    expect([...c.now].sort()).toEqual(['kick', 'snare']);
+    expect(c.hands).toEqual({ snare: 'L' });
+    const soon = cueAt(ev, 2, 0.3, 1);
+    expect(soon.hands).toEqual({ snare: 'L' }); // הבא בתור
+  });
+  it('התאמה לסט: הידיים והשקט עוברים עם החלק שהוחלף', () => {
+    const e2 = { ...ex, hits: { tom3: [0, 4] }, hands: { tom3: { 0: 'R', 4: 'L' } }, soft: { tom3: [4] } };
+    const fit = fitSection(e2, ['kick', 'snare', 'hihat', 'tom1']);
+    expect(fit.section.hits).toEqual({ tom1: [0, 4] });
+    expect(fit.section.hands).toEqual({ tom1: { 0: 'R', 4: 'L' } });
+    expect(fit.section.soft).toEqual({ tom1: [4] });
+  });
+});

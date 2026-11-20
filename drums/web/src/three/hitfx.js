@@ -26,7 +26,9 @@ export function startHit(e, amp = 1) {
   e.anim = a;
 }
 
-export function startFlash(e, cls = 'hit', k = 1) {
+// small = הילה קטנה במרכז (פעמון הרייד) במקום על כל החלק
+export function startFlash(e, cls = 'hit', k = 1, small = false) {
+  if (e.haloBase) e.halo.scale.setScalar(e.haloBase * (small ? 0.32 : 1));
   e.flashT = 0;
   e.flashK = k;
   e.flashColor.copy(FLASH[cls] || FLASH.hit);
@@ -102,10 +104,14 @@ export function stepPiece(e, dt, reduced) {
 }
 
 // הדגשת לימוד: now = טבעת מגנטה חזקה שפועמת, soon = טבעת מקווקוות רכה
-export function setCue(e, cue) {
-  if (e.cue === cue) return;
-  e.cue = cue;
+// hand: 'L' = טבעת תכלת (יד שמאל בתרגילי טכניקה), אחרת מגנטה (ימין / רגיל)
+const HAND_COLOR = { R: new THREE.Color(3.2, 0.25, 1.4), L: new THREE.Color(0.2, 2.1, 3.0) };
+export function setCue(e, cue, hand) {
+  const key = cue ? `${cue}${hand || ''}` : null;
+  if (e.cue === key) return;
+  e.cue = key;
   const u = e.ring.material.uniforms;
+  u.uColor.value.copy(HAND_COLOR[hand] || HAND_COLOR.R);
   e.ring.visible = !!cue;
   u.uDash.value = cue === 'soon' ? 1 : 0;
   u.uAlpha.value = cue === 'now' ? 1.6 : cue === 'soon' ? 0.7 : 0;

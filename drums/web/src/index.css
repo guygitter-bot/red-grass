@@ -987,3 +987,32 @@ input[type='range']:focus-visible {
     height: 9px;
   }
 }
+
+/* ---- אימון: ידיים (ימין = מגנטה, שמאל = תכלת), כוכבים, מסלול ---- */
+.hand-R { color: #ff4fa3; }
+.hand-L { color: #4fd6ff; }
+.tl-hand {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font: 800 9px/1 var(--font-sans);
+}
+.tl-hand.soft { opacity: 0.55; font-size: 7.5px; }
+@media (min-width: 1024px) {
+  .tl-hand { font-size: 12px; }
+  .tl-hand.soft { font-size: 10px; }
+}
+/* בבמה השטוחה: טבעת התכלת ליד שמאל */
+.pad[data-cue][data-hand='L']::before {
+  border-color: #4fd6ff;
+  box-shadow: 0 0 2.4cqw 0.6cqw #4fd6ff, inset 0 0 2cqw #4fd6ff;
+}
+.pad[data-cue='soon'][data-hand='L']::before { box-shadow: none; }
+.star-on { fill: #ffb21f; stroke: #ffb21f; filter: drop-shadow(0 0 3px rgba(255, 178, 31, 0.6)); }
+.star-off { fill: none; stroke: currentColor; opacity: 0.4; }
+.stage-toggle-2 { top: 48px; }
+/* המסלול: נמוך בטלפון לאורך (שהסט יישאר גדול), גבוה יותר במחשב ובעמודה בצד */
+.highway { height: 92px; }
+@media (min-width: 1024px) { .highway { height: 230px; } }
+@media (max-height: 520px) and (orientation: landscape) { .highway { height: 150px; } }
+@media (min-width: 640px) and (max-width: 1023px) and (orientation: portrait) { .highway { height: 150px; } }

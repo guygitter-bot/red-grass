@@ -34,7 +34,15 @@ export function scheduleFor(section, bpm, speed = 1) {
   const out = [];
   for (let i = 0; i < totalSteps(section); i++) {
     const pieces = hitsAt(section, i);
-    if (pieces.length) out.push({ index: i, time: i * step, pieces });
+    if (!pieces.length) continue;
+    const ev = { index: i, time: i * step, pieces };
+    // תרגילי טכניקה: איזו יד מכה כל חלק בצעד הזה (R / L), אם מוגדר
+    if (section.hands) {
+      const hands = {};
+      for (const p of pieces) if (section.hands[p]?.[i]) hands[p] = section.hands[p][i];
+      if (Object.keys(hands).length) ev.hands = hands;
+    }
+    out.push(ev);
   }
   return out;
 }
@@ -72,22 +80,30 @@ export function candidatesAround(events, loopLen, timeSec, loop = true) {
 
 // מה מודגש ברגע מסוים בתוך הלולאה (pos בשניות, 0..loopLen):
 // now = חלקים להכות עכשיו, soon = המכה הבאה (אם בטווח maxAhead שניות). הלולאה "עוטפת"
+// hands = לכל חלק מודגש איזו יד (R / L) – רק בתרגילי טכניקה
 export function cueAt(events, loopLen, pos, maxAhead = Infinity) {
   const now = new Set();
+  const hands = {};
   let soonTime = Infinity;
   let soon = [];
+  let soonHands = null;
   for (const ev of events) {
     for (const shift of [-loopLen, 0, loopLen]) {
       const t = ev.time + shift;
-      if (pos >= t - NOW_BEFORE && pos <= t + NOW_AFTER) ev.pieces.forEach((p) => now.add(p));
-      else if (t > pos + NOW_BEFORE && t < soonTime) {
+      if (pos >= t - NOW_BEFORE && pos <= t + NOW_AFTER) {
+        ev.pieces.forEach((p) => now.add(p));
+        if (ev.hands) Object.assign(hands, ev.hands);
+      } else if (t > pos + NOW_BEFORE && t < soonTime) {
         soonTime = t;
         soon = ev.pieces;
+        soonHands = ev.hands || null;
       }
     }
   }
-  const soonSet = soonTime - pos <= maxAhead ? new Set(soon) : new Set();
-  return { now, soon: soonSet };
+  const soonOk = soonTime - pos <= maxAhead;
+  const soonSet = soonOk ? new Set(soon) : new Set();
+  if (soonOk && soonHands) for (const [p, h] of Object.entries(soonHands)) if (!now.has(p)) hands[p] = h;
+  return { now, soon: soonSet, hands };
 }
 
 // ציון באחוזים: מושלם = 1, טוב = 0.6, מחולק במספר המכות שכבר "נסגרו"
@@ -161,6 +177,8 @@ export function fitPiece(id, available) {
 // מתאים סעיף לחלקי סט נתונים: { section, notes } – notes = הודעות קצרות בעברית על חלקים שהוחלפו
 export function fitSection(section, available) {
   const hits = {};
+  const hands = {};
+  const soft = {};
   const notes = [];
   for (const [piece, idxs] of Object.entries(section.hits)) {
     const to = fitPiece(piece, available);
@@ -170,8 +188,14 @@ export function fitSection(section, available) {
       if (!notes.includes(msg)) notes.push(msg);
     }
     hits[to] = [...new Set([...(hits[to] || []), ...idxs])].sort((a, b) => a - b);
+    // ידיים ושקט עוברים יחד עם החלק (תרגילי טכניקה)
+    if (section.hands?.[piece]) hands[to] = { ...(hands[to] || {}), ...section.hands[piece] };
+    if (section.soft?.[piece]) soft[to] = [...new Set([...(soft[to] || []), ...section.soft[piece]])];
   }
-  return { section: { ...section, hits }, notes };
+  const out = { ...section, hits };
+  if (section.hands) out.hands = hands;
+  if (section.soft) out.soft = soft;
+  return { section: out, notes };
 }
 
 // סדר השורות בציר הזמן: מלמעלה (מצילות) למטה (בס), כמו בתווים לתופים

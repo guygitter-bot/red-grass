@@ -20,10 +20,12 @@ export function feedbackPad(root, id, grade) {
   flashEl(padEl(root, id), `fb-${grade}`);
 }
 
-// מסמן אילו חלקים להכות עכשיו (now) ואילו בקרוב (soon). עובר על ה-DOM רק כשיש שינוי
-export function setCues(root, now, soon) {
+// מסמן אילו חלקים להכות עכשיו (now) ואילו בקרוב (soon). עובר על ה-DOM רק כשיש שינוי.
+// hands (לא חובה) = { חלק: 'R' | 'L' } – באילו ידיים מנגנים (תרגילי טכניקה): data-hand על החלק וצבע הטבעת
+export function setCues(root, now, soon, hands) {
   if (!root) return;
-  const key = [...now].sort().join(',') + '|' + [...soon].sort().join(',');
+  const handKey = hands ? Object.entries(hands).sort().join(';') : '';
+  const key = [...now].sort().join(',') + '|' + [...soon].sort().join(',') + '|' + handKey;
   if (root.dataset.cueKey === key) return;
   root.dataset.cueKey = key;
   root.querySelectorAll('[data-pad]').forEach((el) => {
@@ -31,8 +33,10 @@ export function setCues(root, now, soon) {
     if (now.has(id)) el.dataset.cue = 'now';
     else if (soon.has(id)) el.dataset.cue = 'soon';
     else delete el.dataset.cue;
+    if (hands && hands[id] && (now.has(id) || soon.has(id))) el.dataset.hand = hands[id];
+    else delete el.dataset.hand;
   });
-  root.__fx?.cues(now, soon);
+  root.__fx?.cues(now, soon, hands);
 }
 
 export function clearCues(root) {

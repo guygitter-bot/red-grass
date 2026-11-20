@@ -6,6 +6,7 @@ const ITEMS = [
   { id: 'play', icon: 'drum', label: 'נגינה' },
   { id: 'kits', icon: 'sparkle', label: 'סטים' },
   { id: 'builder', icon: 'sliders', label: 'בונה' },
+  { id: 'train', icon: 'star', label: 'אימון' },
   { id: 'song', icon: 'note', label: 'שיר' },
 ];
 const THEME_ICON = { auto: 'auto', light: 'sun', dark: 'moon' };
