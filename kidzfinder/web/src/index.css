@@ -1,0 +1,62 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+/* מצב לילה: מחלקה dark על html (נקבעת ב-src/lib/theme.js) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* זהות משלנו ל-Kidzfinder: כחול-סגול, שונה משאר האפליקציות.
+   page=רקע מסך, card=כרטיסים, ink=טקסט, muted=משני, line=מסגרות, soft=רקע עדין,
+   accent=כחול ראשי, sos=אדום מצוקה, ok=ירוק אישור */
+@theme {
+  --color-page: #f3f5fb;
+  --color-card: #ffffff;
+  --color-ink: #1a1c2e;
+  --color-muted: #656a85;
+  --color-line: #e3e7f2;
+  --color-soft: #eaeefc;
+  --color-accent: #4f46e5;
+  --color-accent-ink: #4338ca;
+  --color-sos: #dc2626;
+  --color-ok: #16a34a;
+  --color-warn: #d97706;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-page: #0d0f1a;
+  --color-card: #171a2b;
+  --color-ink: #e9ebf7;
+  --color-muted: #9aa0c0;
+  --color-line: #272b42;
+  --color-soft: #1d2138;
+  --color-accent: #818cf8;
+  --color-accent-ink: #a5b4fc;
+  --color-sos: #f87171;
+  --color-ok: #4ade80;
+  --color-warn: #fbbf24;
+}
+
+html,
+body {
+  font-family: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--color-page);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.num { font-variant-numeric: tabular-nums; }
+
+/* המפה ממלאת את הכרטיס שלה; מתאימה למצב לילה */
+.leaflet-container { background: var(--color-soft); font-family: inherit; }
+.dark .leaflet-tile { filter: brightness(0.75) invert(0.04) hue-rotate(10deg); }
+.dark .leaflet-container { background: #10131f; }
+
+/* סמן ילד על המפה – עיגול עם אימוג'י */
+.kid-pin {
+  display: grid; place-items: center;
+  width: 42px; height: 42px; border-radius: 50%;
+  background: var(--color-card); border: 3px solid var(--color-accent);
+  box-shadow: 0 3px 10px rgba(0,0,0,.25); font-size: 22px;
+}
+.kid-pin.sos { border-color: var(--color-sos); animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.12); } }

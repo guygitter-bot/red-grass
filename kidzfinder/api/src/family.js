@@ -155,12 +155,28 @@ export class Family {
         return json({ ok: true });
       }
 
-      // הורה מבקש להתקשר / לצלצל אצל הילד (מסומן ב"פקודות" שהילד מושך)
+      // הורה מבקש להתקשר / לצלצל / בדיקת "אתה בסדר?" אצל הילד (פקודות שהילד מושך)
       if (path === '/command' && method === 'POST') {
         if (!isParent) return json({ error: 'forbidden' }, 403);
-        if (!['ring', 'call'].includes(body.action)) return json({ error: 'bad_action' }, 400);
+        if (!['ring', 'call', 'checkin'].includes(body.action)) return json({ error: 'bad_action' }, 400);
         doc.commands = doc.commands || {};
         doc.commands[body.childId] = { action: body.action, ts: now() };
+        // בדיקה = מחכים לתשובת "אני בסדר"; שומרים מתי נשלחה כדי לדעת אם לא ענו (הסלמה)
+        if (body.action === 'checkin') {
+          doc.checkins = doc.checkins || {};
+          doc.checkins[body.childId] = { requested: now(), answered: null };
+        }
+        await this.save(doc);
+        return json({ ok: true });
+      }
+
+      // הילד לוחץ "אני בסדר 👍" בתגובה לבדיקה
+      if (path === '/checkin-reply' && method === 'POST') {
+        if (!child) return json({ error: 'forbidden' }, 403);
+        doc.checkins = doc.checkins || {};
+        const c = doc.checkins[child.id];
+        if (c) c.answered = now();
+        pushAlert(doc, { type: 'checkin_ok', childId: child.id, childName: child.name });
         await this.save(doc);
         return json({ ok: true });
       }
@@ -189,6 +205,7 @@ export class Family {
           })),
           places: doc.places,
           alerts: doc.alerts.slice(-80),
+          checkins: doc.checkins || {},
         });
       }
 

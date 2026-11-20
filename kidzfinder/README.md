@@ -11,7 +11,7 @@
   - `worker.js` – רק מסדר כתובות ו-CORS.
   - `src/family.js` – הלוגיקה: חיבור בקוד, מיקום חי, גדרות וירטואליות, SOS, סוללה, פקודות.
   - `src/geo.js` – חישובי מרחק וגדרות (פונקציות טהורות + בדיקות).
-- `web/` – אתר ההורה (React + Vite + Tailwind): מפה חיה והתראות. *(בבנייה)*
+- `web/` – אתר ההורה (React + Vite + Tailwind): מפה חיה (Leaflet + OpenStreetMap), כרטיס לכל ילד, בדיקת "אתה בסדר?", צלצול, התקשרות והתראות. יש **מצב הדגמה** (ילד שזז על המפה) לבדיקה בלי טלפון.
 - `mobile/` – אפליקציית הילד (Capacitor, מיקום ברקע). *(בבנייה)*
 
 ## עקרונות (ראו `GAP-REPORT.md`)
@@ -30,4 +30,4 @@
 - `GET  /api/family/:id/state` (הורה) – מיקומים חיים, מקומות, התראות.
 
 ## בדיקה
-- `cd kidzfinder/api && npm test`
+- `cd kidzfinder/api && npm test` · `cd kidzfinder/web && npx vitest run && npm run build`

@@ -92,6 +92,27 @@ test('הורה בלבד רואה מצב; טוקן לא נכון נחסם', async
   assert.ok(ok.ok);
 });
 
+test('בדיקה "אתה בסדר?" – הילד מאשר, המצב מתעדכן', async () => {
+  const fam = makeFamily('fam6');
+  const parent = (await call(fam, '/create', {})).parentToken;
+  const code = (await call(fam, '/pair-code', { auth: parent })).code;
+  const kid = await call(fam, '/pair', { body: { code, childName: 'תמר' } });
+
+  await call(fam, '/command', { auth: parent, body: { childId: kid.childId, action: 'checkin' } });
+  let state = await call(fam, '/state', { method: 'GET', auth: parent });
+  assert.ok(state.checkins[kid.childId].requested);
+  assert.equal(state.checkins[kid.childId].answered, null); // עדיין לא ענה
+
+  // הילד מושך את הפקודה ומגיב "אני בסדר"
+  const cmd = await call(fam, '/commands', { auth: kid.childToken, body: {} });
+  assert.equal(cmd.command.action, 'checkin');
+  await call(fam, '/checkin-reply', { auth: kid.childToken, body: {} });
+
+  state = await call(fam, '/state', { method: 'GET', auth: parent });
+  assert.ok(state.checkins[kid.childId].answered);
+  assert.ok(state.alerts.map((a) => a.type).includes('checkin_ok'));
+});
+
 test('פקודת צלצול מההורה נמשכת פעם אחת אצל הילד', async () => {
   const fam = makeFamily('fam5');
   const parent = (await call(fam, '/create', {})).parentToken;
