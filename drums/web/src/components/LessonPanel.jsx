@@ -59,12 +59,12 @@ export default function LessonPanel({ song, kit, boxRef, hitRef, songApi, songLo
   };
 
   return (
-    <section className="short:w-full flex flex-col" aria-label="ללמוד את השיר">
-      <div className="px-3 py-1.5 bg-card border-b border-line flex flex-col gap-1.5">
+    <section className="desk short:w-full flex flex-col" aria-label="ללמוד את השיר">
+      <div className="px-3 py-2 border-b border-black flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold truncate flex items-center gap-1.5"><Icon name="cap" size={18} className="text-accent" /><bdi dir="ltr" className="truncate">{song.title}</bdi></p>
-            <p className="text-[11px] text-muted truncate">גרסה מפושטת של הביט המרכזי, <bdi dir="ltr">{groove.bpm} BPM</bdi></p>
+            <p className="flex items-center gap-2 min-w-0"><span className="tape text-xl truncate max-w-full"><bdi dir="ltr">{song.title}</bdi></span></p>
+            <p className="text-[11px] text-muted truncate mt-1 flex items-center gap-1.5"><Icon name="cap" size={14} className="text-accent shrink-0" />ביט מפושט, <span className="lcd px-1.5 tabular-nums" dir="ltr">{groove.bpm} BPM</span></p>
           </div>
           <button type="button" className="btn !min-h-9 !px-3 text-sm" onClick={() => setMore(!more)} aria-expanded={more}>{more ? 'פחות' : 'עוד'} <Icon name={more ? 'chevronUp' : 'chevronDown'} size={16} /></button>
           <button type="button" className="btn !min-h-9 !px-3 text-sm" onClick={() => { lesson.stop(); onClose(); }} aria-label="סגירת מצב הלימוד"><Icon name="close" size={16} /></button>
@@ -77,7 +77,7 @@ export default function LessonPanel({ song, kit, boxRef, hitRef, songApi, songLo
               {lesson.running ? <><Icon name="stop" size={14} /> עצירה</> : <><Icon name="play" size={14} /> התחל</>}
             </button>
           )}
-          {lesson.count > 0 && <span className="font-extrabold text-lg w-6 text-center text-cue tabular-nums" aria-live="polite">{lesson.count}</span>}
+          {lesson.count > 0 && <span className="lcd font-extrabold text-xl w-9 text-center !text-cue tabular-nums" aria-live="polite">{lesson.count}</span>}
           {MODES.map((m) => (
             <button key={m.id} type="button" className={`chip !min-h-9 !px-2.5 text-[13px] ${mode === m.id ? 'on' : ''}`} aria-pressed={mode === m.id} onClick={() => switchMode(m.id)}><Icon name={m.icon} size={16} />{m.label}</button>
           ))}
@@ -88,9 +88,10 @@ export default function LessonPanel({ song, kit, boxRef, hitRef, songApi, songLo
             <button key={s} type="button" className={`chip !min-h-9 !px-2.5 text-[13px] ${speed === s ? 'on' : ''}`} aria-pressed={speed === s} onClick={() => setSpeed(s)}><bdi dir="ltr">{Math.round(s * 100)}%</bdi></button>
           ))}
           {showScore && (
-            <span className="ms-auto text-sm font-bold tabular-nums" aria-live="polite">
-              <span className="text-good">{lesson.stats.score}%</span>
-              <span className="text-xs text-muted font-semibold"> מושלם {lesson.stats.perfect}, טוב {lesson.stats.good}, החמצות {lesson.stats.missed}</span>
+            <span className="ms-auto flex items-center gap-2 text-sm font-bold tabular-nums" aria-live="polite">
+              <Vu value={lesson.stats.score} />
+              <span className="lcd px-1.5 !text-good">{lesson.stats.score}%</span>
+              <span className="text-xs text-muted font-semibold">מושלם {lesson.stats.perfect}, טוב {lesson.stats.good}, החמצות {lesson.stats.missed}</span>
             </span>
           )}
         </div>
@@ -119,6 +120,18 @@ export default function LessonPanel({ song, kit, boxRef, hitRef, songApi, songLo
       </div>
       <Timeline section={section} playheadRef={playheadRef} />
     </section>
+  );
+}
+
+// מד VU: 10 לדים לפי הציון (אדום בהתחלה, ענבר באמצע, ירוק בסוף)
+function Vu({ value }) {
+  const on = Math.round(value / 10);
+  return (
+    <span className="vu" aria-hidden>
+      {Array.from({ length: 10 }, (_, i) => (
+        <i key={i} className={i < on ? `on ${i < 3 ? 'low' : i < 6 ? 'mid' : ''}` : ''} />
+      ))}
+    </span>
   );
 }
 
@@ -156,10 +169,10 @@ function SongSync({ songApi, bpm, beatSec, offset, onOffset, status, running }) 
   const ms = Math.round(offset * 1000);
 
   return (
-    <div className="rounded-xl bg-soft px-2.5 py-2 flex flex-col gap-1.5">
+    <div className="rounded-[5px] border border-black bg-black/30 px-2.5 py-2 flex flex-col gap-1.5">
       <div className="flex flex-wrap items-center gap-1.5">
         <button type="button" className={`chip !min-h-9 !px-2.5 text-[13px] ${open ? 'on' : ''}`} aria-expanded={open} onClick={() => setOpen(!open)}><Icon name="target" size={16} />סנכרון</button>
-        <span className="text-xs text-muted" dir="ltr">היסט: {ms > 0 ? '+' : ''}{ms}ms</span>
+        <span className="lcd text-xs px-1.5 py-0.5 tabular-nums" dir="ltr">{ms > 0 ? '+' : ''}{ms}ms</span>
         {status === 'paused' && running && <span className="text-xs font-bold text-bad">השיר מושהה – ההדגשות מחכות</span>}
         {status === 'noplayer' && running && <span className="text-xs font-bold text-bad">הנגן עוד לא מוכן</span>}
       </div>

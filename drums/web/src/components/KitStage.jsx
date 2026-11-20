@@ -1,42 +1,46 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { PIECES, pieceForCode } from '../lib/kit';
 import { layoutFor, STAGE_HEIGHT } from '../lib/layout';
 import { finishOf } from '../lib/finish';
 import { flashEl } from '../lib/padfx';
 import { ensureAudio, playPiece } from '../lib/sounds';
 
+// הבמה התלת־ממדית נטענת בנפרד (three.js כבד) – עד שהיא מוכנה מוצגת הבמה השטוחה
+const Stage3D = lazy(() => import('../three/Stage3D'));
 
 const GROUP = { kick: 'kick', snare: 'drum', hihat: 'cym', hihatOpen: 'cym', tom: 'drum', floor: 'drum', crash: 'cym', ride: 'cym', china: 'cym', splash: 'cym', cowbell: 'bell' };
 
-// במת התופים: חלקים לחיצים (מגע מרובה) במבנה שמותאם ליחס המסך. keys = גם מקלדת.
-// boxRef (לא חובה) = גישה לאלמנט הסט מבחוץ (מצב הלימוד מדגיש עליו חלקים); onUserHit(id) = מכה של המשתמש
+// האם יש WebGL במכשיר (בלי WebGL – הבמה השטוחה בלבד)
+let glOk = null;
+function webglOk() {
+  if (glOk !== null) return glOk;
+  try {
+    const c = document.createElement('canvas');
+    const gl = c.getContext('webgl2') || c.getContext('webgl');
+    glOk = !!gl;
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+  } catch {
+    glOk = false;
+  }
+  return glOk;
+}
+
+// במת התופים: תלת־ממד (סט אמיתי על במה) או הבמה השטוחה כגיבוי. מגע מרובה, ומקלדת כש-keys.
+// boxRef (לא חובה) = גישה לחלקים מבחוץ (מצב הלימוד מדגיש דרכו); onUserHit(id) = מכה של המשתמש
 export default function KitStage({ kit, keys = false, boxRef: outerRef, onUserHit }) {
-  const wrapRef = useRef(null);
   const ownRef = useRef(null);
   const boxRef = outerRef || ownRef;
   const hitCb = useRef(onUserHit);
   hitCb.current = onUserHit;
-  const [mode, setMode] = useState('wide');
-
-  // רחב או גבוה – לפי היחס של האזור הפנוי
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect;
-      setMode(width / Math.max(height, 1) >= 1.15 ? 'wide' : 'tall');
-    });
-    ro.observe(el);
-    return () => {
-      ro.disconnect();
-    };
-  }, []);
+  const engine = useRef(null);
+  const [use3d, setUse3d] = useState(webglOk);
 
   const hit = useCallback(
     (id) => {
       ensureAudio();
       playPiece(id, kit.voice);
-      flashEl(boxRef.current?.querySelector(`[data-pad="${id}"]`));
+      if (engine.current) engine.current.hit(id);
+      else flashEl(boxRef.current?.querySelector(`[data-pad="${id}"]`));
       hitCb.current?.(id);
     },
     [kit, boxRef],
@@ -59,6 +63,34 @@ export default function KitStage({ kit, keys = false, boxRef: outerRef, onUserHi
       window.removeEventListener('keydown', onKey);
     };
   }, [keys, kit, hit]);
+
+  const flat = <KitStage2D kit={kit} keys={keys} boxRef={boxRef} onHit={hit} />;
+  if (!use3d) return flat;
+  return (
+    <Suspense fallback={flat}>
+      <Stage3D kit={kit} keys={keys} padsRef={boxRef} onHit={hit} onFail={() => setUse3d(false)} onEngine={(e) => { engine.current = e; }} />
+    </Suspense>
+  );
+}
+
+// הבמה השטוחה: חלקים עגולים במבנה שמותאם ליחס המסך
+function KitStage2D({ kit, keys, boxRef, onHit }) {
+  const wrapRef = useRef(null);
+  const [mode, setMode] = useState('wide');
+
+  // רחב או גבוה – לפי היחס של האזור הפנוי
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      setMode(width / Math.max(height, 1) >= 1.15 ? 'wide' : 'tall');
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+    };
+  }, []);
 
   const H = STAGE_HEIGHT[mode];
   const pads = layoutFor(kit.pieces, mode);
@@ -85,7 +117,7 @@ export default function KitStage({ kit, keys = false, boxRef: outerRef, onUserHi
               style={{ left: `${p.x}%`, top: `${(p.y / H) * 100}%`, width: `${p.s}%`, '--s': p.s }}
               onPointerDown={(e) => {
                 e.preventDefault();
-                hit(p.id);
+                onHit(p.id);
               }}
               onContextMenu={(e) => e.preventDefault()}
             >

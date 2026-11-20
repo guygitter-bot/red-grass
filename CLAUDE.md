@@ -223,7 +223,7 @@
 - בדיקה: `cd drums/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 - מצב לימוד: ביטים מפושטים לכל שיר ב-`web/src/data/grooves.js` (שיר חדש צריך groove – בדיקה מוודאת), מנוע ב-`lib/lesson.js`; הסנכרון עם יוטיוב לפי הקשה של המשתמש (offset לכל שיר).
 - **תמיד למזג לבד** את ה-PR (אחרי שהבדיקות ירוקות), לבדוק שהעלייה (`matofef.yml` על main) הצליחה, ולדווח עם הקישור.
-- **זהות חזותית** (עיצוב מחדש עם הסקילים לעיצוב): במה מוארת עם גימור נצנצים/לכה לכל סט, מצילות פליז, טורקיז + מגנטה במקום הכתום; גופנים Karantina + Heebo. הצבעים והגופנים ב-`web/src/index.css`, תוכנית העיצוב ב-`drums/DESIGN.md`, גימורי הסטים ב-`web/src/lib/finish.js`, אייקונים ב-`components/Icon.jsx` (בלי אמוג'י בממשק).
+- **מראה:** במה תלת־ממדית ב-`web/src/three/` (Three.js, נטענת בנפרד; סידור הסט ב-`lib/layout3d.js` + בדיקות; בלי WebGL – הבמה השטוחה `KitStage2D`), עטיפות הסטים ב-`lib/finish.js`. ממשק "מאחורי הקלעים" (ארגזים, טייפ, מיקסר) ב-`web/src/index.css`; תוכנית העיצוב ב-`drums/DESIGN.md`.
 
 ### חנוכה לילדים (`hanukkah/`)
 - תיאור: `hanukkah/README.md`. אפליקציה בעברית לילדים בני 9-11: סיפור החג, מנהגים, חידון, 5 משחקים ותוספות. בלי שרת, ההתקדמות ב-localStorage.
@@ -332,6 +332,7 @@
 ### סקילים לעיצוב (`.claude/skills/frontend-design`, `.claude/skills/impeccable`)
 - `frontend-design` (Anthropic) ו-`impeccable` (pbakaus, Apache-2.0) – לעיצוב מחדש ולעיצוב מסכים חדשים, כדי שהאפליקציות לא ייראו אותו דבר (בלי הכתום הקבוע). לכל אפליקציה זהות משלה, ותוכנית העיצוב ב-`<app>/DESIGN.md`.
 - מ-impeccable הותקנו רק ההנחיות (`SKILL.md`, `reference/`); כלי ה-`scripts/` לא הותקן (מוריד ומריץ קובץ חיצוני) – במקומו בודקים בצילומי מסך עם Playwright.
+- לתלת־ממד (Three.js): `threejs-aaa-graphics-builder`, `threejs-procedural-materials`, `threejs-bloom`, `threejs-camera-direction`, `threejs-game-ui-designer` – רק ההנחיות (בלי scripts ובלי הורדות); בודקים בצילומי מסך עם Playwright.
 
 ### כלי עריכת וידאו (`.claude/skills/` – `color-grade`, `beats-and-cuts`, `before-and-after`, `hand-drawn`, `motion-graphics`)
 - מצרפים סרטון בצ'אט וכותבים `/color-grade` וכו'. הסבר בעברית: `.claude/skills/video-tools/README.md`; קוד משותף: `video-tools/lib.py` (ffmpeg + Pillow).
