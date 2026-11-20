@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import Icon from '../components/Icon';
 import KitStage from '../components/KitStage';
 import LessonPanel from '../components/LessonPanel';
 import SongList from '../components/SongList';
@@ -37,14 +38,14 @@ export default function PlayScreen({ kit, drumVol, onDrumVol, onPickKit, songs =
     <div className="flex-1 min-h-0 flex flex-col">
       <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 bg-card border-b border-line">
         <button type="button" className="btn !min-h-10 !px-3 text-sm min-w-0 shrink" onClick={onPickKit} aria-label="החלפת סט">
-          <span className="truncate">{kit.name}</span> <span aria-hidden>▾</span>
+          <span className="truncate font-display text-2xl leading-none pt-0.5">{kit.name}</span> <Icon name="chevronDown" size={16} />
         </button>
         <label className="flex items-center gap-1 text-sm text-muted ms-auto shrink-0">
-          🔊
+          <Icon name="volume" size={20} />
           <input type="range" min="0" max="100" value={Math.round(drumVol * 100)} onChange={(e) => onDrumVol(e.target.value / 100)} className="w-16 sm:w-32" aria-label="עוצמת התופים" />
         </label>
         <div className="flex items-center gap-1 shrink-0">
-          <button type="button" className={`chip !min-h-10 ${metro ? 'on' : ''}`} onClick={() => setMetro(!metro)} aria-pressed={metro} aria-label="מטרונום">⏱<span className="hidden sm:inline"> מטרונום</span></button>
+          <button type="button" className={`chip !min-h-10 ${metro ? 'on' : ''}`} onClick={() => setMetro(!metro)} aria-pressed={metro} aria-label="מטרונום"><Icon name="metronome" size={18} /><span className="hidden sm:inline">מטרונום</span></button>
           {metro && (
             <span className="flex items-center gap-1" dir="ltr">
               <button type="button" className="btn !min-h-10 !px-3" aria-label="האט" onClick={() => setBpm(Math.max(40, bpm - 5))}>−</button>
@@ -54,10 +55,10 @@ export default function PlayScreen({ kit, drumVol, onDrumVol, onPickKit, songs =
           )}
         </div>
         {loadedLearnable && !lessonSong && (
-          <button type="button" className="chip !min-h-10" onClick={() => onLesson(currentSong)} aria-label="ללמוד את השיר">🎓<span className="hidden sm:inline"> ללמוד את השיר</span></button>
+          <button type="button" className="chip !min-h-10" onClick={() => onLesson(currentSong)} aria-label="ללמוד את השיר"><Icon name="cap" size={18} /><span className="hidden sm:inline">ללמוד את השיר</span></button>
         )}
         {songs.length > 0 && (
-          <button type="button" className={`chip !min-h-10 ${songsOpen ? 'on' : ''}`} onClick={() => setSongsOpen(!songsOpen)} aria-pressed={songsOpen} aria-label="שירים של הסט">🎵<span className="hidden sm:inline"> שירים</span></button>
+          <button type="button" className={`chip !min-h-10 ${songsOpen ? 'on' : ''}`} onClick={() => setSongsOpen(!songsOpen)} aria-pressed={songsOpen} aria-label="שירים של הסט"><Icon name="note" size={18} /><span className="hidden sm:inline">שירים</span></button>
         )}
       </div>
       {songsOpen && songs.length > 0 && (
@@ -68,9 +69,9 @@ export default function PlayScreen({ kit, drumVol, onDrumVol, onPickKit, songs =
       )}
       {!tipOff && !lessonSong && (
         <div className="rotate-tip shrink-0 items-center gap-2 px-3 py-1.5 bg-soft text-sm">
-          <span aria-hidden>📱↔️</span>
+          <Icon name="rotate" size={20} />
           <span className="flex-1">סובבו את הטלפון לרוחב – הסט יהיה גדול יותר.</span>
-          <button type="button" className="font-bold px-2" onClick={() => setTipOff(true)} aria-label="סגירה">✕</button>
+          <button type="button" className="font-bold px-2" onClick={() => setTipOff(true)} aria-label="סגירה"><Icon name="close" size={16} /></button>
         </div>
       )}
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row short:flex-row">

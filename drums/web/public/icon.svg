@@ -1,9 +1,29 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#c2410c"/>
-  <ellipse cx="256" cy="340" rx="150" ry="62" fill="#fde7c3"/>
-  <path d="M106 340v60c0 34 67 62 150 62s150-28 150-62v-60c0 34-67 62-150 62s-150-28-150-62z" fill="#7c2a07"/>
-  <g stroke="#fff4dc" stroke-width="22" stroke-linecap="round">
-    <line x1="120" y1="90" x2="270" y2="300"/>
-    <line x1="392" y1="90" x2="242" y2="300"/>
+  <defs>
+    <linearGradient id="shell" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0f8f9a"/>
+      <stop offset="0.5" stop-color="#3fe6d2"/>
+      <stop offset="1" stop-color="#2b3a9e"/>
+    </linearGradient>
+    <linearGradient id="beamA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3fe6d2" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#3fe6d2" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="beamB" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff4d8d" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#ff4d8d" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#1b1748"/>
+  <path d="M70 0h90l120 400H150z" fill="url(#beamA)"/>
+  <path d="M442 0h-90L232 400h130z" fill="url(#beamB)"/>
+  <path d="M104 330v58c0 32 66 58 152 58s152-26 152-58v-58z" fill="url(#shell)"/>
+  <ellipse cx="256" cy="330" rx="152" ry="60" fill="#e6e9fb"/>
+  <ellipse cx="256" cy="330" rx="152" ry="60" fill="none" stroke="#aab0d6" stroke-width="8"/>
+  <g stroke="#ffffff" stroke-width="22" stroke-linecap="round">
+    <line x1="132" y1="104" x2="270" y2="306"/>
+    <line x1="380" y1="104" x2="242" y2="306"/>
   </g>
+  <circle cx="270" cy="306" r="15" fill="#ff4d8d"/>
+  <circle cx="242" cy="306" r="15" fill="#ff4d8d"/>
 </svg>

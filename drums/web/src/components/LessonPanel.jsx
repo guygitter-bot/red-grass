@@ -4,12 +4,13 @@ import { fitSection, phaseFromTaps } from '../lib/lesson';
 import { loadSyncOffset, saveSyncOffset } from '../lib/storage';
 import { createSongClock } from '../lib/songclock';
 import { useLesson } from '../lib/useLesson';
+import Icon from './Icon';
 import Timeline from './Timeline';
 
 const MODES = [
-  { id: 'demo', label: '👀 הדגמה', hint: 'האפליקציה מנגנת את הביט על הסט – רואים ושומעים.' },
-  { id: 'practice', label: '🥁 תרגול', hint: 'יש מטרונום; מנגנים על החלקים המסומנים ומקבלים משוב על כל מכה.' },
-  { id: 'song', label: '🎵 עם השיר', hint: 'השיר מתנגן, והסט מראה מה לנגן לפי הסנכרון שקבעתם.' },
+  { id: 'demo', icon: 'eye', label: 'הדגמה', hint: 'האפליקציה מנגנת את הביט על הסט – רואים ושומעים.' },
+  { id: 'practice', icon: 'drum', label: 'תרגול', hint: 'יש מטרונום; מנגנים על החלקים המסומנים ומקבלים משוב על כל מכה.' },
+  { id: 'song', icon: 'note', label: 'עם השיר', hint: 'השיר מתנגן, והסט מראה מה לנגן לפי הסנכרון שקבעתם.' },
 ];
 const SPEEDS = [0.5, 0.75, 1];
 const STEP = 0.02; // 20ms
@@ -62,23 +63,23 @@ export default function LessonPanel({ song, kit, boxRef, hitRef, songApi, songLo
       <div className="px-3 py-1.5 bg-card border-b border-line flex flex-col gap-1.5">
         <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold truncate">🎓 <bdi dir="ltr">{song.title}</bdi></p>
-            <p className="text-[11px] text-muted truncate">גרסה מפושטת של הביט המרכזי · <bdi dir="ltr">{groove.bpm} BPM</bdi></p>
+            <p className="text-sm font-bold truncate flex items-center gap-1.5"><Icon name="cap" size={18} className="text-accent" /><bdi dir="ltr" className="truncate">{song.title}</bdi></p>
+            <p className="text-[11px] text-muted truncate">גרסה מפושטת של הביט המרכזי, <bdi dir="ltr">{groove.bpm} BPM</bdi></p>
           </div>
-          <button type="button" className="btn !min-h-9 !px-3 text-sm" onClick={() => setMore(!more)} aria-expanded={more}>{more ? 'פחות' : 'עוד'} <span aria-hidden>{more ? '▴' : '▾'}</span></button>
-          <button type="button" className="btn !min-h-9 !px-3 text-sm" onClick={() => { lesson.stop(); onClose(); }} aria-label="סגירת מצב הלימוד">✕</button>
+          <button type="button" className="btn !min-h-9 !px-3 text-sm" onClick={() => setMore(!more)} aria-expanded={more}>{more ? 'פחות' : 'עוד'} <Icon name={more ? 'chevronUp' : 'chevronDown'} size={16} /></button>
+          <button type="button" className="btn !min-h-9 !px-3 text-sm" onClick={() => { lesson.stop(); onClose(); }} aria-label="סגירת מצב הלימוד"><Icon name="close" size={16} /></button>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           {waitingSong ? (
             <button type="button" className="btn btn-primary !min-h-9 !px-3 text-sm" onClick={() => onLoadSong(song.youtubeId)}>טעינת השיר</button>
           ) : (
             <button type="button" className="btn btn-primary !min-h-9 !px-4 text-sm min-w-[84px]" onClick={lesson.running ? lesson.stop : lesson.start} aria-pressed={lesson.running}>
-              {lesson.running ? '⏹ עצירה' : '▶ התחל'}
+              {lesson.running ? <><Icon name="stop" size={14} /> עצירה</> : <><Icon name="play" size={14} /> התחל</>}
             </button>
           )}
-          {lesson.count > 0 && <span className="font-extrabold text-lg w-6 text-center text-accent tabular-nums" aria-live="polite">{lesson.count}</span>}
+          {lesson.count > 0 && <span className="font-extrabold text-lg w-6 text-center text-cue tabular-nums" aria-live="polite">{lesson.count}</span>}
           {MODES.map((m) => (
-            <button key={m.id} type="button" className={`chip !min-h-9 !px-2.5 text-[13px] ${mode === m.id ? 'on' : ''}`} aria-pressed={mode === m.id} onClick={() => switchMode(m.id)}>{m.label}</button>
+            <button key={m.id} type="button" className={`chip !min-h-9 !px-2.5 text-[13px] ${mode === m.id ? 'on' : ''}`} aria-pressed={mode === m.id} onClick={() => switchMode(m.id)}><Icon name={m.icon} size={16} />{m.label}</button>
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -89,7 +90,7 @@ export default function LessonPanel({ song, kit, boxRef, hitRef, songApi, songLo
           {showScore && (
             <span className="ms-auto text-sm font-bold tabular-nums" aria-live="polite">
               <span className="text-good">{lesson.stats.score}%</span>
-              <span className="text-xs text-muted font-semibold"> · מושלם {lesson.stats.perfect} · טוב {lesson.stats.good} · החמצות {lesson.stats.missed}</span>
+              <span className="text-xs text-muted font-semibold"> מושלם {lesson.stats.perfect}, טוב {lesson.stats.good}, החמצות {lesson.stats.missed}</span>
             </span>
           )}
         </div>
@@ -101,13 +102,13 @@ export default function LessonPanel({ song, kit, boxRef, hitRef, songApi, songLo
         {more && (
           <div className="flex flex-col gap-1.5 text-sm">
             <div className="flex flex-wrap gap-1.5">
-              <button type="button" className={`chip !min-h-9 !px-2.5 text-[13px] ${loop ? 'on' : ''}`} aria-pressed={loop} onClick={() => setLoop(!loop)}>🔁 לולאה</button>
-              <button type="button" className={`chip !min-h-9 !px-2.5 text-[13px] ${countIn ? 'on' : ''}`} aria-pressed={countIn} onClick={() => setCountIn(!countIn)} disabled={mode === 'song'}>⏱ ספירה לפני</button>
+              <button type="button" className={`chip !min-h-9 !px-2.5 text-[13px] ${loop ? 'on' : ''}`} aria-pressed={loop} onClick={() => setLoop(!loop)}><Icon name="loop" size={16} />לולאה</button>
+              <button type="button" className={`chip !min-h-9 !px-2.5 text-[13px] ${countIn ? 'on' : ''}`} aria-pressed={countIn} onClick={() => setCountIn(!countIn)} disabled={mode === 'song'}><Icon name="metronome" size={16} />ספירה לפני</button>
             </div>
             <p className="text-xs text-muted">{modeInfo.hint}</p>
-            <p className="text-xs">💡 {groove.tip}</p>
+            <p className="text-xs flex items-start gap-1.5"><Icon name="bulb" size={16} className="text-accent mt-px" />{groove.tip}</p>
             {fit.notes.map((n) => (
-              <p key={n} className="text-xs text-muted">ℹ️ {n}</p>
+              <p key={n} className="text-xs text-muted flex items-start gap-1.5"><Icon name="info" size={16} className="mt-px" />{n}</p>
             ))}
             <p className="text-[11px] text-muted">גרסה מפושטת של הביט המרכזי – לא תמלול מדויק של ההקלטה.</p>
           </div>
@@ -157,7 +158,7 @@ function SongSync({ songApi, bpm, beatSec, offset, onOffset, status, running }) 
   return (
     <div className="rounded-xl bg-soft px-2.5 py-2 flex flex-col gap-1.5">
       <div className="flex flex-wrap items-center gap-1.5">
-        <button type="button" className={`chip !min-h-9 !px-2.5 text-[13px] ${open ? 'on' : ''}`} aria-expanded={open} onClick={() => setOpen(!open)}>🎯 סנכרון</button>
+        <button type="button" className={`chip !min-h-9 !px-2.5 text-[13px] ${open ? 'on' : ''}`} aria-expanded={open} onClick={() => setOpen(!open)}><Icon name="target" size={16} />סנכרון</button>
         <span className="text-xs text-muted" dir="ltr">היסט: {ms > 0 ? '+' : ''}{ms}ms</span>
         {status === 'paused' && running && <span className="text-xs font-bold text-bad">השיר מושהה – ההדגשות מחכות</span>}
         {status === 'noplayer' && running && <span className="text-xs font-bold text-bad">הנגן עוד לא מוכן</span>}
@@ -166,7 +167,7 @@ function SongSync({ songApi, bpm, beatSec, offset, onOffset, status, running }) 
         <>
           <p className="text-xs">הפעילו את השיר והקישו על הכפתור בכל פעם שאתם שומעים את הפעמה – הכי טוב את הפעמה הראשונה בתיבה (לפחות 4 פעמים).</p>
           <button type="button" className="btn btn-primary !min-h-14 text-lg w-full" onPointerDown={(e) => { e.preventDefault(); tap(); }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tap(); } }}>
-            🥁 הקשה בפעמה
+            <Icon name="drum" size={22} /> הקשה בפעמה
           </button>
           {msg && <p className="text-xs font-semibold" role="status">{msg}</p>}
         </>

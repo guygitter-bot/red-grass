@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import Icon from '../components/Icon';
 import KitStage from '../components/KitStage';
 import Stepper from '../components/Stepper';
 import { applyChars, buildPieces, KICK_CHARS, optionsFromPieces, safeKit, safeOptions, safeVoice, SNARE_CHARS } from '../lib/kit';
@@ -6,7 +7,7 @@ import { applyChars, buildPieces, KICK_CHARS, optionsFromPieces, safeKit, safeOp
 function Toggle({ label, on, onChange }) {
   return (
     <button type="button" className={`chip ${on ? 'on' : ''}`} aria-pressed={on} onClick={() => onChange(!on)}>
-      {on ? '✓ ' : ''}{label}
+      {on && <Icon name="check" size={14} />}{label}
     </button>
   );
 }
@@ -57,7 +58,7 @@ export default function BuilderScreen({ base, onSave }) {
       </div>
       <div className="flex-1 lg:flex-none lg:w-[380px] short:flex-none short:w-[330px] lg:order-1 short:order-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4">
         <header>
-          <h1 className="font-display font-extrabold text-2xl">{editing ? 'עריכת סט' : 'בניית סט'}</h1>
+          <h1 className="font-display text-5xl leading-none">{editing ? 'עריכת סט' : 'בניית סט'}</h1>
           <p className="text-muted text-sm">בחרו חלקים וצליל. אפשר ללחוץ על החלקים בתצוגה ולשמוע.</p>
         </header>
         <label className="flex flex-col gap-1">
@@ -78,7 +79,7 @@ export default function BuilderScreen({ base, onSave }) {
         </div>
         <Chars title="צליל הבס" chars={KICK_CHARS} value={opts.kickChar} onChange={(v) => set({ kickChar: v })} />
         <Chars title="צליל הסנר" chars={SNARE_CHARS} value={opts.snareChar} onChange={(v) => set({ snareChar: v })} />
-        <button type="button" className="btn btn-primary" onClick={save}>💾 שמירה ונגינה</button>
+        <button type="button" className="btn btn-primary" onClick={save}><Icon name="save" size={18} /> שמירה ונגינה</button>
       </div>
     </div>
   );
