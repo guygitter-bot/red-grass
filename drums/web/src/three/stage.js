@@ -48,7 +48,7 @@ export function createStage(canvas, opts = {}) {
 
   const coarse = window.matchMedia?.('(pointer: coarse)').matches;
   const locked = opts.quality === 'high';
-  let level = locked ? 0 : opts.quality === 'safe' ? LEVELS.length - 1 : coarse ? 1 : 0;
+  let level = locked ? 0 : opts.quality === 'safe' ? LEVELS.length - 1 : coarse ? 2 : 0; // בטלפון מתחילים בלי זוהר (bloom) – פחות עומס ופחות סיכון למסך שחור
   let composer = null;
   let bloom = null;
   let size = { w: 1, h: 1 };
