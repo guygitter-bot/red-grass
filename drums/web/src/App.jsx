@@ -10,6 +10,7 @@ import BuilderScreen from './screens/BuilderScreen';
 import KitsScreen from './screens/KitsScreen';
 import PlayScreen from './screens/PlayScreen';
 import SongScreen from './screens/SongScreen';
+import TrainScreen from './screens/TrainScreen';
 
 // סט מפורסם ← צורה אחידה עם הקול המלא
 function resolveFamous(k) {
@@ -65,9 +66,17 @@ export default function App() {
 
   // 🎓 ללמוד שיר מרשימת הסט: בוחר את הסט (בלי לטעון את הווידאו – הוא יטען כשבוחרים "עם השיר")
   const learnSong = (kitId, videoId) => {
-    setActiveId(kitId);
-    saveActiveId(kitId);
+    if (kitId) {
+      setActiveId(kitId);
+      saveActiveId(kitId);
+    }
     setLessonId(videoId);
+    setScreen('play');
+  };
+
+  // תרגיל טכניקה: נפתח כמו שיעור (מזהה 'ex:<תרגיל>') על הסט הפעיל
+  const practiceExercise = (exId) => {
+    setLessonId(`ex:${exId}`);
     setScreen('play');
   };
 
@@ -139,6 +148,7 @@ export default function App() {
           <PlayScreen kit={active} drumVol={vol.drums} onDrumVol={(v) => setVol((o) => ({ ...o, drums: v }))} onPickKit={() => setScreen('kits')} songs={kitSongs} currentSong={songId} onLoadSong={loadSong} lessonId={lessonId} onLesson={setLessonId} songApi={songApi} />
         )}
         {screen === 'kits' && <KitsScreen activeId={activeId} custom={custom} onPick={pick} onPickSong={pickWithSong} onLearnSong={learnSong} onBuild={build} onDelete={remove} />}
+        {screen === 'train' && <TrainScreen onPractice={practiceExercise} onLearnSong={(id) => learnSong(null, id)} />}
         {screen === 'builder' && <BuilderScreen key={builderKey} base={builderBase} onSave={saveCustom} />}
         {screen === 'song' && <SongScreen current={songId} recent={songs} onLoad={loadSong} onGoPlay={() => setScreen('play')} />}
       </main>

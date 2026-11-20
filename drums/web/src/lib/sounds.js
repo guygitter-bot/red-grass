@@ -5,6 +5,7 @@
 import { PIECES, DEFAULT_VOICE } from './kit';
 import { allSampleFiles, pieceSample, pickFile, NATURAL } from './samples';
 import { createSynth } from './synth';
+import { applyZone } from './zones';
 
 let ctx = null;
 let master = null;
@@ -113,6 +114,9 @@ export function setMasterVolume(v) {
 }
 
 // ---- ניגון דגימה ----
+let lastFile = '';
+// יומן מכות לבדיקות: רק עם ?debug בכתובת (window.__hitLog). לא משפיע על המשתמשים הרגילים
+const DEBUG = typeof window !== 'undefined' && /[?&]debug\b/.test(window.location?.search || '');
 const rrCounters = {}; // מונה סבבים לכל קבוצה, כדי שמכות חוזרות לא יישמעו כמו מכונה
 let openHat = null; // { src, gain } – היי-האט פתוח שמתנגן כרגע (נחנק כשסוגרים)
 
@@ -133,6 +137,7 @@ function playSample(group, s, strength, t) {
   const file = pickFile(group, strength, (rrCounters[group] = (rrCounters[group] || 0) + 1));
   const buffer = file && buffers.get(file);
   if (!buffer) return null;
+  lastFile = file;
   const src = ctx.createBufferSource();
   src.buffer = buffer;
   src.playbackRate.value = s.rate;
@@ -179,13 +184,17 @@ function playSample(group, s, strength, t) {
 
 // מנגן חלק אחד של הסט. strength (0..1, לא חובה) = עוצמת המכה; בלי זה – קצת אקראי, בעיקר בינוני-חזק
 // when (לא חובה) = זמן עתידי בשעון האודיו (audioTime) – למצב הלימוד, שמתזמן מכות מראש
-export function playPiece(id, voice, strength, when) {
+// opts (לא חובה) = { vel, zone }: vel = עוצמה (גובר על strength), zone = אזור ההקשה (lib/zones.js: מרכז / שפה / חישוק / פעמון...).
+// בלי opts – בדיוק כמו קודם (השיעור והתרגילים לא מעבירים אזור)
+export function playPiece(id, voice, strength, when, opts) {
   const spec = PIECES[id];
   if (!spec || !ensureAudio()) return;
   const v = { ...DEFAULT_VOICE, ...(voice || {}) };
   const t = typeof when === 'number' ? Math.max(when, ctx.currentTime + 0.001) : ctx.currentTime + 0.001;
-  const power = typeof strength === 'number' ? strength : 0.5 + Math.random() * 0.5;
-  const s = pieceSample(id, v);
+  const given = opts && typeof opts.vel === 'number' ? opts.vel : strength;
+  const power = typeof given === 'number' ? given : 0.5 + Math.random() * 0.5;
+  const zone = opts && opts.zone ? opts.zone : null;
+  const s = zone ? applyZone(pieceSample(id, v), spec.type, zone) : pieceSample(id, v);
   const isHat = spec.type === 'hihat' || spec.type === 'hihatOpen';
   // סגירה חונקת את הפתוח (בכל מצב, גם בגיבוי)
   if (isHat) {
@@ -197,6 +206,9 @@ export function playPiece(id, voice, strength, when) {
     played = s && buffers.size > 0 ? playSample(s.group, s, power, t) : null;
   } catch {
     played = null;
+  }
+  if (DEBUG) {
+    (window.__hitLog ||= []).push({ id, zone: zone || 'default', vel: Math.round(power * 100) / 100, group: s ? s.group : null, file: played ? lastFile : 'synth', want: s ? pickFile(s.group, power, 0) : null, rate: s ? Math.round(s.rate * 1000) / 1000 : null, gain: s ? Math.round(s.gain * 1000) / 1000 : null, peak: s ? s.peak : null });
   }
   if (!played) {
     synth.play(id, v, t);

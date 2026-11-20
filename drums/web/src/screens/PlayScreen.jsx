@@ -4,6 +4,7 @@ import KitStage from '../components/KitStage';
 import LessonPanel from '../components/LessonPanel';
 import SongList from '../components/SongList';
 import { grooveFor } from '../data/grooves';
+import { exerciseById } from '../data/rudiments';
 import { songById } from '../data/songs';
 import { setMetronomeBpm, startMetronome, stopMetronome } from '../lib/sounds';
 
@@ -16,7 +17,10 @@ export default function PlayScreen({ kit, drumVol, onDrumVol, onPickKit, songs =
   // מצב לימוד: האלמנט של הסט (להדגשות) והפונקציה שמקבלת מכות של המשתמש
   const boxRef = useRef(null);
   const hitRef = useRef(null);
-  const lessonSong = lessonId && grooveFor(lessonId) ? songById(lessonId) : null;
+  // שיעור = שיר עם ביט, או תרגיל טכניקה (מזהה 'ex:<תרגיל>')
+  const exercise = lessonId && lessonId.startsWith('ex:') ? exerciseById(lessonId.slice(3)) : null;
+  const lessonSong = !exercise && lessonId && grooveFor(lessonId) ? songById(lessonId) : null;
+  const lessonOpen = !!(exercise || lessonSong);
   // שיר שטעון בנגן ויש לו ביט – כפתור מהיר להתחיל ללמוד אותו
   const loadedLearnable = currentSong && grooveFor(currentSong) && songById(currentSong);
 
@@ -54,7 +58,7 @@ export default function PlayScreen({ kit, drumVol, onDrumVol, onPickKit, songs =
             </span>
           )}
         </div>
-        {loadedLearnable && !lessonSong && (
+        {loadedLearnable && !lessonOpen && (
           <button type="button" className="chip !min-h-10" onClick={() => onLesson(currentSong)} aria-label="ללמוד את השיר"><Icon name="cap" size={18} /><span className="hidden sm:inline">ללמוד את השיר</span></button>
         )}
         {songs.length > 0 && (
@@ -66,7 +70,7 @@ export default function PlayScreen({ kit, drumVol, onDrumVol, onPickKit, songs =
           <SongList heading={<>שירים של <bdi dir="ltr">{songs[0].artist}</bdi></>} songs={songs} current={currentSong} onPlay={(s) => { onLoadSong(s.youtubeId); setSongsOpen(false); }} onLearn={(s) => { onLesson(s.youtubeId); setSongsOpen(false); }} />
         </div>
       )}
-      {!tipOff && !lessonSong && !currentSong && (
+      {!tipOff && !lessonOpen && !currentSong && (
         <div className="rotate-tip shrink-0 items-center gap-2 px-3 py-1.5 bg-gaffer text-[#efeae0] text-sm">
           <Icon name="rotate" size={20} />
           <span className="flex-1">סובבו את הטלפון לרוחב – הסט יהיה גדול יותר.</span>
@@ -74,9 +78,9 @@ export default function PlayScreen({ kit, drumVol, onDrumVol, onPickKit, songs =
         </div>
       )}
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row short:flex-row">
-        {lessonSong && (
+        {lessonOpen && (
           <div className="desk shrink-0 phone:max-h-[38dvh] phone:overflow-y-auto lg:w-[390px] short:w-[340px] short:max-w-[45%] lg:overflow-y-auto short:overflow-y-auto lg:border-e-2 short:border-e-2 border-black">
-            <LessonPanel song={lessonSong} kit={kit} boxRef={boxRef} hitRef={hitRef} songApi={songApi} songLoaded={currentSong === lessonSong.youtubeId} onLoadSong={onLoadSong} onClose={() => onLesson(null)} />
+            <LessonPanel key={exercise ? `ex:${exercise.id}` : lessonSong.youtubeId} song={lessonSong} exercise={exercise} kit={kit} boxRef={boxRef} hitRef={hitRef} songApi={songApi} songLoaded={!!lessonSong && currentSong === lessonSong.youtubeId} onLoadSong={onLoadSong} onClose={() => onLesson(null)} />
           </div>
         )}
         <KitStage kit={kit} keys boxRef={boxRef} onUserHit={(id) => hitRef.current?.(id)} />

@@ -224,6 +224,8 @@
 - מצב לימוד: ביטים מפושטים לכל שיר ב-`web/src/data/grooves.js` (שיר חדש צריך groove – בדיקה מוודאת), מנוע ב-`lib/lesson.js`; הסנכרון עם יוטיוב לפי הקשה של המשתמש (offset לכל שיר).
 - **תמיד למזג לבד** את ה-PR (אחרי שהבדיקות ירוקות), לבדוק שהעלייה (`matofef.yml` על main) הצליחה, ולדווח עם הקישור.
 - **מראה:** במה תלת־ממדית ב-`web/src/three/` (Three.js, נטענת בנפרד; סידור הסט ב-`lib/layout3d.js` + בדיקות; בלי WebGL – הבמה השטוחה `KitStage2D`), עטיפות הסטים ב-`lib/finish.js`. ממשק "מאחורי הקלעים" (ארגזים, טייפ, מיקסר) ב-`web/src/index.css`; תוכנית העיצוב ב-`drums/DESIGN.md`.
+- **מכה, טכניקה והתקדמות:** אזורי הקשה לפי מקום המגע (`lib/zones.js`; בתלת־ממד `pick` מחזיר `{ id, r }`), עוצמה מלחץ / גודל מגע (`lib/velocity.js`), רטט (`lib/haptics.js`) – `playPiece(id, voice, strength, when, { vel, zone })`, ניפוי עם `?debug`; תרגילי רודימנטס ב-`web/src/data/rudiments.js` (R/L/r/l/x, בדיקה מוודאת סטיקינג) ומסך "אימון" (`screens/TrainScreen.jsx`, מסלול נוטות `components/Highway.jsx`); התקדמות (כוכבים, רצף, דקות) ב-`lib/progress.js` עם `safeProgress` (`mf_progress`); דוח פערים מול אפליקציות אחרות: `drums/GAP-REPORT.md`. אין לשנות קובצי דגימות.
+- סקיל `reverse-engineer-anything-self-learning-loop` (MIT) הותקן לשיטת "רשימת פערים": רק מידע ציבורי על אפליקציות אחרות, בלי פירוק קבצים ובלי העתקת קוד/צלילים/עיצוב.
 
 ### חנוכה לילדים (`hanukkah/`)
 - תיאור: `hanukkah/README.md`. אפליקציה בעברית לילדים בני 9-11: סיפור החג, מנהגים, חידון, 5 משחקים ותוספות. בלי שרת, ההתקדמות ב-localStorage.

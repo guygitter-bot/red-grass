@@ -27,7 +27,7 @@ export default function Stage3D({ kit, keys = false, safe = false, padsRef, onHi
   // פרוקסי להדגשות הלימוד: padfx קורא לו דרך האלמנט של שכבת הכפתורים
   const fx = useRef({
     flash: (id, cls) => engineRef.current?.flash(id, cls),
-    cues: (now, soon) => engineRef.current?.cues(now, soon),
+    cues: (now, soon, hands) => engineRef.current?.cues(now, soon, hands),
   });
 
   useEffect(() => {
@@ -103,8 +103,9 @@ export default function Stage3D({ kit, keys = false, safe = false, padsRef, onHi
         role="img"
         onPointerDown={(e) => {
           e.preventDefault();
-          const id = engineRef.current?.pick(e.clientX, e.clientY);
-          if (id) hitRef.current?.(id);
+          const p = engineRef.current?.pick(e.clientX, e.clientY);
+          // r = היכן על החלק פגעו (אזור הקשה); הלחץ וגודל המגע – לעוצמת המכה
+          if (p) hitRef.current?.(p.id, { r: p.r, pressure: e.pressure, width: e.width, height: e.height, pointerType: e.pointerType });
         }}
         onContextMenu={(e) => e.preventDefault()}
       />

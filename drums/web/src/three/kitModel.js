@@ -371,13 +371,17 @@ export function buildKit(kit, finishId, mode = 'wide') {
     halo.scale.setScalar(p.r * 3.6);
     group.add(halo);
     entry.halo = halo;
+    entry.haloBase = p.r * 3.6;
 
     // אזורי הקשה בלתי נראים: מדויק (בגודל החלק) ונדיב (hitR)
     const hitGeo = UNIT_TUBE(16);
+    const exactR = p.kind === 'kick' ? p.hitR * 0.75 : p.r * 1.02;
     const mk = (rad, h) => {
       const m = new THREE.Mesh(hitGeo, HIT_MAT);
       m.visible = false;
       m.userData.pieceId = p.id;
+      // יחס לרדיוס המדויק של החלק – כדי לחשב איפה על החלק פגעו (אזור הקשה)
+      m.userData.rScale = rad / exactR;
       if (p.kind === 'kick') {
         m.position.copy(V(p.hitPos));
         m.scale.set(rad, 0.45, rad);

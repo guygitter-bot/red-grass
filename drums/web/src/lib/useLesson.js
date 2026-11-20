@@ -12,16 +12,20 @@ import { createSongClock } from './songclock';
 export const EMPTY_STATS = { perfect: 0, good: 0, missed: 0, wrong: 0, score: 0 };
 const LOOKAHEAD = 0.15; // כמה קדימה מתזמנים אודיו (שניות)
 const strengthOf = (p) => (p === 'hihat' || p === 'hihatOpen' ? 0.55 : p === 'kick' || p === 'snare' ? 0.9 : 0.8);
+// עוצמת הדגמה: מכה "שקטה" בתרגיל טכניקה (אות קטנה) מנוגנת חלש
+const demoVel = (section, p, index) => (section.soft?.[p]?.includes(index) ? 0.36 : strengthOf(p));
 
 // הערות: section כבר מותאם לסט (fitSection). boxRef = אלמנט הסט, playheadRef = הסמן בציר הזמן,
 // songApi = ref לנגן השיר, offset = היסט הסנכרון (שניות)
-export function useLesson({ section, bpm, mode, speed, loop, countIn, voice, boxRef, playheadRef, songApi, offset }) {
+// posRef (לא חובה) = המיקום הנוכחי לתצוגת "מסלול" ({ pos, loopLen, looping }), מתעדכן בכל פריים
+// onResult (לא חובה) = נקרא כשתרגול / שיר מסתיים: { mode, score, notes, seconds, speed }
+export function useLesson({ section, bpm, mode, speed, loop, countIn, voice, boxRef, playheadRef, songApi, offset, posRef, onResult }) {
   const [running, setRunning] = useState(false);
   const [count, setCount] = useState(0);
   const [stats, setStats] = useState(EMPTY_STATS);
   const [status, setStatus] = useState(''); // '' | 'paused' | 'noplayer'
   const cfg = useRef({});
-  cfg.current = { loop, countIn, voice, offset };
+  cfg.current = { loop, countIn, voice, offset, onResult };
   const run = useRef(null);
 
   useEffect(() => {
@@ -50,6 +54,16 @@ export function useLesson({ section, bpm, mode, speed, loop, countIn, voice, box
     let raf = 0;
     let timer = 0;
     let done = false;
+    const startedAt = performance.now();
+    let reported = false;
+
+    // מדווח על ריצה שהסתיימה (פעם אחת): ציון, כמה מכות נסגרו וכמה זמן תרגלו
+    const report = () => {
+      if (reported || mode === 'demo') return;
+      reported = true;
+      const notes = st.perfect + st.good + st.missed;
+      cfg.current.onResult?.({ mode, score: scorePercent(st), notes, seconds: (performance.now() - startedAt) / 1000, speed: sp, passNotes: events.reduce((a, e) => a + e.pieces.length, 0) });
+    };
 
     setStats({ ...EMPTY_STATS });
     setCount(0);
@@ -105,7 +119,7 @@ export function useLesson({ section, bpm, mode, speed, loop, countIn, voice, box
         if (!cfg.current.loop && pass >= 1) break;
         const t = origin + ordTime(nextOrd);
         if (t > horizon) break;
-        if (mode === 'demo') for (const p of events[nextOrd % events.length].pieces) playPiece(p, cfg.current.voice, strengthOf(p), t);
+        if (mode === 'demo') { const ev = events[nextOrd % events.length]; for (const p of ev.pieces) playPiece(p, cfg.current.voice, demoVel(section, p, ev.index), t); }
         nextOrd++;
       }
       if (mode === 'practice') {
@@ -126,8 +140,10 @@ export function useLesson({ section, bpm, mode, speed, loop, countIn, voice, box
       if (pos === null) {
         clearCues(root);
         lastPos = null;
+        if (posRef) posRef.current = null;
         return;
       }
+      if (posRef) posRef.current = { pos, loopLen, looping: looping() };
       if (!looping() && pos > loopLen + 0.35) {
         finish();
         return;
@@ -140,12 +156,12 @@ export function useLesson({ section, bpm, mode, speed, loop, countIn, voice, box
       if (pos < 0) {
         const c = Math.ceil(-pos / spb);
         if (c !== shownCount) setCount((shownCount = c));
-        setCues(root, new Set(), new Set(events[0].pieces));
+        setCues(root, new Set(), new Set(events[0].pieces), events[0].hands);
         return;
       }
       if (shownCount !== 0) setCount((shownCount = 0));
       const c = cueAt(events, loopLen, inLoop, spb * 2);
-      setCues(root, c.now, c.soon);
+      setCues(root, c.now, c.soon, c.hands);
 
       if (mode === 'demo') {
         // הבהוב החלק בשעת המכה (הצליל מתוזמן בנפרד, מראש)
@@ -178,6 +194,7 @@ export function useLesson({ section, bpm, mode, speed, loop, countIn, voice, box
     function finish() {
       if (done) return;
       done = true;
+      report();
       cancelAnimationFrame(raf);
       clearInterval(timer);
       clearCues(boxRef.current);
@@ -207,11 +224,13 @@ export function useLesson({ section, bpm, mode, speed, loop, countIn, voice, box
     tick();
     raf = requestAnimationFrame(frame);
     return () => {
+      report();
       done = true;
       cancelAnimationFrame(raf);
       clearInterval(timer);
       clearCues(boxRef.current);
       run.current = null;
+      if (posRef) posRef.current = null;
       if (song) {
         try {
           songApi.current?.setRate?.(1);

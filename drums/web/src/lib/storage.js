@@ -1,5 +1,6 @@
 // שמירה במכשיר (localStorage). כל קריאה וכתיבה בתוך try/catch – במצב פרטי או כשחסום פשוט לא נשמר
 import { safeKit } from './kit';
+import { safeProgress } from './progress';
 
 const K = { kits: 'mf_kits', active: 'mf_active', songs: 'mf_songs', vol: 'mf_vol' };
 
@@ -74,4 +75,26 @@ export function saveSyncOffset(id, offset) {
   const next = all && typeof all === 'object' ? { ...all } : {};
   next[id] = Math.round(offset * 1000) / 1000;
   write(SYNC_KEY, next);
+}
+
+// רטט בכל מכה (ברירת מחדל: דולק) ותצוגת המסלול בלימוד (ברירת מחדל: ציר זמן)
+export function loadHaptics() {
+  return read('mf_haptic') !== false;
+}
+export function saveHaptics(v) {
+  write('mf_haptic', !!v);
+}
+export function loadHighway() {
+  return read('mf_hwy') === true;
+}
+export function saveHighway(v) {
+  write('mf_hwy', !!v);
+}
+
+// התקדמות (כוכבים, רצף, דקות) – הנרמול ב-lib/progress.js
+export function loadProgress() {
+  return safeProgress(read('mf_progress'));
+}
+export function saveProgress(p) {
+  write('mf_progress', p);
 }
