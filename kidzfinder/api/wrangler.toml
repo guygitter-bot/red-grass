@@ -1,0 +1,26 @@
+name = "kidzfinder-api"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[vars]
+# האתרים שמותר להם לפנות לשרת (* = כל תת-כתובת)
+ALLOWED_ORIGINS = "https://kidzfinder.pages.dev,https://*.kidzfinder.pages.dev,http://localhost:5173,http://localhost:4173"
+
+# משפחה = אובייקט אחד (Durable Object)
+[[durable_objects.bindings]]
+name = "FAMILY"
+class_name = "Family"
+
+# מדריך גלובלי: קוד חיבור → מזהה משפחה (אובייקט יחיד)
+[[durable_objects.bindings]]
+name = "DIR"
+class_name = "Directory"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Family"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Directory"]

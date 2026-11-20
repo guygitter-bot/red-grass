@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Kidzfinder</title>
+  <style>
+    :root {
+      --page: #0d0f1a; --card: #171a2b; --ink: #e9ebf7; --muted: #9aa0c0;
+      --line: #272b42; --accent: #818cf8; --accent-ink: #a5b4fc; --sos: #f87171; --ok: #4ade80;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: var(--page); color: var(--ink);
+      min-height: 100dvh; display: flex; flex-direction: column;
+    }
+    .wrap { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; text-align: center; gap: 18px; }
+    .logo { font-size: 56px; }
+    h1 { margin: 0; font-size: 26px; color: var(--accent); }
+    p { color: var(--muted); margin: 6px 0; max-width: 300px; line-height: 1.5; }
+    input {
+      width: 100%; max-width: 280px; background: var(--card); border: 1px solid var(--line);
+      color: var(--ink); border-radius: 14px; padding: 14px; font-size: 18px; text-align: center; margin: 6px 0;
+    }
+    .code { letter-spacing: 8px; font-size: 26px; font-weight: 700; }
+    button {
+      width: 100%; max-width: 280px; border: 0; border-radius: 14px; padding: 15px;
+      font-size: 18px; font-weight: 700; color: #fff; background: var(--accent); cursor: pointer;
+    }
+    button.ghost { background: transparent; color: var(--muted); font-weight: 500; font-size: 15px; }
+    .note { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; max-width: 300px; font-size: 14px; color: var(--muted); }
+    .ok-badge { color: var(--ok); font-size: 20px; font-weight: 700; }
+    .sos {
+      background: var(--sos); width: 190px; height: 190px; border-radius: 50%;
+      font-size: 30px; display: grid; place-items: center; box-shadow: 0 8px 30px rgba(248,113,113,.4);
+    }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <!-- מסך חיבור -->
+  <div id="pair" class="wrap">
+    <div class="logo">🧭</div>
+    <h1>Kidzfinder</h1>
+    <p>ההורים שלך דואגים לך. הם יראו איפה אתה על מפה. <b>תמיד</b> תופיע הודעה שאומרת שהמיקום משותף — זה לא סודי.</p>
+    <input id="name" placeholder="איך קוראים לך?" />
+    <input id="code" class="code" inputmode="numeric" maxlength="6" placeholder="------" />
+    <button id="connect">חיבור</button>
+    <div id="err" class="note hidden" style="color:var(--sos)"></div>
+  </div>
+
+  <!-- מסך פעיל -->
+  <div id="active" class="wrap hidden">
+    <div class="ok-badge">✓ המיקום משותף</div>
+    <p id="famline">עם המשפחה שלך</p>
+    <div class="sos" id="sosBtn">🆘<br><span style="font-size:16px">עזרה!</span></div>
+    <p id="lastline" style="font-size:13px"></p>
+    <div class="note">כפתור ה-SOS שולח להורים התראה דחופה עם המיקום שלך.</div>
+    <button class="ghost" id="stop">הפסקת שיתוף</button>
+  </div>
+
+  <script>
+    // גישה לתוסף האנדרואיד; בדפדפן רגיל – מוק כדי שלא ייפול
+    const Kid = (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Kid) || {
+      async getStatus() { return { paired: false }; },
+      async pair() { return { ok: false }; },
+      async sos() {},
+      async stopSharing() {},
+    };
+    const $ = (id) => document.getElementById(id);
+    const show = (which) => {
+      $('pair').classList.toggle('hidden', which !== 'pair');
+      $('active').classList.toggle('hidden', which !== 'active');
+    };
+
+    async function refresh() {
+      const s = await Kid.getStatus();
+      if (s.paired) {
+        show('active');
+        $('famline').textContent = 'עם ' + (s.familyName || 'המשפחה שלך');
+        if (s.lastSent) {
+          const mins = Math.round((Date.now() - s.lastSent) / 60000);
+          $('lastline').textContent = 'מיקום נשלח ' + (mins <= 0 ? 'עכשיו' : 'לפני ' + mins + ' דק׳');
+        }
+        if (s.hasLocation === false) {
+          $('lastline').textContent = '⚠️ צריך לאשר הרשאת מיקום (כל הזמן) בהגדרות';
+        }
+      } else {
+        show('pair');
+      }
+    }
+
+    $('connect').onclick = async () => {
+      const code = $('code').value.trim();
+      const name = $('name').value.trim() || 'ילד/ה';
+      if (!/^\d{6}$/.test(code)) { $('err').textContent = 'צריך קוד של 6 ספרות'; $('err').classList.remove('hidden'); return; }
+      $('connect').textContent = 'מתחבר…';
+      try {
+        const r = await Kid.pair({ code, childName: name });
+        if (r && r.ok) { await refresh(); }
+        else throw new Error();
+      } catch {
+        $('err').textContent = 'הקוד לא נכון או פג תוקף. בקש מההורה קוד חדש.';
+        $('err').classList.remove('hidden');
+      }
+      $('connect').textContent = 'חיבור';
+    };
+
+    $('sosBtn').onclick = async () => {
+      $('sosBtn').style.opacity = '0.5';
+      await Kid.sos();
+      $('lastline').textContent = '🆘 נשלחה התראת עזרה להורים';
+      setTimeout(() => ($('sosBtn').style.opacity = '1'), 1500);
+    };
+
+    $('stop').onclick = async () => {
+      if (confirm('להפסיק לשתף את המיקום עם ההורים?')) { await Kid.stopSharing(); await refresh(); }
+    };
+
+    refresh();
+    setInterval(refresh, 30000);
+  </script>
+</body>
+</html>
