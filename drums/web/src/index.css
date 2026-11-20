@@ -4,6 +4,8 @@
 @custom-variant dark (&:where(.dark, .dark *));
 /* טלפון לרוחב: מעט גובה – התפריט עובר לצד */
 @custom-variant short (@media (max-height: 520px) and (orientation: landscape));
+/* טלפון (וטאבלט) לאורך: כל מה שמעל הסט חייב להיות דחוס כדי שהסט יישאר גדול */
+@custom-variant phone (@media (max-width: 1023px) and (orientation: portrait));
 
 /* העולם: אולם הופעות ומאחורי הקלעים (drums/DESIGN.md). כל הצבעים כאן; בלילה ("ההופעה") מחליפים רק אותם.
    page = רצפת במה / טולקס, card = לוח ארגז הובלה, ink = טקסט, muted = משני, line = מסגרות, soft = רקע מודגש,
@@ -966,3 +968,22 @@ input[type='range']:focus-visible {
   100% { transform: translate(-50%, -50%) scale(1); filter: brightness(1) drop-shadow(0 0 0 transparent); }
 }
 
+
+/* ---- פאנל הלימוד בטלפון לאורך: בזמן ריצה מצטמצם לפס אחד (עצירה, מצב, ציון) ---- */
+.lesson-compact-label {
+  display: none;
+}
+@media (max-width: 1023px) and (orientation: portrait) {
+  .lesson[data-compact='true'] .lesson-setup,
+  .lesson[data-compact='true'] .lesson-title,
+  .lesson[data-compact='true'] .lesson-bpm {
+    display: none;
+  }
+  .lesson[data-compact='true'] .lesson-compact-label {
+    display: inline;
+  }
+  /* הציר הדק: שורות נמוכות יותר */
+  .lesson .tl-row {
+    height: 9px;
+  }
+}
