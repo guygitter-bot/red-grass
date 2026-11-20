@@ -1,5 +1,16 @@
-// Kidzfinder – שרת. worker.js רק מסדר כתובות ו-CORS; הלוגיקה ב-src/family.js (Durable Object).
+// Kidzfinder – שרת. worker.js רק מסדר כתובות ו-CORS; הלוגיקה ב-src/*.
 export { Family } from './src/family.js';
+export { Directory } from './src/directory.js';
+
+const dirStub = (env) => env.DIR.get(env.DIR.idFromName('directory'));
+async function dirCall(env, path, body) {
+  const res = await dirStub(env).fetch('https://do.local' + path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}
 
 export default {
   async fetch(request, env) {
@@ -16,6 +27,19 @@ export default {
       return withCors(await addFamilyId(res, id.toString()), cors);
     }
 
+    // הילד מצטרף עם קוד בלבד: מוצאים את המשפחה במדריך ואז מעבירים אליה
+    if (url.pathname === '/api/pair' && request.method === 'POST') {
+      const body = await request.json().catch(() => ({}));
+      const resolved = await dirCall(env, '/resolve', { code: body.code });
+      if (resolved.error) return withCors(json({ error: 'bad_code' }, 400), cors);
+      let id;
+      try { id = env.FAMILY.idFromString(resolved.familyId); } catch { return withCors(json({ error: 'bad_code' }, 400), cors); }
+      const res = await env.FAMILY.get(id).fetch('https://do.local/pair', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+      });
+      return withCors(await addFamilyId(res, resolved.familyId), cors);
+    }
+
     // /api/family/:id/<path> → האובייקט של אותה משפחה
     const m = url.pathname.match(/^\/api\/family\/([a-f0-9]+)(\/.*)$/);
     if (m) {
@@ -26,6 +50,11 @@ export default {
         return withCors(json({ error: 'bad_id' }, 400), cors);
       }
       const res = await forward(env, id, m[2], request);
+      // כשהורה מייצר קוד – רושמים אותו במדריך כדי שהילד ימצא את המשפחה
+      if (m[2] === '/pair-code' && res.status === 200) {
+        const data = await res.clone().json().catch(() => ({}));
+        if (data.code) await dirCall(env, '/register', { code: data.code, familyId: m[1] });
+      }
       return withCors(res, cors);
     }
 

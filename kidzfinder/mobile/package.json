@@ -1,0 +1,17 @@
+{
+  "name": "kidzfinder-mobile",
+  "private": true,
+  "version": "1.0.0",
+  "description": "אפליקציית הילד של Kidzfinder (Capacitor): שולחת מיקום ברקע, מציגה SOS והודעה קבועה שהמיקום משותף",
+  "scripts": {
+    "sync": "cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3"
+  }
+}

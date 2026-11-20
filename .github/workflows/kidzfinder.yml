@@ -1,0 +1,141 @@
+name: kidzfinder
+
+# Kidzfinder – מעקב הורי לאנדרואיד (kidzfinder/):
+#   api    -> Cloudflare Worker "kidzfinder-api" (משפחה = Durable Object; מדריך קודים גלובלי)
+#   web    -> Cloudflare Pages "kidzfinder" -> https://kidzfinder.pages.dev (אתר ההורה, מפה חיה)
+#   mobile -> אפליקציית הילד (Capacitor) – APK להורדה ישירה -> https://kidzfinder.pages.dev/kidzfinder.apk
+on:
+  push:
+    branches: [main]
+    paths: ["kidzfinder/**", ".github/workflows/kidzfinder.yml"]
+  pull_request:
+    paths: ["kidzfinder/**", ".github/workflows/kidzfinder.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kidzfinder-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Server tests
+        working-directory: kidzfinder/api
+        run: |
+          npm ci || npm install
+          npm test
+      - name: App tests and build
+        working-directory: kidzfinder/web
+        run: |
+          npm ci
+          npx vitest run
+          npm run build
+
+  api:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check secrets
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          missing=""
+          [ -n "$CF_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -n "$CF_ACCOUNT" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing (see kidzfinder/README.md)"
+            exit 1
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Deploy worker
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: kidzfinder/api
+          wranglerVersion: "4.146.0"
+      - name: Summary
+        env:
+          URL: ${{ steps.deploy.outputs.deployment-url }}
+        run: echo "Worker: $URL" >> "$GITHUB_STEP_SUMMARY"
+
+  web:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Build the parent site
+        working-directory: kidzfinder/web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build the child app (APK)
+        working-directory: kidzfinder/mobile
+        run: |
+          npm ci
+          npx cap sync android
+
+      - name: Assemble APK
+        working-directory: kidzfinder/mobile/android
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 1.0.${{ github.run_number }}
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Put the APK on the site
+        run: |
+          APK=kidzfinder/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          ls -la "$APK"
+          if [ "$(stat -c %s "$APK")" -lt 26000000 ]; then cp "$APK" kidzfinder/web/dist/kidzfinder.apk; else echo "::warning::APK too big for Pages"; fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kidzfinder-android-${{ github.run_number }}
+          path: kidzfinder/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+
+      - name: Create the Pages project (first run only)
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: kidzfinder/web
+          wranglerVersion: "4.146.0"
+          command: pages project create kidzfinder --production-branch=main
+      - name: Publish
+        if: github.event_name != 'pull_request'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: kidzfinder/web
+          wranglerVersion: "4.146.0"
+          command: pages deploy dist --project-name=kidzfinder --branch=main --commit-dirty=true
+      - name: Summary
+        if: github.event_name != 'pull_request'
+        run: echo "Published https://kidzfinder.pages.dev - APK https://kidzfinder.pages.dev/kidzfinder.apk" >> "$GITHUB_STEP_SUMMARY"

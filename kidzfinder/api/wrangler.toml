@@ -12,6 +12,15 @@ ALLOWED_ORIGINS = "https://kidzfinder.pages.dev,https://*.kidzfinder.pages.dev,h
 name = "FAMILY"
 class_name = "Family"
 
+# מדריך גלובלי: קוד חיבור → מזהה משפחה (אובייקט יחיד)
+[[durable_objects.bindings]]
+name = "DIR"
+class_name = "Directory"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Family"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Directory"]

@@ -12,7 +12,11 @@
   - `src/family.js` – הלוגיקה: חיבור בקוד, מיקום חי, גדרות וירטואליות, SOS, סוללה, פקודות.
   - `src/geo.js` – חישובי מרחק וגדרות (פונקציות טהורות + בדיקות).
 - `web/` – אתר ההורה (React + Vite + Tailwind): מפה חיה (Leaflet + OpenStreetMap), כרטיס לכל ילד, בדיקת "אתה בסדר?", צלצול, התקשרות והתראות. יש **מצב הדגמה** (ילד שזז על המפה) לבדיקה בלי טלפון.
-- `mobile/` – אפליקציית הילד (Capacitor, מיקום ברקע). *(בבנייה)*
+- `mobile/` – אפליקציית הילד (Capacitor + קוד אנדרואיד):
+  - `www/` – מסכי הילד (חיבור בקוד, "המיקום משותף ✓", כפתור SOS).
+  - `android/.../LocationService.java` – שירות שרץ ברקע: התראה קבועה שהמיקום משותף, שליחת מיקום כל 2 דק׳, משיכת פקודות (צלצול/בדיקה).
+  - `KidPlugin.java` – חיבור בקוד, SOS, הפסקת שיתוף. `CheckinReceiver.java` – לחיצת "אני בסדר".
+  - ה-APK נבנה ב-GitHub Actions (אין כאן Android SDK) ומועלה לאתר להורדה: https://kidzfinder.pages.dev/kidzfinder.apk
 
 ## עקרונות (ראו `GAP-REPORT.md`)
 - הילד יודע שהמיקום משותף; הודעה קבועה בטלפון שלו. אין מצב מוסתר.
@@ -31,3 +35,4 @@
 
 ## בדיקה
 - `cd kidzfinder/api && npm test` · `cd kidzfinder/web && npx vitest run && npm run build`
+- אפליקציית הילד (אנדרואיד) נבנית ונבדקת רק ב-CI (`kidzfinder.yml`).

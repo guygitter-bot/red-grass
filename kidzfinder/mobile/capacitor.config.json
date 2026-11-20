@@ -1,0 +1,11 @@
+{
+  "appId": "app.kidzfinder",
+  "appName": "Kidzfinder",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}
