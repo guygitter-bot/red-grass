@@ -4,6 +4,7 @@ import { fitSection, phaseFromTaps } from '../lib/lesson';
 import { loadSyncOffset, saveSyncOffset } from '../lib/storage';
 import { createSongClock } from '../lib/songclock';
 import { useLesson } from '../lib/useLesson';
+import { bpmLabel } from '../lib/quality';
 import Icon from './Icon';
 import Timeline from './Timeline';
 
@@ -68,9 +69,9 @@ export default function LessonPanel({ song, kit, boxRef, hitRef, songApi, songLo
           <div className="min-w-0 flex-1 flex flex-col phone:flex-row phone:items-center gap-2">
             <p className="lesson-title flex items-center gap-2 min-w-0"><span className="tape text-xl phone:text-lg truncate max-w-full"><bdi dir="ltr">{song.title}</bdi></span></p>
             {/* בטלפון אנכי: ה-BPM ליד הכותרת (במקום שורה נפרדת); בזמן ריצה – תקציר המצב */}
-            <span className="lcd px-1.5 text-[11px] tabular-nums shrink-0 hidden phone:inline lesson-bpm" dir="ltr">{groove.bpm} BPM</span>
+            <span className="lcd px-1.5 text-[11px] tabular-nums shrink-0 hidden phone:inline lesson-bpm whitespace-nowrap" dir="ltr">{bpmLabel(groove.bpm)}</span>
             <span className="lesson-compact-label text-xs text-muted truncate">{modeInfo.label} · <bdi dir="ltr">{Math.round(speed * 100)}%</bdi> · {section.name}</span>
-            <p className="text-[11px] text-muted truncate mt-1 flex items-center gap-1.5 phone:hidden"><Icon name="cap" size={14} className="text-accent shrink-0" />ביט מפושט, <span className="lcd px-1.5 tabular-nums" dir="ltr">{groove.bpm} BPM</span></p>
+            <p className="text-[11px] text-muted mt-1 flex items-center gap-1.5 min-w-0 phone:hidden"><Icon name="cap" size={14} className="text-accent shrink-0" /><span className="truncate min-w-0">ביט מפושט,</span> <span className="lcd px-1.5 tabular-nums shrink-0 whitespace-nowrap" dir="ltr">{bpmLabel(groove.bpm)}</span></p>
           </div>
           <button type="button" className="btn !min-h-9 !px-3 text-sm" onClick={() => setMore(!more)} aria-expanded={more}>{more ? 'פחות' : 'עוד'} <Icon name={more ? 'chevronUp' : 'chevronDown'} size={16} /></button>
           <button type="button" className="btn !min-h-9 !px-3 text-sm" onClick={() => { lesson.stop(); onClose(); }} aria-label="סגירת מצב הלימוד"><Icon name="close" size={16} /></button>

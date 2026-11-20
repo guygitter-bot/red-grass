@@ -3,6 +3,7 @@ import { PIECES, pieceForCode } from '../lib/kit';
 import { layoutFor, STAGE_HEIGHT } from '../lib/layout';
 import { finishOf } from '../lib/finish';
 import { flashEl } from '../lib/padfx';
+import { recoveryStep } from '../lib/quality';
 import { ensureAudio, playPiece } from '../lib/sounds';
 
 // הבמה התלת־ממדית נטענת בנפרד (three.js כבד) – עד שהיא מוכנה מוצגת הבמה השטוחה
@@ -34,6 +35,12 @@ export default function KitStage({ kit, keys = false, boxRef: outerRef, onUserHi
   hitCb.current = onUserHit;
   const engine = useRef(null);
   const [use3d, setUse3d] = useState(webglOk);
+  // כמה פעמים הבמה התלת־ממדית נתקעה (מסך שחור / אובדן הקשר): פעם ראשונה בונים אותה מחדש באיכות נמוכה, פעם שנייה – הבמה השטוחה
+  const [attempt, setAttempt] = useState(0);
+  const trouble = useCallback(() => {
+    if (recoveryStep(attempt) === 'safe') setAttempt(attempt + 1);
+    else setUse3d(false);
+  }, [attempt]);
 
   const hit = useCallback(
     (id) => {
@@ -68,7 +75,7 @@ export default function KitStage({ kit, keys = false, boxRef: outerRef, onUserHi
   if (!use3d) return flat;
   return (
     <Suspense fallback={flat}>
-      <Stage3D kit={kit} keys={keys} padsRef={boxRef} onHit={hit} onFail={() => setUse3d(false)} onEngine={(e) => { engine.current = e; }} />
+      <Stage3D key={attempt} safe={attempt > 0} kit={kit} keys={keys} padsRef={boxRef} onHit={hit} onFail={() => setUse3d(false)} onTrouble={trouble} onEngine={(e) => { engine.current = e; }} />
     </Suspense>
   );
 }
