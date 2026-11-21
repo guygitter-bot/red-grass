@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Moon, Sun, MapPin, BellRing, PhoneCall, ShieldQuestion, Plus, X } from 'lucide-react';
+import { Moon, Sun, MapPin, BellRing, PhoneCall, ShieldQuestion, Navigation, Plus, X } from 'lucide-react';
 import LiveMap from './components/LiveMap';
 import { toggle as toggleTheme } from './lib/theme';
 import { loadParent, saveParent, clearParent } from './lib/store';
@@ -220,6 +220,20 @@ function ChildCard({ child, checkin, following, onFollow, onCommand }) {
           <PhoneCall className="w-5 h-5" />התקשרי
         </button>
       </div>
+
+      {/* ניווט ל-Google Maps אל המיקום של הילד */}
+      <button
+        onClick={() => {
+          if (!live) return;
+          const url = `https://www.google.com/maps/dir/?api=1&destination=${live.lat},${live.lng}`;
+          window.open(url, '_blank', 'noopener');
+        }}
+        disabled={!live}
+        className="mt-2 w-full flex items-center justify-center gap-2 bg-accent text-white rounded-xl py-2.5 text-sm font-bold disabled:opacity-40"
+      >
+        <Navigation className="w-4 h-4" />
+        {live ? `נווט אל ${child.name} ב-Google Maps` : 'אין עדיין מיקום לניווט'}
+      </button>
     </div>
   );
 }
