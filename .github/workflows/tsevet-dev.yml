@@ -21,6 +21,9 @@ jobs:
     timeout-minutes: 60
     env:
       TSEVET_API: https://tsevet-api.guygitter.workers.dev
+      # מפת הקוד – גרסה קבועה (לעדכן בכוונה, עם ה-SHA-256 מ-checksums.txt של הגרסה)
+      CBM_VERSION: v0.9.0
+      CBM_SHA256: 8459d5c9d1457f2c82de3de307ffc7641ecbba2dde893427be1e62eca8ef9b25
       TSEVET_TOKEN: ${{ secrets.POINTS_GITHUB_TOKEN }}
       DEV_ID: ${{ github.event.client_payload.id }}
     steps:
@@ -52,16 +55,37 @@ jobs:
           done
           npm install -g --silent @anthropic-ai/claude-code
           git checkout -q -B "tsevet-dev/${DEV_ID}"
+      # מפת קוד (codebase-memory-mcp, רישיון MIT, גרסה קבועה + בדיקת SHA-256): רץ רק כאן, בלי רשת ובלי מפתח.
+      # המתכנת שואל את המפה "איפה זה" ו"מי קורא למה" במקום לקרוא קובץ אחרי קובץ. אם משהו נכשל – ממשיכים בלי.
+      - name: Code map
+        env:
+          APP: ${{ steps.job.outputs.app }}
+        run: |
+          d="$RUNNER_TEMP/cbm"; mkdir -p "$d/cache"
+          f=codebase-memory-mcp-linux-amd64-portable.tar.gz
+          if curl -fsSL -o "$d/$f" "https://github.com/DeusData/codebase-memory-mcp/releases/download/${CBM_VERSION}/$f" \
+            && echo "${CBM_SHA256}  $d/$f" | sha256sum -c --quiet - \
+            && tar xzf "$d/$f" -C "$d" codebase-memory-mcp \
+            && CBM_CACHE_DIR="$d/cache" timeout 600 "$d/codebase-memory-mcp" cli index_repository --repo-path "$PWD/$APP" > /dev/null 2>&1; then
+            CBM_CACHE_DIR="$d/cache" "$d/codebase-memory-mcp" daemon stop > /dev/null 2>&1 || true
+            printf '{"mcpServers":{"codebase-memory-mcp":{"command":"%s","args":[],"env":{"CBM_CACHE_DIR":"%s"}}}}' \
+              "$d/codebase-memory-mcp" "$d/cache" > "$d/mcp.json"
+            echo "MCP_ARGS=--mcp-config $d/mcp.json" >> "$GITHUB_ENV"
+            echo "code map ready"
+          else
+            echo "::warning::code map not available – continuing without it"
+          fi
       - name: Claude makes the change
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           MODEL: ${{ vars.TSEVET_DEV_MODEL || 'claude-opus-5-5' }}
         run: |
-          claude -p "$(cat .dev/prompt.txt)" \
+          # shellcheck disable=SC2086
+          claude -p "$(cat .dev/prompt.txt)" ${MCP_ARGS} \
             --model "$MODEL" \
             --max-turns 100 \
             --permission-mode acceptEdits \
-            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(cd:*),Bash(ls:*),Bash(cat:*),Bash(npm test:*),Bash(npm run build:*),Bash(npm run test:*),Bash(npx vitest:*),Bash(node --test:*),Bash(git diff:*),Bash(git status:*)" \
+            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(cd:*),Bash(ls:*),Bash(cat:*),Bash(npm test:*),Bash(npm run build:*),Bash(npm run test:*),Bash(npx vitest:*),Bash(node --test:*),Bash(git diff:*),Bash(git status:*),mcp__codebase-memory-mcp" \
             --output-format json > .dev/claude.json 2>/dev/null || echo "::warning::Claude exited with an error"
       - name: Check the result
         id: check
