@@ -17,7 +17,8 @@ const SMART_STALE_MS = 100 * 60 * 1000;
 // תקרת הוצאה לעריכה חכמה אחת (דולר) ומספר עריכות ביום
 export const SMART_MAX_USD = 12;
 export const dailySmart = (env) => Number(env.DAILY_SMART) || 3;
-export const SMART_TOOLS = { auto: 'הכי מתאים', 'ghost-editor': 'Ghost Editor', shorts: 'Claude Shorts', ffmpeg: 'FFmpeg' };
+// montage = OpenMontage (calesthio/OpenMontage, AGPLv3, רץ רק ב-Actions): סרטון שלם מרעיון, גם בלי קבצים, רק ממקורות חינמיים
+export const SMART_TOOLS = { auto: 'הכי מתאים', 'ghost-editor': 'Ghost Editor', shorts: 'Claude Shorts', ffmpeg: 'FFmpeg', montage: 'OpenMontage – אולפן' };
 const OPS = {
   color_grade: { min: 1, max: 1, kinds: ['video'] },
   before_after: { min: 1, max: 2, kinds: ['video'] },
@@ -72,7 +73,9 @@ export async function startRender(t, job, input, started) {
     if (!spec.kinds.includes(f.kind)) return `File ${id} is ${f.kind}; ${input.op} needs ${spec.kinds.join(' or ')}.`;
     inputs.push(f.id);
   }
-  if (inputs.length < spec.min) return `${input.op} needs at least ${spec.min} file(s). Ask the owner to upload.`;
+  // OpenMontage יכול להתחיל מרעיון בלבד
+  const min = input.op === 'smart_edit' && input.tool === 'montage' ? 0 : spec.min;
+  if (inputs.length < min) return `${input.op} needs at least ${spec.min} file(s). Ask the owner to upload.`;
   if (inputs.length > spec.max) return `${input.op} takes at most ${spec.max} file(s).`;
   let music = null;
   if (input.music) {

@@ -3,7 +3,9 @@ Work ONLY inside the folder `{APP}/` of the app "{APP}".
 
 Before you change anything:
 1. Read `CLAUDE.md` at the root (the shared rules and the section of `{APP}`), and `{APP}/README.md`.
-2. Find the relevant code (Glob / Grep / Read). Follow the existing style, file layout and comments (comments in Hebrew, like the code around them).
+2. Find the relevant code. A code map of `{APP}/` is ready (the `codebase-memory-mcp` tools, already indexed – start with
+   `list_projects`, then `search_graph` / `trace_path` / `get_code_snippet`): ask the map where things are and who calls
+   what before reading files one by one. If the map tools are missing or fail, use Glob / Grep / Read. Follow the existing style, file layout and comments (comments in Hebrew, like the code around them).
 
 The task (approved by the owner):
 ---

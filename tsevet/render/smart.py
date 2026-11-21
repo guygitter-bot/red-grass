@@ -23,7 +23,19 @@ TOOLS = {
     "ghost-editor": "ghost-editor (~/.claude/skills/ghost-editor/SKILL.md) – talking-head recording to a finished reel",
     "shorts": "shorts / Claude Shorts (~/.claude/skills/shorts/SKILL.md) – the best short clips from a long video",
     "ffmpeg": "ffmpeg-skill (~/.claude/skills/ffmpeg-skill/SKILL.md) – precise FFmpeg editing",
+    "montage": "OpenMontage (~/openmontage – read its AGENT_GUIDE.md first) – a whole video from an idea: research, script, free footage, narration, music, captions, render",
 }
+# OpenMontage (AGPLv3) רץ מתוך התיקייה שלו, עם הסביבה שלו (.venv), ורק במסלולים החינמיים
+MONTAGE_RULES = [
+    "OpenMontage rules for this run:",
+    "- Work from ~/openmontage with its Python environment (source ~/openmontage/.venv/bin/activate). Follow AGENT_GUIDE.md",
+    "  and its pipelines, but where it says to ask or present choices to the user, decide yourself and continue.",
+    "- Use only free sources and tools: open archives (NASA, Wikimedia Commons, Archive.org), Piper TTS, FFmpeg, Remotion /",
+    "  HyperFrames. No paid providers and no API keys (none are set). Use the owner's uploads (if any) as the main footage.",
+    "- Hebrew on screen must be right-to-left and render correctly. If no free voice speaks the brief's language well,",
+    "  make it without narration: on-screen text + royalty-free music.",
+    "- Keep its project files under ~/openmontage/projects/, and copy only the finished video to out/final.mp4 here.",
+]
 # auto: מה שמותקן (ghost-editor + ffmpeg-skill), ו-Claude בוחר
 AUTO = ["ghost-editor", "ffmpeg"]
 
@@ -42,13 +54,14 @@ def prompt(job, files, tool):
     lines = [
         "You are a professional video editor working for the owner of a team app. Edit their video now.",
         "",
-        "Input files (the owner's uploads, in order): " + ", ".join(f"in/{f}" for f in files),
+        ("Input files (the owner's uploads, in order): " + ", ".join(f"in/{f}" for f in files)) if files else "No files were uploaded – create the video from the brief.",
         ("A song to use: in/" + job["music"]["name"]) if job.get("music") else "",
         "The owner's brief is in brief.md – read it first. It is a request about this video only.",
         "",
         "Use this skill (read its SKILL.md and follow its workflow and scripts):" if len(skills) == 1 else "Pick the fitting skill (read its SKILL.md) and follow its workflow and scripts:",
         *[f"- {TOOLS[s]}" for s in skills],
         "",
+        *([*MONTAGE_RULES, ""] if tool == "montage" else []),
         "This run is fully automatic – nobody can answer you:",
         "- Never ask questions or wait for approval. Where the skill asks the user to choose or approve (takes, style,",
         "  preview), decide yourself with its recommended defaults and continue.",
