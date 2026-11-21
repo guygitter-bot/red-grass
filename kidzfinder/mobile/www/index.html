@@ -56,6 +56,8 @@
     <p id="famline">עם המשפחה שלך</p>
     <div class="sos" id="sosBtn">🆘<br><span style="font-size:16px">עזרה!</span></div>
     <p id="lastline" style="font-size:13px"></p>
+    <button id="grant" class="hidden" style="background:var(--sos);max-width:280px">אישור הרשאת מיקום</button>
+    <div id="tip" class="note hidden">כדי שההורים יראו אותך גם כשהאפליקציה סגורה, בחר/י במיקום <b>"לאפשר תמיד"</b> בהגדרות.</div>
     <div class="note">כפתור ה-SOS שולח להורים התראה דחופה עם המיקום שלך.</div>
     <button class="ghost" id="stop">הפסקת שיתוף</button>
   </div>
@@ -66,6 +68,7 @@
       async getStatus() { return { paired: false }; },
       async pair() { return { ok: false }; },
       async sos() {},
+      async askLocation() {},
       async stopSharing() {},
     };
     const $ = (id) => document.getElementById(id);
@@ -83,9 +86,11 @@
           const mins = Math.round((Date.now() - s.lastSent) / 60000);
           $('lastline').textContent = 'מיקום נשלח ' + (mins <= 0 ? 'עכשיו' : 'לפני ' + mins + ' דק׳');
         }
-        if (s.hasLocation === false) {
-          $('lastline').textContent = '⚠️ צריך לאשר הרשאת מיקום (כל הזמן) בהגדרות';
-        }
+        const noLoc = s.hasLocation === false;
+        $('grant').classList.toggle('hidden', !noLoc);
+        $('tip').classList.toggle('hidden', noLoc);
+        if (noLoc) $('lastline').textContent = '⚠️ המיקום עדיין לא משותף — צריך לאשר הרשאת מיקום';
+        else if (!s.lastSent) $('lastline').textContent = 'מאתר מיקום… (עד דקה)';
       } else {
         show('pair');
       }
@@ -105,6 +110,11 @@
         $('err').classList.remove('hidden');
       }
       $('connect').textContent = 'חיבור';
+    };
+
+    $('grant').onclick = async () => {
+      try { await Kid.askLocation(); } catch {}
+      await refresh();
     };
 
     $('sosBtn').onclick = async () => {

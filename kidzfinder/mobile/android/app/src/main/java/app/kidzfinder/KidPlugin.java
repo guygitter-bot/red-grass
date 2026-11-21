@@ -2,19 +2,16 @@ package app.kidzfinder;
 
 import android.Manifest;
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
-import android.os.Build;
-
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 
 import com.getcapacitor.JSObject;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
 import org.json.JSONObject;
 
@@ -23,7 +20,16 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 // הגשר בין מסכי הילד (webview) לקוד האנדרואיד: חיבור בקוד, מצב, SOS, והפסקת שיתוף.
-@CapacitorPlugin(name = "Kid")
+@CapacitorPlugin(
+    name = "Kid",
+    permissions = {
+        @Permission(alias = "location", strings = {
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        }),
+        @Permission(alias = "notifications", strings = { Manifest.permission.POST_NOTIFICATIONS })
+    }
+)
 public class KidPlugin extends Plugin {
 
     public static final String API_BASE = "https://kidzfinder-api.guygitter.workers.dev";
@@ -33,21 +39,19 @@ public class KidPlugin extends Plugin {
         return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
-    // מצב נוכחי: האם מחובר, שמות, ומתי נשלח מיקום לאחרונה
     @PluginMethod
     public void getStatus(PluginCall call) {
         SharedPreferences p = prefs(getContext());
         JSObject res = new JSObject();
-        boolean paired = p.getString("childToken", null) != null;
-        res.put("paired", paired);
+        res.put("paired", p.getString("childToken", null) != null);
         res.put("childName", p.getString("childName", ""));
         res.put("familyName", p.getString("familyName", ""));
         res.put("lastSent", p.getLong("lastSent", 0));
-        res.put("hasLocation", hasLocationPermission());
+        res.put("hasLocation", getPermissionState("location") == PermissionState.GRANTED);
         call.resolve(res);
     }
 
-    // חיבור עם קוד 6 ספרות: פונה לשרת, שומר את הזהות, ומתחיל לשתף מיקום
+    // חיבור עם קוד 6 ספרות: פונה לשרת, שומר את הזהות, ואז מבקש הרשאות ומתחיל לשתף
     @PluginMethod
     public void pair(final PluginCall call) {
         final String code = call.getString("code", "");
@@ -58,10 +62,7 @@ public class KidPlugin extends Plugin {
                 body.put("code", code);
                 body.put("childName", childName);
                 JSONObject r = postJson(API_BASE + "/api/pair", body, null);
-                if (r == null || r.has("error")) {
-                    call.reject("bad_code");
-                    return;
-                }
+                if (r == null || r.has("error")) { call.reject("bad_code"); return; }
                 SharedPreferences.Editor e = prefs(getContext()).edit();
                 e.putString("familyId", r.optString("familyId"));
                 e.putString("childId", r.optString("childId"));
@@ -69,18 +70,25 @@ public class KidPlugin extends Plugin {
                 e.putString("childName", childName);
                 e.putString("familyName", r.optString("familyName", "המשפחה"));
                 e.apply();
-                getActivity().runOnUiThread(() -> {
-                    requestPermissionsIfNeeded();
-                    LocationService.start(getContext());
-                    JSObject out = new JSObject();
-                    out.put("ok", true);
-                    out.put("familyName", r.optString("familyName", "המשפחה"));
-                    call.resolve(out);
-                });
+                // בקשת הרשאות חייבת לרוץ ב-UI; השירות יתחיל רק אחרי האישור (למטה)
+                getActivity().runOnUiThread(() ->
+                        requestPermissionForAliases(new String[]{"location", "notifications"}, call, "afterPerms"));
             } catch (Exception ex) {
                 call.reject("network");
             }
         }).start();
+    }
+
+    // אחרי שהמשתמש ענה על בקשת ההרשאות: אם המיקום אושר – מתחילים את השירות
+    @PermissionCallback
+    private void afterPerms(PluginCall call) {
+        boolean loc = getPermissionState("location") == PermissionState.GRANTED;
+        if (loc) LocationService.start(getContext());
+        JSObject out = new JSObject();
+        out.put("ok", true);
+        out.put("hasLocation", loc);
+        out.put("familyName", prefs(getContext()).getString("familyName", "המשפחה"));
+        call.resolve(out);
     }
 
     // הילד לוחץ SOS
@@ -92,10 +100,14 @@ public class KidPlugin extends Plugin {
                 postJson(API_BASE + "/api/family/" + p.getString("familyId", "") + "/sos",
                         new JSONObject(), p.getString("childToken", ""));
                 call.resolve();
-            } catch (Exception ex) {
-                call.reject("network");
-            }
+            } catch (Exception ex) { call.reject("network"); }
         }).start();
+    }
+
+    // בקשת הרשאת המיקום שוב (אם הילד דחה בהתחלה)
+    @PluginMethod
+    public void askLocation(PluginCall call) {
+        requestPermissionForAliases(new String[]{"location", "notifications"}, call, "afterPerms");
     }
 
     // הפסקת שיתוף: עוצר את השירות ומוחק את הזהות מהמכשיר
@@ -104,28 +116,6 @@ public class KidPlugin extends Plugin {
         LocationService.stop(getContext());
         prefs(getContext()).edit().clear().apply();
         call.resolve();
-    }
-
-    private boolean hasLocationPermission() {
-        return ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION)
-                == PackageManager.PERMISSION_GRANTED;
-    }
-
-    // מבקש הרשאות מיקום והתראות (מיקום-ברקע מתבקש בנפרד על ידי המשתמש בהגדרות)
-    private void requestPermissionsIfNeeded() {
-        java.util.ArrayList<String> ask = new java.util.ArrayList<>();
-        if (!hasLocationPermission()) {
-            ask.add(Manifest.permission.ACCESS_FINE_LOCATION);
-            ask.add(Manifest.permission.ACCESS_COARSE_LOCATION);
-        }
-        if (Build.VERSION.SDK_INT >= 33 &&
-                ContextCompat.checkSelfPermission(getContext(), Manifest.permission.POST_NOTIFICATIONS)
-                        != PackageManager.PERMISSION_GRANTED) {
-            ask.add(Manifest.permission.POST_NOTIFICATIONS);
-        }
-        if (!ask.isEmpty()) {
-            ActivityCompat.requestPermissions(getActivity(), ask.toArray(new String[0]), 7001);
-        }
     }
 
     // שליחת JSON ל-URL. token – אם קיים, נשלח ככותרת Authorization. מחזיר את התשובה או null.
