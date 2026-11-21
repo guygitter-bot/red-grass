@@ -18,6 +18,7 @@ import { AGENTS, AGENT_KEYS, MODELS, SELF_LEARNERS, SKILL_SEEKERS, STOP, TG_KEYS
 import { APP_PREFIX, addFile, fileUrl as fileUrlOf, checkFileUrl, getSettings, handleApp, newId as convIdNew } from './app.js';
 import { IG_SKILLS } from './igskills.js';
 import { CODE_WORD, DESIGN_PACK } from './designpack.js';
+import { loadExpert, searchExperts } from './agency.js';
 import { bursaReady, bursaTools } from './bursa.js';
 import { appsOf, appsText, codeTools, devDone, devFail, devJob, devQuestion, devReady, proposeChange } from './dev.js';
 import { readSkill as githubRead, searchSkills as githubSearch } from './github.js';
@@ -533,6 +534,9 @@ export class Team {
         await this.storage.put('skills', left);
         return 'Removed.';
       },
+      // הסוכנות: ספריית המומחים (agency.js)
+      experts_search: async ({ query, division }) => searchExperts(query, division),
+      expert_load: async ({ name }) => loadExpert(this.env, name),
       use_skill: async ({ name }) => {
         const skill = ((await this.storage.get('skills')) || []).find((s) => s.name === name && !s.pending)
           || [...designSkills(current), FIND_SKILLS, ...builtinSkills(current)].find((s) => s.name === name);

@@ -1355,6 +1355,22 @@ test('bots read uploaded documents: PDF as a document, Word/Excel text, and read
   assert.match(result.content[0].text, /חשמל,300/);
 });
 
+test('smart edit with OpenMontage: can start from an idea with no files; other tools still need a file', async () => {
+  const { env } = setupEnv({ replies: [] });
+  const token = await signIn(env);
+  env.AI_CLIENT = fakeAI({ replies: [
+    { stop: 'tool_use', content: tool('edit_video', { op: 'smart_edit', files: [], tool: 'montage', brief: 'סרטון הסבר של דקה על הירח' }) },
+    { content: text('הכנתי תוכנית') },
+  ] }, []);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'סרטון על הירח', to: 'editor' }, token);
+  await env.team.alarm();
+  const card = (await call(env, '/app/conv', { id: conv.id }, token)).data.messages[1].renders[0];
+  assert.equal(card.status, 'proposed');
+  assert.equal(card.tool, 'OpenMontage – אולפן');
+  assert.equal(card.files, 0);
+});
+
 test('smart edit: only a proposal until the owner approves; cost recorded; daily cap', async () => {
   const { env, outside } = setupEnv({ replies: [] }, { DAILY_SMART: '1' });
   const token = await signIn(env);
