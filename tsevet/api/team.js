@@ -18,6 +18,7 @@ import { AGENTS, AGENT_KEYS, MODELS, SELF_LEARNERS, SKILL_SEEKERS, STOP, TG_KEYS
 import { APP_PREFIX, addFile, fileUrl as fileUrlOf, checkFileUrl, getSettings, handleApp, newId as convIdNew } from './app.js';
 import { IG_SKILLS } from './igskills.js';
 import { CODE_WORD, DESIGN_PACK } from './designpack.js';
+import { MOTION_NOTE } from './motion.js';
 import { loadExpert, searchExperts } from './agency.js';
 import { bursaReady, bursaTools } from './bursa.js';
 import { appsOf, appsText, codeTools, devDone, devFail, devJob, devQuestion, devReady, proposeChange } from './dev.js';
@@ -580,6 +581,8 @@ export class Team {
         extra: [
           agent === 'coder' && app && devReady(this.env) ? `The apps (folders in the repository):\n${appsText(await appsOf(this))}` : '',
           app && agent === 'creative' ? CODE_WORD_NOTE : '',
+          // מילת הקוד "תנועה": אנימציית HTML -> סרטון (הקריאייטיב בונה, עורך הווידאו מרנדר)
+          app && (agent === 'creative' || agent === 'editor') && this.env.FILES ? MOTION_NOTE : '',
           app && CREATORS.includes(agent) && this.env.FILES
             ? 'Deliver work as files in the chat: when the owner (or a teammate) wants a landing page, an illustration, a document or a table – create it with make_file (a complete, polished file), not just a description. For new images use make_image (created only after the owner approves), then place them in pages with {{file:<id>}}.'
             : '',

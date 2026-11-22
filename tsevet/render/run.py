@@ -74,6 +74,9 @@ def command(job, clips, music, dst):
     if op == "beats_and_cuts":
         cmd = [SKILLS / "beats-and-cuts/beats.py", *clips, f"--music={music}", f"--format={p.get('format', '9:16')}", *out]
         return cmd + ([f"--seconds={float(p['seconds'])}"] if p.get("seconds") else [])
+    if op == "animation":
+        cmd = [SKILLS / "motion-graphics/animate.py", clips[0], f"--format={p.get('format', '9:16')}", f"--seconds={float(p.get('seconds', 10))}", *out]
+        return cmd + ([f"--music={music}"] if music else [])
     raise ValueError("unknown op")
 
 

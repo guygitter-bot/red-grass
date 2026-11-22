@@ -12,7 +12,8 @@ import { addFile, israelDate, newId } from './app.js';
 
 export const CREATORS = ['creative', 'coder'];
 // מי יוצר קבצים (בלי תמונות): גם המשפטן – תיק מסודר לפגישה עם עורך דין
-export const FILE_MAKERS = [...CREATORS, 'lawyer'];
+// ועורך הווידאו – בונה אנימציית HTML לפני רינדור (motion.js)
+export const FILE_MAKERS = [...CREATORS, 'lawyer', 'editor'];
 const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const MAX_DOC = 400_000;
 const IMAGE_USD = 0.04;

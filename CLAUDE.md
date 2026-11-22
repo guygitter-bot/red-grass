@@ -187,6 +187,7 @@
 - קבצים ותמונות (`api/create.js`, רק קריאייטיב והמתכנת): `make_file` (דף נחיתה / SVG / מסמך / טבלה) נשמר מיד כקובץ בשיחה ומוגש ב-sandbox; `make_image` (Google) **רק באישור בכפתור**, תקרה `DAILY_IMAGES`. לא לעקוף את האישור.
 - **"הסוכנות"** (`api/agency.js`, Agency Agents, MIT, גרסה קבועה `AGENCY_SHA`): 283 מומחים שכל בוט טוען (`experts_search` / `expert_load`); מילת הקוד **"סוכנות"**. הכללים של הבוט תמיד גוברים על המומחה.
   המתכנת מקבל מפת קוד (codebase-memory-mcp, MIT, גרסה + SHA-256 קבועים ב-`tsevet-dev.yml`); עורך הווידאו – OpenMontage (AGPLv3, `tool: 'montage'` בעריכה חכמה, רק מסלולים חינמיים, באישור בכפתור כמו כל עריכה חכמה).
+- **"תנועה"** (מילת קוד, `api/motion.js`): אנימציית HTML חופשית שהקריאייטיב / העורך בונים עם `make_file` והעורך מרנדר ל-MP4 (op `animation` ב-`api/render.js`, `.claude/skills/motion-graphics/animate.py`).
 - ארגז כלי העיצוב של הקריאייטיב (`api/designpack.js`: taste-skill, web-design-guidelines, awesome-design, image-to-code; MIT) – מילת הקוד **"סטודיו"** בוחרת מהם.
 - מסמכים (PDF / Word / Excel / PowerPoint / CSV): PDF עולה כמו שהוא, השאר הופך לטקסט בטלפון (`web/src/lib/docs.js`); הבוטים קוראים אותם (`docBlock` + `read_file` ב-`api/team.js`).
 - חדרים: שיחה עם 2-6 בוטים נבחרים (`members`, `teamOf` ב-`api/team.js`) – רק הם עונים ומקבלים משימות בחדר.

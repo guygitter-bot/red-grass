@@ -1300,6 +1300,53 @@ test('creative has the design toolbox from the video and the code word picks fro
   assert.match(aiCalls[1].messages.at(-1).content[0].content, /web-interface-guidelines\/main\/command\.md/);
 });
 
+test('motion code word: the note reaches creative and editor, and the editor renders an HTML animation', async () => {
+  const { env, aiCalls, outside } = setupEnv({
+    replies: [
+      { stop: 'tool_use', content: tool('make_file', { kind: 'html', name: 'אנימציה', content: '<!doctype html><html dir="rtl"><body><h1>שלום</h1></body></html>' }) },
+      { content: text('הכנתי את האנימציה') },
+    ],
+  });
+  const token = await signIn(env);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'תנועה – אנימציה לריל על הסדר', to: 'editor' }, token);
+  await env.team.alarm();
+  const sys = aiCalls[0].system[0].text;
+  assert.match(sys, /Code word "תנועה"/);
+  assert.match(sys, /op "animation"/);
+  // לעורך הווידאו יש make_file, ובלי make_image
+  const names = aiCalls[0].tools.map((t) => t.name);
+  assert.ok(names.includes('make_file') && names.includes('edit_video') && !names.includes('make_image'));
+  const html = (await call(env, '/app/conv', { id: conv.id }, token)).data.messages.flatMap((m) => m.files || []).find((f) => f.kind === 'doc');
+  assert.equal(html.name, 'אנימציה.html');
+  const video = await upload(env, token, { type: 'video/mp4', name: 'clip.mp4', bytes: new Uint8Array(20).fill(7), query: '&dur=5&w=1080&h=1920' });
+
+  // אנימציה מקובץ HTML: מתחילה, והשרת נותן ל-workflow את הדף עם סיומת html
+  env.AI_CLIENT = fakeAI({ replies: [
+    { stop: 'tool_use', content: tool('edit_video', { op: 'animation', files: [html.id], format: '9:16', seconds: 999 }) },
+    { content: text('מרנדר') },
+  ] }, []);
+  await call(env, '/app/send', { id: conv.id, text: 'תרנדר', to: 'editor' }, token);
+  await env.team.alarm();
+  const dispatch = outside.find((o) => o.url === 'https://api.github.com/repos/me/repo/dispatches');
+  assert.equal(dispatch.body.event_type, 'tsevet-render');
+  const gh = (path) => worker.fetch(new Request(`${API}${path}`, { headers: { authorization: `Bearer ${GH}` } }), env);
+  const job = await (await gh(`/render/job?id=${dispatch.body.client_payload.id}`)).json();
+  assert.equal(job.op, 'animation');
+  assert.deepEqual(job.params, { format: '9:16', seconds: 60 });
+  assert.deepEqual(job.inputs, [{ n: 0, kind: 'doc', name: 'in0.html' }]);
+
+  // סרטון לא מתקבל כקלט לאנימציה
+  const calls = [];
+  env.AI_CLIENT = fakeAI({ replies: [
+    { stop: 'tool_use', content: tool('edit_video', { op: 'animation', files: [video.data.id] }) },
+    { content: text('לא התאים') },
+  ] }, calls);
+  await call(env, '/app/send', { id: conv.id, text: 'תרנדר את הסרטון', to: 'editor' }, token);
+  await env.team.alarm();
+  assert.match(calls[1].messages.at(-1).content[0].content, /needs doc/);
+});
+
 test('the legal expert organizes a case file for a lawyer meeting (a file, no images)', async () => {
   const { env, aiCalls } = setupEnv({
     replies: [

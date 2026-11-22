@@ -26,6 +26,8 @@ const OPS = {
   motion_graphics: { min: 0, max: 6, kinds: ['video'] },
   beats_and_cuts: { min: 1, max: 8, kinds: ['video'], music: true },
   smart_edit: { min: 1, max: 8, kinds: ['video', 'image'], smart: true },
+  // אנימציית HTML (קובץ שנוצר עם make_file) שהופכת לסרטון – motion.js
+  animation: { min: 1, max: 1, kinds: ['doc'], html: true },
 };
 export const OP_LABELS = {
   color_grade: 'צבעוניות קולנועית',
@@ -34,9 +36,10 @@ export const OP_LABELS = {
   motion_graphics: 'כותרות מונפשות',
   beats_and_cuts: 'חיתוך לפי הקצב',
   smart_edit: 'עריכה חכמה',
+  animation: 'אנימציה לסרטון',
 };
 
-const EXT = { 'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/webm': 'webm', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/wav': 'wav', 'audio/ogg': 'ogg', 'audio/aac': 'aac' };
+const EXT = { 'video/mp4': 'mp4', 'video/quicktime': 'mov', 'video/webm': 'webm', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/wav': 'wav', 'audio/ogg': 'ogg', 'audio/aac': 'aac', 'text/html': 'html', 'text/html; charset=utf-8': 'html' };
 const extOf = (f) => EXT[f.type] || { video: 'mp4', image: 'jpg', audio: 'mp3' }[f.kind];
 // שורה אחת, ולא מתחילה ב-"-" (שלא תיקרא כאפשרות בשורת הפקודה של כלי העריכה)
 const text = (v, max) => String(v ?? '').replace(/[\r\n]+/g, ' ').trim().replace(/^-+\s*/, '').slice(0, max);
@@ -71,6 +74,7 @@ export async function startRender(t, job, input, started) {
     const f = await storage.get(`f:${String(id)}`);
     if (!f) return `No such file: ${id}. Use the ids that appear in the conversation as [file <id>: ...].`;
     if (!spec.kinds.includes(f.kind)) return `File ${id} is ${f.kind}; ${input.op} needs ${spec.kinds.join(' or ')}.`;
+    if (spec.html && !String(f.type || '').startsWith('text/html')) return `File ${id} is not an HTML page; animation needs an HTML file made with make_file (kind "html").`;
     inputs.push(f.id);
   }
   // OpenMontage יכול להתחיל מרעיון בלבד
