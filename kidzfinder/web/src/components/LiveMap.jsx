@@ -2,12 +2,15 @@ import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 
 // מפה חיה: מציגה את הילדים (סמן עם אימוג'י) ואת המקומות (עיגול). מתעדכנת בלי לבנות מחדש.
-export default function LiveMap({ children = [], places = [], follow }) {
+export default function LiveMap({ children = [], places = [], follow, track = null, onMapClick = null }) {
   const elRef = useRef(null);
   const mapRef = useRef(null);
   const kidLayers = useRef(new Map()); // id -> { marker }
   const placeLayers = useRef(new Map());
+  const trackLayer = useRef(null);
+  const clickCb = useRef(onMapClick);
   const didFit = useRef(false);
+  clickCb.current = onMapClick;
 
   // בניית המפה פעם אחת
   useEffect(() => {
@@ -17,12 +20,27 @@ export default function LiveMap({ children = [], places = [], follow }) {
       maxZoom: 19,
       attribution: '© OpenStreetMap',
     }).addTo(map);
+    map.on('click', (e) => {
+      if (clickCb.current) clickCb.current({ lat: e.latlng.lat, lng: e.latlng.lng });
+    });
     mapRef.current = map;
     return () => {
       map.remove();
       mapRef.current = null;
     };
   }, []);
+
+  // מסלול היום (קו על המפה)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (trackLayer.current) { trackLayer.current.remove(); trackLayer.current = null; }
+    if (track && track.length > 1) {
+      trackLayer.current = L.polyline(track.map((p) => [p.lat, p.lng]), {
+        color: '#4f46e5', weight: 4, opacity: 0.7, dashArray: '1,8', lineCap: 'round',
+      }).addTo(map);
+    }
+  }, [track]);
 
   // עדכון מקומות (עיגולים)
   useEffect(() => {

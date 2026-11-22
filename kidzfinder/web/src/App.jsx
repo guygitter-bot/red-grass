@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Moon, Sun, MapPin, BellRing, PhoneCall, ShieldQuestion, Navigation, Plus, X } from 'lucide-react';
+import { Moon, Sun, MapPin, BellRing, PhoneCall, ShieldQuestion, Navigation, Route, Plus, X } from 'lucide-react';
 import LiveMap from './components/LiveMap';
 import { toggle as toggleTheme } from './lib/theme';
 import { loadParent, saveParent, clearParent } from './lib/store';
@@ -79,6 +79,10 @@ function Dashboard({ demo, onExit }) {
   const [state, setState] = useState(demoState(demo, Date.now()));
   const [follow, setFollow] = useState(null);
   const [toast, setToast] = useState('');
+  const [adding, setAdding] = useState(false);   // מצב "הוספת מקום" (לוחצים על המפה)
+  const [pending, setPending] = useState(null);   // נקודה שנבחרה על המפה למקום חדש
+  const [routeOf, setRouteOf] = useState(null);   // הילד שמוצג לו מסלול היום
+  const [track, setTrack] = useState(null);       // נקודות המסלול
   // בדיקות שההורה שלח (לכל ילד): { requested, answered } — במצב אמיתי מגיע מהשרת
   const demoCheckin = useRef({});
 
@@ -131,6 +135,37 @@ function Dashboard({ demo, onExit }) {
     }
   }
 
+  // מסלול היום: הדלקה/כיבוי לילד נבחר
+  async function toggleRoute(childId) {
+    if (routeOf === childId) { setRouteOf(null); setTrack(null); return; }
+    setRouteOf(childId);
+    if (demo) { setTrack(DEMO_PATH.map(([lat, lng]) => ({ lat, lng }))); return; }
+    try {
+      const r = await api.track(parent.familyId, parent.token, childId);
+      setTrack(r.track || []);
+      if (!r.track || r.track.length < 2) showToast('אין עדיין מספיק נקודות למסלול היום');
+    } catch { showToast('לא הצלחתי לטעון את המסלול'); }
+  }
+
+  // שמירת מקום חדש (אחרי בחירת נקודה על המפה)
+  async function savePlace(name, radius) {
+    const place = { name: name || 'מקום', lat: pending.lat, lng: pending.lng, radius };
+    setAdding(false); setPending(null);
+    if (demo) {
+      setState((s) => ({ ...s, places: [...s.places, { ...place, id: 'p' + Date.now() }] }));
+      return;
+    }
+    try {
+      await api.addPlace(parent.familyId, parent.token, place);
+      showToast('המקום נשמר — תקבל התראה כשהילד מגיע או יוצא');
+    } catch { showToast('לא הצלחתי לשמור את המקום'); }
+  }
+
+  async function deletePlace(id) {
+    if (demo) { setState((s) => ({ ...s, places: s.places.filter((p) => p.id !== id) })); return; }
+    try { await api.delPlace(parent.familyId, parent.token, id); } catch {}
+  }
+
   return (
     <div className="min-h-dvh max-w-lg mx-auto flex flex-col">
       <header className="flex items-center justify-between px-4 py-3">
@@ -143,10 +178,27 @@ function Dashboard({ demo, onExit }) {
         </div>
       </header>
 
+      {/* הודעה במצב הוספת מקום */}
+      {adding && !pending && (
+        <div className="mx-4 mb-2 bg-accent text-white rounded-xl px-4 py-2 text-sm text-center font-medium">
+          לחצו על המפה במקום שתרצו (בית, בית ספר…)
+          <button onClick={() => setAdding(false)} className="underline mr-2">ביטול</button>
+        </div>
+      )}
+
       {/* המפה החיה */}
       <div className="mx-4 rounded-2xl overflow-hidden border border-line h-[52vh] min-h-[320px] shadow-sm">
-        <LiveMap children={state.children} places={state.places} follow={follow} />
+        <LiveMap
+          children={state.children}
+          places={state.places}
+          follow={follow}
+          track={track}
+          onMapClick={adding ? (pt) => setPending(pt) : null}
+        />
       </div>
+
+      {/* טופס שמירת מקום חדש */}
+      {pending && <PlaceForm onSave={savePlace} onCancel={() => { setPending(null); setAdding(false); }} />}
 
       {/* הילדים */}
       <div className="p-4 flex flex-col gap-3">
@@ -163,9 +215,14 @@ function Dashboard({ demo, onExit }) {
             following={follow === c.id}
             onFollow={() => setFollow(follow === c.id ? null : c.id)}
             onCommand={(a) => doCommand(c.id, a)}
+            routeOn={routeOf === c.id}
+            onToggleRoute={() => toggleRoute(c.id)}
           />
         ))}
       </div>
+
+      {/* מקומות (גדרות): התראה כשהילד מגיע או יוצא */}
+      <Places places={state.places} adding={adding} onAdd={() => { setAdding(true); setPending(null); }} onDelete={deletePlace} />
 
       {/* התראות */}
       <Alerts alerts={state.alerts} />
@@ -179,7 +236,7 @@ function Dashboard({ demo, onExit }) {
   );
 }
 
-function ChildCard({ child, checkin, following, onFollow, onCommand }) {
+function ChildCard({ child, checkin, following, onFollow, onCommand, routeOn, onToggleRoute }) {
   const live = child.live;
   const mins = live ? Math.round((Date.now() - live.ts) / 60000) : null;
   const seen = mins === null ? 'אין מיקום' : mins <= 0 ? 'עכשיו' : `לפני ${mins} דק׳`;
@@ -234,6 +291,64 @@ function ChildCard({ child, checkin, following, onFollow, onCommand }) {
         <Navigation className="w-4 h-4" />
         {live ? `נווט אל ${child.name} ב-Google Maps` : 'אין עדיין מיקום לניווט'}
       </button>
+
+      {/* מסלול היום */}
+      <button
+        onClick={onToggleRoute}
+        className={`mt-2 w-full flex items-center justify-center gap-2 rounded-xl py-2 text-sm font-bold ${routeOn ? 'bg-accent text-white' : 'bg-soft text-accent-ink'}`}
+      >
+        <Route className="w-4 h-4" />
+        {routeOn ? 'הסתר מסלול היום' : 'הצג מסלול היום'}
+      </button>
+    </div>
+  );
+}
+
+// טופס שמירת מקום חדש (נפתח אחרי בחירת נקודה על המפה)
+function PlaceForm({ onSave, onCancel }) {
+  const [name, setName] = useState('');
+  const [radius, setRadius] = useState(150);
+  return (
+    <div className="mx-4 mb-2 bg-card border border-line rounded-2xl p-4">
+      <h3 className="font-bold mb-2">מקום חדש</h3>
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="שם המקום (בית, בית ספר…)"
+        className="w-full bg-page border border-line rounded-xl px-3 py-2 mb-3"
+        autoFocus
+      />
+      <label className="text-sm text-muted">גודל האזור: {radius} מ׳</label>
+      <input type="range" min="80" max="500" step="10" value={radius} onChange={(e) => setRadius(Number(e.target.value))} className="w-full" />
+      <div className="flex gap-2 mt-3">
+        <button onClick={() => onSave(name, radius)} className="flex-1 bg-accent text-white rounded-xl py-2.5 font-bold">שמירה</button>
+        <button onClick={onCancel} className="px-4 bg-soft text-muted rounded-xl py-2.5">ביטול</button>
+      </div>
+    </div>
+  );
+}
+
+// רשימת המקומות (גדרות) + הוספה/מחיקה
+function Places({ places = [], adding, onAdd, onDelete }) {
+  return (
+    <div className="px-4 pb-4">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-sm font-bold text-muted">מקומות (התראה בהגעה/יציאה)</h2>
+        {!adding && (
+          <button onClick={onAdd} className="flex items-center gap-1 text-sm text-accent font-bold">
+            <Plus className="w-4 h-4" />הוספה
+          </button>
+        )}
+      </div>
+      <div className="flex flex-col gap-1.5">
+        {places.length === 0 && <div className="text-sm text-muted">אין מקומות עדיין. הוסיפו בית ובית ספר כדי לקבל התראות.</div>}
+        {places.map((p) => (
+          <div key={p.id} className="flex items-center justify-between bg-card border border-line rounded-xl px-3 py-2">
+            <span className="text-sm font-medium">📍 {p.name} <span className="text-muted">· {p.radius || 150} מ׳</span></span>
+            <button onClick={() => onDelete(p.id)} className="text-muted hover:text-sos p-1" aria-label="מחק מקום"><X className="w-4 h-4" /></button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
