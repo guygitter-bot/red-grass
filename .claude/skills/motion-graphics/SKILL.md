@@ -30,3 +30,12 @@ python3 /home/user/red-grass/.claude/skills/motion-graphics/make.py [CLIP1.mp4 C
 ## מגבלות
 - טקסטים ארוכים מאוד קטנים אוטומטית; עדיף שורות קצרות. הפונט: Rubik (בתיקיית `video-tools/fonts`).
 - הכותרות ממוקמות במרכז/למטה – אם הדמות בקליפ במרכז, הכותרת תכסה חלק ממנה.
+
+## אנימציית HTML חופשית (`animate.py`)
+סרטון מדף HTML אחד שנכתב ביד (טיפוגרפיה קינטית, גרף שנבנה, מסך אפליקציה זז, חלקיקים, חשיפת לוגו) – בלי תבנית קבועה.
+```bash
+python3 /home/user/red-grass/.claude/skills/motion-graphics/animate.py page.html --format=9:16 --seconds=10 [--music=song.mp3] --out=/tmp/video-out/anim.mp4
+```
+- 30fps, 1080x1920 / 1920x1080 / 1080x1080; אורך 2–60 שניות; הפריים האחרון נשאר; מוזיקה (אם יש) נחתכת לאורך ונעלמת בסוף.
+- הרינדור דטרמיניסטי: השעון של הדף מזויף (`Date`, `setTimeout`, `requestAnimationFrame`, `performance.now`) ומתקדם פריים-פריים, ואנימציות CSS / WAAPI מוקפאות על הזמן הנכון. אם בדף יש `window.seek(שניות)` – קוראים לו במקום.
+- הדף: קובץ אחד, `body` בגודל המדויק של הפורמט בלי גלילה, בלי בקשות חיצוניות (חוץ מ-Google Fonts), `dir="rtl"` לעברית.

@@ -55,6 +55,8 @@ clips call it once per clip with the same preset, so they match.
 - hand_drawn: a pencil-sketch look that draws itself, with an optional Hebrew title (works on a clip or a photo).
 - motion_graphics: showreel-style animated Hebrew titles over the clips (or on a tech background with no clips). \
 Each line is one scene: "main title | sub title".
+- animation: renders an HTML animation (a file made with make_file, kind "html" – by you or by קריאייטיב) to an MP4: kinetic type, a chart that builds, an app screen demo, a logo reveal. \
+files = [the HTML file id], format, seconds, optional music. Code word "תנועה" (see the note).
 - beats_and_cuts: cuts between the clips on the beat of a song the owner uploaded (needs a music file).
 - smart_edit: a full edit by Claude Code with professional editing skills – it watches and hears the video. Use it \
 for anything the quick tools can't do: a talking-head recording into a finished reel (best takes, pauses and false \
@@ -376,15 +378,15 @@ const EDIT_VIDEO = {
   input_schema: {
     type: 'object',
     properties: {
-      op: { type: 'string', enum: ['color_grade', 'before_after', 'hand_drawn', 'motion_graphics', 'beats_and_cuts', 'smart_edit'] },
+      op: { type: 'string', enum: ['color_grade', 'before_after', 'hand_drawn', 'motion_graphics', 'beats_and_cuts', 'smart_edit', 'animation'] },
       files: { type: 'array', items: { type: 'string' }, description: 'File ids of the clips / photos, in order (may be empty only for motion_graphics, or smart_edit with tool "montage")' },
-      music: { type: 'string', description: 'File id of an uploaded song (required for beats_and_cuts, optional for motion_graphics)' },
+      music: { type: 'string', description: 'File id of an uploaded song (required for beats_and_cuts, optional for motion_graphics and animation)' },
       preset: { type: 'string', enum: ['cinematic', 'warm', 'clean', 'bw'], description: 'Color look (color_grade, before_after)' },
       strength: { type: 'number', description: 'Color strength 0.6-1.4 (color_grade)' },
       title: { type: 'string', description: 'Hebrew title that writes itself (hand_drawn)' },
       lines: { type: 'array', items: { type: 'string' }, description: 'One line per scene, "main | sub" (motion_graphics)' },
-      format: { type: 'string', enum: ['9:16', '16:9', '1:1'], description: 'Output shape (motion_graphics, beats_and_cuts)' },
-      seconds: { type: 'number', description: 'Target length in seconds (before_after, hand_drawn, beats_and_cuts, smart_edit)' },
+      format: { type: 'string', enum: ['9:16', '16:9', '1:1'], description: 'Output shape (motion_graphics, beats_and_cuts, animation)' },
+      seconds: { type: 'number', description: 'Target length in seconds (before_after, hand_drawn, beats_and_cuts, smart_edit; animation: 2-60, default 10)' },
       tool: { type: 'string', enum: ['auto', 'ghost-editor', 'shorts', 'ffmpeg', 'montage'], description: 'smart_edit: which skill (auto = the editor picks; montage = a whole new video from an idea, files optional)' },
       brief: { type: 'string', description: 'smart_edit: the full brief in the owner\'s words – what the finished video should be, style, length, captions language, what to keep or cut' },
     },
