@@ -21,4 +21,5 @@ export const api = {
   addPlace: (id, token, place) => call(`/api/family/${id}/places`, { token, body: place }),
   delPlace: (id, token, placeId) => call(`/api/family/${id}/places/delete`, { token, body: { id: placeId } }),
   command: (id, token, childId, action) => call(`/api/family/${id}/command`, { token, body: { childId, action } }),
+  track: (id, token, childId) => call(`/api/family/${id}/track?childId=${childId}`, { method: 'GET', token }),
 };

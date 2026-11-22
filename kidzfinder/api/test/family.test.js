@@ -83,6 +83,41 @@ test('SOS ו-סוללה חלשה יוצרים התראות', async () => {
   assert.ok(types.includes('sos'));
 });
 
+test('מסלול היום נאסף וההורה מקבל אותו', async () => {
+  const fam = makeFamily('fam_track');
+  const parent = (await call(fam, '/create', {})).parentToken;
+  const code = (await call(fam, '/pair-code', { auth: parent })).code;
+  const kid = await call(fam, '/pair', { body: { code, childName: 'רון' } });
+
+  // שלוש נקודות רחוקות זו מזו → שלוש נקודות מסלול
+  await call(fam, '/loc', { auth: kid.childToken, body: { lat: 32.08, lng: 34.78, battery: 90 } });
+  await call(fam, '/loc', { auth: kid.childToken, body: { lat: 32.09, lng: 34.79, battery: 89 } });
+  await call(fam, '/loc', { auth: kid.childToken, body: { lat: 32.10, lng: 34.80, battery: 88 } });
+
+  const res = await (await fam.fetch(
+    new Request('https://do.local/track?childId=' + kid.childId, {
+      method: 'GET', headers: new Headers({ authorization: 'Bearer ' + parent }),
+    })
+  )).json();
+  assert.equal(res.track.length, 3);
+  assert.ok(res.track[0].lat && res.track[0].ts);
+});
+
+test('נקודה קרובה מאוד לא מתווספת למסלול', async () => {
+  const fam = makeFamily('fam_track2');
+  const parent = (await call(fam, '/create', {})).parentToken;
+  const code = (await call(fam, '/pair-code', { auth: parent })).code;
+  const kid = await call(fam, '/pair', { body: { code, childName: 'מיה' } });
+  await call(fam, '/loc', { auth: kid.childToken, body: { lat: 32.08, lng: 34.78 } });
+  await call(fam, '/loc', { auth: kid.childToken, body: { lat: 32.080001, lng: 34.780001 } }); // ~0 מטר
+  const res = await (await fam.fetch(
+    new Request('https://do.local/track?childId=' + kid.childId, {
+      method: 'GET', headers: new Headers({ authorization: 'Bearer ' + parent }),
+    })
+  )).json();
+  assert.equal(res.track.length, 1);
+});
+
 test('הורה בלבד רואה מצב; טוקן לא נכון נחסם', async () => {
   const fam = makeFamily('fam4');
   const parent = (await call(fam, '/create', {})).parentToken;

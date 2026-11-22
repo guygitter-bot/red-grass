@@ -1,5 +1,8 @@
 // Durable Object אחד לכל משפחה: הורים, ילדים, מקומות, מיקום חי והתראות.
-import { placesContaining, geofenceEvents, lowBatteryCrossed } from './geo.js';
+import { placesContaining, geofenceEvents, lowBatteryCrossed, distanceMeters } from './geo.js';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_TRACK = 600; // מקסימום נקודות מסלול לכל ילד
 
 const token = () => crypto.randomUUID().replace(/-/g, '');
 const pairCode = () => String(Math.floor(100000 + Math.random() * 900000)); // קוד 6 ספרות
@@ -112,8 +115,24 @@ export class Family {
           ts: now(),
           placeIds: nowPlaces,
         };
+        // מסלול היום: מוסיפים נקודה אם זזה מספיק או עבר זמן, שומרים רק 24 שעות אחרונות
+        doc.tracks = doc.tracks || {};
+        const track = (doc.tracks[child.id] || []).filter((p) => now() - p.ts < DAY_MS);
+        const last = track[track.length - 1];
+        if (!last || distanceMeters(last, point) > 20 || now() - last.ts > 5 * 60 * 1000) {
+          track.push({ lat: point.lat, lng: point.lng, ts: now() });
+        }
+        doc.tracks[child.id] = track.slice(-MAX_TRACK);
         await this.save(doc);
         return json({ ok: true });
+      }
+
+      // ההורה מבקש את מסלול היום של ילד (GET /track?childId=...)
+      if (path.startsWith('/track') && method === 'GET') {
+        if (!isParent) return json({ error: 'forbidden' }, 403);
+        const childId = url.searchParams.get('childId');
+        const track = ((doc.tracks || {})[childId] || []).filter((p) => now() - p.ts < DAY_MS);
+        return json({ ok: true, track });
       }
 
       // הילד לוחץ SOS
