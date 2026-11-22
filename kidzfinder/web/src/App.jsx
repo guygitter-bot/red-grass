@@ -83,6 +83,7 @@ function Dashboard({ demo, onExit }) {
   const [pending, setPending] = useState(null);   // נקודה שנבחרה על המפה למקום חדש
   const [routeOf, setRouteOf] = useState(null);   // הילד שמוצג לו מסלול היום
   const [track, setTrack] = useState(null);       // נקודות המסלול
+  const [codeModal, setCodeModal] = useState(null); // קוד לחיבור ילד נוסף
   // בדיקות שההורה שלח (לכל ילד): { requested, answered } — במצב אמיתי מגיע מהשרת
   const demoCheckin = useRef({});
 
@@ -166,11 +167,21 @@ function Dashboard({ demo, onExit }) {
     try { await api.delPlace(parent.familyId, parent.token, id); } catch {}
   }
 
+  // יצירת קוד חיבור לילד נוסף
+  async function addChild() {
+    if (demo) { setCodeModal('123456'); return; }
+    try { const r = await api.pairCode(parent.familyId, parent.token); setCodeModal(r.code); }
+    catch { showToast('לא הצלחתי לייצר קוד'); }
+  }
+
   return (
     <div className="min-h-dvh max-w-lg mx-auto flex flex-col">
       <header className="flex items-center justify-between px-4 py-3">
         <h1 className="text-xl font-extrabold text-accent">🧭 Kidzfinder{demo && <span className="text-xs font-normal text-warn"> · הדגמה</span>}</h1>
         <div className="flex items-center gap-1">
+          <button onClick={addChild} className="flex items-center gap-1 bg-soft text-accent-ink rounded-lg px-2.5 py-1.5 text-sm font-bold" aria-label="הוספת ילד">
+            <Plus className="w-4 h-4" />ילד
+          </button>
           <button onClick={toggleTheme} className="p-2 rounded-lg hover:bg-soft" aria-label="מצב לילה">
             <Moon className="w-5 h-5 hidden dark:block" /><Sun className="w-5 h-5 dark:hidden" />
           </button>
@@ -186,34 +197,25 @@ function Dashboard({ demo, onExit }) {
         </div>
       )}
 
-      {/* המפה החיה */}
-      <div className="mx-4 rounded-2xl overflow-hidden border border-line h-[52vh] min-h-[320px] shadow-sm">
-        <LiveMap
-          children={state.children}
-          places={state.places}
-          follow={follow}
-          track={track}
-          onMapClick={adding ? (pt) => setPending(pt) : null}
-        />
-      </div>
-
       {/* טופס שמירת מקום חדש */}
       {pending && <PlaceForm onSave={savePlace} onCancel={() => { setPending(null); setAdding(false); }} />}
 
-      {/* הילדים */}
-      <div className="p-4 flex flex-col gap-3">
+      {/* כרטיס מפה נפרד לכל ילד */}
+      <div className="px-4 pt-1 pb-2 flex flex-col gap-4">
         {state.children.length === 0 && (
           <div className="bg-card border border-line rounded-2xl p-5 text-center text-muted">
-            עדיין לא חוברו ילדים. פִתחו את אפליקציית הילד והקלידו את הקוד.
+            עדיין לא חוברו ילדים. לחצו "+ ילד" למעלה כדי לקבל קוד, והקלידו אותו באפליקציה של הילד.
           </div>
         )}
         {state.children.map((c) => (
-          <ChildCard
+          <ChildMapCard
             key={c.id}
             child={c}
+            places={state.places}
+            adding={adding}
+            onMapClick={(pt) => setPending(pt)}
+            track={routeOf === c.id ? track : null}
             checkin={(demo ? demoCheckin.current : state.checkins || {})[c.id]}
-            following={follow === c.id}
-            onFollow={() => setFollow(follow === c.id ? null : c.id)}
             onCommand={(a) => doCommand(c.id, a)}
             routeOn={routeOf === c.id}
             onToggleRoute={() => toggleRoute(c.id)}
@@ -227,6 +229,19 @@ function Dashboard({ demo, onExit }) {
       {/* התראות */}
       <Alerts alerts={state.alerts} />
 
+      {/* קוד לחיבור ילד נוסף */}
+      {codeModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1200] p-6" onClick={() => setCodeModal(null)}>
+          <div className="bg-card rounded-2xl p-6 w-full max-w-xs text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="text-3xl mb-2">📲</div>
+            <p className="text-muted text-sm">הקוד לחיבור הטלפון של הילד:</p>
+            <div className="text-4xl font-extrabold tracking-widest num my-3">{codeModal}</div>
+            <p className="text-xs text-muted">מתקינים את אפליקציית Kidzfinder בטלפון של הילד ומקלידים את הקוד. תקף 10 דקות.</p>
+            <button onClick={() => setCodeModal(null)} className="mt-4 w-full bg-accent text-white rounded-xl py-2.5 font-bold">סגור</button>
+          </div>
+        </div>
+      )}
+
       {toast && (
         <div className="fixed bottom-5 inset-x-0 flex justify-center z-[1000] px-4">
           <div className="bg-ink text-page rounded-full px-5 py-2.5 text-sm font-medium shadow-lg">{toast}</div>
@@ -236,31 +251,54 @@ function Dashboard({ demo, onExit }) {
   );
 }
 
-function ChildCard({ child, checkin, following, onFollow, onCommand, routeOn, onToggleRoute }) {
+// כמה זמן עבר מאז המיקום האחרון — לתווית על המפה
+function lastSeenText(live) {
+  if (!live) return 'אין מיקום עדיין';
+  const m = Math.round((Date.now() - live.ts) / 60000);
+  if (m < 1) return 'כאן עכשיו';
+  if (m < 60) return `היה כאן לפני ${m} דק׳`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `היה כאן לפני ${h} שע׳`;
+  return 'היה כאן אתמול';
+}
+
+// שורת מצב לילד (סוללה, דיוק, ניתוק)
+function statusLine(live) {
+  if (!live) return { text: 'מחכים למיקום הראשון של הטלפון', warn: true };
+  if (Date.now() - live.ts > 15 * 60 * 1000) return { text: 'לא מתקבל מיקום כרגע — ייתכן שהטלפון כבוי', warn: true };
+  if (typeof live.battery === 'number' && live.battery <= 15) return { text: `הסוללה כמעט ריקה (${live.battery}%)`, warn: true };
+  if (live.acc && live.acc > 120) return { text: 'ייתכן שהמיקום אינו מדויק', warn: true };
+  return { text: 'מחובר ומשתף מיקום', warn: false };
+}
+
+// כרטיס מפה לילד: מפה משלו למעלה, שם ומצב למטה, ואז הכפתורים
+function ChildMapCard({ child, places, adding, onMapClick, track, checkin, onCommand, routeOn, onToggleRoute }) {
   const live = child.live;
-  const mins = live ? Math.round((Date.now() - live.ts) / 60000) : null;
-  const seen = mins === null ? 'אין מיקום' : mins <= 0 ? 'עכשיו' : `לפני ${mins} דק׳`;
   const bat = live?.battery;
+  const status = statusLine(live);
   const waiting = checkin && checkin.requested && !checkin.answered;
   const confirmed = checkin && checkin.answered;
+  const mapChild = { ...child, label: lastSeenText(live) };
 
   return (
-    <div className="bg-card border border-line rounded-2xl p-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="text-3xl">🧒</div>
-          <div>
-            <div className="font-bold text-lg">{child.name}</div>
-            <div className="text-sm text-muted flex items-center gap-2">
-              <span>🕓 {seen}</span>
-              {typeof bat === 'number' && <span className={bat <= 15 ? 'text-sos font-bold' : ''}>🔋 {bat}%</span>}
-            </div>
-          </div>
-        </div>
-        <button onClick={onFollow} className={`p-2 rounded-lg ${following ? 'bg-accent text-white' : 'bg-soft text-accent-ink'}`} aria-label="עקוב על המפה">
-          <MapPin className="w-5 h-5" />
-        </button>
+    <div className="bg-card border border-line rounded-2xl overflow-hidden shadow-sm">
+      {/* המפה של הילד */}
+      <div className="h-60 border-b border-line">
+        <LiveMap children={[mapChild]} places={places} track={track} onMapClick={adding ? onMapClick : null} />
       </div>
+
+      {/* שם ומצב */}
+      <div className="p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">🧒</span>
+            <span className="font-extrabold text-lg">{child.name}</span>
+          </div>
+          {typeof bat === 'number' && <span className={`text-sm ${bat <= 15 ? 'text-sos font-bold' : 'text-muted'}`}>🔋 {bat}%</span>}
+        </div>
+        <div className={`mt-1 text-sm flex items-center gap-1.5 ${status.warn ? 'text-sos' : 'text-ok'}`}>
+          <span>{status.warn ? '⚠️' : '✓'}</span>{status.text}
+        </div>
 
       {/* סטטוס בדיקה */}
       {waiting && <div className="mt-3 text-sm text-warn bg-soft rounded-xl px-3 py-2">⏳ ממתין לתשובה… אם לא יענה, תקבלו התראה.</div>}
@@ -300,6 +338,7 @@ function ChildCard({ child, checkin, following, onFollow, onCommand, routeOn, on
         <Route className="w-4 h-4" />
         {routeOn ? 'הסתר מסלול היום' : 'הצג מסלול היום'}
       </button>
+      </div>
     </div>
   );
 }
@@ -400,9 +439,13 @@ function demoState(demo, t, checkins = {}) {
   if (!demo) return { children: [], places: [], alerts: [], checkins: {} };
   const pos = demoPosition(t);
   const bat = demoBattery(t);
+  const pos2 = demoPosition(t + 25000); // ילד שני במקום אחר על המסלול
   return {
     name: 'משפחת הדגמה',
-    children: [{ id: 'demo', name: 'נועה', live: { ...pos, battery: bat, ts: t, placeIds: [] } }],
+    children: [
+      { id: 'demo', name: 'נועה', live: { ...pos, battery: bat, ts: t, placeIds: [] } },
+      { id: 'demo2', name: 'איתי', live: { ...pos2, battery: 12, ts: t - 11 * 60000, placeIds: [] } },
+    ],
     places: DEMO_PLACES,
     checkins,
     alerts: [

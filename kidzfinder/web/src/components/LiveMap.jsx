@@ -89,14 +89,16 @@ export default function LiveMap({ children = [], places = [], follow, track = nu
         iconSize: [42, 42],
         iconAnchor: [21, 21],
       });
+      const label = c.label || c.name;
       let layer = kidLayers.current.get(c.id);
       if (!layer) {
         const marker = L.marker([c.live.lat, c.live.lng], { icon }).addTo(map);
-        marker.bindPopup(c.name);
+        marker.bindTooltip(label, { permanent: true, direction: 'top', offset: [0, -22], className: 'kid-label' });
         kidLayers.current.set(c.id, marker);
       } else {
         layer.setLatLng([c.live.lat, c.live.lng]);
         layer.setIcon(icon);
+        layer.setTooltipContent(label);
       }
     }
     for (const [id, layer] of kidLayers.current) {
