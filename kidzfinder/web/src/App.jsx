@@ -367,13 +367,27 @@ function Alerts({ alerts = [] }) {
       default: return '';
     }
   };
+  // מתי היתה ההתראה, בשפה פשוטה
+  const timeAgo = (ts) => {
+    if (!ts) return '';
+    const m = Math.round((Date.now() - ts) / 60000);
+    if (m < 1) return 'עכשיו';
+    if (m < 60) return `לפני ${m} דק׳`;
+    const h = Math.round(m / 60);
+    if (h < 24) return `לפני ${h} שע׳`;
+    return 'אתמול';
+  };
+  // רק התראות מ-24 השעות האחרונות (הישנות כבר לא רלוונטיות)
+  const recent = alerts.filter((a) => !a.ts || Date.now() - a.ts < 24 * 60 * 60 * 1000);
+  if (!recent.length) return null;
   return (
     <div className="px-4 pb-8">
-      <h2 className="text-sm font-bold text-muted mb-2">התראות אחרונות</h2>
+      <h2 className="text-sm font-bold text-muted mb-2">התראות (24 שעות אחרונות)</h2>
       <div className="flex flex-col gap-1.5">
-        {[...alerts].reverse().slice(0, 15).map((a, i) => (
-          <div key={i} className={`text-sm rounded-xl px-3 py-2 ${a.type === 'sos' ? 'bg-sos/10 text-sos font-bold' : 'bg-card border border-line'}`}>
-            {txt(a)}
+        {[...recent].reverse().slice(0, 15).map((a, i) => (
+          <div key={i} className={`text-sm rounded-xl px-3 py-2 flex items-center justify-between gap-2 ${a.type === 'sos' ? 'bg-sos/10 text-sos font-bold' : 'bg-card border border-line'}`}>
+            <span>{txt(a)}</span>
+            <span className="text-xs text-muted whitespace-nowrap">{timeAgo(a.ts)}</span>
           </div>
         ))}
       </div>
