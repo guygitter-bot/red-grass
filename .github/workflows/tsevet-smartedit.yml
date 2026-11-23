@@ -25,6 +25,8 @@ env:
   FFMPEG_SKILL_VERSION: 3.15.1
   # OpenMontage (calesthio/OpenMontage, AGPLv3) – אולפן וידאו שלם; רק המסלולים החינמיים, בלי מפתחות
   OPENMONTAGE_SHA: 2e003e65fa99a0f329478a2c1cdcf26bc481933a
+  # rea-video (JuneYaooo/rea-video, Apache-2.0) – פירוק סרטון לדוח (לא עריכה)
+  REA_VIDEO_SHA: 9572a00bbccf0baa272983893b5c0c3589875088
 
 jobs:
   edit:
@@ -94,6 +96,26 @@ jobs:
           "$d/.venv/bin/python" -m pip install --quiet piper-tts || echo "::warning::piper-tts not installed"
           (cd "$d/remotion-composer" && npm install --silent --no-audit --no-fund) || echo "::warning::remotion not installed"
           [ -f "$d/.env.example" ] && cp "$d/.env.example" "$d/.env" || true
+      - name: Install rea-video
+        if: steps.job.outputs.tool == 'rea'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          d=~/rea-video
+          git clone -q https://github.com/JuneYaooo/rea-video.git "$d"
+          git -C "$d" checkout -q "$REA_VIDEO_SHA"
+          python3 -m venv "$d/.venv"
+          "$d/.venv/bin/python" -m pip install --quiet "$d[ocr,asr]"
+          # rapidocr מביא opencv-python שדורס את ה-headless (כמו ב-install_skill.sh שלהם)
+          if "$d/.venv/bin/python" -m pip show opencv-python > /dev/null 2>&1; then
+            "$d/.venv/bin/python" -m pip uninstall -y -q opencv-python
+            "$d/.venv/bin/python" -m pip install --quiet --force-reinstall --no-deps "opencv-python-headless>=4.8,<5"
+          fi
+          sudo ln -sf "$d/.venv/bin/rea-video" /usr/local/bin/rea-video
+          ln -sfn "$d/skills/rea-video" ~/.claude/skills/rea-video
+          # Gemini (רואה ושומע את הסרטון – פירוק מדויק יותר) – רק אם יש מפתח; הקובץ מחוץ למאגר
+          if [ -n "$GEMINI_API_KEY" ]; then printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY" > ~/.rea.env; chmod 600 ~/.rea.env; fi
+          rea-video --help > /dev/null
       - name: Claude edits the video
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -109,6 +131,7 @@ jobs:
             --allowedTools "Read,Edit,Write,Glob,Grep,Bash,Task" \
             --add-dir ~/.claude/skills \
             $([ -d ~/openmontage ] && echo "--add-dir $HOME/openmontage") \
+            $([ -d ~/rea-video ] && echo "--add-dir $HOME/rea-video") \
             --output-format json > claude.json 2>/dev/null || echo "::warning::Claude exited with an error"
       - name: Upload the result
         if: always() && steps.job.outcome == 'success'
