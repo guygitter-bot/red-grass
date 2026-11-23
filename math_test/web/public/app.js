@@ -102,7 +102,7 @@ function showHome() {
   $('examCard').classList.toggle('ready', ready);
   $('startExam').textContent = resumeText(EXAM) ? `▶ ממשיכים במבחן (${resumeText(EXAM)})` : '🎓 למבחן המסכם';
   $('examBest').textContent = best[EXAM] ? `התוצאה הכי טובה: ${best[EXAM]}%${best[EXAM] >= PASS ? ' 🎓' : ''}`
-    : `${EXAM_SIZE} שאלות מכל הנושאים, כמו במבחן האמיתי`;
+    : `לפי דף התרגול של המורה: ${EXAM_SIZE} שאלות, בסדר הדף`;
   show('home');
 }
 
@@ -141,7 +141,7 @@ function showQuestion() {
   answered = false;
   firstTry = true;
   $('pos').textContent = `${index + 1} / ${order.length}`;
-  $('topicName').textContent = mode === EXAM ? `· ${MODE_TITLES[q.topic]}` : `· ${MODE_TITLES[mode]}`;
+  $('topicName').textContent = mode === EXAM ? `· ${q.no} · ${MODE_TITLES[q.topic]}` : `· ${MODE_TITLES[mode]}`;
   $('stars').textContent = `⭐ ${stars}`;
   $('playBar').style.width = `${(index / order.length) * 100}%`;
   $('qtext').innerHTML = rich(q.text);

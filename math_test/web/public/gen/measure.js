@@ -81,4 +81,12 @@ function chooseUnit(rng) {
   return mc(rng, { kind: 'unit', text: `באיזו יחידה הכי מתאים למדוד: ${thing}?`, explain: `${thing} נמדד בדרך כלל ב${WORDS[u]}.` }, ans, Object.keys(U).filter((k) => k !== u).map((k) => `${WORDS[k]} (${U[k]})`));
 }
 
-export const measureGens = { length: [convert, convert, mixed, compare, ruler, ruler, chooseUnit] };
+// מלכודת הסרגל: העיפרון לא מתחיל ב-0, ולכן האורך הוא סוף פחות התחלה
+function rulerTrap(rng) {
+  const s = rng.int(1, 4), e = rng.int(s + 3, 9), ans = e - s;
+  const pool = [e, s, ans - 1, ans + 1, e + s].filter((x, i, a) => x > 0 && x !== ans && a.indexOf(x) === i);
+  return mc(rng, { kind: 'ruler-trap', meta: { s, e }, svg: rulerSvg(10, s * 10, e * 10, true), text: 'מה אורך העיפרון בסנטימטרים?', explain: `העיפרון לא מתחיל ב-0 אלא ב-${s}, ונגמר ב-${e}. סופרים מאיפה שהוא מתחיל: ${e} − ${s} = ${ans} ס"מ.` }, ans, pool.slice(0, 3));
+}
+export const sheetMeasure = { rulerTrap };
+
+export const measureGens = { length: [convert, convert, mixed, compare, ruler, ruler, chooseUnit, rulerTrap] };

@@ -1,6 +1,6 @@
 // גיאומטריה (נושאים 13-17): צלעות מקבילות, היקף, שטח, זוויות, אלכסונים
 import { mc, numQ, numChoice } from './common.js';
-import { svg, poly, rect, regularPts, sideLabels, vertexLabels, rowSvg, angleEl, angleSvg, COL } from '../svg.js';
+import { svg, poly, rect, line, txt, circle, regularPts, centroid, sideLabels, vertexLabels, rowSvg, angleEl, angleSvg, gridRectSvg, gridLines, COL } from '../svg.js';
 
 // ---------- צורות מוכנות (בתוך תיבה של 100×90) ----------
 // pairs = מספר זוגות הצלעות המקבילות. הקודקודים מסודרים A,B,C,D: שמאל-למעלה, ימין-למעלה, ימין-למטה, שמאל-למטה
@@ -268,11 +268,156 @@ function diagIdentify(rng) {
   return mc(rng, { kind: 'diag-id', meta: { n, sides, diags }, svg: pic, text: 'איזה מהקטעים הוא אלכסון?', explain: `אלכסון מחבר שני קודקודים שאינם שכנים. ${ans} מחבר קודקודים שאינם שכנים, והקטעים האחרים הם צלעות של המצולע.` }, ans, wrong);
 }
 
+// ---------- דף התרגול של המורה ----------
+// מקבילית נוטה עם צלע מודגשת: איזו צלע מקבילה לה?
+function parallelSide(rng) {
+  const s = rng.int(14, 30) * (rng.chance(0.5) ? 1 : -1);
+  const raw = [[s > 0 ? 5 + s : 5, 16], [s > 0 ? 95 : 95 + s, 16], [s > 0 ? 95 - s : 95, 70], [s > 0 ? 5 : 5 - s, 70]];
+  const pts = raw.map(([x, y]) => [x + 22, y + 10]);
+  const names = ['A', 'B', 'C', 'D'];
+  const sides = ['AB', 'BC', 'CD', 'DA'];
+  const hi = rng.int(0, 3);
+  const a = pts[hi], b = pts[(hi + 1) % 4];
+  const pic = svg(150, 110, poly(pts) + line(a[0], a[1], b[0], b[1], { stroke: COL.b, width: 6 }) + vertexLabels(pts, names), 'מקבילית ABCD עם צלע מודגשת');
+  const ans = sides[(hi + 2) % 4];
+  const dist = [sides[(hi + 1) % 4], sides[(hi + 3) % 4], rng.pick(['AC', 'BD'])];
+  return mc(rng, { kind: 'parallel-side', meta: { hi }, svg: pic, text: `בציור מקבילית ABCD. הצלע ${sides[hi]} מודגשת. איזו צלע מקבילה לצלע המודגשת?`, explain: `במקבילית הצלעות שמול זו מקבילות: ${sides[hi]} מקבילה ל-${ans}. הצלעות הסמוכות לא מקבילות, ו-${dist[2]} הוא אלכסון.` }, ans, dist);
+}
+
+// היקף מלבן שמצויר על רשת של 1 ס"מ
+function perimeterGrid(rng) {
+  const w = rng.int(3, 8), h = rng.int(2, Math.min(5, w - 1));
+  const ans = 2 * (w + h);
+  return numQ(rng, { kind: 'perimeter', meta: { sides: [w, h, w, h] }, svg: gridRectSvg(w, h), text: 'המלבן מצויר על רשת, וכל צלע של משבצת היא 1 ס"מ. מהו ההיקף של המלבן (בס"מ)?', explain: `סופרים את צלעות המשבצות לאורך השפה: ${w} + ${h} + ${w} + ${h} = ${ans} ס"מ.` }, ans, [w * h, w + h, ans - 2, ans + 2], 0.4);
+}
+
+// ארבעה מלבנים על משבצות: אילו שניים בעלי שטח שווה? (בדיוק זוג אחד)
+function areaPairs(rng) {
+  const all = [];
+  for (let w = 1; w <= 10; w++) for (let h = 1; h <= 6; h++) all.push([w, h]);
+  for (;;) {
+    const A = rng.int(8, 30);
+    const same = all.filter(([w, h]) => w * h === A && (w > 1 || h > 1));
+    if (same.length < 2) continue;
+    const [r1, r2] = rng.shuffle(same).slice(0, 2);
+    const others = rng.shuffle(all.filter(([w, h]) => w * h !== A && w * h >= 4));
+    const r3 = others[0], r4 = others.find(([w, h]) => w * h !== r3[0] * r3[1]);
+    const rects = rng.shuffle([r1, r2, r3, r4]);
+    const areas = rects.map(([w, h]) => w * h);
+    const L = ['א', 'ב', 'ג', 'ד'];
+    const pairs = [];
+    for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) pairs.push([i, j]);
+    const good = pairs.filter(([i, j]) => areas[i] === areas[j]);
+    if (good.length !== 1) continue;
+    const fmt = ([i, j]) => `${L[i]} ו-${L[j]}`;
+    const S = 14;
+    let out = '';
+    rects.forEach(([w, h], i) => {
+      const x0 = (i % 2) * 175 + 12, y0 = Math.floor(i / 2) * 104 + 26;
+      out += txt(x0 + 8, y0 - 8, L[i], { size: 17, weight: 700 });
+      out += rect(x0, y0, w * S, h * S, { fill: COL.a, stroke: COL.ink, width: 2 }) + gridLines(x0, y0, w, h, S).replace('stroke-opacity="0.3"', 'stroke-opacity="0.6" style="stroke:var(--card,#fff)"');
+    });
+    const pic = svg(350, 214, out, 'ארבעה מלבנים על משבצות');
+    const wrong = rng.shuffle(pairs.filter((p) => p !== good[0])).slice(0, 3);
+    return mc(rng, { kind: 'area-pairs', meta: { areas, rects }, svg: pic, text: 'כל משבצת היא סנטימטר רבוע אחד. אילו שני מלבנים שטחם שווה?', explain: `סופרים משבצות (אורך × רוחב): ${rects.map(([w, h], i) => `${L[i]}: ${w} × ${h} = ${w * h}`).join(', ')}. השטח שווה ב-${fmt(good[0])}.` }, fmt(good[0]), wrong.map(fmt));
+  }
+}
+
+// מרובע על רשת עם זוויות ממוספרות: איזו הכי קטנה / איזו קהה
+const angleAt = (pts, i) => {
+  const p = pts[i], a = pts[(i + 3) % 4], b = pts[(i + 1) % 4];
+  const u = [a[0] - p[0], a[1] - p[1]], w = [b[0] - p[0], b[1] - p[1]];
+  return (Math.acos((u[0] * w[0] + u[1] * w[1]) / (Math.hypot(...u) * Math.hypot(...w))) * 180) / Math.PI;
+};
+export const quadAngles = (pts) => pts.map((_, i) => angleAt(pts, i));
+function makeQuad(rng) {
+  for (;;) {
+    const p = rng.int(4, 7), q = rng.int(4, 7), x = rng.int(1, q - 1), y = rng.int(1, p - 1);
+    if (x / q + y / p <= 1) continue;
+    let pts = [[0, p], [0, 0], [q, 0], [x, y]];
+    const d = quadAngles(pts);
+    const acute = [d[0], d[2]].sort((a, b) => a - b);
+    if (Math.abs(d[1] - 90) > 1e-6 || d[3] < 100 || acute[0] < 25 || acute[1] - acute[0] < 15) continue;
+    // סיבוב ושיקוף על הרשת, כדי שהצורה לא תהיה תמיד באותו כיוון
+    for (let r = rng.int(0, 3); r > 0; r--) pts = pts.map(([a, b]) => [-b, a]);
+    if (rng.chance(0.5)) pts = pts.map(([a, b]) => [-a, b]);
+    const mx = Math.min(...pts.map((t) => t[0])), my = Math.min(...pts.map((t) => t[1]));
+    pts = pts.map(([a, b]) => [a - mx, b - my]);
+    return pts;
+  }
+}
+function quadAngleQ(rng, ask) {
+  const pts = makeQuad(rng);
+  const labels = rng.shuffle([1, 2, 3, 4]);
+  const degs = quadAngles(pts);
+  const S = 28, W = Math.max(...pts.map((t) => t[0])), H = Math.max(...pts.map((t) => t[1]));
+  const P = pts.map(([a, b]) => [14 + (a + 0.5) * S, 14 + (b + 0.5) * S]);
+    let out = gridLines(14, 14, W + 1, H + 1, S) + poly(P, { fill: COL.soft });
+  P.forEach((t, i) => {
+    // המספר על חוצה הזווית, רחוק יותר בזווית חדה (שלא יידבק לקווים)
+    const u = (o) => { const dx = o[0] - t[0], dy = o[1] - t[1], l = Math.hypot(dx, dy); return [dx / l, dy / l]; };
+    const ua = u(P[(i + 3) % 4]), ub = u(P[(i + 1) % 4]);
+    let bx = ua[0] + ub[0], by = ua[1] + ub[1];
+    const bl = Math.hypot(bx, by); bx /= bl; by /= bl;
+    const dist = Math.min(30, 9 / Math.sin((Math.min(degs[i], 170) * Math.PI) / 360) + 6);
+    out += txt(t[0] + bx * dist, t[1] + by * dist + 5, String(labels[i]), { size: 15, weight: 700 });
+  });
+  const pic = svg(28 + (W + 1) * S, 28 + (H + 1) * S, out, 'מרובע על משבצות עם זוויות ממוספרות');
+  const idx = ask === 'min' ? degs.indexOf(Math.min(...degs)) : degs.indexOf(Math.max(...degs));
+  const ans = String(labels[idx]);
+  const text = ask === 'min' ? 'איזו זווית הכי קטנה?' : 'איזו זווית קהה?';
+  const explain = ask === 'min'
+    ? `הזווית הקטנה ביותר היא זו שנפתחת הכי מעט – זווית מספר ${ans}. זווית ישרה היא פינה של משבצת, וקהה גדולה ממנה.`
+    : `זווית קהה גדולה מפינה של משבצת (זווית ישרה). זווית מספר ${ans} נפתחת יותר מפינה של משבצת, ולכן היא הקהה.`;
+  return { kind: 'angle-quad', meta: { pts, labels, ask }, svg: pic, text, options: ['1', '2', '3', '4'], answer: ans, explain };
+}
+const angleQuadMin = (rng) => quadAngleQ(rng, 'min');
+const angleQuadObtuse = (rng) => quadAngleQ(rng, 'obtuse');
+
+// ארבעה מצולעים עם קטע מקווקו: איזה קטע אינו אלכסון (או: איזה כן)
+function diagCell(rng, real) {
+  const n = rng.int(4, 6);
+  const start = rng.int(0, 359);
+  const rx = rng.int(36, 44), ry = rng.int(28, 38);
+  const pts = Array.from({ length: n }, (_, i) => {
+    const a = ((start + (360 / n) * i + rng.int(-5, 5)) * Math.PI) / 180;
+    return [50 + rx * Math.cos(a), 45 + ry * Math.sin(a)];
+  });
+  const mid = (k) => [(pts[k][0] + pts[(k + 1) % n][0]) / 2, (pts[k][1] + pts[(k + 1) % n][1]) / 2];
+  let a, b, type;
+  if (real) {
+    const i = rng.int(0, n - 1), j = (i + rng.int(2, n - 2)) % n;
+    a = pts[i]; b = pts[j]; type = 'diag';
+  } else if (rng.chance(0.5)) {
+    // מקודקוד אל אמצע צלע שלא נוגעת בו
+    const i = rng.int(0, n - 1);
+    const k = rng.pick(Array.from({ length: n }, (_, t) => t).filter((t) => t !== i && (t + 1) % n !== i));
+    a = pts[i]; b = mid(k); type = 'vertex-mid';
+  } else {
+    const k1 = rng.int(0, n - 1), k2 = (k1 + rng.int(1, n - 1)) % n;
+    a = mid(k1); b = mid(k2); type = 'mid-mid';
+  }
+  const inner = poly(pts) + line(a[0], a[1], b[0], b[1], { stroke: COL.d, width: 3, dash: '6 4' }) + circle(a[0], a[1], 3.5, { fill: COL.d, stroke: COL.d }) + circle(b[0], b[1], 3.5, { fill: COL.d, stroke: COL.d });
+  return { inner, type, n };
+}
+function diagDashed(rng, askReal) {
+  // askReal: איזה כן אלכסון (אחד אמיתי ושלושה לא); אחרת איזה לא אלכסון (שלושה אמיתיים ואחד לא)
+  const idx = rng.int(0, 3);
+  const cells = [0, 1, 2, 3].map((i) => diagCell(rng, askReal ? i === idx : i !== idx));
+  const L = ['א', 'ב', 'ג', 'ד'];
+  const pic = rowSvg(cells.map((c) => c.inner), 100, 90);
+  return { kind: 'diag-dashed', meta: { types: cells.map((c) => c.type), askReal }, svg: pic, text: askReal ? 'באיזה מצולע הקטע המקווקו הוא אלכסון?' : 'באיזה מצולע הקטע המקווקו אינו אלכסון?', options: L, answer: L[idx], explain: `אלכסון מחבר שני קודקודים שאינם שכנים. במצולע ${L[idx]} ${askReal ? 'הקטע המקווקו מחבר שני קודקודים שאינם שכנים, ולכן הוא אלכסון. בשאר המצולעים הקטע מגיע לאמצע צלע.' : 'הקטע המקווקו מגיע לאמצע צלע, ולכן הוא לא אלכסון. בשאר המצולעים הוא מחבר קודקודים שאינם שכנים.'}` };
+}
+const diagNot = (rng) => diagDashed(rng, false);
+const diagIs = (rng) => diagDashed(rng, true);
+
+export const sheetGeometry = { parallelSide, perimeterGrid, areaPairs, angleQuadMin, angleQuadObtuse, diagNot, diagIs };
+
 export const geometryGens = {
-  parallel: [parallelCount, parallelPick, parallelNamed],
-  perimeter: [perimeterRect, perimeterPolygon, perimeterSquare, perimeterMissing, perimeterFence],
-  area: [areaGrid, areaRect, areaSquare, areaMissing, areaCompare, samePerimeter],
-  angles: [angleClassify, angleCompare, angleWhich, angleCountRight],
-  diagonals: [diagCount, diagWhichPolygon, diagIdentify],
+  parallel: [parallelCount, parallelPick, parallelNamed, parallelSide],
+  perimeter: [perimeterRect, perimeterPolygon, perimeterSquare, perimeterMissing, perimeterFence, perimeterGrid],
+  area: [areaGrid, areaRect, areaSquare, areaMissing, areaCompare, samePerimeter, areaPairs],
+  angles: [angleClassify, angleCompare, angleWhich, angleCountRight, angleQuadMin, angleQuadObtuse],
+  diagonals: [diagCount, diagWhichPolygon, diagIdentify, diagNot, diagIs],
 };
 export { SHAPES };

@@ -10,6 +10,7 @@ export const SECTIONS = [
   ['מדידות אורכים', [['length', '📏 מדידת אורכים']]],
   ['גיאומטריה', [['parallel', '🛤️ צלעות מקבילות'], ['perimeter', '🔲 היקף מצולעים'], ['area', '🟦 שטחים'], ['angles', '📐 זוויות'], ['diagonals', '❌ אלכסונים']]],
   ['חקר נתונים', [['chart', '📊 דיאגרמות']]],
+  ['דף התרגול של המורה', [['teacher_sheet', '📝 דף התרגול מהמורה']]],
 ];
 export const EXAM = ['exam', '🎓 מבחן מסכם'];
 export const TOPIC_IDS = SECTIONS.flatMap(([, list]) => list.map(([id]) => id));

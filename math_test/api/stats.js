@@ -1,10 +1,11 @@
 // סיכום התוצאות של ילד אחד לכל נושא (פונקציה טהורה – נבדקת בלי שרת)
 export const PASS = 80;
-// כל סוגי התרגול באפליקציה: 18 הנושאים והמבחן המסכם. חייב להיות זהה ל-MODES ב-web/public/topics.js
+// כל סוגי התרגול באפליקציה: 19 הנושאים (כולל דף התרגול של המורה) והמבחן המסכם. חייב להיות זהה ל-MODES ב-web/public/topics.js
 export const TOPICS = [
   'sequences', 'digits', 'ops', 'order', 'zero_one', 'times_more', 'word_problems', 'write_problem',
   'compare_frac', 'bigger_smaller', 'whole_from_part', 'length',
   'parallel', 'perimeter', 'area', 'angles', 'diagonals', 'chart',
+  'teacher_sheet',
 ];
 export const MODES = [...TOPICS, 'exam'];
 

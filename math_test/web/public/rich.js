@@ -4,7 +4,7 @@ export function esc(text) {
 }
 
 // שבר | רצף מספרים וסימני חשבון | אותיות לועזיות (A, AB) | ספרה בודדת
-const TOKEN = /(\d+)\/(\d+)|[\d(□][\d\s+−\-×:=()□.,]*[\d)□]|[A-Za-z]+(?: ?[A-Za-z]+)*|\d/g;
+const TOKEN = /(\d+)\/(\d+)|[\d(□][\d\s+−\-×:=()□.,<>]*[\d)□]|[<>=]|[A-Za-z]+(?: ?[A-Za-z]+)*|\d/g;
 
 export function rich(text) {
   const src = String(text ?? '');

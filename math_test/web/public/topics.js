@@ -1,7 +1,8 @@
 // רשימת הנושאים – המקור היחיד. הסדר כאן הוא הסדר במסך, ובתוך כל פרק נושא נפתח אחרי שעוברים את הקודם
 export const PASS = 80;
 export const ROUND_SIZE = 10;
-export const EXAM_SIZE = 20;
+// מספר שאלות המבחן = מספר הסעיפים בדף התרגול (gen/sheet.js; בדיקה מוודאת)
+export const EXAM_SIZE = 34;
 export const EXAM = 'exam';
 
 export const SECTIONS = [
@@ -10,6 +11,7 @@ export const SECTIONS = [
   { id: 'measure', title: 'מדידות אורכים', emoji: '📏' },
   { id: 'geometry', title: 'גיאומטריה', emoji: '📐' },
   { id: 'data', title: 'חקר נתונים', emoji: '📊' },
+  { id: 'teacher', title: 'דף התרגול של המורה', emoji: '📝' },
 ];
 
 export const TOPICS = [
@@ -31,6 +33,7 @@ export const TOPICS = [
   { id: 'angles', section: 'geometry', emoji: '📐', title: 'זוויות', note: 'ישרה, חדה, קהה' },
   { id: 'diagonals', section: 'geometry', emoji: '❌', title: 'אלכסונים', note: 'כמה אלכסונים יש?' },
   { id: 'chart', section: 'data', emoji: '📊', title: 'דיאגרמות', note: 'עמודות ופיקטוגרמה' },
+  { id: 'teacher_sheet', section: 'teacher', emoji: '📝', title: 'דף התרגול מהמורה', note: 'שאלות כמו בדף של המורה' },
 ];
 
 export const TOPIC_IDS = TOPICS.map((t) => t.id);

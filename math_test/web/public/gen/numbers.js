@@ -1,5 +1,6 @@
 // מספרים טבעיים ופעולות חשבון (נושאים 1-8). כל פונקציה מקבלת rng ומחזירה שאלה אחת
 import { mc, numQ, numInput, evalExpr, NAMES, v, OBJECTS, CONTAINERS, twoNames } from './common.js';
+import { numberLineSvg } from '../svg.js';
 
 const ASK = 'מה התוצאה?';
 
@@ -152,10 +153,12 @@ const orderPatterns = [
   (r) => { const c = r.int(2, 9), q = r.int(3, 12), a = r.int(1, c * q - 1); const b = c * q - a; return [`(${a} + ${b}) : ${c}`, `קודם הסוגריים: ${a} + ${b} = ${a + b}, ואחר כך ${a + b} : ${c} = ${q}.`]; },
   (r) => { const a = r.int(2, 9), b = r.int(2, 9), c = r.int(2, 9), d = r.int(2, 9); return [`${a} × ${b} + ${c} × ${d}`, `קודם שני הכפלים: ${a * b} ו-${c * d}, ואחר כך ${a * b} + ${c * d} = ${a * b + c * d}.`]; },
   (r) => { const b = r.int(2, 9), c = r.int(2, 9), a = r.int(2, 30), d = r.int(1, a + b * c); return [`${a} + ${b} × ${c} − ${d}`, `קודם כפל: ${b} × ${c} = ${b * c}. אחר כך משמאל לימין: ${a} + ${b * c} = ${a + b * c}, ו-${a + b * c} − ${d} = ${a + b * c - d}.`]; },
+  // חילוק במספר שבסוגריים: 60 : (4 + 6) – חייבת להישאר האחרונה ברשימה (orderDiv)
+  (r) => { const c = r.int(4, 10), a = r.int(1, c - 1), q = r.int(2, 9); return [`${c * q} : (${a} + ${c - a})`, `קודם הסוגריים: ${a} + ${c - a} = ${c}, ואחר כך ${c * q} : ${c} = ${q}.`]; },
 ];
-function orderQ(rng) {
+function orderQ(rng, pattern) {
   for (;;) {
-    const [expr, steps] = rng.pick(orderPatterns)(rng);
+    const [expr, steps] = (pattern || rng.pick(orderPatterns))(rng);
     const ans = evalExpr(expr);
     if (!Number.isInteger(ans) || ans < 0) continue;
     const wrong = evalExpr(expr, expr.includes('(') ? { noParens: true } : { ltr: true });
@@ -290,13 +293,233 @@ function writeProblem(rng) {
   return mc(rng, { kind: 'write', text: 'איזו בעיה מילולית מתאימה לתרגיל?', expr: `${a} ${sym} ${b}`, meta: { op, a, b }, explain }, right, dist);
 }
 
+// ---------- דף התרגול של המורה: וריאנטים חדשים (משמשים גם את הנושא "דף התרגול" וגם את המבחן המסכם) ----------
+const uniq = (arr) => [...new Set(arr)];
+
+// השלימו את שלושת המספרים הבאים בסדרה
+function seqTriple(rng) {
+  const d = rng.pick([2, 5, 10, 10, 20, 50, 100, 100]);
+  const s = rng.chance(0.25) ? -1 : 1;
+  const start = s > 0 ? rng.int(1000, 6000) : rng.int(4000, 9000);
+  const t = [0, 1, 2].map((i) => start + s * i * d);
+  const last = t[2];
+  const at = (first, step, n = 3) => Array.from({ length: n }, (_, i) => first + s * step * i);
+  const ans = at(last + s * d, d);
+  const dist = [
+    at(last + s, 1), // קפיצות של 1
+    at(last + s * 10 * d, 10 * d), // קפיצות גדולות פי 10
+    [last + s * d, last + s * d + s * 10 * d, last + s * d + s * 20 * d], // רק הראשון נכון
+    at(last - s * d, -d), // כיוון הפוך
+    [ans[0], ans[1], ans[2] + s * 10], // האחרון שגוי
+  ].map((a) => a.join(', '));
+  return mc(rng, { kind: 'seq3', meta: { terms: t, d: s * d }, text: 'השלימו את שלושת המספרים הבאים בסדרה.', expr: `${t.join(', ')}, …`, explain: `ההפרש בין כל שני מספרים סמוכים הוא ${d}. ${s > 0 ? 'מוסיפים' : 'מחסירים'} ${d} שוב ושוב: ${ans.join(', ')}.` }, ans.join(', '), dist);
+}
+
+// ציר מספרים עם קטע מושחר: איזה מספר נמצא בקטע?
+function seqLine(rng) {
+  const st = rng.pick([100, 100, 100, 10, 1000]);
+  const from = st * rng.int(1, Math.min(90, Math.floor((9999 - 5 * st) / st)));
+  const k = rng.int(0, 4);
+  const a = from + k * st;
+  const r = rng.pick([2, 3, 4, 6, 7, 8]) * (st / 10);
+  const x = a + r;
+  const pool = [1, 2, 3, 4].map((j) => a + j * st + r);
+  if (Number.isInteger(r / 10)) pool.push(a + 2 * st + r / 10);
+  if (a - st + r >= 0) pool.push(a - st + r);
+  return mc(rng, { kind: 'seq-line', meta: { a, st, r }, svg: numberLineSvg(from, st, 6, k), text: 'איזה מספר נמצא בקטע המושחר בציר המספרים?', explain: `הקטע המושחר מתחיל ב-${a} ונגמר ב-${a + st}, ולכן המספר שנמצא בתוכו הוא ${x}. שאר המספרים נמצאים מחוץ לקטע.` }, x, pool);
+}
+
+// בעזרת ספרות נתונות: מספר שעומד בתנאי (גדול/קטן מ-T, ולפעמים זוגי/אי-זוגי)
+const isPermOf = (n, ds) => { const s = String(n); return s.length === ds.length && [...s].sort().join('') === ds.map(String).sort().join(''); };
+function digitsRule(rng, withParity) {
+  for (;;) {
+    const rest = rng.shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    const ds = rng.shuffle(rng.chance(0.75) ? [0, ...rest.slice(0, 3)] : rest.slice(0, 4));
+    const t = rng.pick(ds.filter((x) => x > 0));
+    const T = t * 1000;
+    const cmp = withParity ? (rng.chance(0.7) ? '<' : '>') : '>';
+    const parity = withParity ? rng.pick(['odd', 'even']) : null;
+    const okCmp = (n) => (cmp === '>' ? n > T : n < T);
+    const okPar = (n) => !parity || (parity === 'odd' ? n % 2 === 1 : n % 2 === 0);
+    const valid = (n) => isPermOf(n, ds) && String(n)[0] !== '0' && okCmp(n) && okPar(n);
+    const perms = permutations(ds).filter((p) => p[0] !== 0).map((p) => Number(p.join('')));
+    const goods = perms.filter(valid), breaks = perms.filter((n) => !valid(n));
+    if (!goods.length || !breaks.length) continue;
+    const ans = rng.pick(goods);
+    const digs = String(ans).split('').map(Number);
+    const rep = [], miss = [];
+    const foreign = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].filter((x) => !ds.includes(x));
+    for (let pos = 0; pos < 4; pos++) {
+      for (const d of [...ds, ...foreign]) {
+        if (d === digs[pos]) continue;
+        const c = digs.slice(); c[pos] = d;
+        const n = Number(c.join(''));
+        if (c[0] === 0 || isPermOf(n, ds) || !okCmp(n) || !okPar(n)) continue;
+        (new Set(c).size < 4 ? rep : miss).push(n);
+      }
+    }
+    if (!rep.length || !miss.length) continue;
+    const opts = [rng.pick(rep), rng.pick(miss), rng.pick(breaks)];
+    if (new Set([ans, ...opts]).size < 4) continue;
+    if ([ans, ...opts].filter(valid).length !== 1) continue;
+    const word = parity ? `${parity === 'odd' ? 'אי-זוגי' : 'זוגי'} ` : '';
+    return mc(rng, {
+      kind: 'digits-rule', meta: { digits: ds, T, cmp, parity },
+      text: `בעזרת הספרות ${ds.join(', ')} (כל ספרה פעם אחת בדיוק) – איזה מספר ${word}${cmp === '>' ? 'גדול' : 'קטן'} מ-${T}?`,
+      explain: `התשובה היא ${ans}: הוא בנוי מכל הספרות פעם אחת${parity ? `, נגמר בספרה ${parity === 'odd' ? 'אי-זוגית' : 'זוגית'}` : ''} והוא ${cmp === '>' ? 'גדול' : 'קטן'} מ-${T}. במסיחים יש מספר שחוזר על ספרה, מספר עם ספרה שלא ניתנה, ומספר שלא עומד בתנאי.`,
+    }, ans, opts);
+  }
+}
+const digitsGreater = (rng) => digitsRule(rng, false);
+const digitsParity = (rng) => digitsRule(rng, true);
+
+// תרגילים משולבים עם 0 ו-1
+const COMBO = [
+  (n) => [`${n} : ${n} + 0`, 1, `${n} : ${n} = 1 (מספר מחולק בעצמו), ואחר כך 1 + 0 = 1.`],
+  (n) => [`1 × (${n} − ${n})`, 0, `קודם הסוגריים: ${n} − ${n} = 0, ואחר כך 1 × 0 = 0.`],
+  (n) => [`0 : ${n} + 1`, 1, `0 : ${n} = 0 (0 מחולק בכל מספר), ואחר כך 0 + 1 = 1.`],
+  (n, m) => [`${n} × 0 + ${m}`, m, `${n} × 0 = 0, ואחר כך 0 + ${m} = ${m}.`],
+  (n, m) => [`${n} + 0 × ${m}`, n, `קודם כפל: 0 × ${m} = 0, ואחר כך ${n} + 0 = ${n}.`],
+  (n, m) => [`${m} × (${n} : ${n})`, m, `קודם הסוגריים: ${n} : ${n} = 1, ואחר כך ${m} × 1 = ${m}.`],
+  (n) => [`(${n} : 1) − ${n}`, 0, `${n} : 1 = ${n}, ואחר כך ${n} − ${n} = 0.`],
+];
+const zeroCombo = (i) => (rng) => {
+  const n = rng.int(100, 999), m = rng.int(2, 99);
+  const [expr, ans, why] = COMBO[i](n, m);
+  return numQ(rng, { kind: 'calc', text: ASK, expr: `${expr} = □`, meta: { expr }, explain: `${why} התוצאה ${ans}.` }, ans, [0, 1, n, m], 0.3);
+};
+const zeroOneCombined = (rng) => zeroCombo(rng.int(0, COMBO.length - 1))(rng);
+
+// תרגילי חשבון בסגנון הדף
+const opsAddSmall = (rng) => {
+  const a = rng.int(200, 900), b = rng.int(21, 99);
+  return calc(rng, `${a} + ${b}`, a + b, [a + b + 10, a + b - 10, a + b + 100, a + b - 1], `${a} + ${b} = ${a + b}. מחברים יחידות, עשרות ומאות, ומעבירים לעמודה הבאה כשצריך.`);
+};
+const opsSubZeros = (rng) => {
+  const a = rng.pick([1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000]);
+  const b = rng.int(1, 9) * 100 + rng.int(1, 9) * 10 + (rng.chance(0.3) ? rng.int(1, 9) : 0);
+  const h = Math.floor(b / 100) * 100, r = b - h, s = a - b;
+  return calc(rng, `${a} − ${b}`, s, [s + 100, s - 100, s + 10, s - 10, a - h + r], `${a} − ${b} = ${s}. אפשר לחסר בחלקים: ${a} − ${h} = ${a - h}, ואחר כך ${a - h} − ${r} = ${s}. (או: ${a} הוא ${a - 1} ועוד 1, ומחסירים עמודה אחרי עמודה).`);
+};
+const opsHandy = (rng) => {
+  const a = rng.pick([25, 25, 50, 20]), b = rng.int(2, 12);
+  const why = a === 25 ? '4 פעמים 25 הם 100.' : a === 50 ? '2 פעמים 50 הם 100.' : '5 פעמים 20 הם 100.';
+  return calc(rng, `${a} × ${b}`, a * b, [a * b + a, a * b - a, a + b, a * b + 10], `${a} × ${b} = ${a * b}. כדאי לזכור: ${why}`, 0.5);
+};
+const opsDivTable = (rng) => {
+  const d = rng.int(6, 9), q = rng.int(6, 12);
+  return calc(rng, `${d * q} : ${d}`, q, [q + 1, q - 1, q + 2, d], `${d * q} : ${d} = ${q}, כי ${d} × ${q} = ${d * q}.`, 0.5);
+};
+const orderDiv = (rng) => orderQ(rng, orderPatterns[orderPatterns.length - 1]);
+
+// השלימו את הסימן < > =
+function signQ(rng, L, lv, R, rv) {
+  const sign = lv < rv ? '<' : lv > rv ? '>' : '=';
+  const why = sign === '=' ? 'שני הצדדים שווים' : lv > rv ? 'הצד השמאלי גדול יותר' : 'הצד השמאלי קטן יותר';
+  return { kind: 'sign', meta: { L, R, lv, rv }, text: 'השלימו את הסימן המתאים: < , > או =', expr: `${L} □ ${R}`, options: ['<', '=', '>'], answer: sign, explain: `מחשבים כל צד: ${L} = ${lv} ו-${R} = ${rv}. ${why}, ולכן הסימן הוא ${sign}.` };
+}
+function signProducts(rng) {
+  const a = rng.int(2, 9), m = rng.int(2, 9), p = rng.int(1, 2);
+  const b = m * 10 ** p, half = b / 10;
+  const mode = rng.pick(['eq', 'eq', 'gt', 'lt']);
+  let c = half;
+  if (mode === 'gt') c = half + rng.int(1, 4);
+  if (mode === 'lt') c = Math.max(1, half - rng.int(1, Math.min(4, half - 1)));
+  return signQ(rng, `${a} × ${b}`, a * b, `${a * 10} × ${c}`, a * 10 * c);
+}
+function signThree(rng) {
+  const [x, y, z] = [rng.int(2, 9), rng.int(2, 9), rng.int(2, 9)];
+  const mode = rng.pick(['eq', 'gt', 'lt']);
+  let right;
+  if (mode === 'eq') right = rng.pick([[x * y, z, 1], [x, y * z, 1], [x * z, y]]);
+  else if (mode === 'gt') right = [x, y, 1, 1];
+  else right = [x, y, z, rng.int(2, 3)];
+  right = rng.shuffle(right);
+  const left = [x, y, z];
+  const pr = (a) => a.reduce((s, t) => s * t, 1);
+  return signQ(rng, left.join(' × '), pr(left), right.join(' × '), pr(right));
+}
+
+// פי כמה גדול תרגיל מתרגיל (בלי לחשב)
+function timesExpr(rng) {
+  const A = rng.int(12, 99), k2 = rng.int(2, 5), m = rng.int(2, 5), k1 = k2 * m;
+  return numQ(rng, { kind: 'times', meta: { A, k1, k2, m }, text: `פי כמה ${A} × ${k1} גדול מ-${A} × ${k2}?`, explain: `בשני התרגילים יש ${A}. ב-${A} × ${k1} מכפילים ב-${k1}, וב-${A} × ${k2} ב-${k2}, ו-${k1} הוא פי ${m} מ-${k2} (${k2} × ${m} = ${k1}). לכן התשובה ${m} – אין צורך לחשב.` }, m, [m + 1, m - 1, k1, k2, k1 - k2], 0.4);
+}
+
+// בעיות מילוליות בסגנון הדף
+function wordLibrary(rng) {
+  const a = rng.int(50, 400), give = rng.int(10, Math.floor(a / 2)), b = a - give;
+  const t = rng.pick([
+    `בספרייה היו ${a} ספרים. אחרי שהספרנית נתנה ספרים לתלמידים נשארו ${b}. כמה ספרים נתנה?`,
+    `בחנות היו ${a} חולצות. אחרי שנמכרו כמה חולצות נשארו ${b}. כמה חולצות נמכרו?`,
+    `באוטובוס היו ${a} נוסעים. בתחנה ירדו כמה נוסעים ונשארו ${b}. כמה נוסעים ירדו?`,
+  ]);
+  return numQ(rng, { kind: 'word', meta: { a, b }, text: t, explain: `כדי לדעת כמה נלקחו מחסרים מההתחלה את מה שנשאר: ${a} − ${b} = ${give}.` }, give, [a + b, give + 10, give - 10, b], 0.5);
+}
+function wordClasses(rng) {
+  for (;;) {
+    const c = [rng.int(20, 45), rng.int(20, 45), rng.int(20, 45)], T = rng.int(120, 260);
+    const s = c[0] + c[1] + c[2], rest = T - s;
+    if (rest < 15 || rest > 70) continue;
+    return numQ(rng, { kind: 'word', meta: { T, c }, text: `בשכבה ד' ${T} תלמידים. בכיתה ד1 יש ${c[0]} תלמידים, בכיתה ד2 ${c[1]}, בכיתה ד3 ${c[2]}, והשאר לומדים בכיתה ד4. כמה תלמידים לומדים בכיתה ד4?`, explain: `קודם מחברים את שלוש הכיתות: ${c.join(' + ')} = ${s}. אחר כך מחסירים מכלל השכבה: ${T} − ${s} = ${rest}.` }, rest, [s, T + s, rest + 10, rest - 10, T - c[0]], 0.5);
+  }
+}
+function wordGroups(rng) {
+  const g = rng.pick([4, 5, 10, 10, 20, 25]), k = rng.int(4, 20), T = g * k;
+  return numQ(rng, { kind: 'word', meta: { T, g }, text: `בשכבה ${T} תלמידים. מחלקים אותם לקבוצות של ${g} תלמידים. כמה קבוצות יהיו?`, explain: `כמה פעמים ${g} נכנס ב-${T}? ${T} : ${g} = ${k}, כי ${g} × ${k} = ${T}.` }, k, [g, k + 1, k - 1, k * 2], 0.5);
+}
+function wordSplit(rng) {
+  const T = rng.pick([120, 150, 180, 200, 240, 300]);
+  const pairs = [];
+  for (let k = 2; k <= 20; k++) if (T % k === 0 && T / k >= 5 && T / k <= 60) pairs.push([k, T / k]);
+  const [k, g] = rng.pick(pairs);
+  const fmt = ([a, b]) => `${a} קבוצות של ${b} תלמידים`;
+  const cand = [[k + 1, g], [k, g + 5], [k - 1, g], [k, g - 5], [k + 2, g], [k * 2, g + 5]].filter(([a, b]) => a >= 2 && b >= 5 && a * b !== T);
+  return mc(rng, { kind: 'word', meta: { T }, text: `בשכבה ${T} תלמידים. רוצים לחלק אותם לקבוצות שוות. איזו חלוקה אפשרית?`, explain: `חלוקה אפשרית היא כזו שמספר הקבוצות כפול מספר התלמידים בקבוצה נותן ${T}. ${k} × ${g} = ${T}, ולכן ${fmt([k, g])}. בשאר החלוקות המכפלה שונה.` }, fmt([k, g]), cand.map(fmt));
+}
+
+// מספר חסר וחוסר שוויון
+function missingSub(rng) {
+  const a = rng.pick([200, 300, 400, 500, 600, 700, 800, 1000]), x = rng.int(2, Math.floor(a / 10) * 0.8 | 0) * 10 + rng.pick([0, 0, 5]);
+  const c = a - x;
+  return numQ(rng, { kind: 'missing', text: 'איזה מספר חסר?', expr: `${a} − □ = ${c}`, meta: { expr: `${a} − □ = ${c}` }, explain: `המספר החסר הוא ${x}, כי ${a} − ${c} = ${x}. בדיקה: ${a} − ${x} = ${c}.` }, x, [a, c, x + 10, x - 10, a + c], 0.5);
+}
+function missingIneq(rng) {
+  const a = rng.pick([300, 400, 500, 600, 800, 1000]), t = rng.int(6, Math.min(30, (a - 40) / 10)) * 10, c = a - t;
+  const gt = rng.chance(0.65);
+  const sign = gt ? '>' : '<';
+  let x, wrong;
+  if (gt) { x = rng.int(2, t / 5 - 1) * 5; wrong = uniq([t, t + 10, t + 20, t + 30, t + 50, c]).filter((n) => n >= t && n <= a); }
+  else { x = rng.int(t / 5 + 1, a / 5) * 5; wrong = uniq([t, t - 10, t - 20, t - 30, t - 50, 10]).filter((n) => n <= t && n >= 0); }
+  return mc(rng, { kind: 'ineq', meta: { a, c, sign }, text: 'איזה מספר מתאים במקום □?', expr: `${a} − □ ${sign} ${c}`, explain: `${a} − ${t} = ${c}, לכן כדי שיהיה ${gt ? 'יותר' : 'פחות'} מ-${c} צריך ${gt ? 'לחסר פחות' : 'לחסר יותר'} מ-${t}. המספר ${x} ${gt ? 'קטן' : 'גדול'} מ-${t}, ולכן הוא מתאים.` }, x, wrong);
+}
+
+// כתיבת שאלה לתרגיל חילוק (חלוקה שווה או "כמה קבוצות")
+function writeDivision(rng) {
+  const c = { p: rng.pick(NAMES), o: rng.pick(OBJECTS), ct: rng.pick(CONTAINERS) };
+  const b = rng.int(2, 9), q = rng.int(3, 10), a = b * q;
+  const { p, o, ct } = c;
+  const right = rng.chance(0.5)
+    ? story(':', a, b, c)
+    : `ל${p.n} יש ${a} ${o}. ${p.n} ${v(p, 'שם', 'שמה')} ${b} ${o} בכל ${ct.s}. כמה ${ct.pl} יהיו?`;
+  const dist = ['+', '−', '×'].map((o2) => story(o2, a, b, c));
+  dist.push(story('+', a + b, b, c), story('×', a + 1, b, c));
+  return mc(rng, { kind: 'write-div', text: 'איזו בעיה מילולית מתאימה לתרגיל?', expr: `${a} : ${b}`, meta: { op: ':', a, b }, explain: `חילוק מתאים לחלוקה שווה (${a} ${o} ל-${b}) או לשאלה "כמה קבוצות של ${b} יש ב-${a}". ${a} : ${b} = ${q}.` }, right, dist);
+}
+
+// כל הווריאנטים החדשים של הדף, לפי נושא (הנושא "דף התרגול" והמבחן המסכם משתמשים בהם)
+export const sheetNumbers = {
+  seqTriple, seqLine, digitsGreater, digitsParity, zeroCombo, zeroOneCombined, opsAddSmall, opsSubZeros, opsHandy, opsDivTable, orderDiv,
+  signProducts, signThree, timesExpr, wordLibrary, wordClasses, wordGroups, wordSplit, missingSub, missingIneq, writeDivision,
+};
+
 export const numbersGens = {
-  sequences: [seqMissing, seqNext, seqRule, seqBelongs],
-  digits: [digitsQ],
-  ops: opsGens,
+  sequences: [seqMissing, seqNext, seqRule, seqBelongs, seqTriple, seqLine],
+  digits: [digitsQ, digitsGreater, digitsParity],
+  ops: [...opsGens, opsAddSmall, opsSubZeros, opsHandy, opsDivTable, signProducts, signThree, missingSub, missingIneq],
   order: [orderQ],
-  zero_one: [zeroOne, zeroOneMissing, zeroOneTrue],
-  times_more: [timesMore, timesHowMany, timesReverse, timesDouble],
-  word_problems: [wordProblem],
-  write_problem: [writeProblem],
+  zero_one: [zeroOne, zeroOneMissing, zeroOneTrue, zeroOneCombined],
+  times_more: [timesMore, timesHowMany, timesReverse, timesDouble, timesExpr],
+  word_problems: [wordProblem, wordLibrary, wordClasses, wordGroups, wordSplit],
+  write_problem: [writeProblem, writeDivision],
 };
