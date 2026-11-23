@@ -24,7 +24,24 @@ TOOLS = {
     "shorts": "shorts / Claude Shorts (~/.claude/skills/shorts/SKILL.md) – the best short clips from a long video",
     "ffmpeg": "ffmpeg-skill (~/.claude/skills/ffmpeg-skill/SKILL.md) – precise FFmpeg editing",
     "montage": "OpenMontage (~/openmontage – read its AGENT_GUIDE.md first) – a whole video from an idea: research, script, free footage, narration, music, captions, render",
+    "rea": "rea-video (~/.claude/skills/rea-video/SKILL.md, CLI `rea-video`) – reverse-engineer a video shot by shot and how to remake it",
 }
+# rea-video (Apache-2.0) לא עורך: מפרק את הסרטון ומחזיר דוח – עמוד HTML אחד בעברית (out/report.html)
+REA_RULES = [
+    "rea-video rules for this run – this is a BREAKDOWN, not an edit:",
+    "- Follow SKILL.md section 1: `rea-video decompose in/<video> -o work/ref --lang en` (add `--env-file ~/.rea.env --vlm`",
+    "  only if ~/.rea.env exists), then `rea-video review` + look at the images yourself + `rea-video apply-review`,",
+    "  then `rea-video summary`. Don't run remake/plan or any paid generation.",
+    "- Then write the final report yourself as ONE self-contained page: out/report.html – Hebrew, dir=rtl, readable on a phone",
+    "  and in dark mode (prefers-color-scheme), no external files or scripts. Embed only the key images as base64 JPEG",
+    "  (storyboard + a few shot frames, resized to max 720px wide, total under 6 MB).",
+    "- Sections (follow references/output-template.md, in Hebrew): one-line verdict; what the video is about and its hook;",
+    "  a shot table (time, what is seen, how it was made + confidence, evidence); captions / text on screen; sound (voice,",
+    "  music, effects – AI or not); filming / lighting / editing notes for live shots; and a practical 'how to make one like",
+    "  it' plan with free / cheap tools. Write 'לא בטוח' where the tools are unsure – never invent certainty.",
+    "- Don't put the brief's text, file names or personal details into anything outside this folder. (rea-video's own",
+    "  --vlm call to Gemini is allowed; don't open or print ~/.rea.env.)",
+]
 # OpenMontage (AGPLv3) רץ מתוך התיקייה שלו, עם הסביבה שלו (.venv), ורק במסלולים החינמיים
 MONTAGE_RULES = [
     "OpenMontage rules for this run:",
@@ -52,7 +69,8 @@ def prompt(job, files, tool):
     p = job.get("params") or {}
     skills = AUTO if tool == "auto" else [tool]
     lines = [
-        "You are a professional video editor working for the owner of a team app. Edit their video now.",
+        "You are a professional video analyst working for the owner of a team app. Break down their video now." if tool == "rea"
+        else "You are a professional video editor working for the owner of a team app. Edit their video now.",
         "",
         ("Input files (the owner's uploads, in order): " + ", ".join(f"in/{f}" for f in files)) if files else "No files were uploaded – create the video from the brief.",
         ("A song to use: in/" + job["music"]["name"]) if job.get("music") else "",
@@ -62,6 +80,7 @@ def prompt(job, files, tool):
         *[f"- {TOOLS[s]}" for s in skills],
         "",
         *([*MONTAGE_RULES, ""] if tool == "montage" else []),
+        *([*REA_RULES, ""] if tool == "rea" else []),
         "This run is fully automatic – nobody can answer you:",
         "- Never ask questions or wait for approval. Where the skill asks the user to choose or approve (takes, style,",
         "  preview), decide yourself with its recommended defaults and continue.",
@@ -72,7 +91,8 @@ def prompt(job, files, tool):
         "- If the skill would make several outputs, make the single best one for the brief.",
         "- Work only inside this folder and the skill folders. Don't post, upload or send anything anywhere.",
         "",
-        "When done, save the finished video as out/final.mp4 (H.264 + AAC, MP4). If it cannot be done, don't create it.",
+        "When done, save the report as out/report.html. If it cannot be done, don't create it." if tool == "rea"
+        else "When done, save the finished video as out/final.mp4 (H.264 + AAC, MP4). If it cannot be done, don't create it.",
     ]
     return "\n".join(lines)
 
@@ -109,11 +129,13 @@ def cost():
 
 def finish(job_id):
     usd = round(cost(), 4)
-    dst = WORK / "out" / "final.mp4"
+    # סרטון (עריכה) או דוח (rea-video)
+    video, report = WORK / "out" / "final.mp4", WORK / "out" / "report.html"
+    dst, kind = (report, "&type=html") if report.exists() and not video.exists() else (video, "")
     print(f"cost: ${usd}")
     if dst.exists() and dst.stat().st_size > 0:
         print(f"result: {dst.stat().st_size / 1e6:.1f} MB")
-        request("PUT", f"/render/result?id={job_id}&usd={usd}", data=dst)
+        request("PUT", f"/render/result?id={job_id}&usd={usd}{kind}", data=dst)
         print("uploaded")
         return
     print("no result")

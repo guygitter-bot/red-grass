@@ -1418,6 +1418,37 @@ test('smart edit with OpenMontage: can start from an idea with no files; other t
   assert.equal(card.files, 0);
 });
 
+test('smart edit with rea-video: one video only; the result is an HTML report shown as a document', async () => {
+  const { env } = setupEnv({ replies: [] });
+  const token = await signIn(env);
+  const video = await upload(env, token, { type: 'video/mp4', name: 'ad.mp4', bytes: new Uint8Array(20).fill(7) });
+  const results = [];
+  env.AI_CLIENT = fakeAI({ replies: [
+    { stop: 'tool_use', content: tool('edit_video', { op: 'smart_edit', files: [], tool: 'rea', brief: 'איך עשו את זה?' }) },
+    { stop: 'tool_use', content: tool('edit_video', { op: 'smart_edit', files: [video.data.id], tool: 'rea', brief: 'איך עשו את זה?' }) },
+    { content: text('אפרק את הסרטון') },
+  ] }, results);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'איך עשו את הסרטון הזה?', files: [video.data.id], to: 'editor' }, token);
+  await env.team.alarm();
+  let card = (await call(env, '/app/conv', { id: conv.id }, token)).data.messages[1].renders[0];
+  assert.equal(card.status, 'proposed');
+  assert.equal(card.tool, 'rea-video – פירוק סרטון');
+  assert.equal(card.report, true);
+  assert.equal(card.files, 1);
+
+  assert.equal((await call(env, '/app/render/approve', { id: card.id }, token)).status, 200);
+  const gh = (path, init = {}) => worker.fetch(new Request(`${API}${path}`, { ...init, headers: { authorization: `Bearer ${GH}`, ...(init.headers || {}) } }), env);
+  const html = new TextEncoder().encode('<!doctype html><html dir="rtl"><body>דוח</body></html>');
+  assert.equal((await gh(`/render/result?id=${card.id}&usd=2&type=html`, { method: 'PUT', body: html, duplex: 'half' })).status, 200);
+  card = (await call(env, '/app/conv', { id: conv.id }, token)).data.messages[1].renders[0];
+  assert.equal(card.status, 'done');
+  assert.equal(card.file.kind, 'doc');
+  assert.match(card.file.name, /\.html$/);
+  const page = await worker.fetch(new Request(card.file.url.startsWith('http') ? card.file.url : `${API}${card.file.url}`), env);
+  assert.match(page.headers.get('content-security-policy') || '', /sandbox/);
+});
+
 test('smart edit: only a proposal until the owner approves; cost recorded; daily cap', async () => {
   const { env, outside } = setupEnv({ replies: [] }, { DAILY_SMART: '1' });
   const token = await signIn(env);

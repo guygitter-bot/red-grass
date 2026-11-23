@@ -64,7 +64,11 @@ starts removed, word-timed captions, zooms, sound effects, B-roll) – tool "gho
 out of a long video (podcast, lecture, live) with animated captions – tool "shorts"; precise technical work (trim, \
 join, reframe to 9:16, speed, silence removal, subtitles, loudness, platform export) – tool "ffmpeg"; a whole new video \
 from an idea, even with no uploads (explainer, product video, trailer: research, script, free archive / stock footage, \
-narration, music, captions, render) – tool "montage" (the OpenMontage studio, free sources only); or "auto". \
+narration, music, captions, render) – tool "montage" (the OpenMontage studio, free sources only); a breakdown of an \
+existing video instead of an edit ("how was this made?", "reverse engineer this", "פרק לי את הסרטון", "איך עשו את \
+זה?", "אני רוצה לעשות כזה"): shot by shot – filmed / AI / 3D / animation / screen recording, captions, music and \
+sound, cuts, lighting – and how to make one like it; the result is a Hebrew report page, not a video – tool "rea" \
+(rea-video; one video file); or "auto". \
 Write the brief in detail from what the owner asked (style, length, captions language – Hebrew by default, what \
 to keep). It costs a few dollars, so it is only a proposal: the owner approves it with a button. The owner can \
 describe what they want without knowing editing terms – you pick the tool.
@@ -387,7 +391,7 @@ const EDIT_VIDEO = {
       lines: { type: 'array', items: { type: 'string' }, description: 'One line per scene, "main | sub" (motion_graphics)' },
       format: { type: 'string', enum: ['9:16', '16:9', '1:1'], description: 'Output shape (motion_graphics, beats_and_cuts, animation)' },
       seconds: { type: 'number', description: 'Target length in seconds (before_after, hand_drawn, beats_and_cuts, smart_edit; animation: 2-60, default 10)' },
-      tool: { type: 'string', enum: ['auto', 'ghost-editor', 'shorts', 'ffmpeg', 'montage'], description: 'smart_edit: which skill (auto = the editor picks; montage = a whole new video from an idea, files optional)' },
+      tool: { type: 'string', enum: ['auto', 'ghost-editor', 'shorts', 'ffmpeg', 'montage', 'rea'], description: 'smart_edit: which skill (auto = the editor picks; montage = a whole new video from an idea, files optional; rea = a breakdown report of one video, not an edit)' },
       brief: { type: 'string', description: 'smart_edit: the full brief in the owner\'s words – what the finished video should be, style, length, captions language, what to keep or cut' },
     },
     required: ['op', 'files'],

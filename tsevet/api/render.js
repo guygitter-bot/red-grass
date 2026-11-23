@@ -18,7 +18,8 @@ const SMART_STALE_MS = 100 * 60 * 1000;
 export const SMART_MAX_USD = 12;
 export const dailySmart = (env) => Number(env.DAILY_SMART) || 3;
 // montage = OpenMontage (calesthio/OpenMontage, AGPLv3, רץ רק ב-Actions): סרטון שלם מרעיון, גם בלי קבצים, רק ממקורות חינמיים
-export const SMART_TOOLS = { auto: 'הכי מתאים', 'ghost-editor': 'Ghost Editor', shorts: 'Claude Shorts', ffmpeg: 'FFmpeg', montage: 'OpenMontage – אולפן' };
+// rea = rea-video (JuneYaooo/rea-video, Apache-2.0, רץ רק ב-Actions): לא עורך – מפרק סרטון ומחזיר דוח HTML (איך כל שוט צולם / נוצר, ואיך לעשות דומה)
+export const SMART_TOOLS = { auto: 'הכי מתאים', 'ghost-editor': 'Ghost Editor', shorts: 'Claude Shorts', ffmpeg: 'FFmpeg', montage: 'OpenMontage – אולפן', rea: 'rea-video – פירוק סרטון' };
 const OPS = {
   color_grade: { min: 1, max: 1, kinds: ['video'] },
   before_after: { min: 1, max: 2, kinds: ['video'] },
@@ -81,6 +82,11 @@ export async function startRender(t, job, input, started) {
   const min = input.op === 'smart_edit' && input.tool === 'montage' ? 0 : spec.min;
   if (inputs.length < min) return `${input.op} needs at least ${spec.min} file(s). Ask the owner to upload.`;
   if (inputs.length > spec.max) return `${input.op} takes at most ${spec.max} file(s).`;
+  // rea-video מפרק סרטון אחד
+  if (input.op === 'smart_edit' && input.tool === 'rea') {
+    if (inputs.length !== 1) return 'tool "rea" breaks down exactly one video: pass one video file.';
+    if ((await storage.get(`f:${inputs[0]}`)).kind !== 'video') return 'tool "rea" needs a video file, not a photo.';
+  }
   let music = null;
   if (input.music) {
     const m = await storage.get(`f:${String(input.music)}`);
@@ -96,6 +102,7 @@ export async function startRender(t, job, input, started) {
   await storage.put(`r:${rec.id}`, rec);
   if (spec.smart) {
     started.push(rec.id);
+    if (params.tool === 'rea') return `The breakdown proposal is shown to the owner with an approve button and its cost (a few dollars, at most $${SMART_MAX_USD}). Nothing runs until they approve; then it takes 10-40 minutes and the report page appears in the chat by itself. Say briefly what the report will cover; do not propose it again.`;
     return `The smart edit proposal is shown to the owner with an approve button and its cost (a few dollars, at most $${SMART_MAX_USD}). Nothing runs or is charged until they approve; then it takes 10-40 minutes and the video appears in the chat by itself. Say briefly what you planned; do not propose the same edit again.`;
   }
   return dispatch(t, rec, 'tsevet-render', started);
@@ -126,6 +133,8 @@ export async function renderView(t, id, origin) {
   if (!r) return null;
   const out = { id: r.id, op: r.op, label: OP_LABELS[r.op] || r.op, status: r.status, at: r.at };
   if (r.op === 'smart_edit') Object.assign(out, { tool: SMART_TOOLS[r.params?.tool] || SMART_TOOLS.auto, brief: r.params?.brief || '', files: r.inputs.length, maxUsd: SMART_MAX_USD, usd: r.usd || 0 });
+  // פירוק סרטון (rea-video): התוצאה דוח ולא סרטון
+  if (r.op === 'smart_edit' && r.params?.tool === 'rea') Object.assign(out, { label: 'פירוק סרטון', report: true });
   if (r.status === 'queued' && Date.now() - r.at > (r.op === 'smart_edit' ? SMART_STALE_MS : STALE_MS)) return { ...out, status: 'failed', error: 'העריכה לקחה יותר מדי זמן. אפשר לבקש שוב.' };
   if (r.status === 'failed') out.error = r.error || 'העריכה לא הצליחה. אפשר לבקש שוב.';
   if (r.status === 'done' && r.file) out.file = await fileView(t.storage, origin, await t.storage.get(`f:${r.file}`));
@@ -163,10 +172,13 @@ export async function renderInput(storage, id, n) {
 // usd = מה שעלתה עריכה חכמה (Claude Code), נרשם במסך העלויות של עורך הווידאו
 const costOf = (usd) => Math.min(Math.max(Number(usd) || 0, 0), 100);
 
-export async function renderDone(t, id, file, usd) {
+// html = דוח פירוק (rea-video) במקום סרטון – נשמר כקובץ מסמך שמוצג בתצוגה מקדימה (sandbox)
+export async function renderDone(t, id, file, usd, html = false) {
   const { storage } = t;
   const r = await queued(storage, id);
-  const rec = await addFile(storage, { id: file.id, kind: 'video', name: `${r.op}.mp4`, type: 'video/mp4', size: file.size, conv: 'render' });
+  const rec = html
+    ? await addFile(storage, { id: file.id, kind: 'doc', name: 'פירוק-סרטון.html', type: 'text/html; charset=utf-8', size: file.size, conv: 'render' })
+    : await addFile(storage, { id: file.id, kind: 'video', name: `${r.op}.mp4`, type: 'video/mp4', size: file.size, conv: 'render' });
   await storage.put(`r:${r.id}`, { ...r, status: 'done', file: rec.id, doneAt: Date.now(), usd: costOf(usd) });
   if (r.op === 'smart_edit') await t.addUsd(costOf(usd), 'editor', { smartEdits: 1, smartUsd: costOf(usd) });
   return { ok: true };

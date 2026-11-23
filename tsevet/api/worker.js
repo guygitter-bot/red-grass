@@ -199,8 +199,10 @@ async function render(request, env, url) {
   }
   if (route === 'PUT /render/result') {
     const fileId = newId(16);
-    const obj = await env.FILES.put(`files/${fileId}`, request.body, { httpMetadata: { contentType: 'video/mp4' } });
-    const r = obj.size ? await call(env, '/internal/render-done', { id, file: { id: fileId, size: obj.size }, usd: url.searchParams.get('usd') }) : { status: 400, data: { error: 'empty' } };
+    // ?type=html – דוח פירוק סרטון (rea-video) במקום סרטון
+    const html = url.searchParams.get('type') === 'html';
+    const obj = await env.FILES.put(`files/${fileId}`, request.body, { httpMetadata: { contentType: html ? 'text/html; charset=utf-8' : 'video/mp4' } });
+    const r = obj.size ? await call(env, '/internal/render-done', { id, file: { id: fileId, size: obj.size }, usd: url.searchParams.get('usd'), html }) : { status: 400, data: { error: 'empty' } };
     if (r.status !== 200) await env.FILES.delete(`files/${fileId}`);
     return json(r.status, r.data);
   }

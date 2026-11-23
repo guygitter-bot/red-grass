@@ -67,7 +67,9 @@ export function RenderCard({ render }) {
           <Spinner />
           <div>
             <div className="font-medium">{render.label}</div>
-            <div className="text-xs text-muted">{smart ? 'עורך… עריכה חכמה לוקחת 10-40 דקות, והסרטון יופיע כאן לבד' : 'עורך… זה לוקח כמה דקות'}</div>
+            <div className="text-xs text-muted">
+              {render.report ? 'מפרק… זה לוקח 10-40 דקות, והדוח יופיע כאן לבד' : smart ? 'עורך… עריכה חכמה לוקחת 10-40 דקות, והסרטון יופיע כאן לבד' : 'עורך… זה לוקח כמה דקות'}
+            </div>
           </div>
         </div>
       )}
@@ -124,7 +126,7 @@ function SmartPlan({ render }) {
       {render.status === 'proposed' && (
         <div className="mt-3">
           <p className="mb-2 text-xs text-muted">
-            Claude Code עורך את הסרטון ברקע. עולה בערך 3-10 דולר (לכל היותר {render.maxUsd}$), לפי האורך. שום דבר לא מתחיל בלי אישור.
+            {render.report ? 'Claude Code מפרק את הסרטון ברקע: איך כל שוט צולם או נוצר, ואיך לעשות דומה.' : 'Claude Code עורך את הסרטון ברקע.'} עולה בערך 3-10 דולר (לכל היותר {render.maxUsd}$), לפי האורך. שום דבר לא מתחיל בלי אישור.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button disabled={busy} onClick={() => act('/app/render/approve')}>
