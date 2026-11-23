@@ -337,7 +337,7 @@ function makeQuad(rng) {
     let pts = [[0, p], [0, 0], [q, 0], [x, y]];
     const d = quadAngles(pts);
     const acute = [d[0], d[2]].sort((a, b) => a - b);
-    if (Math.abs(d[1] - 90) > 1e-6 || d[3] < 100 || acute[0] < 25 || acute[1] - acute[0] < 15) continue;
+    if (Math.abs(d[1] - 90) > 1e-6 || d[3] < 100 || d[3] > 150 || acute[0] < 25 || acute[1] - acute[0] < 15) continue;
     // סיבוב ושיקוף על הרשת, כדי שהצורה לא תהיה תמיד באותו כיוון
     for (let r = rng.int(0, 3); r > 0; r--) pts = pts.map(([a, b]) => [-b, a]);
     if (rng.chance(0.5)) pts = pts.map(([a, b]) => [-a, b]);
