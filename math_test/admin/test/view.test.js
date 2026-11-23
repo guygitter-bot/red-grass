@@ -26,7 +26,7 @@ test('הכרטיס מראה מצב, ניסיונות ושאלות קשות', () 
   const html = kidHtml(kid);
   assert.ok(html.includes('עבר 80% אחרי 2 ניסיונות'));
   assert.ok(html.includes('עוד לא הגיע ל-80%'));
-  assert.ok(html.includes('עבר 80% ב-1 מתוך 18 נושאים'));
+  assert.ok(html.includes('עבר 80% ב-1 מתוך 19 נושאים'));
   assert.ok(html.includes('47 : 5'));
   assert.ok(html.includes('9/10'));
   assert.ok(html.includes('המבחן המסכם עוד לא נעשה'));

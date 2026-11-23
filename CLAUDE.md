@@ -243,7 +243,7 @@
 - בדיקה: `cd english_words/api && npm test` · `cd english_words/web && npm test` · `cd english_words/admin && npm test`. טלפון + מחשב + מצב לילה.
 
 ### חשבון לכיתה ד' (`math_test/`)
-- תיאור: `math_test/README.md`. תרגול למבחן בחשבון לפי 18 נושאי המורה (סדרות עד שברים, גיאומטריה ודיאגרמות): סיבוב של 10 שאלות, 80% לעבור, הסבר אחרי טעות, פתיחה הדרגתית בכל פרק ומבחן מסכם של 20 שאלות.
+- תיאור: `math_test/README.md`. תרגול למבחן בחשבון לפי 18 נושאי המורה (+ נושא 19, `teacher_sheet`, עם שאלות הדף שהמורה שלחה; המבחן המסכם בנוי לפי הדף, 34 שאלות בסדר קבוע – `gen/sheet.js`) (סדרות עד שברים, גיאומטריה ודיאגרמות): סיבוב של 10 שאלות, 80% לעבור, הסבר אחרי טעות, פתיחה הדרגתית בכל פרק ומבחן מסכם של 20 שאלות.
 - `math_test/web/public` (HTML+JS בלי בנייה) → https://cheshbon-dalet.pages.dev · ניהול להורים `admin/public` → Pages `cheshbon-admin` · שרת `api` → Worker `cheshbon-api`. עלייה: `cheshbon.yml` אחרי מיזוג ל-main.
 - בדיקה: `cd math_test/api && npm test` · `cd math_test/web && npm test` · `cd math_test/admin && npm test`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 - השאלות במחוללים טהורים ב-`web/public/gen/` (קובץ לכל פרק) עם ציורי SVG ב-`svg.js`; הרשימה ב-`web/public/topics.js`. סוג תרגול חדש – להוסיף גם ל-`MODES` בשרת (`api/stats.js`) ול-`STAGES` בניהול (`admin/public/view.js`).

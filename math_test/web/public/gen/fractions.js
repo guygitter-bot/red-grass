@@ -1,6 +1,6 @@
 // שברים פשוטים (נושאים 9-11)
-import { mc, numQ, F, cmpFrac, DEN } from './common.js';
-import { pieSvg, barsSvg, squaresSvg } from '../svg.js';
+import { mc, numQ, F, cmpFrac, DEN, NAMES, v, twoNames } from './common.js';
+import { pieSvg, barsSvg, squaresSvg, gridCellsSvg } from '../svg.js';
 
 const HALF = [1, 2];
 // כל השברים הפשוטים (קטנים מ-1) במכנים שבנושא
@@ -160,8 +160,91 @@ function wholeComplement(rng) {
   return mc(rng, { kind: 'whole', meta: { p, d, complement: true }, ...base }, ans, cands);
 }
 
+
+// ---------- דף התרגול של המורה ----------
+// "X אומרת ש-3/4 עוגה זה פחות מ-4/4 של אותה עוגה. האם היא צודקת?" – לפעמים הטענה נכונה ולפעמים לא
+function fracClaim(rng) {
+  const d = rng.pick([4, 5, 6, 8, 10, 12]);
+  let p, q;
+  do { p = rng.int(1, d); q = rng.int(1, d); } while (p === q);
+  const less = rng.chance(0.5);
+  const truth = less ? p < q : p > q;
+  const who = rng.pick(NAMES);
+  const lo = Math.min(p, q), hi = Math.max(p, q);
+  const yes = truth ? 'כן' : 'לא', no = truth ? 'לא' : 'כן';
+  const good = `בשני השברים החלקים שווים, ו-${hi} חלקים הם יותר מ-${lo} חלקים`;
+  const options = [`${yes}, כי ${good}.`, `${yes}, כי המכנה זהה, ולכן השברים שווים.`, `${no}, כי ${lo} חלקים הם יותר מ-${hi} חלקים.`, `${no}, כי ${good}.`];
+  return mc(rng, {
+    kind: 'frac-claim', meta: { p, q, d, less, truth },
+    text: `${who.n} ${v(who, 'אומר', 'אומרת')} ש-${F(p, d)} עוגה זה ${less ? 'פחות' : 'יותר'} מ-${F(q, d)} של אותה עוגה. האם ${v(who, 'הוא צודק', 'היא צודקת')}?`,
+    explain: `המכנה זהה, ולכן משווים את המונים: ${F(lo, d)} קטן מ-${F(hi, d)}. ${F(p, d)} ${p < q ? 'קטן' : 'גדול'} מ-${F(q, d)}, ולכן ${truth ? 'הטענה נכונה' : 'הטענה לא נכונה'}.`,
+  }, options[0], options.slice(1));
+}
+
+// איזה שבר שווה לשבר נתון (מסיחים קרובים: אותו מונה ומכנה סמוך וכו')
+function fracEqual(rng) {
+  for (;;) {
+    const ref = rng.pick([[1, 2], [1, 2], [1, 3], [2, 3], [1, 4], [3, 4], [1, 5]]);
+    const ks = [2, 3, 4, 5, 6].filter((k) => ref[1] * k <= 12);
+    if (!ks.length) continue;
+    const k = rng.pick(ks);
+    const ans = [ref[0] * k, ref[1] * k];
+    const ok = (f) => f[0] >= 1 && f[0] < f[1] && cmpFrac(f, ref) !== 0;
+    const near = [[ans[0], ans[1] - 1], [ans[0], ans[1] + 1], [ans[0] + 1, ans[1]], [ans[0] - 1, ans[1]], [ans[0] + 1, ans[1] + 1]].filter(ok);
+    const seen = new Set([str(ans)]);
+    const others = [];
+    for (const f of [...rng.shuffle(near), ...rng.shuffle(ALL.filter(ok))]) {
+      if (others.length < 3 && !seen.has(str(f))) { seen.add(str(f)); others.push(f); }
+    }
+    return mc(rng, { kind: 'frac', meta: { fracs: [ans, ...others], op: 'eq', ref }, text: `איזה שבר שווה ל-${str(ref)}?`, explain: `${str(ref)} = ${str(ans)}, כי מכפילים את המונה ואת המכנה ב-${k}: ${ref[0]} × ${k} = ${ans[0]} ו-${ref[1]} × ${k} = ${ans[1]}.` }, str(ans), values(others));
+  }
+}
+
+// זמן הליכה: דקות מול חלק משעה
+const HOURS = [[1, 2, 30], [1, 4, 15], [3, 4, 45]];
+const walk = (p) => v(p, 'הולך', 'הולכת');
+function timePair(rng, equal) {
+  const [n, d, mins] = rng.pick(HOURS);
+  const m = equal ? mins : rng.pick([10, 15, 20, 25, 30, 35, 40, 45, 50, 60].filter((x) => x !== mins));
+  const [a, b] = twoNames(rng);
+  return { a, b, n, d, mins, m };
+}
+function timeWho(rng) {
+  const equal = rng.chance(0.25);
+  const { a, b, n, d, mins, m } = timePair(rng, equal);
+  const SAME = 'שניהם הולכים אותו זמן', UNK = 'אי אפשר לדעת';
+  const ans = equal ? SAME : m > mins ? a.n : b.n;
+  const dist = equal ? [a.n, b.n, UNK] : [ans === a.n ? b.n : a.n, SAME, UNK];
+  return mc(rng, { kind: 'time', meta: { m, mins }, text: `${a.n} ${walk(a)} ${m} דקות. ${b.n} ${walk(b)} ${F(n, d)} שעה. מי הולך זמן רב יותר?`, explain: `שעה היא 60 דקות, ולכן ${F(n, d)} שעה הם 60 : ${d} × ${n} = ${mins} דקות. משווים ${m} דקות ל-${mins} דקות: ${equal ? 'זה אותו זמן' : `${ans} ${walk(ans === a.n ? a : b)} יותר זמן`}.` }, ans, dist);
+}
+function timeDiff(rng) {
+  const { a, b, n, d, mins, m } = timePair(rng, false);
+  const longer = m > mins ? a : b;
+  const diff = Math.abs(m - mins);
+  return numQ(rng, { kind: 'time', meta: { m, mins }, text: `${a.n} ${walk(a)} ${m} דקות. ${b.n} ${walk(b)} ${F(n, d)} שעה. בכמה דקות יותר ${walk(longer)} ${longer.n}?`, explain: `${F(n, d)} שעה = ${mins} דקות (שעה היא 60 דקות). ההפרש: ${Math.max(m, mins)} − ${Math.min(m, mins)} = ${diff} דקות.` }, diff, [m + mins, m, mins, diff + 10, diff + 5], 0.5);
+}
+
+// צורת L אפורה היא 1/k מהצורה השלמה: כמה משבצות בשלמה?
+function wholeLShape(rng) {
+  for (;;) {
+    const w = rng.int(3, 5), h = rng.int(2, 4), cw = rng.int(1, w - 1), ch = rng.int(1, h - 1);
+    const fx = rng.chance(0.5), fy = rng.chance(0.5);
+    const cells = [];
+    for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) {
+      if ((fx ? x >= w - cw : x < cw) && (fy ? y >= h - ch : y < ch)) continue;
+      cells.push([x, y]);
+    }
+    const N = cells.length;
+    if (N < 5 || N > 12) continue;
+    const k = rng.pick([2, 3, 4, 5]);
+    return numQ(rng, { kind: 'whole', meta: { p: 1, d: k, part: N }, svg: gridCellsSvg(cells), text: `הצורה האפורה היא ${F(1, k)} מהצורה השלמה. כמה משבצות יש בצורה השלמה?`, explain: `סופרים את המשבצות האפורות: ${N}. זה ${F(1, k)} מהשלם, ולכן השלם הוא ${N} × ${k} = ${N * k} משבצות.` }, N * k, [N + k, N * (k - 1), N, N * k + k], 0.5);
+  }
+}
+
+export const sheetFractions = { fracClaim, fracEqual, timeWho, timeDiff, wholeLShape };
+
 export const fractionGens = {
-  compare_frac: [sameDenominator, sameNumerator, versusHalf, barsCompare, orderThree],
+  compare_frac: [sameDenominator, sameNumerator, versusHalf, barsCompare, orderThree, fracClaim, fracEqual],
   bigger_smaller: [biggerSmaller],
-  whole_from_part: [wholeSquares, wholeWord, wholeComplement],
+  whole_from_part: [wholeSquares, wholeWord, wholeComplement, wholeLShape, timeWho, timeDiff],
 };

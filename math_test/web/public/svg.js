@@ -84,7 +84,7 @@ export function squaresSvg(count, cols = 6) {
 
 // ---- סרגל ----
 // סרגל באורך lenCm עם סימוני מ"מ; פס מ-fromMm עד toMm (במ"מ)
-export function rulerSvg(lenCm, fromMm, toMm) {
+export function rulerSvg(lenCm, fromMm, toMm, pencil = false) {
   const pad = 20, u = 40, w = pad * 2 + lenCm * u, mm = u / 10;
   let out = rect(pad, 44, lenCm * u, 40, { fill: COL.soft });
   for (let i = 0; i <= lenCm * 10; i++) {
@@ -92,7 +92,15 @@ export function rulerSvg(lenCm, fromMm, toMm) {
     out += line(x, 44, x, 44 + len, { width: i % 10 === 0 ? 1.8 : 1 });
     if (i % 10 === 0) out += txt(x, 78, String(i / 10), { size: 14, weight: 700 });
   }
-  out += rect(pad + fromMm * mm, 12, (toMm - fromMm) * mm, 18, { fill: COL.b });
+  if (pencil) {
+    // עיפרון: גוף, מחק בהתחלה וחוד בסוף (האורך כולו מ-fromMm עד toMm)
+    const x0 = pad + fromMm * mm, x1 = pad + toMm * mm, tip = 14;
+    out += rect(x0 + 8, 12, x1 - x0 - 8 - tip, 18, { fill: COL.b });
+    out += rect(x0, 12, 8, 18, { fill: COL.d });
+    out += poly([[x1 - tip, 12], [x1, 21], [x1 - tip, 30]], { fill: COL.soft, width: 1.5 });
+  } else {
+    out += rect(pad + fromMm * mm, 12, (toMm - fromMm) * mm, 18, { fill: COL.b });
+  }
   out += line(pad + fromMm * mm, 8, pad + fromMm * mm, 44, { dash: '3 3', width: 1 }) + line(pad + toMm * mm, 8, pad + toMm * mm, 44, { dash: '3 3', width: 1 });
   return svg(w, 92, out, 'סרגל ופס שמודדים');
 }
@@ -156,4 +164,44 @@ export function pictogramSvg({ title, cats, vals, per, unit }) {
   });
   out += circle(W - 90, H - 16, 8, { fill: COL.ink }) + txt(W - 104, H - 11, `= ${per} ${unit}`, { anchor: 'end', size: 14 });
   return svg(W, H, out, `פיקטוגרמה: ${title}`);
+}
+
+// ---- ציר מספרים: count סימונים כל step מ-from, והקטע בין סימון k לסימון k+1 מושחר ----
+export function numberLineSvg(from, step, count, k) {
+  const L = 28, gap = 60, y = 40, w = L * 2 + gap * (count - 1);
+  let out = rect(L + gap * k, y - 8, gap, 16, { fill: COL.b, stroke: 'none', width: 0 });
+  out += line(L - 10, y, w - L + 10, y, { width: 2 });
+  for (let i = 0; i < count; i++) {
+    const x = L + gap * i;
+    out += line(x, y - 10, x, y + 10, { width: 2 }) + txt(x, y + 30, String(from + i * step), { size: 13, weight: 700 });
+  }
+  return svg(w, 76, out, 'ציר מספרים עם קטע מושחר');
+}
+
+// ---- משבצות אפורות (צורה שנבנתה ממשבצות יחידה) ----
+export function gridCellsSvg(cells, S = 28) {
+  const W = Math.max(...cells.map((c) => c[0])) + 1, H = Math.max(...cells.map((c) => c[1])) + 1;
+  let out = '';
+  for (const [x, y] of cells) out += rect(10 + x * S, 10 + y * S, S, S, { fill: 'var(--svggray, #9ca3af)', stroke: 'var(--card, #fff)', width: 1.5 });
+  return svg(20 + W * S, 20 + H * S, out, 'צורה אפורה על משבצות');
+}
+
+// קווי רשת (path אחד) על שטח של cols×rows משבצות שמתחיל ב-(x0,y0)
+export function gridLines(x0, y0, cols, rows, S) {
+  let d = '';
+  for (let i = 0; i <= cols; i++) d += `M${r1(x0 + i * S)},${r1(y0)}V${r1(y0 + rows * S)}`;
+  for (let j = 0; j <= rows; j++) d += `M${r1(x0)},${r1(y0 + j * S)}H${r1(x0 + cols * S)}`;
+  return `<path d="${d}" fill="none" stroke="${COL.ink}" stroke-opacity="0.3" stroke-width="1"/>`;
+}
+
+// ---- מלבן על רשת משבצות של 1 ס"מ, עם סימון "1 ס"מ" ----
+export function gridRectSvg(w, h) {
+  const S = 26, pad = 10, top = 30;
+  const gw = w + 2, gh = h + 2;
+  let out = gridLines(pad, top, gw, gh, S);
+  out += rect(pad + S, top + S, w * S, h * S, { fill: 'none', stroke: COL.a, width: 4 });
+  // סימון אורך משבצת אחת
+  out += line(pad, 16, pad + S, 16, { width: 2 }) + line(pad, 11, pad, 21, { width: 2 }) + line(pad + S, 11, pad + S, 21, { width: 2 });
+  out += txt(pad + S + 8, 21, '1 ס"מ', { anchor: 'start', size: 13, weight: 700 });
+  return svg(pad * 2 + gw * S, top + gh * S + pad, out, 'מלבן על רשת משבצות');
 }
