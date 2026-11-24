@@ -1702,3 +1702,47 @@ test('social: without a connection the bot is told to write the post ready to co
   assert.ok(aiCalls[0].tools.some((x) => x.name === 'propose_post'));
   assert.match(JSON.stringify(aiCalls[1].messages.at(-1)), /not connected yet/);
 });
+
+test('ElevenLabs voice-over and music: only after approval, the result is an audio file in the chat', async () => {
+  const calls = [];
+  const FETCH = async (url, init = {}) => {
+    if (url.startsWith('https://api.elevenlabs.io')) {
+      calls.push({ url, body: init.body ? JSON.parse(init.body) : null, key: init.headers?.['xi-api-key'] });
+      if (url.includes('/v1/music')) return new Response('{"detail":"quota exceeded"}', { status: 402 });
+      return new Response(new Uint8Array([73, 68, 51, 4, 0, 0]), { headers: { 'content-type': 'audio/mpeg' } });
+    }
+    return new Response(JSON.stringify({ ok: true }));
+  };
+  const { env } = setupEnv({ replies: [] }, { ELEVENLABS_API_KEY: 'el-key', FETCH });
+  const token = await signIn(env);
+  env.AI_CLIENT = fakeAI({ replies: [
+    { stop: 'tool_use', content: tool('make_audio', { kind: 'voice', text: 'שלום, ברוכים הבאים!', summary: 'קריינות פתיחה' }) },
+    { stop: 'tool_use', content: [{ type: 'tool_use', id: 't_m', name: 'make_audio', input: { kind: 'music', text: 'upbeat modern pop, light drums', seconds: 500, summary: 'מוזיקת רקע' } }] },
+    { content: text('הכנתי שתי הצעות') },
+  ] }, []);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'קריינות ומוזיקה לסרטון', to: 'editor' }, token);
+  await env.team.alarm();
+  assert.equal(calls.length, 0);
+  const cards = async () => (await call(env, '/app/conv', { id: conv.id }, token)).data.messages.at(-1).audios;
+  let [voice, music] = await cards();
+  assert.equal(voice.status, 'proposed');
+  assert.equal(music.seconds, 180);
+
+  assert.equal((await call(env, '/app/audio/approve', { id: voice.id }, token)).status, 200);
+  await env.team.alarm();
+  [voice] = await cards();
+  assert.equal(voice.status, 'done');
+  assert.equal(voice.file.kind, 'audio');
+  assert.match(calls[0].url, /\/v1\/text-to-speech\/6WRlPmU1fqPwYbSxeP16/);
+  assert.equal(calls[0].body.text, 'שלום, ברוכים הבאים!');
+  assert.equal(calls[0].key, 'el-key');
+
+  // מוזיקה: נגמרו הקרדיטים – הודעה ברורה, ואפשר לנסות שוב
+  await call(env, '/app/audio/approve', { id: music.id }, token);
+  await env.team.alarm();
+  [, music] = await cards();
+  assert.equal(music.status, 'failed');
+  assert.match(music.error, /קרדיטים/);
+  assert.equal(calls.find((c) => c.url.includes('/v1/music')).body.music_length_ms, 180000);
+});

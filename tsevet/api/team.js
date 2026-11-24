@@ -28,6 +28,7 @@ import { genDone, genFail, genReady, genStart, proposeClip, runGenJob } from './
 import { CREATORS, FILE_MAKERS, imagesReady, makeFile, proposeImage } from './create.js';
 import { proposeSite, siteDone, siteFail, siteInput, siteJob } from './sites.js';
 import { finishMeta, proposePost, runSocial, socialAccounts } from './meta.js';
+import { AUDIO_MAKERS, audioReady, audioVoices, proposeAudio, runAudio } from './audio.js';
 import { designSkills } from './design.js';
 import { FIND_SKILLS } from './findskills.js';
 import { DEFAULT_BUDGET, isDue, nextOf } from './schedule.js';
@@ -405,6 +406,8 @@ export class Team {
     if (await runGenJob(this)) return;
     await this.runSchedules();
     // פוסטים מאושרים: מה שהגיע זמנו מתפרסם, וריל באינסטגרם נבדק עד שמוכן (meta.js)
+    // קריינות / מוזיקה מ-ElevenLabs שאושרו (audio.js)
+    await runAudio(this).catch((e) => console.error('audio', e));
     await this.storage.put('social:next', await runSocial(this).catch((e) => {
       console.error('social', e);
       return Date.now() + 60_000;
@@ -476,6 +479,7 @@ export class Team {
     const imgs = [];
     const sites = [];
     const posts = [];
+    const audios = [];
     const maagar = Boolean(this.env.MAAGAR);
     // סקילים מ-GitHub: מה שנמצא בחיפוש (רק אותו אפשר לקרוא), ומה שנקרא אחרון (מקור הסקיל שיישמר)
     const githubFound = new Map();
@@ -518,6 +522,8 @@ export class Team {
       // קבצים ותמונות (רק קריאייטיב והמתכנת; התמונה רק באישור – create.js)
       make_file: (input) => makeFile(this, input, made),
       make_image: (input) => (CREATORS.includes(job.target) ? proposeImage(this, job, input, imgs) : 'Not available for you.'),
+      make_audio: (input) => (AUDIO_MAKERS.includes(job.target) ? proposeAudio(this, job, input, audios) : 'Not available for you.'),
+      audio_voices: () => (AUDIO_MAKERS.includes(job.target) ? audioVoices(this) : 'Not available for you.'),
       social_accounts: () => (job.target === 'social' ? socialAccounts(this) : 'Not available for you.'),
       propose_post: (input) => (job.target === 'social' ? proposePost(this, job, input, posts) : 'Not available for you.'),
       publish_page: (input) => (CREATORS.includes(job.target) ? proposeSite(this, job, input, sites) : 'Not available for you.'),
@@ -603,6 +609,7 @@ export class Team {
         code: app && devReady(this.env),
         create: app && FILE_MAKERS.includes(agent) && Boolean(this.env.FILES),
         imageGen: app && imagesReady(this.env),
+        audio: app && AUDIO_MAKERS.includes(agent) && audioReady(this.env),
         extra: [
           agent === 'coder' && app && devReady(this.env) ? `The apps (folders in the repository):\n${appsText(await appsOf(this))}` : '',
           app && agent === 'creative' ? CODE_WORD_NOTE : '',
@@ -642,6 +649,7 @@ export class Team {
         ...(imgs.length ? { images: imgs.splice(0) } : {}),
         ...(sites.length ? { sites: sites.splice(0) } : {}),
         ...(posts.length ? { posts: posts.splice(0) } : {}),
+        ...(audios.length ? { audios: audios.splice(0) } : {}),
         ...(proposed.length ? { skillsProposed: proposed.splice(0) } : {}),
         at: Date.now(),
       });
