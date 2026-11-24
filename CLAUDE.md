@@ -179,6 +179,13 @@
 - בדיקה: `cd harochshim/api && npm test` · `cd harochshim/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 - ספק לא נמחק – רק "מורד מהרשימה" (`active: false`). ספק רואה רק את הלידים שלו (נבדק בשרת). צבעי הלוגו ב-`web/src/index.css`.
 
+### פרומפטיקה – אפיון והצעות מחיר ללקוחות (`promptika/`)
+- תיאור: `promptika/README.md`. כלי פנימי לבעלים: קליטת לקוח (כלים שיש / חסרים) → Claude ממליץ על כלי AI, כותב אפיון ומעריך שעות → הקוד מחשב עלות הקמה ותחזוקה לפי ההגדרות.
+- `promptika/web` → https://promptika.pages.dev · `promptika/api` → Worker `promptika-api` (Durable Object `Studio`). עלייה: `promptika.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd promptika/api && npm test` · `cd promptika/web && npm test && npm run build`. טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- **ה-AI מחזיר רק שעות, לא כסף.** הסכומים רק ב-`web/src/lib/pricing.js` לפי ההגדרות. המאגר ציבורי – אין נתוני לקוחות בקוד, בבדיקות או בלוגים.
+- צבעי המותג: כתום, כחול-לילה, טורקיז (`web/src/index.css`).
+
 ### צוות – צוות בוטים מומחים (`tsevet/`)
 - תיאור: `tsevet/README.md`. בוטים עם תפקידים (🎨 קריאייטיב, 📊 קמפיינים, 🎬 עורך וידאו, 📚 ספרן, 📱 אינסטגרם, 🩺 הדוקטור, ⚖️ המשפטן, 👨‍💻 המתכנת, 📈 בורסאי, ✈️ טיולים, 🧭 מנהל) שמדברים ביניהם (`handoff`; המנהל מחלק משימה לשלבים עם `assign`) וחולקים זיכרון; אפליקציה משלהם, וגם Telegram.
 - `tsevet/web` → https://tsevet-ai.pages.dev · `tsevet/api` → Worker `tsevet-api` (Durable Object `Team` אחד, עבודה ברקע ב-alarm; קבצים ב-R2 `tsevet-files`). עלייה: `tsevet.yml` אחרי מיזוג ל-main.
