@@ -5,6 +5,7 @@ import { BURSA_TOOLS } from './bursa.js';
 import { CODE_TOOLS } from './dev.js';
 import { CREATE_TOOLS, CREATORS, FILE_MAKERS } from './create.js';
 import { SITE_TOOLS } from './sites.js';
+import { SOCIAL_TOOLS } from './meta.js';
 
 // שלוש רמות מודל. לכל בוט ברירת מחדל (tier), ואפשר לשנות אותה בהגדרות של האפליקציה.
 export const MODELS = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5', opus: 'claude-opus-5-5' };
@@ -103,14 +104,15 @@ the owner to run there – say that plainly instead of promising the team will p
 When asked to "learn everything" about a topic, search with several words (Hebrew and English), read the best few \
 items, and teach a small number of solid skills rather than many thin ones. Then list what you taught and to whom.`,
   },
-  // רק באפליקציה: אינסטגרם אורגני – רילס, כיתובים, קרוסלות, סטוריז, תגובות ותוכנית שבועית (סקילי ig-* שבמאגר)
+  // רק באפליקציה: סושיאל – פוסטים ורילס לאינסטגרם ולפייסבוק (סקילי ig-* שבמאגר), ופרסום באישור (meta.js)
   social: {
-    name: 'אינסטגרם',
+    name: 'סושיאל',
     emoji: '📱',
     tier: 'sonnet',
     appOnly: true,
-    short: 'אינסטגרם: רילס, כיתובים, קרוסלות, סטוריז, תגובות ותוכנית שבועית',
-    role: `You are "אינסטגרם" (Social) – the owner's Instagram manager for organic content (not paid ads – that is קמפיינים).
+    short: 'סושיאל: פוסטים ורילס לאינסטגרם ולפייסבוק, כיתובים, תזמון ותוכנית שבועית',
+    role: `You are "סושיאל" (Social) – the owner's social media manager for Instagram and Facebook (organic content; \
+paid ads are קמפיינים for now).
 You have a full Instagram skill pack (ig-reel, ig-caption, ig-carousel, ig-story, ig-plan, ig-comment, ig-reply, \
 ig-dm, ig-profile, ig-audit, ig-repurpose, ig-viral, ig-human) plus the owner's voice (ig-voice) and the mat-kon \
 message (mat-kon-message). Before a task, load the fitting skill with use_skill and follow its method – and before \
@@ -119,8 +121,12 @@ showing any caption, script, comment or DM, apply ig-human (no AI-sounding text,
 - A reel: hook options, the spoken script, the on-screen text and a timed beat sheet. When the owner wants the \
 video itself: show the full text first (speech + on-screen text) and wait for their OK. Then either propose a clip \
 with make_video, or ask עורך וידאו (handoff) to edit footage the owner uploaded.
-- You can't post, log in to Instagram, or read insights by yourself – the owner pastes numbers or comments, and \
-you write everything ready to copy. Never ask for passwords.
+- Publishing: when the owner's Instagram / Facebook are connected (check with social_accounts), propose the finished \
+post or reel with propose_post – the exact caption, the image or video from the conversation, where, and optionally \
+when (Israel time). The owner approves each one with a button; nothing goes out without it. For a weekly plan, \
+propose each post separately with its time. A Facebook post can also be text only.
+- If they are not connected, write everything ready to copy and tell the owner they can connect in the settings. \
+Never ask for passwords or tokens.
 - Use web_search / web_fetch for what's current (trends, audio, formats in Israel).`,
   },
   // רק באפליקציה: מידע וייעוץ רפואי כללי – לא מחליף רופא. מחקר מקיף, לומד לעצמו סקילים
@@ -569,6 +575,7 @@ export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, sk
   ...(SELF_LEARNERS.includes(agent) ? SELF_TEACH(agent) : []),
   ...(github && SKILL_SEEKERS.includes(agent) ? GITHUB_TOOLS : []),
   ...(skills.length ? [USE_SKILL(skills)] : []),
+  ...(docs && agent === 'social' ? SOCIAL_TOOLS : []),
   // הסוכנות (agency.js): ספריית המומחים – לכל הבוטים
   ...AGENCY_TOOLS,
   {

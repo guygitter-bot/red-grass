@@ -20,6 +20,7 @@ import { approve as approveGen, cancel as cancelGen, dailyLimit, genReady, genVi
 import { approveDev, cancelDev, devView, discardDev, mergeDev } from './dev.js';
 import { approveImage, cancelImage, dailyImages, imageView } from './create.js';
 import { approveSite, cancelSite, removeSite, siteView } from './sites.js';
+import { approvePost, cancelPost, disconnectMeta, metaStatus, postView, saveMetaApp, startMeta } from './meta.js';
 import { approveRender, cancelRender, renderView } from './render.js';
 import { approveSkill, declineSkill } from './maagar.js';
 import { BUDGETS, MAX_SCHEDULES, cleanSchedule, nextRun } from './schedule.js';
@@ -214,6 +215,12 @@ async function convView(t, id, origin) {
       if (s) sites.push(s);
       if (['publishing', 'removing'].includes(s?.status)) pending = true;
     }
+    const posts = [];
+    for (const pid of h.posts || []) {
+      const p = await postView(t, pid, origin, fileView);
+      if (p) posts.push(p);
+      if (p?.status === 'publishing') pending = true;
+    }
     const devs = [];
     // אותה בקשה בכמה הודעות (הצעה, ואז "מוכן") – הכרטיס מוצג רק בהודעה האחרונה
     const later = new Set(history.slice(i + 1).flatMap((x) => x.devs || []));
@@ -233,6 +240,7 @@ async function convView(t, id, origin) {
       ...(files.length ? { files } : {}),
       ...(renders.length ? { renders } : {}),
       ...(sites.length ? { sites } : {}),
+      ...(posts.length ? { posts } : {}),
       ...(gens.length ? { gens } : {}),
       ...(devs.length ? { devs } : {}),
       ...(images.length ? { images } : {}),
@@ -450,6 +458,19 @@ export async function handleApp(t, path, body, headers, origin) {
       return approveImage(t, body.id);
     case '/app/image/cancel':
       return cancelImage(storage, body.id);
+    // סושיאל: חיבור לפייסבוק ואינסטגרם, ופרסום רק באישור (meta.js)
+    case '/app/meta/status':
+      return metaStatus(t, origin);
+    case '/app/meta/app':
+      return saveMetaApp(t, body);
+    case '/app/meta/start':
+      return startMeta(t, origin);
+    case '/app/meta/disconnect':
+      return disconnectMeta(t);
+    case '/app/social/approve':
+      return approvePost(t, body, origin);
+    case '/app/social/cancel':
+      return cancelPost(t, body.id);
     case '/app/site/approve':
       return approveSite(t, body.id);
     case '/app/site/cancel':

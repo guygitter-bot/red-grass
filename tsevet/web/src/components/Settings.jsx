@@ -5,6 +5,7 @@ import { api, setToken } from '../lib/api';
 import { TIERS } from '../lib/agents';
 import { getTheme, setTheme } from '../lib/theme';
 import Skills from './Skills';
+import MetaSettings from './MetaSettings';
 import { currentSubscription, disablePush, enablePush, pushSupported } from '../lib/push';
 import { Button, Segmented, inputCls } from './ui';
 
@@ -268,6 +269,9 @@ export default function Settings({ team, onLogout }) {
       <Skills agents={team?.agents || []} connected={team?.maagar} />
       <Memory />
       <Notifications />
+      <Card title="פייסבוק ואינסטגרם" id="meta">
+        <MetaSettings />
+      </Card>
       <Card title="תצוגה">
         <Segmented
           value={theme}
