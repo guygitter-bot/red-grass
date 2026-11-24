@@ -136,6 +136,7 @@ export default function Client({ id }) {
                         <span>{p.tools.length} כלים</span>
                         <span>הקמה <bdi>{shekel(cost.build)}</bdi></span>
                         <span>חודשי <bdi>{shekel(cost.monthly)}</bdi></span>
+                        <a href={`#/client/${id}/proposal/${p.id}`} className="ms-auto font-bold text-turq-ink underline">לפתוח</a>
                       </div>
                       {p.understanding && <p className="mt-2 text-sm text-muted">{p.understanding}</p>}
                       {p.tools.length > 0 && (

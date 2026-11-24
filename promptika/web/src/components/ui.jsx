@@ -27,7 +27,7 @@ export function Header({ route }) {
     </a>
   );
   return (
-    <header className="sticky top-0 z-10 bg-night text-white shadow-md">
+    <header className="sticky top-0 z-10 bg-night text-white shadow-md print:hidden">
       <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3">
         <a href="#/" aria-label="פרומפטיקה – לקוחות">
           <Logo />
