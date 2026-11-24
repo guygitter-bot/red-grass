@@ -64,3 +64,66 @@ body {
   transform: translate(2px, 2px);
   box-shadow: 1px 1px 0 0 var(--color-night);
 }
+
+/* ===== הדפסה / PDF של הצעה: דף לבן, טקסט שחור, בלי כפתורי עריכה ===== */
+.avoid-break,
+.proposal-section {
+  break-inside: avoid;
+}
+.proposal-section h2 {
+  break-after: avoid;
+}
+/* בלי חיצי המספרים בשדות שעות */
+.num-edit::-webkit-outer-spin-button,
+.num-edit::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.num-edit {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+@media print {
+  @page {
+    margin: 14mm;
+  }
+  :root,
+  :root.dark,
+  .dark {
+    color-scheme: light;
+    --color-page: #fff;
+    --color-card: #fff;
+    --color-ink: #000;
+    --color-muted: #222;
+    --color-line: #888;
+    --color-soft: #fff;
+    --color-orange-ink: #000;
+    --color-turq-ink: #000;
+    --color-night: #000;
+  }
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  textarea,
+  input {
+    border: 0 !important;
+    background: transparent !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    resize: none;
+    color: #000 !important;
+    overflow: hidden;
+  }
+  textarea::placeholder {
+    color: transparent;
+  }
+  .proposal-section {
+    border-color: #888 !important;
+    border-radius: 0 !important;
+  }
+}
