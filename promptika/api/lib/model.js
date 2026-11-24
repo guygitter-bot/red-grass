@@ -28,17 +28,43 @@ export function safeSettings(s) {
   };
 }
 
-// כלי בהצעה: ה-AI מחזיר רק שעות – אין כאן שדה של כסף
+// שעות לכלי לפי שלב. הצעה ישנה (מהשלד) שמרה מספר אחד – הוא נחשב כשעות "בנייה"
+export const HOURS_MAX = 500;
+const hours = (v) => num(v, 0, 0, HOURS_MAX);
+export function safeBuildHours(b) {
+  if (typeof b === 'number' || typeof b === 'string') return { spec: 0, build: hours(b), test: 0, training: 0 };
+  b = obj(b);
+  return { spec: hours(b.spec), build: hours(b.build), test: hours(b.test), training: hours(b.training) };
+}
+const list = (v, max = 20, len = 300) => (Array.isArray(v) ? v.slice(0, max).map((x) => str(x, len)).filter(Boolean) : []);
+const score = (v) => Math.round(num(v, 3, 1, 5));
+
+// כלי בהצעה: ה-AI מחזיר רק שעות – אין כאן שדה של כסף (חוץ מהערכת עלות ה-API החודשית שבסכמה)
 export function safeTool(t) {
   t = obj(t);
   return {
     name: str(t.name, 120),
     problem: str(t.problem, 2000),
+    benefit: score(t.benefit),
+    effort: score(t.effort),
+    savedHoursPerMonth: hours(t.savedHoursPerMonth),
+    estimate: true, // חיסכון ללקוח הוא תמיד הערכה
+    input: str(t.input, 2000),
+    output: str(t.output, 2000),
+    users: str(t.users, 1000),
+    screens: list(t.screens),
+    integrations: list(t.integrations),
+    notIncluded: list(t.notIncluded),
     spec: str(t.spec, 20000),
-    buildHours: num(t.buildHours, 0, 0, 10_000),
-    monthlyHours: num(t.monthlyHours, 0, 0, 1000),
+    buildHours: safeBuildHours(t.buildHours),
+    monthlyHours: hours(t.monthlyHours),
+    apiMonthlyEstimate: num(t.apiMonthlyEstimate, 0, 0, 5000),
+    range: str(t.range, 300),
+    rangeDrivers: str(t.rangeDrivers, 1000),
   };
 }
+
+export const MAX_PROPOSALS = 50;
 
 export function safeProposal(p) {
   p = obj(p);
@@ -46,7 +72,11 @@ export function safeProposal(p) {
     id: str(p.id, 40),
     version: Math.round(num(p.version, 1, 1, 1000)),
     createdAt: num(p.createdAt, 0, 0, Number.MAX_SAFE_INTEGER),
+    understanding: str(p.understanding, 5000),
+    missingQuestions: list(p.missingQuestions, 15, 500),
     tools: (Array.isArray(p.tools) ? p.tools : []).slice(0, 30).map(safeTool),
+    timeline: (Array.isArray(p.timeline) ? p.timeline : []).slice(0, 12).map((x) => ({ stage: str(obj(x).stage, 200), duration: str(obj(x).duration, 100) })),
+    nextStep: str(p.nextStep, 1000),
     notes: str(p.notes, 5000),
   };
 }
@@ -99,7 +129,7 @@ export function safeClient(c) {
     createdAt: num(c.createdAt, 0, 0, Number.MAX_SAFE_INTEGER),
     updatedAt: num(c.updatedAt, 0, 0, Number.MAX_SAFE_INTEGER),
     intake: safeIntake(c.intake),
-    proposals: (Array.isArray(c.proposals) ? c.proposals : []).slice(0, 50).map(safeProposal),
+    proposals: (Array.isArray(c.proposals) ? c.proposals : []).slice(0, MAX_PROPOSALS).map(safeProposal),
   };
 }
 

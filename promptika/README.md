@@ -29,7 +29,7 @@
 | `GET` / `PUT /settings` | הגדרות (עדכון חלקי) |
 | `GET` / `POST /clients` | רשימה / לקוח חדש |
 | `GET` / `PUT` / `DELETE /clients/:id` | לקוח אחד |
-| `POST /clients/:id/propose` | עוד לא – מחזיר 501 (ה-AI יגיע בהמשך) |
+| `POST /clients/:id/propose` | Claude ממליץ על 2-5 כלים ומעריך שעות → גרסה חדשה בהצעות (עד 10 בשעה) |
 
 ## מבנה הנתונים (ב-Studio)
 - `auth` – `{ salt, hash, tries, tokens }` (הסיסמה רק כ-hash, האסימונים רק כ-sha256).
@@ -42,13 +42,23 @@
   - `tech` `{ maintain: 'yes'|'no'|'partly'|'', dataLocation, decider, sensitive: 'yes'|'no'|'', sensitiveNote }`
   - מספר ריק = `''`; עד 30 שורות לכל רשימה; מפתחות לא מוכרים נזרקים. שמירה אוטומטית (800ms) ב-`PUT /clients/:id`, וטיוטה ב-localStorage (`pk_draft_<id>`) עד שמירה מוצלחת.
   - הגדרות החלקים והתוויות: `web/src/data/intakeSections.js`; הממשק: `web/src/components/Intake.jsx`.
-- הצעה (בתוך הלקוח) – `{ id, version, createdAt, tools: [{ name, problem, spec, buildHours, monthlyHours }], notes }`.
+- הצעה (בתוך הלקוח) – `{ id, version, createdAt, understanding, missingQuestions[], tools[], timeline[{stage,duration}], nextStep, notes }`.
+  כלי: `{ name, problem, benefit 1-5, effort 1-5, savedHoursPerMonth, estimate: true, input, output, users, screens[], integrations[],
+  notIncluded[], buildHours: { spec, build, test, training }, monthlyHours, apiMonthlyEstimate, range, rangeDrivers }`.
+  הצעה ישנה (מהשלד) עם `buildHours` כמספר נקראת כשעות "בנייה" (`safeProposal`). גרסה חדשה לא דורסת ישנה.
 
 כל שדה אופציונלי ומקבל ברירת מחדל ב-`safeSettings` / `safeClient` – נתונים ישנים ממשיכים לעבוד. שדה חדש = ברירת מחדל שם.
 
+## ההצעה מ-Claude (`api/lib/propose.js`, `api/lib/ai.js`)
+- רק מהשרת (`ANTHROPIC_API_KEY`), `claude-opus-5-5` עם fallback. ההנחיה בעברית (`SYSTEM_HE`) – כפי שהבעלים ניסח, לא לשנות בלי לשאול.
+- התשובה JSON בלבד, נבדקת בקוד; לא תקינה → ניסיון אחד נוסף → שגיאה בעברית.
+- כל שדה כסף שהמודל מחזיר נמחק (`stripMoney`, חוץ מ-`apiMonthlyEstimate` שבסכמה); שעות מוגבלות ל-0–500; כלים מדורגים לפי תועלת פחות מאמץ.
+- רק שאלות חסרות (בלי כלים) → לא נשמרת גרסה, השאלות מוצגות מעל ההצעות.
+- תוכן הקליטה לא נכתב ללוג. בדיקות עם Claude מדומה (`propose.test.js`).
+
 ## כסף – רק בקוד
 **ה-AI מחזיר רק שעות, לעולם לא סכומים.** החישוב ב-`web/src/lib/pricing.js` (פונקציות טהורות + בדיקות):
-- הקמה = שעות הקמה × תעריף לשעה.
+- הקמה = שעות הקמה (סכום השלבים) × תעריף לשעה.
 - חודשי = שעות תחזוקה בחודש × תעריף + אחסון + AI (אחסון ו-AI פעם אחת להצעה).
 - מקדמה = אחוז מההקמה. מע"מ (18%) נוסף אם `vatIncluded` כבוי.
 

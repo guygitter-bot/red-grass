@@ -1,9 +1,9 @@
 // כרטיס לקוח: שם ועסק (נשמרים), טופס הקליטה (9 חלקים) והצעות
-import { ArrowRight, Trash2 } from 'lucide-react';
+import { ArrowRight, Sparkles, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { go } from '../lib/route';
-import { proposalCost, shekel } from '../lib/pricing';
+import { buildHoursOf, proposalCost, shekel } from '../lib/pricing';
 import Intake from '../components/Intake';
 import { Button, Card, ErrorLine, Field, inputClass } from '../components/ui';
 
@@ -14,6 +14,9 @@ export default function Client({ id }) {
   const [business, setBusiness] = useState('');
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  const [proposing, setProposing] = useState(false);
+  const [proposeError, setProposeError] = useState('');
+  const [questions, setQuestions] = useState([]);
 
   useEffect(() => {
     Promise.all([api('GET', `/clients/${id}`), api('GET', '/settings')])
@@ -36,6 +39,22 @@ export default function Client({ id }) {
       setTimeout(() => setSaved(false), 1500);
     } catch (err) {
       setError(err.message);
+    }
+  }
+
+  // Claude ממליץ על כלים ומעריך שעות; נשמר כגרסה חדשה בשרת
+  async function propose() {
+    setProposing(true);
+    setProposeError('');
+    try {
+      const res = await api('POST', `/clients/${id}/propose`, {});
+      setQuestions(res.missingQuestions || []);
+      if (res.client) setClient((c) => ({ ...c, proposals: res.client.proposals }));
+      else if (!res.proposal) setProposeError('לא נוצרה הצעה – חסר מידע. אפשר למלא את הטופס ולנסות שוב.');
+    } catch (err) {
+      setProposeError(err.message);
+    } finally {
+      setProposing(false);
     }
   }
 
@@ -83,20 +102,54 @@ export default function Client({ id }) {
 
           <Intake key={id} clientId={id} serverIntake={client.intake} serverUpdatedAt={client.updatedAt} />
 
-          <Card>
-            <h2 className="font-bold">הצעות מחיר</h2>
+          <Card className="space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="font-bold">הצעות מחיר</h2>
+              <Button className="ms-auto" onClick={propose} disabled={proposing}>
+                <Sparkles size={18} aria-hidden />
+                {proposing ? 'Claude חושב… (עד דקה)' : 'ליצור הצעה'}
+              </Button>
+            </div>
+            <ErrorLine text={proposeError} />
+            {questions.length > 0 && (
+              <div className="rounded-lg border border-orange bg-soft p-3" role="status">
+                <p className="font-bold text-orange-ink">כדאי להשלים לפני ההצעה הבאה:</p>
+                <ul className="mt-1 list-disc space-y-0.5 ps-5 text-sm">
+                  {questions.map((q, i) => (
+                    <li key={i}>{q}</li>
+                  ))}
+                </ul>
+                <p className="mt-1 text-xs text-muted">אפשר לעדכן את הטופס למעלה וללחוץ שוב "ליצור הצעה".</p>
+              </div>
+            )}
             {client.proposals.length === 0 ? (
-              <p className="mt-1 text-sm text-muted">עוד אין הצעות. בהמשך Claude ימליץ על כלים ויעריך שעות – והסכומים יחושבו לפי ההגדרות.</p>
+              <p className="text-sm text-muted">עוד אין הצעות. מלאו את הטופס (כמה שאפשר) ולחצו "ליצור הצעה" – Claude ימליץ על כלים ויעריך שעות, והסכומים יחושבו לפי ההגדרות.</p>
             ) : (
-              <ul className="mt-2 divide-y divide-line">
-                {client.proposals.map((p) => {
+              <ul className="space-y-3">
+                {[...client.proposals].reverse().map((p) => {
                   const cost = proposalCost(p, settings);
                   return (
-                    <li key={p.id} className="flex flex-wrap gap-x-4 gap-y-1 py-2 text-sm">
-                      <span className="font-bold">גרסה {p.version}</span>
-                      <span>{p.tools.length} כלים</span>
-                      <span>הקמה {shekel(cost.build)}</span>
-                      <span>חודשי {shekel(cost.monthly)}</span>
+                    <li key={p.id} className="rounded-lg border border-line p-3">
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                        <span className="font-bold">גרסה {p.version}</span>
+                        {p.createdAt > 0 && <span className="text-muted">{new Date(p.createdAt).toLocaleDateString('he-IL')}</span>}
+                        <span>{p.tools.length} כלים</span>
+                        <span>הקמה <bdi>{shekel(cost.build)}</bdi></span>
+                        <span>חודשי <bdi>{shekel(cost.monthly)}</bdi></span>
+                      </div>
+                      {p.understanding && <p className="mt-2 text-sm text-muted">{p.understanding}</p>}
+                      {p.tools.length > 0 && (
+                        <ol className="mt-2 space-y-1 text-sm">
+                          {p.tools.map((t, i) => (
+                            <li key={i}>
+                              <span className="font-bold">{i + 1}. {t.name}</span>
+                              <span className="text-muted"> · <bdi>{buildHoursOf(t)}</bdi> שעות הקמה · <bdi>{t.monthlyHours || 0}</bdi> בחודש</span>
+                              {t.problem && <span className="block text-muted">{t.problem}</span>}
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                      {p.nextStep && <p className="mt-2 text-sm"><span className="font-bold text-turq-ink">צעד הבא: </span>{p.nextStep}</p>}
                     </li>
                   );
                 })}
