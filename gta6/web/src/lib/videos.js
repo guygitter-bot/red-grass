@@ -25,11 +25,17 @@ export function matches(item, query) {
   const q = norm(query).trim();
   if (!q) return true;
   const codes = codesOf(item).flatMap((c) => [c.code, c.effect, c.platform]);
-  const hay = norm([item.title, item.summary, item.note, item.url, item.category, ...(item.tags || []), ...codes].join(' '));
+  const hay = norm([item.title, item.summary, item.note, item.url, item.category, item.watched, ...(item.tags || []), ...codes].join(' '));
   return q.split(/\s+/).every((w) => hay.includes(w));
 }
 
 export const isWaiting = (item) => item.status === 'pending' || item.status === 'working';
+
+// הצפייה בסרטון (Gemini): 'fetching' מוריד, 'uploaded' מחכה לצפייה / צופה
+export const videoState = (item) => item?.video?.state || '';
+export const isWatching = (item) => ['fetching', 'uploaded'].includes(videoState(item));
+export const needsUpload = (item) => ['need_upload', 'failed'].includes(videoState(item));
+export const MAX_VIDEO_BYTES = 95 * 1024 * 1024;
 
 // קטגוריות עם מספר הסרטונים בכל אחת, הגדולות קודם
 export function categoryList(items, categories = {}) {

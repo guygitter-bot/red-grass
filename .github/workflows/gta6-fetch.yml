@@ -1,0 +1,39 @@
+name: gta6 fetch
+
+# הורדה אוטומטית של סרטון לאפליקציית GTA 6 (gta6/api – צפייה עם Gemini):
+# השרת שולח אות (repository_dispatch) עם מזהה; כאן מורידים את הסרטון מהקישור (yt-dlp) ומעלים אותו לשרת.
+# המאגר ציבורי – בלוג לא מודפס הקישור ולא תוכן (ראו gta6/fetcher/fetch.py).
+on:
+  repository_dispatch:
+    types: [gta6-fetch]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gta6-fetch-${{ github.event.client_payload.id }}
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GTA6_API: https://gta6-videos-api.guygitter.workers.dev
+      GTA6_TOKEN: ${{ secrets.POINTS_GITHUB_TOKEN }}
+      ITEM_ID: ${{ github.event.client_payload.id }}
+    steps:
+      - name: Check the request
+        run: |
+          [ -n "$GTA6_TOKEN" ] || { echo "::error::Missing secret POINTS_GITHUB_TOKEN"; exit 1; }
+          printf '%s' "$ITEM_ID" | grep -Eq '^[A-Za-z0-9_-]{6,64}$' || { echo "::error::Bad id"; exit 1; }
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: gta6/fetcher
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the downloader
+        run: pip install --quiet "yt-dlp==2026.10.26"
+      - name: Download and upload
+        run: python3 gta6/fetcher/fetch.py "$ITEM_ID"

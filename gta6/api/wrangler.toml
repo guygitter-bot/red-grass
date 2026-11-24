@@ -6,6 +6,10 @@ workers_dev = true
 [vars]
 # האתרים שמותר להם לפנות לשרת (האפליקציה ב-Cloudflare Pages ופיתוח מקומי)
 ALLOWED_ORIGINS = "https://gta6-videos-97q.pages.dev,http://localhost:5173,http://localhost:4173"
+# צפייה בסרטונים עם Gemini: כמה צפיות ביום לכל היותר (עולה כסף), ואיפה ההורדה האוטומטית רצה (gta6-fetch.yml)
+DAILY_VIDEOS = "40"
+GITHUB_REPO = "guygitter-bot/red-grass"
+# WATCH_MODEL = "..."  – אם רוצים לקבוע מודל של Gemini ידנית (אחרת נבחר לבד את ה-Flash החדש ביותר)
 
 # כל הסרטונים והקטגוריות – אובייקט אחד ("main")
 [[durable_objects.bindings]]
@@ -18,3 +22,5 @@ new_sqlite_classes = ["Library"]
 
 # סודות, לא כאן (נקבעים אוטומטית מ-GitHub, ראו .github/workflows/gta6.yml):
 #   ANTHROPIC_API_KEY  – המפתח של Claude (כותרת וקודים)
+#   GEMINI_API_KEY     – המפתח של Google (צפייה בסרטון: תמונה וקול)
+#   GITHUB_TOKEN       – POINTS_GITHUB_TOKEN: מפעיל את ההורדה האוטומטית, וההורדה מזדהה איתו בחזרה

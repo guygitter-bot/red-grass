@@ -68,8 +68,10 @@ written, with what it does. If the caption only says "codes in the video" withou
 and say in the summary that the codes appear only in the video itself. NEVER invent or "complete" codes from memory.
 - Categories are by topic. Reuse an existing category whenever it reasonably fits, and write its name exactly as \
 given. Open a new category only when the topic clearly does not fit any existing one.
-- Be faithful to the material. You cannot watch the video – you only get its caption, description and (for YouTube) \
-its spoken transcript. If you could not read anything, title it by what the link tells you and say so briefly.
+- Be faithful to the material. You cannot watch the video yourself – you get its caption, description, (for YouTube) \
+its spoken transcript, and sometimes notes from another AI that watched and listened to the video. Those notes are \
+the best source for codes shown on screen. If you could not read anything, title it by what the link tells you and \
+say so briefly.
 - Always finish by calling file_video.`;
 
 const clean = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
@@ -105,10 +107,12 @@ export function material(item, src, categories) {
         src?.description ? `Caption / description: ${src.description}` : '',
         src?.text ? `Page text:\n${src.text}` : 'The page text could not be downloaded.',
       ];
-  const web = v ? !v.title && !v.transcript : !src || !enoughText(src);
+  // מה ש-Gemini ראה ושמע בסרטון עצמו (כולל טקסט על המסך) – המקור הכי טוב לקודים
+  const watched = item.watched ? `\n\nWhat a video-watching AI saw and heard in the video itself (speech, on-screen text, codes):\n${item.watched}` : '';
+  const web = !item.watched && (v ? !v.title && !v.transcript : !src || !enoughText(src));
   return {
     web,
-    content: `${lines.filter(Boolean).join('\n')}${note}\n\n${head}\n\n${web ? 'If needed, read the link with web_fetch. ' : ''}Call file_video.`,
+    content: `${lines.filter(Boolean).join('\n')}${watched}${note}\n\n${head}\n\n${web ? 'If needed, read the link with web_fetch. ' : ''}Call file_video.`,
   };
 }
 

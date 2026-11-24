@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { allCodes, categoryList, codesOf, CODES, filterFromHash, filterItems, hashFromFilter, matches, newestTitles, parsePasted, sharedText, sourceOf } from './videos';
+import { isWatching, needsUpload, videoState, allCodes, categoryList, codesOf, CODES, filterFromHash, filterItems, hashFromFilter, matches, newestTitles, parsePasted, sharedText, sourceOf } from './videos';
 
 describe('parsePasted', () => {
   it('finds links and keeps the rest as a note', () => {
@@ -58,5 +58,19 @@ describe('sourceOf', () => {
     expect(sourceOf('https://www.facebook.com/share/r/1JVJ2AkHeK/')).toBe('Facebook');
     expect(sourceOf('https://youtu.be/x')).toBe('YouTube');
     expect(sourceOf('https://example.com/a')).toBe('example.com');
+  });
+});
+
+describe('video watching state', () => {
+  it('works for old items without video', () => {
+    expect(videoState({})).toBe('');
+    expect(isWatching({})).toBe(false);
+    expect(needsUpload({})).toBe(false);
+  });
+  it('knows busy and needs-upload', () => {
+    expect(isWatching({ video: { state: 'fetching' } })).toBe(true);
+    expect(isWatching({ video: { state: 'uploaded' } })).toBe(true);
+    expect(needsUpload({ video: { state: 'need_upload' } })).toBe(true);
+    expect(needsUpload({ video: { state: 'watched' } })).toBe(false);
   });
 });

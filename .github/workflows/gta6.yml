@@ -6,9 +6,9 @@ name: gta6
 on:
   push:
     branches: [main]
-    paths: ["gta6/**", ".github/workflows/gta6.yml"]
+    paths: ["gta6/**", ".github/workflows/gta6.yml", ".github/workflows/gta6-fetch.yml"]
   pull_request:
-    paths: ["gta6/**", ".github/workflows/gta6.yml"]
+    paths: ["gta6/**", ".github/workflows/gta6.yml", ".github/workflows/gta6-fetch.yml"]
   workflow_dispatch:
 
 permissions:
@@ -49,11 +49,15 @@ jobs:
           CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GH_TOKEN_SECRET: ${{ secrets.POINTS_GITHUB_TOKEN }}
         run: |
           missing=""
           [ -n "$CF_TOKEN" ] || missing="$missing CLOUDFLARE_API_TOKEN"
           [ -n "$CF_ACCOUNT" ] || missing="$missing CLOUDFLARE_ACCOUNT_ID"
           [ -n "$API_KEY" ] || missing="$missing ANTHROPIC_API_KEY"
+          [ -n "$GEMINI_KEY" ] || missing="$missing GEMINI_API_KEY"
+          [ -n "$GH_TOKEN_SECRET" ] || missing="$missing POINTS_GITHUB_TOKEN"
           if [ -n "$missing" ]; then
             echo "::error::Missing repository secrets:$missing (see gta6/README.md)"
             exit 1
@@ -69,6 +73,8 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.POINTS_GITHUB_TOKEN }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -76,6 +82,8 @@ jobs:
           wranglerVersion: "4.146.0"
           secrets: |
             ANTHROPIC_API_KEY
+            GEMINI_API_KEY
+            GITHUB_TOKEN
       - name: Summary
         env:
           URL: ${{ steps.deploy.outputs.deployment-url }}
