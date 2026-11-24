@@ -51,6 +51,45 @@ export function safeProposal(p) {
   };
 }
 
+// מספר אופציונלי: ריק נשאר ריק (''), אחרת מוגבל לטווח
+const optNum = (v, max) => {
+  if (v === '' || v === null || v === undefined) return '';
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(max, Math.max(0, n)) : '';
+};
+const oneOf = (v, allowed) => (allowed.includes(v) ? v : '');
+const rows = (v, fn) => (Array.isArray(v) ? v.slice(0, MAX_ROWS).map(fn) : []);
+export const MAX_ROWS = 30;
+
+// טופס הקליטה (9 חלקים) – הכול אופציונלי; שדות לא מוכרים נזרקים. הצורה זהה ל-web/src/lib/intake.js
+export function safeIntake(i) {
+  i = obj(i);
+  const b = obj(i.business), o = obj(i.offer), cu = obj(i.customers), g = obj(i.goal), bu = obj(i.budget), t = obj(i.tech);
+  return {
+    business: { name: str(b.name, 200), field: str(b.field, 200), employees: optNum(b.employees, 100_000), roles: str(b.roles, 3000) },
+    offer: { items: str(o.items, 3000), topEarner: str(o.topEarner, 2000) },
+    customers: { ideal: str(cu.ideal, 3000), reach: str(cu.reach, 3000) },
+    tools: rows(i.tools, (r) => {
+      r = obj(r);
+      return { tool: str(r.tool, 120), purpose: str(r.purpose, 500), monthlyCost: optNum(r.monthlyCost, 1_000_000) };
+    }),
+    pains: rows(i.pains, (r) => {
+      r = obj(r);
+      return { pain: str(r.pain, 1000), lastTime: str(r.lastTime, 1000), frequency: str(r.frequency, 200), hoursPerMonth: optNum(r.hoursPerMonth, 1000) };
+    }),
+    missing: rows(i.missing, (r) => str(r, 500)),
+    goal: { success: str(g.success, 3000) },
+    budget: { budget: str(bu.budget, 500), timeline: str(bu.timeline, 500) },
+    tech: {
+      maintain: oneOf(t.maintain, ['yes', 'no', 'partly']),
+      dataLocation: str(t.dataLocation, 1000),
+      decider: str(t.decider, 500),
+      sensitive: oneOf(t.sensitive, ['yes', 'no']),
+      sensitiveNote: str(t.sensitiveNote, 1000),
+    },
+  };
+}
+
 export function safeClient(c) {
   c = obj(c);
   return {
@@ -59,8 +98,7 @@ export function safeClient(c) {
     business: str(c.business, 200),
     createdAt: num(c.createdAt, 0, 0, Number.MAX_SAFE_INTEGER),
     updatedAt: num(c.updatedAt, 0, 0, Number.MAX_SAFE_INTEGER),
-    // 9 חלקי טופס הקליטה – יתמלאו בהמשך
-    intake: obj(c.intake),
+    intake: safeIntake(c.intake),
     proposals: (Array.isArray(c.proposals) ? c.proposals : []).slice(0, 50).map(safeProposal),
   };
 }
