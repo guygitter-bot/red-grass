@@ -146,6 +146,13 @@
 - בדיקה: `cd ai_maagar/api && npm test` · `cd ai_maagar/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 - **תמיד למזג לבד** את ה-PR (אחרי שהבדיקות ירוקות), לבדוק שהעלייה (`ai-maagar.yml` על main) הצליחה, ולדווח. אזור "לימוד וסקילים": `api/learn.js` (`mode: 'learn'`).
 
+### GTA 6 – סרטונים וקודים (`gta6/`)
+- תיאור: `gta6/README.md`. קישורים לסרטוני GTA 6; Claude כותב לכל סרטון כותרת (מה יש בו), תקציר ורשימת קודים (`codes`), וממיין לקטגוריות. מסך "כל הקודים" (`#/codes`).
+- `gta6/web` → https://gta6-videos.pages.dev · `gta6/api` → Worker `gta6-videos-api` (Durable Object `Library` אחד, קריאה ברקע ב-alarm). עלייה: `gta6.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd gta6/api && npm test` · `cd gta6/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
+- הסוכן לא רואה את תמונת הסרטון (רק כיתוב / תיאור / כתוביות יוטיוב) ו**לא ממציא קודים**; קודים שנערכו ידנית (`codesEdited`) לא נדרסים. בלי סיסמה, עד 100 הוספות ביום.
+- **תמיד למזג לבד** את ה-PR (אחרי שהבדיקות ירוקות), לבדוק שהעלייה (`gta6.yml` על main) הצליחה, ולדווח.
+
 ### ארץ עיר (`eretz_ir/`)
 - תיאור: `eretz_ir/README.md`. משחק לכמה שחקנים בקישור, עם שם ותמונה; 9 קטגוריות (כולל מאכל); ניקוד 10 (רק אחד) / 5 (כמה), בונוס 10 למי שסיים ראשון (עם צלצול).
 - `eretz_ir/web` → https://eretz-ir.pages.dev · `eretz_ir/api` → Worker `eretz-ir-api` (Durable Object `Room` לכל משחק). עלייה: `eretz-ir.yml` אחרי מיזוג ל-main.

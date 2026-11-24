@@ -1,0 +1,134 @@
+// קריאת קישור לסרטון: כותרת, תיאור (הכיתוב של הפוסט) וטקסט הדף – החומר שממנו הסוכן כותב כותרת ומוציא קודים.
+// דף שחוסם או ריק (רשתות חברתיות, אתרים עם JavaScript בלבד) – הסוכן קורא אותו בעצמו (web_fetch).
+import { isPublicUrl, safeFetch } from './net.js';
+
+export const MAX_TEXT = 15000;
+
+const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+export function decodeEntities(s) {
+  return String(s || '').replace(/&(#x[\da-f]+|#\d+|\w+);/gi, (m, e) => {
+    if (e[0] === '#') {
+      const code = e[1].toLowerCase() === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+      return Number.isFinite(code) && code > 0 && code < 0x110000 ? String.fromCodePoint(code) : m;
+    }
+    return ENTITIES[e.toLowerCase()] ?? m;
+  });
+}
+
+const clean = (s) => decodeEntities(s).replace(/\s+/g, ' ').trim();
+
+function meta(html, name) {
+  const re = new RegExp(`<meta[^>]+(?:property|name)=["']${name}["'][^>]*>`, 'i');
+  const tag = html.match(re)?.[0];
+  return tag ? clean(tag.match(/content=["']([^"']*)["']/i)?.[1]) : '';
+}
+
+// HTML -> { title, description, site, text }
+export function readPage(html, maxText = MAX_TEXT) {
+  const title = meta(html, 'og:title') || clean(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]);
+  const description = meta(html, 'og:description') || meta(html, 'description');
+  const site = meta(html, 'og:site_name');
+  const body = html
+    .replace(/<(head|title|script|style|noscript|svg|nav|footer|header|form)\b[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<\/(p|div|li|h\d|tr|section|article|br)>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ');
+  const text = decodeEntities(body)
+    .split('\n')
+    .map((l) => l.replace(/\s+/g, ' ').trim())
+    .filter((l) => l.length > 1)
+    .join('\n')
+    .slice(0, maxText);
+  return { title, description, site, text };
+}
+
+// רשתות חברתיות (פייסבוק, אינסטגרם, טיקטוק) מחזירות את הכיתוב של הסרטון רק לקורא של תצוגה מקדימה
+const SOCIAL_RE = /(^|\.)(facebook\.com|fb\.watch|fb\.com|instagram\.com|tiktok\.com|threads\.net)$/;
+export function userAgent(url) {
+  try {
+    if (SOCIAL_RE.test(new URL(url).hostname)) return 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)';
+  } catch {
+    // כתובת לא תקינה – ברירת המחדל
+  }
+  return 'Mozilla/5.0 (compatible; Gta6Videos/1.0)';
+}
+
+// מוריד את הדף. לא נכשל: בלי חומר מחזיר רק את הכתובת (והסוכן ינסה לבד)
+export async function gatherLink(url, fetchFn = fetch, { maxText = MAX_TEXT } = {}) {
+  if (!isPublicUrl(url)) throw new Error('כתובת לא תקינה');
+  try {
+    const { res, finalUrl, text } = await safeFetch(fetchFn, url, {
+      headers: { 'user-agent': userAgent(url), accept: 'text/html,text/plain;q=0.9,*/*;q=0.5' },
+    });
+    if (!res.ok) return { url, finalUrl, title: '', description: '', site: '', text: '' };
+    const type = res.headers?.get?.('content-type') || '';
+    if (/text\/plain|markdown/.test(type)) return { url, finalUrl, title: '', description: '', site: '', text: (await text()).slice(0, maxText) };
+    if (!/html/.test(type)) return { url, finalUrl, title: '', description: '', site: '', text: '' };
+    return { url, finalUrl, ...readPage(await text(), maxText) };
+  } catch {
+    return { url, finalUrl: url, title: '', description: '', site: '', text: '' };
+  }
+}
+
+// יש מספיק חומר כדי למפות בלי לקרוא את הדף שוב?
+export const enoughText = (src) => `${src.title} ${src.description} ${src.text}`.trim().length >= 400;
+
+// ---------- סרטוני יוטיוב: כותרת, תיאור ותמליל (כתוביות) ----------
+// הסוכן לא צופה בסרטון עצמו – הוא קורא את מה שנאמר בו (הכתוביות של יוטיוב, גם האוטומטיות). שם נמצאים הרבה קודים.
+
+export function youtubeId(input) {
+  let url;
+  try {
+    url = new URL(input);
+  } catch {
+    return '';
+  }
+  const host = url.hostname.replace(/^(www|m|music)\./, '');
+  let id = '';
+  if (host === 'youtu.be') id = url.pathname.slice(1).split('/')[0];
+  else if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+    id = url.searchParams.get('v') || url.pathname.match(/^\/(?:shorts|live|embed|v)\/([^/?#]+)/)?.[1] || '';
+  }
+  return /^[\w-]{11}$/.test(id) ? id : '';
+}
+
+// XML של כתוביות -> טקסט רציף
+export function captionText(xml) {
+  const parts = [...String(xml).matchAll(/<(?:text|p)\b[^>]*>([\s\S]*?)<\/(?:text|p)>/g)].map((m) =>
+    decodeEntities(decodeEntities(m[1].replace(/<[^>]+>/g, ''))).replace(/\s+/g, ' ').trim(),
+  );
+  return parts.filter(Boolean).join(' ');
+}
+
+const YT_CLIENT = { clientName: 'ANDROID', clientVersion: '20.10.38', androidSdkVersion: 34, hl: 'he' };
+
+// { title, author, description, transcript, minutes } – לא נכשל: בלי תמליל מחזיר מה שיש
+export async function youtubeSource(id, fetchFn = fetch, { maxText = 60000 } = {}) {
+  const out = { title: '', author: '', description: '', transcript: '', minutes: 0 };
+  try {
+    const res = await fetchFn('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'user-agent': 'com.google.android.youtube/20.10.38 (Linux; U; Android 14) gzip' },
+      body: JSON.stringify({ context: { client: YT_CLIENT }, videoId: id }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) return out;
+    const data = await res.json();
+    const d = data.videoDetails || {};
+    Object.assign(out, {
+      title: String(d.title || ''),
+      author: String(d.author || ''),
+      description: String(d.shortDescription || '').slice(0, 5000),
+      minutes: Math.round(Number(d.lengthSeconds || 0) / 60),
+    });
+    const tracks = data.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+    // כתוביות שנכתבו ביד עדיפות על אוטומטיות
+    const track = tracks.find((t) => t.kind !== 'asr') || tracks[0];
+    if (!track?.baseUrl || !/^https:\/\/(www\.)?youtube\.com\//.test(track.baseUrl)) return out;
+    const cap = await fetchFn(track.baseUrl, { signal: AbortSignal.timeout(15000) });
+    if (cap.ok) out.transcript = captionText(await cap.text()).slice(0, maxText);
+  } catch {
+    // יוטיוב חסם / אין רשת – ממשיכים עם מה שיש (והסוכן ינסה לבד)
+  }
+  return out;
+}

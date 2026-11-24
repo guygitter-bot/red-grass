@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+/* מצב לילה: מחלקה dark על html (נקבעת ב-src/lib/theme.js) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* כל הצבעים במקום אחד – במצב לילה מחליפים רק אותם:
+   page = רקע המסך, card = כרטיסים, ink = טקסט, muted = טקסט משני, line = מסגרות, soft = רקע מודגש עדין */
+@theme {
+  --color-page: #fbf6f4;
+  --color-card: #ffffff;
+  --color-ink: #23152b;
+  --color-muted: #77667f;
+  --color-line: #eedfe4;
+  --color-soft: #fde7ef;
+  --color-accent: #d6266f;
+  --color-accent-ink: #b0195a;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-page: #120c18;
+  --color-card: #1d1426;
+  --color-ink: #f3e9f2;
+  --color-muted: #ae9bb4;
+  --color-line: #33263f;
+  --color-soft: #3a1a33;
+  --color-accent: #ff3d8b;
+  --color-accent-ink: #ff8ab8;
+}
+
+/* שקיעה של וייס סיטי: ורוד -> כתום -> סגול */
+.brand-bg {
+  background: linear-gradient(115deg, #ff3d8b 0%, #ff7a45 55%, #7b3fe4 100%);
+}
+.brand-text {
+  background: linear-gradient(90deg, #ff3d8b, #ff7a45);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+html,
+body {
+  font-family: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--color-page);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* רצועת קטגוריות בטלפון – גלילה לצד בלי פס גלילה */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
