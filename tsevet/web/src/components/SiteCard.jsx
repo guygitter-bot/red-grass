@@ -4,9 +4,9 @@ import { Copy, ExternalLink, Globe } from 'lucide-react';
 import { api } from '../lib/api';
 import { copyText } from '../lib/copy';
 import { RELOAD } from './Gen';
-import { Button } from './ui';
+import { Button, Spinner } from './ui';
 
-const LABEL = { live: 'באוויר', removed: 'הורד מהאוויר', replaced: 'הוחלף בגרסה חדשה', cancelled: 'בוטל' };
+const LABEL = { live: 'באוויר', removed: 'הורד מהאוויר', replaced: 'הוחלף בגרסה חדשה', cancelled: 'בוטל', publishing: 'מעלה לאוויר… דקה-שתיים', removing: 'מוריד מהאוויר…' };
 
 export function SiteCard({ site }) {
   const [busy, setBusy] = useState(false);
@@ -41,16 +41,21 @@ export function SiteCard({ site }) {
           <div dir="ltr" className="truncate text-start text-xs text-muted">
             {site.url}
           </div>
-          {LABEL[site.status] && <div className={`mt-0.5 text-xs ${live ? 'font-medium text-ok' : 'text-muted'}`}>{LABEL[site.status]}</div>}
+          {LABEL[site.status] && (
+            <div className={`mt-0.5 flex items-center gap-1.5 text-xs ${live ? 'font-medium text-ok' : 'text-muted'}`}>
+              {['publishing', 'removing'].includes(site.status) && <Spinner size={11} />}
+              {LABEL[site.status]}
+            </div>
+          )}
         </div>
       </div>
 
-      {site.status === 'proposed' && (
+      {['proposed', 'failed'].includes(site.status) && (
         <div className="mt-3">
-          <p className="mb-2 text-xs text-muted">הדף יהיה פתוח לכל מי שיש לו את הקישור. בלי עלות. שום דבר לא עולה בלי אישור.</p>
+          <p className="mb-2 text-xs text-muted">אתר משלו בכתובת pages.dev, פתוח לכל מי שיש לו את הקישור. בלי עלות. שום דבר לא עולה בלי אישור.</p>
           <div className="flex flex-wrap gap-2">
             <Button disabled={busy} onClick={() => act('/app/site/approve')}>
-              {busy ? 'מפרסם…' : 'לפרסם'}
+              {busy ? 'מפרסם…' : site.status === 'failed' ? 'לנסות שוב' : 'לפרסם'}
             </Button>
             <Button kind="ghost" disabled={busy} onClick={() => act('/app/site/cancel')}>
               לא עכשיו
@@ -71,7 +76,7 @@ export function SiteCard({ site }) {
           </button>
         </div>
       )}
-      {error && <div className="mt-2 text-bad">{error}</div>}
+      {(error || site.error) && <div className="mt-2 text-bad">{error || site.error}</div>}
     </div>
   );
 }

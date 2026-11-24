@@ -210,8 +210,9 @@ async function convView(t, id, origin) {
     }
     const sites = [];
     for (const sid of h.sites || []) {
-      const s = await siteView(t, sid, origin);
+      const s = await siteView(t, sid);
       if (s) sites.push(s);
+      if (['publishing', 'removing'].includes(s?.status)) pending = true;
     }
     const devs = [];
     // אותה בקשה בכמה הודעות (הצעה, ואז "מוכן") – הכרטיס מוצג רק בהודעה האחרונה

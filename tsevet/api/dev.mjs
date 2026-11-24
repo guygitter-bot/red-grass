@@ -177,6 +177,13 @@ const env = {
         }, 4000);
         return new Response(null, { status: 204 });
       }
+      // פרסום אתר מדומה: אחרי שתי שניות "באוויר" (בלי Cloudflare)
+      if (event_type === 'tsevet-site') {
+        setTimeout(() => {
+          fetch(`http://localhost:${PORT}/site/done?id=${client_payload.id}`, { method: 'POST', headers: { authorization: `Bearer ${TOKEN}` }, body: JSON.stringify({ url: 'https://summer-sale.pages.dev' }) }).catch(() => {});
+        }, 2000);
+        return new Response(null, { status: 204 });
+      }
       // עריכה חכמה מדומה: בלי Claude Code – הקובץ הראשון חוזר כ"סרטון ערוך" אחרי כמה שניות
       if (event_type === 'tsevet-smartedit') {
         const smart = fileURLToPath(new URL('../render/smart.py', import.meta.url));

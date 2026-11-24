@@ -110,8 +110,9 @@
 - Higgsfield ו-OpenMontage לא הותקנו: Higgsfield דורש חשבון בתשלום והתחברות אישית, OpenMontage ברישיון AGPL וכבד מאוד.
 
 ## פרסום אתר 🌐 (קריאייטיב + המתכנת, באישור)
-- `publish_page` (`api/sites.js`): דף HTML שנוצר ב-`make_file` עולה לכתובת קבועה וציבורית `https://tsevet-api.guygitter.workers.dev/p/<שם>` – **רק אחרי "לפרסם"** בכרטיס (`/app/site/approve`); אותו שם = עדכון (גם באישור). "להוריד מהאוויר" – `/app/site/remove`. עד 50 אתרים.
-- הדף מוגש עם CSP של sandbox (בלי גישה לשרת או לאפליקציה); תמונות מתוכו ב-`/p/<שם>/img/<id>` – רק כאלה שהדף עצמו משתמש בהן. מיני-סייט = דף אחד עם חלקים וקישורי עוגן.
+- `publish_page` (`api/sites.js`): דף HTML שנוצר ב-`make_file` עולה לאתר משלו ב-Cloudflare Pages – `https://<שם>.pages.dev` – **רק אחרי "לפרסם"** בכרטיס (`/app/site/approve`); אותו שם = עדכון (גם באישור). "להוריד מהאוויר" מוחק את הפרויקט. עד 50 אתרים.
+- `.github/workflows/tsevet-site.yml` + `render/site.py`: מוריד את הדף והתמונות שבו (`/site/job`, `/site/input` עם הטוקן), יוצר פרויקט ומעלה עם wrangler, ומחזיר את הכתובת האמיתית (Cloudflare מוסיף סיומת אם השם תפוס אצל אחרים).
+- **לעולם לא דורס פרויקט Pages קיים שהצוות לא יצר** (למשל `promptika`): השם נבדק מול Cloudflare, ואם הוא קיים ולא ברשימת `sites` – נכשל עם "השם תפוס". לדף על אפליקציה – שם כמו `<app>-landing`.
 
 ## קריאת מסמכים 📄 (כל הבוטים, באפליקציה)
 - מצרפים בשיחה PDF, Word, Excel, PowerPoint, CSV, טקסט, Markdown או JSON (`kind: 'doc'`).

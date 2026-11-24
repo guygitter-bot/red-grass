@@ -26,7 +26,7 @@ import { readSkill as githubRead, searchSkills as githubSearch } from './github.
 import { addSkill, learnFrom, listItems, pendingOf, read as maagarRead, search as maagarSearch, skillsOf } from './maagar.js';
 import { genDone, genFail, genReady, genStart, proposeClip, runGenJob } from './gen.js';
 import { CREATORS, FILE_MAKERS, imagesReady, makeFile, proposeImage } from './create.js';
-import { proposeSite, siteImage, sitePage } from './sites.js';
+import { proposeSite, siteDone, siteFail, siteInput, siteJob } from './sites.js';
 import { designSkills } from './design.js';
 import { FIND_SKILLS } from './findskills.js';
 import { DEFAULT_BUDGET, isDue, nextOf } from './schedule.js';
@@ -136,11 +136,15 @@ export class Team {
         for (const id of f.links || []) links[id] = await fileUrlOf(storage, body.origin, id);
         return { type: f.type, name: f.name, kind: f.kind, ...(f.links?.length ? { links } : {}) };
       }
-      // אתר שפורסם (publish_page): הדף והתמונות שבו, בלי כניסה
-      case '/internal/site-page':
-        return sitePage(storage, body.slug, body.origin);
-      case '/internal/site-image':
-        return siteImage(storage, body.slug, body.id);
+      // פרסום אתר ל-Pages (publish_page, tsevet-site.yml)
+      case '/internal/site-job':
+        return siteJob(storage, body.id);
+      case '/internal/site-input':
+        return siteInput(storage, body.id, body.f);
+      case '/internal/site-done':
+        return siteDone(storage, body.id, body.url);
+      case '/internal/site-fail':
+        return siteFail(storage, body.id, body.reason);
       case '/internal/render-job':
         return renderJob(storage, body.id);
       case '/internal/render-input':
