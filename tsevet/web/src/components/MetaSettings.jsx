@@ -9,6 +9,7 @@ export default function MetaSettings() {
   const [s, setS] = useState(null);
   const [appId, setAppId] = useState('');
   const [secret, setSecret] = useState('');
+  const [configId, setConfigId] = useState('');
   const [edit, setEdit] = useState(false);
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
@@ -18,6 +19,7 @@ export default function MetaSettings() {
       .then((r) => {
         setS(r);
         setAppId(r.appId);
+        setConfigId(r.configId || '');
       })
       .catch((e) => setMsg(e.message));
   useEffect(() => {
@@ -28,7 +30,7 @@ export default function MetaSettings() {
     e.preventDefault();
     setMsg('');
     try {
-      await api('/app/meta/app', { appId, secret });
+      await api('/app/meta/app', { appId, secret, configId });
       setSecret('');
       setEdit(false);
       await load();
@@ -106,9 +108,11 @@ export default function MetaSettings() {
               </button>
             </li>
             <li>ב-App settings ← Basic מעתיקים לכאן את ה-App ID ואת ה-App Secret.</li>
+            <li>ב-Facebook Login for Business ← Configurations יוצרים הגדרה עם ההרשאות לעמודים ולאינסטגרם, ומעתיקים את ה-Configuration ID.</li>
           </ol>
           <input className={inputCls} dir="ltr" inputMode="numeric" placeholder="App ID" value={appId} onChange={(e) => setAppId(e.target.value.trim())} />
           <input className={inputCls} dir="ltr" type="password" autoComplete="off" placeholder={s.configured ? 'App Secret (ריק = בלי שינוי)' : 'App Secret'} value={secret} onChange={(e) => setSecret(e.target.value.trim())} />
+          <input className={inputCls} dir="ltr" inputMode="numeric" placeholder="Configuration ID" value={configId} onChange={(e) => setConfigId(e.target.value.trim())} />
           <div className="flex flex-wrap gap-2">
             <Button disabled={!appId || (!secret && !s.configured)}>שמירה</Button>
             {s.configured && (

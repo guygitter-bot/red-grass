@@ -7,7 +7,7 @@
 // פרסום: הבוט רק מציע (propose_post) – כרטיס עם הטקסט, המדיה, היעדים והשעה. רק "לאשר" מפרסם (מיד, או בשעה
 // שנקבעה – ה-alarm של Team מריץ את runSocial). ריל באינסטגרם עובר עיבוד אצל Meta – בודקים כל חצי דקה עד שמוכן.
 //
-//   meta:app   -> { appId, secret }
+//   meta:app   -> { appId, secret, configId }   (configId = "Configuration" של Facebook Login for Business, אם יש)
 //   meta:conn  -> { pages: [{ id, name, token, ig: { id, username } | null }], at }
 //   meta:state -> { nonce, exp }               (התחברות שבדרך)
 //   sp:<id>    -> { id, key, text, kind: post|reel|text, file, targets: [instagram|facebook], page, when, origin,
@@ -49,6 +49,7 @@ export async function metaStatus(t, origin) {
   const conn = await t.storage.get('meta:conn');
   return {
     appId: app.appId || '',
+    configId: app.configId || '',
     configured: Boolean(app.appId && app.secret),
     redirect: callbackUrl(origin),
     pages: (conn?.pages || []).map((p) => ({ id: p.id, name: p.name, ig: p.ig ? { username: p.ig.username } : null })),
@@ -62,7 +63,9 @@ export async function saveMetaApp(t, body) {
   const secret = String(body.secret || '').trim() || prev.secret || '';
   if (!/^\d{6,20}$/.test(appId)) throw fail(400, 'App ID צריך להיות מספר (מההגדרות של האפליקציה ב-Meta)');
   if (!/^[a-f0-9]{32}$/i.test(secret)) throw fail(400, 'App Secret צריך להיות 32 תווים (אותיות ומספרים)');
-  await t.storage.put('meta:app', { appId, secret });
+  const configId = String(body.configId || '').trim();
+  if (configId && !/^\d{6,20}$/.test(configId)) throw fail(400, 'Configuration ID צריך להיות מספר');
+  await t.storage.put('meta:app', { appId, secret, configId });
   return { ok: true };
 }
 
@@ -75,7 +78,9 @@ export async function startMeta(t, origin) {
   url.searchParams.set('client_id', app.appId);
   url.searchParams.set('redirect_uri', callbackUrl(origin));
   url.searchParams.set('state', nonce);
-  url.searchParams.set('scope', SCOPES.join(','));
+  // Facebook Login for Business: ההרשאות מוגדרות ב-Configuration (config_id); אחרת – רשימת ההרשאות
+  if (app.configId) url.searchParams.set('config_id', app.configId);
+  else url.searchParams.set('scope', SCOPES.join(','));
   url.searchParams.set('response_type', 'code');
   return { url: url.toString() };
 }
