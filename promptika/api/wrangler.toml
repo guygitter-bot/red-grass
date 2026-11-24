@@ -1,0 +1,21 @@
+name = "promptika-api"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+workers_dev = true
+
+[vars]
+# האתרים שמותר להם לפנות לשרת (האפליקציה ב-Cloudflare Pages ופיתוח מקומי)
+ALLOWED_ORIGINS = "https://promptika.pages.dev,http://localhost:5173,http://localhost:4173"
+
+# כל הנתונים (סיסמה, הגדרות, לקוחות) – אובייקט אחד ("main")
+[[durable_objects.bindings]]
+name = "STUDIO"
+class_name = "Studio"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Studio"]
+
+# סודות, לא כאן (נקבעים אוטומטית מ-GitHub, ראו .github/workflows/promptika.yml):
+#   ANTHROPIC_API_KEY – המפתח של Claude (להצעות, בהמשך)
+# הסיסמה לא סוד ב-GitHub: נקבעת באפליקציה בכניסה הראשונה ונשמרת מוצפנת (hash) ב-Studio

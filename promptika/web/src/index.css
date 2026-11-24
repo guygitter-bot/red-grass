@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+/* מצב לילה: מחלקה dark על html (נקבעת ב-src/lib/theme.js) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* צבעי המותג: כתום (ראשי / כפתורים), כחול-לילה (רקעים כהים, כותרות), טורקיז (הדגשה).
+   page = רקע המסך, card = כרטיסים, ink = טקסט, muted = טקסט משני, line = מסגרות, soft = רקע מודגש עדין.
+   *-ink = הגוון של הצבע כשהוא טקסט על רקע בהיר/כהה (ניגודיות 4.5:1 לפחות) */
+@theme {
+  --color-orange: #ff7a1a;
+  --color-orange-ink: #b04506;
+  --color-night: #0b1630;
+  --color-night-2: #15254d;
+  --color-turq: #2ec4b6;
+  --color-turq-ink: #0b7168;
+  --color-page: #f4f6fb;
+  --color-card: #ffffff;
+  --color-ink: #10182e;
+  --color-muted: #525d76;
+  --color-line: #dce1ec;
+  --color-soft: #fff1e6;
+  --color-danger: #b42318;
+
+  --font-pixel: "Press Start 2P", "Silkscreen", monospace;
+  --font-sans: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-orange-ink: #ffa25e;
+  --color-turq-ink: #67e3d6;
+  --color-page: #060d1f;
+  --color-card: #0f1a36;
+  --color-ink: #eef1f8;
+  --color-muted: #a6b0c7;
+  --color-line: #24335c;
+  --color-soft: #2a1a10;
+  --color-danger: #ff8a80;
+}
+
+html,
+body {
+  font-family: var(--font-sans);
+  background: var(--color-page);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* הלוגו באנגלית בלבד בגופן פיקסלים; כותרות בעברית ב-Rubik מודגש */
+.pixel {
+  font-family: var(--font-pixel);
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+}
+
+/* צל "פיקסלי" לכפתורים */
+.px-shadow {
+  box-shadow: 3px 3px 0 0 var(--color-night);
+}
+.dark .px-shadow {
+  box-shadow: 3px 3px 0 0 #000;
+}
+.px-shadow:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 0 var(--color-night);
+}
