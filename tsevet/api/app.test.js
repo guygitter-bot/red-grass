@@ -1506,3 +1506,49 @@ test('the owner message remembers which bot it was sent to', async () => {
   assert.equal(view.messages[0].to, 'lawyer');
   assert.equal(view.messages[1].who, 'lawyer');
 });
+
+test('creative publishes a landing page at a public address, only after approval', async () => {
+  const { env } = setupEnv({ replies: [] }, { GEMINI_API_KEY: 'g' });
+  const token = await signIn(env);
+  const photo = await upload(env, token, { type: 'image/jpeg', name: 'hero.jpg' });
+  const other = await upload(env, token, { type: 'image/jpeg', name: 'private.jpg' });
+  const page = `<!doctype html><html dir="rtl"><body><h1>מבצע קיץ</h1><img src="{{file:${photo.data.id}}}"></body></html>`;
+  const script = { replies: [
+    { stop: 'tool_use', content: tool('make_file', { kind: 'html', name: 'מבצע קיץ', content: page }) },
+    { content: text('הדף מוכן') },
+  ] };
+  env.AI_CLIENT = fakeAI(script, []);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'תעשה דף נחיתה ותעלה אותו', to: 'creative' }, token);
+  await env.team.alarm();
+  let view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  const fileId = view.messages[1].files[0].id;
+
+  env.AI_CLIENT = fakeAI({ replies: [
+    { stop: 'tool_use', content: tool('publish_page', { file: fileId, slug: 'Bad Slug!' }) },
+    { stop: 'tool_use', content: [{ type: 'tool_use', id: 't_pp2', name: 'publish_page', input: { file: fileId, slug: 'summer-sale', title: 'מבצע קיץ' } }] },
+    { content: text('מחכה לאישור') },
+  ] }, []);
+  await call(env, '/app/send', { id: conv.id, text: 'תעלה', to: 'creative' }, token);
+  await env.team.alarm();
+  view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  const card = view.messages.at(-1).sites[0];
+  assert.equal(card.status, 'proposed');
+  assert.equal(card.url, `${API}/p/summer-sale`);
+
+  const get = (path) => worker.fetch(new Request(`${API}${path}`), env);
+  assert.equal((await get('/p/summer-sale')).status, 404);
+  assert.equal((await call(env, '/app/site/approve', { id: card.id }, token)).status, 200);
+  const res = await get('/p/summer-sale');
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-security-policy'), /sandbox/);
+  const html = await res.text();
+  assert.match(html, /מבצע קיץ/);
+  assert.ok(html.includes(`${API}/p/summer-sale/img/${photo.data.id}`));
+  assert.equal((await get(`/p/summer-sale/img/${photo.data.id}`)).status, 200);
+  // רק תמונות שהדף משתמש בהן
+  assert.equal((await get(`/p/summer-sale/img/${other.data.id}`)).status, 404);
+
+  assert.equal((await call(env, '/app/site/remove', { id: card.id }, token)).status, 200);
+  assert.equal((await get('/p/summer-sale')).status, 404);
+});

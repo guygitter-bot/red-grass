@@ -118,6 +118,34 @@ async function stream(request, env, key, type, extra = {}) {
 }
 
 const DOC_CSP = "sandbox allow-scripts allow-popups allow-forms; default-src * data: blob: 'unsafe-inline'";
+// אתר שפורסם: אותו sandbox (בלי גישה לשרת), וקישורים יכולים לפתוח חלון רגיל
+const SITE_CSP = "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-top-navigation-by-user-activation; default-src * data: blob: 'unsafe-inline'";
+
+// GET /p/<שם> – דף שפורסם (sites.js); GET /p/<שם>/img/<id> – תמונה מתוכו. ציבורי, בלי כניסה
+async function serveSite(request, env, url) {
+  const m = url.pathname.match(/^\/p\/([a-z0-9-]{3,40})(?:\/img\/([a-z0-9]{8,32}))?\/?$/);
+  if (!m || !env.FILES) return json(404, { error: 'not found' });
+  const [, slug, img] = m;
+  if (img) {
+    const r = await call(env, '/internal/site-image', { slug, id: img });
+    if (r.status !== 200) return json(404, { error: 'not found' });
+    return stream(request, env, r.data.key, r.data.type, { 'cache-control': 'public, max-age=300', 'cross-origin-resource-policy': 'cross-origin' });
+  }
+  const r = await call(env, '/internal/site-page', { slug, origin: url.origin });
+  if (r.status !== 200) return new Response('הדף לא נמצא', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+  const obj = await env.FILES.get(`files/${r.data.file}`);
+  if (!obj) return json(404, { error: 'not found' });
+  const body = fillLinks(await obj.text(), r.data.links || {});
+  return new Response(request.method === 'HEAD' ? null : body, {
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'content-security-policy': SITE_CSP,
+      'x-content-type-options': 'nosniff',
+      'referrer-policy': 'no-referrer',
+      'cache-control': 'public, max-age=60',
+    },
+  });
+}
 async function serveDoc(request, env, url, id, info) {
   const obj = await env.FILES.get(`files/${id}`);
   if (!obj) return json(404, { error: 'not found' });
@@ -252,6 +280,7 @@ export default {
     const { pathname } = url;
     if (pathname.startsWith('/app/')) return app(request, env, url);
     if (pathname.startsWith('/file/') && (request.method === 'GET' || request.method === 'HEAD')) return serveFile(request, env, url);
+    if (pathname.startsWith('/p/') && (request.method === 'GET' || request.method === 'HEAD')) return serveSite(request, env, url);
     if (pathname.startsWith('/render/')) return render(request, env, url);
     if (pathname.startsWith('/dev/')) return dev(request, env, url);
     if (request.method === 'GET' && pathname === '/') return new Response('צוות 🤖');

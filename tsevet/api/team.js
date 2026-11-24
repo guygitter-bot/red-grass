@@ -26,6 +26,7 @@ import { readSkill as githubRead, searchSkills as githubSearch } from './github.
 import { addSkill, learnFrom, listItems, pendingOf, read as maagarRead, search as maagarSearch, skillsOf } from './maagar.js';
 import { genDone, genFail, genReady, genStart, proposeClip, runGenJob } from './gen.js';
 import { CREATORS, FILE_MAKERS, imagesReady, makeFile, proposeImage } from './create.js';
+import { proposeSite, siteImage, sitePage } from './sites.js';
 import { designSkills } from './design.js';
 import { FIND_SKILLS } from './findskills.js';
 import { DEFAULT_BUDGET, isDue, nextOf } from './schedule.js';
@@ -135,6 +136,11 @@ export class Team {
         for (const id of f.links || []) links[id] = await fileUrlOf(storage, body.origin, id);
         return { type: f.type, name: f.name, kind: f.kind, ...(f.links?.length ? { links } : {}) };
       }
+      // אתר שפורסם (publish_page): הדף והתמונות שבו, בלי כניסה
+      case '/internal/site-page':
+        return sitePage(storage, body.slug, body.origin);
+      case '/internal/site-image':
+        return siteImage(storage, body.slug, body.id);
       case '/internal/render-job':
         return renderJob(storage, body.id);
       case '/internal/render-input':
@@ -454,6 +460,7 @@ export class Team {
     const devs = [];
     const made = [];
     const imgs = [];
+    const sites = [];
     const maagar = Boolean(this.env.MAAGAR);
     // סקילים מ-GitHub: מה שנמצא בחיפוש (רק אותו אפשר לקרוא), ומה שנקרא אחרון (מקור הסקיל שיישמר)
     const githubFound = new Map();
@@ -496,6 +503,7 @@ export class Team {
       // קבצים ותמונות (רק קריאייטיב והמתכנת; התמונה רק באישור – create.js)
       make_file: (input) => makeFile(this, input, made),
       make_image: (input) => (CREATORS.includes(job.target) ? proposeImage(this, job, input, imgs) : 'Not available for you.'),
+      publish_page: (input) => (CREATORS.includes(job.target) ? proposeSite(this, job, input, sites) : 'Not available for you.'),
       // מאגר AI: הרשימה נטענת פעם אחת לכל עבודה
       maagar_search: async ({ query, area }) => maagarSearch(await items(), query, area),
       maagar_read: async ({ id }) => maagarRead(await items(), id),
@@ -584,7 +592,7 @@ export class Team {
           // מילת הקוד "תנועה": אנימציית HTML -> סרטון (הקריאייטיב בונה, עורך הווידאו מרנדר)
           app && (agent === 'creative' || agent === 'editor') && this.env.FILES ? MOTION_NOTE : '',
           app && CREATORS.includes(agent) && this.env.FILES
-            ? 'Deliver work as files in the chat: when the owner (or a teammate) wants a landing page, an illustration, a document or a table – create it with make_file (a complete, polished file), not just a description. For new images use make_image (created only after the owner approves), then place them in pages with {{file:<id>}}.'
+            ? 'Deliver work as files in the chat: when the owner (or a teammate) wants a landing page, an illustration, a document or a table – create it with make_file (a complete, polished file), not just a description. For new images use make_image (created only after the owner approves), then place them in pages with {{file:<id>}}. When the owner wants a page live on the web at a real address (a landing page or mini-site), make it with make_file and then propose it with publish_page – it goes live after they press "publish". A mini-site is one self-contained HTML page (sections + anchor links, no other pages).'
             : '',
         ].filter(Boolean).join('\n\n'),
         gen: app && genReady(this.env),
@@ -615,6 +623,7 @@ export class Team {
         ...(devs.length ? { devs: devs.splice(0) } : {}),
         ...(made.length ? { files: made.splice(0) } : {}),
         ...(imgs.length ? { images: imgs.splice(0) } : {}),
+        ...(sites.length ? { sites: sites.splice(0) } : {}),
         ...(proposed.length ? { skillsProposed: proposed.splice(0) } : {}),
         at: Date.now(),
       });

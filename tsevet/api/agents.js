@@ -4,6 +4,7 @@ import { APPS } from './apps.js';
 import { BURSA_TOOLS } from './bursa.js';
 import { CODE_TOOLS } from './dev.js';
 import { CREATE_TOOLS, CREATORS, FILE_MAKERS } from './create.js';
+import { SITE_TOOLS } from './sites.js';
 
 // שלוש רמות מודל. לכל בוט ברירת מחדל (tier), ואפשר לשנות אותה בהגדרות של האפליקציה.
 export const MODELS = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5', opus: 'claude-opus-5-5' };
@@ -594,6 +595,7 @@ export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, sk
   ...(bursa && agent === 'bursai' ? BURSA_TOOLS : []),
   ...(code && agent === 'coder' ? CODE_TOOLS : []),
   ...(create && FILE_MAKERS.includes(agent) ? CREATE_TOOLS(imageGen && CREATORS.includes(agent)) : []),
+  ...(create && CREATORS.includes(agent) ? SITE_TOOLS : []),
   ...(gen && VIDEO_MAKERS.includes(agent) ? [MAKE_VIDEO] : []),
   ...(assign && agent === 'manager' ? [ASSIGN(team)] : []),
   ...(!noHandoff && agent !== 'manager' && team.filter((k) => k !== agent).length
