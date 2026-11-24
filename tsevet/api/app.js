@@ -218,6 +218,7 @@ async function convView(t, id, origin) {
     messages.push({
       i, who: h.who, text: h.text || '', at: h.at || 0,
       ...(h.photo ? { photo: true } : {}),
+      ...(h.who === 'owner' && h.to ? { to: h.to } : {}),
       ...(h.handoff ? { handoff: h.handoff } : {}),
       ...(h.plan ? { plan: h.plan } : {}),
       ...(h.step ? { step: h.step } : {}),
@@ -317,14 +318,15 @@ async function send(t, body) {
   }
   if (!text && !files.length) throw fail(400, 'אין מה לשלוח');
 
-  await t.pushHistory(key, { who: 'owner', text, ...(files.length ? { files } : {}), at: Date.now() });
+  const to = AGENT_KEYS.includes(body.to) ? body.to : null;
+  await t.pushHistory(key, { who: 'owner', text, ...(files.length ? { files } : {}), ...(to ? { to } : {}), at: Date.now() });
   if (meta) {
     meta.at = Date.now();
     // השיחה מקבלת שם מההודעה הראשונה
     if (!meta.title) meta.title = (text || files[0]?.name || 'שיחה').replace(/\s+/g, ' ').slice(0, 40);
     await storage.put('convs', convs);
   }
-  const target = AGENT_KEYS.includes(body.to) ? body.to : null;
+  const target = to;
   await t.enqueue({ id: newId(), chan: 'app', key, target, turns: 0, attempts: 0 });
   return { ok: true };
 }

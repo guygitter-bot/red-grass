@@ -1495,3 +1495,14 @@ test('smart edit: only a proposal until the owner approves; cost recorded; daily
   assert.equal((await call(env, '/app/render/approve', { id: second.id }, token)).status, 429);
   assert.equal((await call(env, '/app/render/cancel', { id: second.id }, token)).status, 200);
 });
+
+test('the owner message remembers which bot it was sent to', async () => {
+  const { env } = setupEnv({ replies: [{ content: text('שלום') }] });
+  const token = await signIn(env);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'היי', to: 'lawyer' }, token);
+  await env.team.alarm();
+  const view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  assert.equal(view.messages[0].to, 'lawyer');
+  assert.equal(view.messages[1].who, 'lawyer');
+});

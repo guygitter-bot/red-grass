@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowRight, Headphones, Send, Square } from 'lucide-react';
 import { api } from '../lib/api';
 import { go, getPreset } from '../lib/route';
+import { lastTarget } from '../lib/convs';
 import { convInterval } from '../lib/polling';
 import { usePoll } from '../lib/usePoll';
 import { mergeConv } from '../lib/stable';
@@ -19,6 +20,7 @@ export default function Chat({ id, agents, refresh }) {
   const [conv, setConv] = useState(null);
   const [error, setError] = useState('');
   const [to, setTo] = useState(() => getPreset(id));
+  const toKnown = useRef(Boolean(getPreset(id))); // כבר נקבע (מראש או ביד) – לא משנים לבד
   const [sending, setSending] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [title, setTitle] = useState('');
@@ -46,6 +48,11 @@ export default function Chat({ id, agents, refresh }) {
       api('/app/conv', { id })
         .then((c) => {
           setConv((prev) => mergeConv(prev, c));
+          if (!toKnown.current) {
+            toKnown.current = true;
+            const guess = lastTarget(c.messages);
+            if (guess) setTo(guess);
+          }
           setError('');
         })
         .catch((e) => setError(e.message)),
@@ -255,7 +262,10 @@ export default function Chat({ id, agents, refresh }) {
         </div>
       )}
           {voice && <p className="px-4 pt-2 text-xs text-muted">🎧 שיחה קולית: מדברים, ההודעה נשלחת לבד, והמיקרופון נפתח שוב אחרי התשובה. {voiceNote}</p>}
-          <Composer agents={roomAgents} room={Boolean(conv?.members)} to={to} setTo={setTo} onSend={send} sending={sending} voice={voice} listenTick={listenTick} onMicBlocked={() => {
+          <Composer agents={roomAgents} room={Boolean(conv?.members)} to={to} setTo={(v) => {
+            toKnown.current = true;
+            setTo(v);
+          }} onSend={send} sending={sending} voice={voice} listenTick={listenTick} onMicBlocked={() => {
             micBlocked.current = true;
             setVoiceNote(MIC_BLOCKED);
           }} />

@@ -16,6 +16,7 @@ export default function Composer({ agents, room = false, to, setTo, onSend, send
   const areaRef = useRef(null);
   const [listening, setListening] = useState(false);
   const recRef = useRef(null);
+  const sessionRef = useRef(null); // ההקשבה הנוכחית: { finished }
   const textRef = useRef('');
   textRef.current = text;
 
@@ -60,7 +61,8 @@ export default function Composer({ agents, room = false, to, setTo, onSend, send
 
   const send = () => {
     if (!canSend) return;
-    stopListening();
+    // שולחים – ההקשבה נסגרת, ומה שהמיקרופון עוד ישלח אחר כך לא ייכנס לתיבה
+    endListening();
     return sendText(text);
   };
   const sendText = async (value) => {
@@ -84,15 +86,23 @@ export default function Composer({ agents, room = false, to, setTo, onSend, send
   const stopListening = () => {
     recRef.current?.stop();
   };
+  const endListening = () => {
+    if (sessionRef.current) sessionRef.current.finished = true;
+    recRef.current?.abort?.();
+    recRef.current = null;
+    setListening(false);
+  };
   const startListening = (auto) => {
     if (recRef.current) return;
     setNotice('');
     const base = textRef.current;
-    let finished = false; // אחרי הסיום (ובטח אחרי שליחה) – מתעלמים מתוצאות מאוחרות (כרום באנדרואיד שולח כאלה)
+    // אחרי הסיום (ובטח אחרי שליחה) – מתעלמים מתוצאות מאוחרות (כרום באנדרואיד שולח כאלה)
+    const session = { finished: false };
+    sessionRef.current = session;
     const rec = listen({
       continuous: !auto,
       onText: (done, interim) => {
-        if (finished) return;
+        if (session.finished) return;
         setText(joinText(base, joinText(done, interim)));
         requestAnimationFrame(grow);
       },
@@ -102,8 +112,8 @@ export default function Composer({ agents, room = false, to, setTo, onSend, send
         if (code === 'not-allowed' || code === 'service-not-allowed') onMicBlocked?.();
       },
       onEnd: (done) => {
-        if (finished) return;
-        finished = true;
+        if (session.finished) return;
+        session.finished = true;
         recRef.current = null;
         setListening(false);
         const full = joinText(base, done);
