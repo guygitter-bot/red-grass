@@ -19,6 +19,7 @@ import * as auth from './auth.js';
 import { approve as approveGen, cancel as cancelGen, dailyLimit, genReady, genView } from './gen.js';
 import { approveDev, cancelDev, devView, discardDev, mergeDev } from './dev.js';
 import { approveImage, cancelImage, dailyImages, imageView } from './create.js';
+import { approveSite, cancelSite, removeSite, siteView } from './sites.js';
 import { approveRender, cancelRender, renderView } from './render.js';
 import { approveSkill, declineSkill } from './maagar.js';
 import { BUDGETS, MAX_SCHEDULES, cleanSchedule, nextRun } from './schedule.js';
@@ -207,6 +208,12 @@ async function convView(t, id, origin) {
       if (g) images.push(g);
       if (g?.status === 'working') pending = true;
     }
+    const sites = [];
+    for (const sid of h.sites || []) {
+      const s = await siteView(t, sid);
+      if (s) sites.push(s);
+      if (['publishing', 'removing'].includes(s?.status)) pending = true;
+    }
     const devs = [];
     // אותה בקשה בכמה הודעות (הצעה, ואז "מוכן") – הכרטיס מוצג רק בהודעה האחרונה
     const later = new Set(history.slice(i + 1).flatMap((x) => x.devs || []));
@@ -225,6 +232,7 @@ async function convView(t, id, origin) {
       ...(h.skillsProposed ? { skills: proposedView(h.skillsProposed, allSkills) } : {}),
       ...(files.length ? { files } : {}),
       ...(renders.length ? { renders } : {}),
+      ...(sites.length ? { sites } : {}),
       ...(gens.length ? { gens } : {}),
       ...(devs.length ? { devs } : {}),
       ...(images.length ? { images } : {}),
@@ -442,6 +450,12 @@ export async function handleApp(t, path, body, headers, origin) {
       return approveImage(t, body.id);
     case '/app/image/cancel':
       return cancelImage(storage, body.id);
+    case '/app/site/approve':
+      return approveSite(t, body.id);
+    case '/app/site/cancel':
+      return cancelSite(storage, body.id);
+    case '/app/site/remove':
+      return removeSite(t, body.id);
 
     case '/app/dev/approve':
       return approveDev(t, body.id);

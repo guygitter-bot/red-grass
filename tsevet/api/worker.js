@@ -213,6 +213,23 @@ async function render(request, env, url) {
   return json(404, { error: 'not found' });
 }
 
+// ה-workflow שמפרסם אתר ל-Pages (tsevet-site.yml, sites.js). מזדהה עם הטוקן של GitHub שיש גם לשרת
+async function site(request, env, url) {
+  const bearer = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  if (!env.GITHUB_TOKEN || !env.FILES || !bearer || !safeEqual(bearer, env.GITHUB_TOKEN)) return json(403, { error: 'forbidden' });
+  const id = url.searchParams.get('id') || '';
+  const route = `${request.method} ${url.pathname}`;
+  if (route === 'GET /site/input') {
+    const r = await call(env, '/internal/site-input', { id, f: url.searchParams.get('f') });
+    return r.status === 200 ? stream(request, env, r.data.key, r.data.type) : json(r.status, r.data);
+  }
+  const routes = { 'GET /site/job': 'site-job', 'POST /site/done': 'site-done', 'POST /site/fail': 'site-fail' };
+  if (!routes[route]) return json(404, { error: 'not found' });
+  const body = request.method === 'POST' ? await request.json().catch(() => ({})) : {};
+  const r = await call(env, `/internal/${routes[route]}`, { ...body, id });
+  return json(r.status, r.data);
+}
+
 // ה-workflow של המתכנת (tsevet-dev.yml). מזדהה עם הטוקן של GitHub שיש גם לשרת
 async function dev(request, env, url) {
   const bearer = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
@@ -252,6 +269,7 @@ export default {
     const { pathname } = url;
     if (pathname.startsWith('/app/')) return app(request, env, url);
     if (pathname.startsWith('/file/') && (request.method === 'GET' || request.method === 'HEAD')) return serveFile(request, env, url);
+    if (pathname.startsWith('/site/')) return site(request, env, url);
     if (pathname.startsWith('/render/')) return render(request, env, url);
     if (pathname.startsWith('/dev/')) return dev(request, env, url);
     if (request.method === 'GET' && pathname === '/') return new Response('צוות 🤖');

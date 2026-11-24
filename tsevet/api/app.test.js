@@ -1506,3 +1506,75 @@ test('the owner message remembers which bot it was sent to', async () => {
   assert.equal(view.messages[0].to, 'lawyer');
   assert.equal(view.messages[1].who, 'lawyer');
 });
+
+test('creative publishes a landing page to its own pages.dev site, only after approval; never over a project it did not create', async () => {
+  const { env, outside } = setupEnv({ replies: [] }, { GEMINI_API_KEY: 'g' });
+  const token = await signIn(env);
+  const photo = await upload(env, token, { type: 'image/jpeg', name: 'hero.jpg' });
+  const other = await upload(env, token, { type: 'image/jpeg', name: 'private.jpg' });
+  const page = `<!doctype html><html dir="rtl"><body><h1>מבצע קיץ</h1><img src="{{file:${photo.data.id}}}"></body></html>`;
+  env.AI_CLIENT = fakeAI({ replies: [
+    { stop: 'tool_use', content: tool('make_file', { kind: 'html', name: 'מבצע קיץ', content: page }) },
+    { content: text('הדף מוכן') },
+  ] }, []);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'תעשה דף נחיתה ותעלה אותו', to: 'creative' }, token);
+  await env.team.alarm();
+  let view = (await call(env, '/app/conv', { id: conv.id }, token)).data;
+  const fileId = view.messages[1].files[0].id;
+
+  env.AI_CLIENT = fakeAI({ replies: [
+    { stop: 'tool_use', content: tool('publish_page', { file: fileId, slug: 'Bad Slug!' }) },
+    { stop: 'tool_use', content: [{ type: 'tool_use', id: 't_pp2', name: 'publish_page', input: { file: fileId, slug: 'summer-sale', title: 'מבצע קיץ' } }] },
+    { content: text('מחכה לאישור') },
+  ] }, []);
+  await call(env, '/app/send', { id: conv.id, text: 'תעלה', to: 'creative' }, token);
+  await env.team.alarm();
+  const cardOf = async () => (await call(env, '/app/conv', { id: conv.id }, token)).data.messages.at(-1).sites[0];
+  let card = await cardOf();
+  assert.equal(card.status, 'proposed');
+  assert.equal(card.url, 'https://summer-sale.pages.dev');
+  assert.equal(outside.filter((o) => o.url.endsWith('/dispatches')).length, 0);
+
+  assert.equal((await call(env, '/app/site/approve', { id: card.id }, token)).status, 200);
+  const dispatch = outside.find((o) => o.url.endsWith('/dispatches'));
+  assert.equal(dispatch.body.event_type, 'tsevet-site');
+  assert.equal((await cardOf()).status, 'publishing');
+
+  // ה-workflow: רק עם הטוקן
+  const gh = (path, init = {}) => worker.fetch(new Request(`${API}${path}`, { ...init, headers: { authorization: `Bearer ${GH}`, ...(init.headers || {}) } }), env);
+  assert.equal((await worker.fetch(new Request(`${API}/site/job?id=${card.id}`), env)).status, 403);
+  const job = await (await gh(`/site/job?id=${card.id}`)).json();
+  assert.deepEqual({ action: job.action, slug: job.slug, ours: job.ours, page: job.page }, { action: 'deploy', slug: 'summer-sale', ours: false, page: fileId });
+  assert.deepEqual(job.images.map((x) => x.id), [photo.data.id]);
+  assert.equal((await gh(`/site/input?id=${card.id}&f=${fileId}`)).status, 200);
+  assert.equal((await gh(`/site/input?id=${card.id}&f=${photo.data.id}`)).status, 200);
+  // רק הדף והתמונות שבו
+  assert.equal((await gh(`/site/input?id=${card.id}&f=${other.data.id}`)).status, 404);
+  assert.equal((await gh(`/site/done?id=${card.id}`, { method: 'POST', body: JSON.stringify({ url: 'https://summer-sale-a1b.pages.dev' }) })).status, 200);
+  card = await cardOf();
+  assert.equal(card.status, 'live');
+  assert.equal(card.url, 'https://summer-sale-a1b.pages.dev');
+
+  // הורדה מהאוויר
+  assert.equal((await call(env, '/app/site/remove', { id: card.id }, token)).status, 200);
+  const job2 = await (await gh(`/site/job?id=${card.id}`)).json();
+  assert.deepEqual({ action: job2.action, ours: job2.ours }, { action: 'remove', ours: true });
+  await gh(`/site/done?id=${card.id}`, { method: 'POST', body: '{}' });
+  assert.equal((await cardOf()).status, 'removed');
+
+  // שם תפוס (אפליקציה אחרת): נכשל עם הסבר
+  env.AI_CLIENT = fakeAI({ replies: [
+    { stop: 'tool_use', content: tool('publish_page', { file: fileId, slug: 'promptika' }) },
+    { content: text('מחכה') },
+  ] }, []);
+  await call(env, '/app/send', { id: conv.id, text: 'לפרומפטיקה', to: 'creative' }, token);
+  await env.team.alarm();
+  const taken = await cardOf();
+  await call(env, '/app/site/approve', { id: taken.id }, token);
+  assert.equal((await (await gh(`/site/job?id=${taken.id}`)).json()).ours, false);
+  await gh(`/site/fail?id=${taken.id}`, { method: 'POST', body: JSON.stringify({ reason: 'taken' }) });
+  const after = await cardOf();
+  assert.equal(after.status, 'failed');
+  assert.match(after.error, /תפוס/);
+});

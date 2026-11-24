@@ -10,6 +10,7 @@ import { FileView, RenderCard } from './Files';
 import { GenCard } from './Gen';
 import { DevCard } from './DevCard';
 import { ImageCard } from './ImageCard';
+import { SiteCard } from './SiteCard';
 import { SkillCard } from './SkillCard';
 
 function Body({ m }) {
@@ -42,6 +43,13 @@ function Body({ m }) {
         <div className="mt-2 space-y-2">
           {m.images.map((g) => (
             <ImageCard key={g.id} image={g} />
+          ))}
+        </div>
+      )}
+      {m.sites?.length > 0 && (
+        <div className="mt-2 space-y-2">
+          {m.sites.map((x) => (
+            <SiteCard key={x.id} site={x} />
           ))}
         </div>
       )}

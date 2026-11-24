@@ -94,6 +94,14 @@ const ai = {
             { to: 'campaigns', request: 'תוכנית קמפיין בדיקה בפייסבוק לריל, תקציב קטן' },
           ] } }], usage };
         }
+        // הקריאייטיב: "תעלה לאוויר" – דף נחיתה ואז הצעה לפרסם אותו
+        if (role.startsWith('You are "קריאייטיב"') && /תעלה|לאוויר/.test(prompt)) {
+          const done = JSON.stringify(req.messages);
+          const saved = done.match(/Saved as \[file (\w+)/);
+          if (!saved) return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 's1', name: 'make_file', input: { kind: 'html', name: 'מבצע קיץ', content: '<!doctype html><html dir="rtl" lang="he"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><body style="font-family:sans-serif;text-align:center;padding:40px;background:#fff7ed"><h1>מבצע קיץ ☀️</h1><p>20% הנחה על הכול</p><a href="#join" style="background:#ea580c;color:#fff;padding:12px 24px;border-radius:12px;text-decoration:none">להצטרפות</a></body></html>' } }], usage };
+          if (!done.includes('publish proposal')) return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 's2', name: 'publish_page', input: { file: saved[1], slug: 'summer-sale', title: 'מבצע קיץ' } }], usage };
+          return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'בניתי את הדף. לחץ **"לפרסם"** והוא יעלה לכתובת קבועה 👇' }], usage };
+        }
         // הספרן: מחפש במאגר, מלמד את העורך, ומדווח
         if (role.startsWith('You are "ספרן"')) {
           const done = JSON.stringify(req.messages);
@@ -167,6 +175,13 @@ const env = {
         setTimeout(() => {
           fetch(`http://localhost:${PORT}/dev/done?id=${client_payload.id}`, { method: 'POST', headers: { authorization: `Bearer ${TOKEN}`, 'content-type': 'application/json' }, body: JSON.stringify({ pr: 99, summary: 'נוסף כפתור 🖨️ בדף המתכון, שמדפיס רק את המתכון.\nאחרי העלייה: לסגור ולפתוח את האפליקציה.' }) }).catch(() => {});
         }, 4000);
+        return new Response(null, { status: 204 });
+      }
+      // פרסום אתר מדומה: אחרי שתי שניות "באוויר" (בלי Cloudflare)
+      if (event_type === 'tsevet-site') {
+        setTimeout(() => {
+          fetch(`http://localhost:${PORT}/site/done?id=${client_payload.id}`, { method: 'POST', headers: { authorization: `Bearer ${TOKEN}` }, body: JSON.stringify({ url: 'https://summer-sale.pages.dev' }) }).catch(() => {});
+        }, 2000);
         return new Response(null, { status: 204 });
       }
       // עריכה חכמה מדומה: בלי Claude Code – הקובץ הראשון חוזר כ"סרטון ערוך" אחרי כמה שניות
