@@ -94,6 +94,13 @@ const ai = {
             { to: 'campaigns', request: 'תוכנית קמפיין בדיקה בפייסבוק לריל, תקציב קטן' },
           ] } }], usage };
         }
+        // סושיאל: "פוסט" עם תמונה מהשיחה – הצעה לאינסטגרם ולפייסבוק
+        if (role.startsWith('You are "סושיאל"') && /פוסט/.test(prompt)) {
+          const done = JSON.stringify(req.messages);
+          const img = [...prompt.matchAll(/\[file (\w+): photo/g)].pop();
+          if (img && !done.includes('post proposal')) return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'p1', name: 'propose_post', input: { text: 'העוגה הכי קלה שתכינו השבוע 🍰\nהמתכון המלא ב-mat-kon (קישור בביו)\n\n#מתכונים #אפייה', targets: ['instagram', 'facebook'], kind: 'post', file: img[1] } }], usage };
+          return { stop_reason: 'end_turn', content: [{ type: 'text', text: 'הכנתי את הפוסט. מאשרים בכרטיס והוא עולה 👇' }], usage };
+        }
         // הקריאייטיב: "תעלה לאוויר" – דף נחיתה ואז הצעה לפרסם אותו
         if (role.startsWith('You are "קריאייטיב"') && /תעלה|לאוויר/.test(prompt)) {
           const done = JSON.stringify(req.messages);
@@ -208,6 +215,17 @@ const env = {
     if (url.startsWith('https://api.github.com/search/code')) return new Response(JSON.stringify({ items: [{ path: 'skills/trip-planner/SKILL.md', repository: { full_name: 'good/travel-skills' } }] }));
     if (url === 'https://api.github.com/repos/good/travel-skills') return new Response(JSON.stringify({ full_name: 'good/travel-skills', owner: { login: 'good' }, stargazers_count: 850, pushed_at: new Date().toISOString(), license: { spdx_id: 'MIT' }, html_url: 'https://github.com/good/travel-skills' }));
     if (url.startsWith('https://api.github.com/repos/good/travel-skills/contents/')) return new Response('# Trip planner\nPlan day by day.');
+    // Meta מדומה (פייסבוק ואינסטגרם): כל פרסום מצליח מיד
+    if (url.startsWith('https://graph.facebook.com/')) {
+      const path = new URL(url).pathname;
+      const ok = (x) => new Response(JSON.stringify(x));
+      if (path.endsWith('/media')) return ok({ id: 'C1' });
+      if (path === '/C1') return ok({ status_code: 'FINISHED' });
+      if (path.endsWith('/media_publish')) return ok({ id: 'M1' });
+      if (path === '/M1') return ok({ permalink: 'https://www.instagram.com/p/demo/' });
+      if (path.endsWith('/photos')) return ok({ id: '7', post_id: '111_7' });
+      return ok({ id: '111_5' });
+    }
     // מחולל תמונות מדומה: ריבוע סגול קטן
     if (url.includes('generativelanguage.googleapis.com') && url.includes(':generateContent')) {
       const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
@@ -226,6 +244,8 @@ const env = {
   },
 };
 env.team = new Team({ storage: memoryStorage() }, env);
+// פייסבוק ואינסטגרם "מחוברים" (DEV_META=0 – לא מחוברים, כדי לראות את מסך החיבור)
+if (process.env.DEV_META !== '0') await env.team.storage.put('meta:conn', { pages: [{ id: '111', name: 'mat-kon', token: 'dev', ig: { id: '999', username: 'matkon' } }], at: Date.now() });
 env.TEAM = { idFromName: (n) => n, get: () => ({ fetch: (url, init) => env.team.fetch(new Request(url, init)) }) };
 
 http.createServer(async (req, res) => {

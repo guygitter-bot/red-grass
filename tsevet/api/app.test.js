@@ -924,7 +924,7 @@ test('the Instagram bot has the ig skill pack built in, the owner voice and the 
   await call(env, '/app/send', { id: conv.id, text: 'ריל על mat-kon', to: 'social' }, token);
   await env.team.alarm();
   const [first, second] = aiCalls;
-  assert.match(first.system[0].text, /^You are "אינסטגרם"/);
+  assert.match(first.system[0].text, /^You are "סושיאל"/);
   assert.match(first.system[0].text, /- ig-reel: ig-reel – Write an Instagram Reel/);
   const names = first.tools.find((t) => t.name === 'use_skill').input_schema.properties.name.enum;
   for (const n of ['ig-reel', 'ig-caption', 'ig-human', 'ig-plan', 'ig-voice', 'mat-kon-message']) assert.ok(names.includes(n), n);
@@ -1577,4 +1577,123 @@ test('creative publishes a landing page to its own pages.dev site, only after ap
   const after = await cardOf();
   assert.equal(after.status, 'failed');
   assert.match(after.error, /תפוס/);
+});
+
+// ---------- סושיאל: חיבור לפייסבוק ואינסטגרם ופרסום באישור ----------
+function fakeMeta(calls, { reelStatus = ['IN_PROGRESS', 'FINISHED'] } = {}) {
+  const statuses = [...reelStatus];
+  return async (url, init = {}) => {
+    const u = new URL(url);
+    const body = init.body ? Object.fromEntries(new URLSearchParams(init.body)) : {};
+    calls.push({ path: u.pathname, method: init.method || 'GET', query: Object.fromEntries(u.searchParams), body });
+    const ok = (x) => new Response(JSON.stringify(x));
+    if (u.pathname === '/oauth/access_token') return ok({ access_token: u.searchParams.get('grant_type') ? 'LONG' : 'SHORT' });
+    if (u.pathname === '/me/accounts') return ok({ data: [{ id: '111', name: 'mat-kon', access_token: 'PAGE', instagram_business_account: { id: '999', username: 'matkon' } }] });
+    if (u.pathname === '/111/feed') return ok({ id: '111_5' });
+    if (u.pathname === '/111/photos') return ok({ id: '7', post_id: '111_7' });
+    if (u.pathname === '/111/videos') return ok({ id: '8' });
+    if (u.pathname === '/999/media') return ok({ id: body.media_type === 'REELS' ? 'C_REEL' : 'C_IMG' });
+    if (u.pathname === '/C_IMG') return ok({ status_code: 'FINISHED' });
+    if (u.pathname === '/C_REEL') return ok({ status_code: statuses.shift() || 'FINISHED' });
+    if (u.pathname === '/999/media_publish') return ok({ id: 'M1' });
+    if (u.pathname === '/M1') return ok({ permalink: 'https://www.instagram.com/reel/abc/' });
+    if (url.includes('api.github.com')) return new Response(null, { status: 204 });
+    return ok({ ok: true });
+  };
+}
+
+test('social: connect Facebook/Instagram once, then publish posts and reels only after approval', async () => {
+  const meta = [];
+  const { env } = setupEnv({ replies: [] }, { FETCH: fakeMeta(meta) });
+  const token = await signIn(env);
+  // חיבור: פרטי האפליקציה (הסוד לא חוזר), התחברות, וחזרה עם קוד
+  assert.equal((await call(env, '/app/meta/app', { appId: '12345678', secret: 'x' }, token)).status, 400);
+  assert.equal((await call(env, '/app/meta/app', { appId: '12345678', secret: 'a'.repeat(32) }, token)).status, 200);
+  let status = (await call(env, '/app/meta/status', {}, token)).data;
+  assert.equal(status.configured, true);
+  assert.equal(JSON.stringify(status).includes('a'.repeat(32)), false);
+  assert.equal(status.redirect, `${API}/meta/callback`);
+  const { url } = (await call(env, '/app/meta/start', {}, token)).data;
+  const state = new URL(url).searchParams.get('state');
+  assert.match(url, /instagram_content_publish/);
+  // state מזויף – נדחה
+  assert.equal((await worker.fetch(new Request(`${API}/meta/callback?code=c&state=bad`), env)).status, 400);
+  const { url: url2 } = (await call(env, '/app/meta/start', {}, token)).data;
+  const back = await worker.fetch(new Request(`${API}/meta/callback?code=c&state=${new URL(url2).searchParams.get('state')}`), env);
+  assert.equal(back.status, 302);
+  assert.equal(back.headers.get('location'), `${ORIGIN}/#/settings`);
+  assert.notEqual(state, new URL(url2).searchParams.get('state'));
+  status = (await call(env, '/app/meta/status', {}, token)).data;
+  assert.deepEqual(status.pages, [{ id: '111', name: 'mat-kon', ig: { username: 'matkon' } }]);
+  assert.equal(JSON.stringify(status).includes('PAGE'), false);
+
+  // הבוט מציע פוסט עם תמונה (PNG) ופוסט טקסט מתוזמן
+  const png = await upload(env, token, { type: 'image/png', name: 'post.png' });
+  const jpg = await upload(env, token, { type: 'image/jpeg', name: 'post.jpg' });
+  env.AI_CLIENT = fakeAI({ replies: [
+    { stop: 'tool_use', content: tool('propose_post', { text: 'טעים!', targets: ['instagram', 'facebook'], kind: 'post', file: png.data.id }) },
+    { stop: 'tool_use', content: [{ type: 'tool_use', id: 't_pp2', name: 'propose_post', input: { text: 'מחר בשבע', targets: ['facebook'], kind: 'post', when: new Date(Date.now() + 48 * 3600_000).toLocaleString('sv-SE', { timeZone: 'Asia/Jerusalem' }).slice(0, 16) } }] },
+    { content: text('הכנתי שני פוסטים') },
+  ] }, []);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'תעלה פוסט', files: [png.data.id], to: 'social' }, token);
+  await env.team.alarm();
+  const cards = async () => (await call(env, '/app/conv', { id: conv.id }, token)).data.messages.at(-1).posts;
+  let [post, later] = await cards();
+  assert.equal(post.status, 'proposed');
+  assert.equal(post.jpeg, false);
+  assert.equal(later.when > Date.now(), true);
+  assert.equal(meta.some((c) => c.method === 'POST' && /\/(111|999)\//.test(c.path)), false);
+
+  // אינסטגרם רק JPEG: בלי JPEG – נדחה; עם JPEG – מתפרסם בשני המקומות
+  assert.equal((await call(env, '/app/social/approve', { id: post.id }, token)).data.error, 'needs-jpeg');
+  assert.equal((await call(env, '/app/social/approve', { id: post.id, jpeg: jpg.data.id }, token)).status, 200);
+  await env.team.alarm();
+  [post, later] = await cards();
+  assert.equal(post.status, 'done');
+  assert.equal(post.results.facebook.url, 'https://www.facebook.com/111_7');
+  assert.equal(post.results.instagram.url, 'https://www.instagram.com/reel/abc/');
+  const igMedia = meta.find((c) => c.path === '/999/media');
+  assert.match(igMedia.body.image_url, new RegExp(`/file/${jpg.data.id}\\?`));
+  assert.equal(igMedia.body.caption, 'טעים!');
+  assert.equal(igMedia.body.access_token, 'PAGE');
+
+  // מתוזמן: מאושר, לא מתפרסם לפני הזמן, ואפשר לבטל
+  await call(env, '/app/social/approve', { id: later.id }, token);
+  await env.team.alarm();
+  [, later] = await cards();
+  assert.equal(later.status, 'scheduled');
+  assert.equal(meta.some((c) => c.path === '/111/feed'), false);
+  assert.equal((await call(env, '/app/social/cancel', { id: later.id }, token)).status, 200);
+
+  // ריל: האינסטגרם מעבד – נבדק שוב עד שמוכן
+  const video = await upload(env, token, { type: 'video/mp4', name: 'reel.mp4', bytes: new Uint8Array(20).fill(3) });
+  env.AI_CLIENT = fakeAI({ replies: [
+    { stop: 'tool_use', content: tool('propose_post', { text: 'ריל חדש', targets: ['instagram'], kind: 'reel', file: video.data.id }) },
+    { content: text('מוכן') },
+  ] }, []);
+  await call(env, '/app/send', { id: conv.id, text: 'ריל', files: [video.data.id], to: 'social' }, token);
+  await env.team.alarm();
+  let [reel] = await cards();
+  await call(env, '/app/social/approve', { id: reel.id }, token);
+  await env.team.alarm();
+  [reel] = await cards();
+  assert.equal(reel.status, 'publishing');
+  assert.equal(meta.find((c) => c.path === '/999/media' && c.body.media_type === 'REELS').body.share_to_feed, 'true');
+  await env.team.alarm();
+  [reel] = await cards();
+  assert.equal(reel.status, 'done');
+});
+
+test('social: without a connection the bot is told to write the post ready to copy', async () => {
+  const { env, aiCalls } = setupEnv({ replies: [
+    { stop: 'tool_use', content: tool('propose_post', { text: 'היי', targets: ['facebook'], kind: 'post' }) },
+    { content: text('הנה הטקסט להעתקה') },
+  ] });
+  const token = await signIn(env);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'פוסט', to: 'social' }, token);
+  await env.team.alarm();
+  assert.ok(aiCalls[0].tools.some((x) => x.name === 'propose_post'));
+  assert.match(JSON.stringify(aiCalls[1].messages.at(-1)), /not connected yet/);
 });

@@ -149,6 +149,8 @@ async function serveFile(request, env, url) {
     'cache-control': 'private, max-age=3600',
     'cross-origin-resource-policy': 'cross-origin',
     'content-disposition': url.searchParams.get('dl') ? `attachment; filename="tsevet-${id.slice(0, 6)}.${ext}"` : 'inline',
+    // תמונה: האפליקציה ממירה אותה ל-JPEG לאינסטגרם (קישור חתום – מי שיש לו אותו כבר יכול להוריד)
+    ...(check.data.kind === 'image' ? { 'access-control-allow-origin': '*' } : {}),
   });
 }
 
@@ -213,6 +215,22 @@ async function render(request, env, url) {
   return json(404, { error: 'not found' });
 }
 
+// GET /meta/callback?code=&state= – Meta מחזירה לכאן אחרי "התחברות עם פייסבוק" (meta.js). state חד-פעמי מאמת שההתחברות
+// התחילה מהאפליקציה; הטוקנים נשמרים בשרת בלבד. בסוף – חזרה להגדרות באפליקציה
+async function metaCallback(request, env, url) {
+  const page = (title, text, status = 200) => new Response(
+    `<!doctype html><html lang="he" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${title}</title><body style="font-family:system-ui,sans-serif;max-width:28rem;margin:3rem auto;padding:0 1rem;line-height:1.6"><h1 style="font-size:1.3rem">${title}</h1><p>${text}</p></body></html>`,
+    { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' } },
+  );
+  const esc = (s) => String(s).replace(/[<>&"]/g, '');
+  if (url.searchParams.get('error')) return page('ההתחברות בוטלה', 'אפשר לחזור לאפליקציה ולנסות שוב מההגדרות.');
+  const r = await call(env, '/internal/meta-finish', { code: url.searchParams.get('code') || '', state: url.searchParams.get('state') || '', origin: url.origin });
+  if (r.status !== 200) return page('ההתחברות לא הצליחה', esc(r.data?.error || 'אפשר לנסות שוב מההגדרות.'), 400);
+  const app = String(env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).find((s) => /^https:\/\/[^*]+$/.test(s));
+  if (app) return Response.redirect(`${app}/#/settings`, 302);
+  return page('חובר ✓', 'פייסבוק ואינסטגרם מחוברים. אפשר לחזור לאפליקציה.');
+}
+
 // ה-workflow שמפרסם אתר ל-Pages (tsevet-site.yml, sites.js). מזדהה עם הטוקן של GitHub שיש גם לשרת
 async function site(request, env, url) {
   const bearer = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
@@ -270,6 +288,7 @@ export default {
     if (pathname.startsWith('/app/')) return app(request, env, url);
     if (pathname.startsWith('/file/') && (request.method === 'GET' || request.method === 'HEAD')) return serveFile(request, env, url);
     if (pathname.startsWith('/site/')) return site(request, env, url);
+    if (pathname === '/meta/callback' && request.method === 'GET') return metaCallback(request, env, url);
     if (pathname.startsWith('/render/')) return render(request, env, url);
     if (pathname.startsWith('/dev/')) return dev(request, env, url);
     if (request.method === 'GET' && pathname === '/') return new Response('צוות 🤖');

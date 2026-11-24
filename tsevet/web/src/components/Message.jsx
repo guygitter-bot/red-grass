@@ -11,6 +11,7 @@ import { GenCard } from './Gen';
 import { DevCard } from './DevCard';
 import { ImageCard } from './ImageCard';
 import { SiteCard } from './SiteCard';
+import { PostCard } from './PostCard';
 import { SkillCard } from './SkillCard';
 
 function Body({ m }) {
@@ -43,6 +44,13 @@ function Body({ m }) {
         <div className="mt-2 space-y-2">
           {m.images.map((g) => (
             <ImageCard key={g.id} image={g} />
+          ))}
+        </div>
+      )}
+      {m.posts?.length > 0 && (
+        <div className="mt-2 space-y-2">
+          {m.posts.map((x) => (
+            <PostCard key={x.id} post={x} />
           ))}
         </div>
       )}

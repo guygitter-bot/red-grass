@@ -27,6 +27,7 @@ import { addSkill, learnFrom, listItems, pendingOf, read as maagarRead, search a
 import { genDone, genFail, genReady, genStart, proposeClip, runGenJob } from './gen.js';
 import { CREATORS, FILE_MAKERS, imagesReady, makeFile, proposeImage } from './create.js';
 import { proposeSite, siteDone, siteFail, siteInput, siteJob } from './sites.js';
+import { finishMeta, proposePost, runSocial, socialAccounts } from './meta.js';
 import { designSkills } from './design.js';
 import { FIND_SKILLS } from './findskills.js';
 import { DEFAULT_BUDGET, isDue, nextOf } from './schedule.js';
@@ -137,6 +138,9 @@ export class Team {
         return { type: f.type, name: f.name, kind: f.kind, ...(f.links?.length ? { links } : {}) };
       }
       // פרסום אתר ל-Pages (publish_page, tsevet-site.yml)
+      // חיבור לפייסבוק ואינסטגרם: Meta חוזרת עם קוד (meta.js)
+      case '/internal/meta-finish':
+        return finishMeta(this, body);
       case '/internal/site-job':
         return siteJob(storage, body.id);
       case '/internal/site-input':
@@ -206,8 +210,9 @@ export class Team {
 
   // ההשכמה הבאה: המשימה הקבועה הקרובה (אם אין עבודה בתור)
   async armSchedules() {
-    const next = nextOf((await this.storage.get('schedules')) || [], Date.now());
-    if (!next) return;
+    const times = [nextOf((await this.storage.get('schedules')) || [], Date.now()), await this.storage.get('social:next')].filter(Boolean);
+    if (!times.length) return;
+    const next = Math.min(...times);
     const current = await this.storage.getAlarm();
     if (!current || current > next || current < Date.now()) await this.storage.setAlarm(next);
   }
@@ -399,6 +404,11 @@ export class Team {
     // במופע של יצירת סרטון ("gen:<id>") זו כל העבודה
     if (await runGenJob(this)) return;
     await this.runSchedules();
+    // פוסטים מאושרים: מה שהגיע זמנו מתפרסם, וריל באינסטגרם נבדק עד שמוכן (meta.js)
+    await this.storage.put('social:next', await runSocial(this).catch((e) => {
+      console.error('social', e);
+      return Date.now() + 60_000;
+    }));
     const started = Date.now();
     while (Date.now() - started < ALARM_BUDGET_MS) {
       const q = (await this.storage.get('q')) || [];
@@ -465,6 +475,7 @@ export class Team {
     const made = [];
     const imgs = [];
     const sites = [];
+    const posts = [];
     const maagar = Boolean(this.env.MAAGAR);
     // סקילים מ-GitHub: מה שנמצא בחיפוש (רק אותו אפשר לקרוא), ומה שנקרא אחרון (מקור הסקיל שיישמר)
     const githubFound = new Map();
@@ -507,6 +518,8 @@ export class Team {
       // קבצים ותמונות (רק קריאייטיב והמתכנת; התמונה רק באישור – create.js)
       make_file: (input) => makeFile(this, input, made),
       make_image: (input) => (CREATORS.includes(job.target) ? proposeImage(this, job, input, imgs) : 'Not available for you.'),
+      social_accounts: () => (job.target === 'social' ? socialAccounts(this) : 'Not available for you.'),
+      propose_post: (input) => (job.target === 'social' ? proposePost(this, job, input, posts) : 'Not available for you.'),
       publish_page: (input) => (CREATORS.includes(job.target) ? proposeSite(this, job, input, sites) : 'Not available for you.'),
       // מאגר AI: הרשימה נטענת פעם אחת לכל עבודה
       maagar_search: async ({ query, area }) => maagarSearch(await items(), query, area),
@@ -628,6 +641,7 @@ export class Team {
         ...(made.length ? { files: made.splice(0) } : {}),
         ...(imgs.length ? { images: imgs.splice(0) } : {}),
         ...(sites.length ? { sites: sites.splice(0) } : {}),
+        ...(posts.length ? { posts: posts.splice(0) } : {}),
         ...(proposed.length ? { skillsProposed: proposed.splice(0) } : {}),
         at: Date.now(),
       });
