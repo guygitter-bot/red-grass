@@ -3,7 +3,8 @@
 מקום אחד לסרטונים על GTA 6: מדביקים קישור (פייסבוק, אינסטגרם, טיקטוק, יוטיוב), ו-Claude כותב לכל סרטון
 **כותרת שאומרת מה יש בו**, תקציר קצר, ו**רשימת קודים** אם הסרטון נותן קודים. הסרטונים מסודרים לקטגוריות לפי נושא.
 
-כתובת: **https://gta6-videos.pages.dev** (Cloudflare Pages, `.github/workflows/gta6.yml`).
+כתובת: **https://gta6-videos-97q.pages.dev** (Cloudflare Pages, `.github/workflows/gta6.yml`).
+(השם gta6-videos.pages.dev תפוס – Cloudflare הוסיף לשם שלנו את הסיומת 97q.)
 
 ## מה יש
 

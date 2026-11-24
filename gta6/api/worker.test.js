@@ -56,7 +56,7 @@ function fakeAI(calls = []) {
 const page = (title) => new Response(`<html><head><title>${title}</title><meta property="og:description" content="תיאור"></head><body><p>${'טקסט '.repeat(120)}</p></body></html>`, { status: 200, headers: { 'content-type': 'text/html' } });
 
 function fakeEnv(extra = {}) {
-  const env = { ALLOWED_ORIGINS: 'https://gta6-videos.pages.dev', AI_CLIENT: fakeAI(), FETCH: async (url) => page(url), ...extra };
+  const env = { ALLOWED_ORIGINS: 'https://gta6-videos-97q.pages.dev', AI_CLIENT: fakeAI(), FETCH: async (url) => page(url), ...extra };
   env.lib = new Library({ storage: fakeStorage() }, env);
   env.LIBRARY = { idFromName: (n) => n, get: () => ({ fetch: (req) => env.lib.fetch(req) }) };
   return env;
@@ -65,7 +65,7 @@ function fakeEnv(extra = {}) {
 async function call(env, path, body) {
   const res = await worker.fetch(new Request(`https://api.test${path}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', origin: 'https://gta6-videos.pages.dev' },
+    headers: { 'content-type': 'application/json', origin: 'https://gta6-videos-97q.pages.dev' },
     body: JSON.stringify(body),
   }), env);
   return { status: res.status, cors: res.headers.get('access-control-allow-origin'), data: await res.json() };
@@ -75,7 +75,7 @@ test('open without a password, only for the app site', async () => {
   const env = fakeEnv();
   const res = await call(env, '/list', {});
   assert.equal(res.status, 200);
-  assert.equal(res.cors, 'https://gta6-videos.pages.dev');
+  assert.equal(res.cors, 'https://gta6-videos-97q.pages.dev');
   assert.deepEqual(res.data.items, []);
   assert.equal((await call(env, '/learn-from', {})).status, 404);
 });
