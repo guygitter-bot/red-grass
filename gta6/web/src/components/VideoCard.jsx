@@ -1,5 +1,5 @@
 import { AlertCircle, KeyRound, Loader2, PlayCircle } from 'lucide-react';
-import { codesOf, codesText, isWaiting, sourceOf } from '../lib/videos';
+import { codesOf, codesText, isWaiting, isWatching, needsUpload, sourceOf } from '../lib/videos';
 
 // כרטיס של סרטון ברשימה: מאיפה, כותרת (מה יש בסרטון), כמה קודים
 export default function VideoCard({ item, emoji, onOpen }) {
@@ -22,6 +22,12 @@ export default function VideoCard({ item, emoji, onOpen }) {
           <Loader2 size={15} className="animate-spin" /> קורא את הסרטון...
         </p>
       )}
+      {!waiting && isWatching(item) && (
+        <p className="flex items-center gap-1.5 text-sm text-accent-ink">
+          <Loader2 size={15} className="animate-spin" /> צופה בסרטון...
+        </p>
+      )}
+      {!waiting && needsUpload(item) && <p className="text-sm text-amber-700 dark:text-amber-400">אפשר להעלות את הסרטון כדי שאצפה בו</p>}
       {item.status === 'failed' && (
         <p className="flex items-center gap-1.5 text-sm text-red-600 dark:text-red-400">
           <AlertCircle size={15} /> {item.error || 'הקריאה נכשלה'}

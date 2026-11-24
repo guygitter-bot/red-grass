@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, Inbox, KeyRound, Moon, Pencil, Search, Sun } from 'lucide-react';
-import { api } from './lib/api';
-import { allCodes, categoryList, CODES, codesText, countText, filterFromHash, filterItems, hashFromFilter, isWaiting, newestTitles, parsePasted, sharedText } from './lib/videos';
+import { api, uploadVideo } from './lib/api';
+import { allCodes, categoryList, CODES, codesText, countText, filterFromHash, filterItems, hashFromFilter, isWaiting, isWatching, newestTitles, parsePasted, sharedText } from './lib/videos';
 import { isDark, setTheme } from './lib/theme';
 import AddBox from './components/AddBox';
 import CategoryTile from './components/CategoryTile';
@@ -45,15 +45,16 @@ export default function App() {
     load();
   }, [load]);
 
-  // בזמן קריאה – רענון כל 3 שניות עד שהכול מוכן
+  // בזמן קריאה / צפייה בסרטון – רענון כל 3 שניות עד שהכול מוכן
   const waiting = items.some(isWaiting);
+  const busy3 = waiting || items.some(isWatching);
   useEffect(() => {
-    if (!waiting) return undefined;
+    if (!busy3) return undefined;
     const timer = setInterval(load, 3000);
     return () => {
       clearInterval(timer);
     };
-  }, [waiting, load]);
+  }, [busy3, load]);
 
   // חזרה לאפליקציה – רענון (אולי נוסף משהו ממכשיר אחר)
   useEffect(() => {
@@ -272,6 +273,11 @@ export default function App() {
           onClose={() => setOpenId(null)}
           onUpdate={(patch) => act('/update', { id: open.id, ...patch })}
           onRetry={() => act('/retry', { id: open.id })}
+          onWatch={() => act('/video/watch', { id: open.id })}
+          onUpload={async (file, onProgress) => {
+            await uploadVideo(open.id, file, onProgress);
+            await load();
+          }}
           onDelete={async () => {
             setOpenId(null);
             await act('/delete', { id: open.id });

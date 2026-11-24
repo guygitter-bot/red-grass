@@ -4,14 +4,22 @@
 //   i:<id>   -> סרטון { id, url, note, status, title, summary, codes: [{code, effect, platform}], category, emoji, tags, ... }
 //               status: pending (מחכה לקריאה) | working | ready | failed
 //               codesEdited = הקודים נערכו ידנית – "לקרוא שוב" לא ידרוס אותם
+//               video = הצפייה בסרטון עם Gemini (ראו google.js):
+//                 { state: 'fetching', at }         – GitHub Actions מוריד את הסרטון מהקישור (gta6-fetch.yml)
+//                 { state: 'need_upload', error }   – ההורדה האוטומטית לא הצליחה: מעלים מהטלפון
+//                 { state: 'uploaded', file | youtube, at, tries } – מחכה לצפייה (file = קובץ ב-Gemini)
+//                 { state: 'watched', at } | { state: 'failed', error }
+//               watched = מה ש-Gemini ראה ושמע בסרטון (עובר ל-Claude)
 //   cats     -> { <שם קטגוריה>: { emoji } }
 //   day      -> { date, count }  כמה סרטונים נוספו היום (מגבלה יומית – האפליקציה בלי סיסמה)
+//   vday     -> { date, count }  כמה צפיות של Gemini היום (DAILY_VIDEOS ב-wrangler.toml)
 //
 // הוספה שומרת את הסרטון מיד ("קורא...") ו-Durable Object alarm קורא אותו ברקע –
 // כך שאפשר לסגור את האפליקציה באמצע, והקריאה ממשיכה.
 import Anthropic from '@anthropic-ai/sdk';
 import { aiMessage, classify, cleanCodes, temporary } from './ai.js';
 import { gatherLink, youtubeId, youtubeSource } from './source.js';
+import { deleteFile, fileState, googleTemporary, listModels, pickWatchModel, watchVideo } from './google.js';
 import { isPublicUrl } from './net.js';
 
 const MAX_NOTE = 1000;
@@ -21,6 +29,18 @@ const MAX_ATTEMPTS = 3;
 const STUCK_MS = 10 * 60 * 1000;
 const PER_ALARM = 5;
 const ID_RE = /^[\w-]{6,64}$/;
+// הורדה אוטומטית שלא חזרה תוך הזמן הזה – מבקשים להעלות מהטלפון
+const FETCH_MS = 15 * 60 * 1000;
+const WATCH_TRIES = 3;
+const FILE_WAIT_MS = 60_000;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const NEED_UPLOAD = {
+  off: 'ההורדה האוטומטית עוד לא מחוברת. אפשר להעלות את הסרטון מהטלפון.',
+  blocked: 'לא הצלחתי להוריד את הסרטון מהקישור (האתר חוסם). אפשר להעלות אותו מהטלפון.',
+  too_big: 'הסרטון גדול מדי להורדה. אפשר להעלות גרסה קצרה יותר מהטלפון.',
+  timeout: 'ההורדה האוטומטית לא הסתיימה. אפשר להעלות את הסרטון מהטלפון.',
+};
 
 const itemKey = (id) => `i:${id}`;
 
@@ -63,6 +83,7 @@ export class Library {
     if (pathname === '/list') return json(200, await this.list());
     if (pathname === '/add') return this.add(body);
     if (pathname === '/category') return this.renameCategory(body);
+    if (pathname === '/video/fetch-failed') return this.fetchFailed(body);
 
     const item = ID_RE.test(String(body.id || '')) ? await this.storage.get(itemKey(body.id)) : null;
     if (!item) return json(404, { error: 'הסרטון לא נמצא' });
@@ -86,7 +107,17 @@ export class Library {
       await this.storage.put(itemKey(item.id), item);
       return json(200, { item });
     }
+    if (pathname === '/video/watch') return this.startWatch(item);
+    if (pathname === '/video/can-upload') {
+      if (!this.canWatch()) return json(400, { error: 'צפייה בסרטונים עוד לא מחוברת' });
+      return item.video?.state === 'uploaded' && !item.video.youtube ? json(409, { error: 'כבר יש סרטון שמחכה לצפייה' }) : json(200, { ok: true });
+    }
+    if (pathname === '/video/ready') return this.videoReady(item, body.file);
+    if (pathname === '/video/job') {
+      return item.video?.state === 'fetching' ? json(200, { url: item.url }) : json(409, { error: 'אין הורדה פתוחה' });
+    }
     if (pathname === '/delete') {
+      if (item.video?.file) await deleteFile(this.env, item.video.file.name);
       await this.storage.delete(itemKey(item.id));
       return json(200, { ok: true });
     }
@@ -148,6 +179,7 @@ export class Library {
 
   // ---------- הקריאה ברקע ----------
   async alarm() {
+    await this.videoWork();
     const now = Date.now();
     const waiting = (await this.allItems())
       .filter((i) => (i.status === 'pending' && !(i.retryAt > now)) || (i.status === 'working' && now - i.startedAt > STUCK_MS))
@@ -155,8 +187,13 @@ export class Library {
     for (const item of waiting.slice(0, PER_ALARM)) await this.process(item.id);
     if (waiting.length > PER_ALARM) return this.wake();
     // סרטון שמחכה לניסיון חוזר אחרי עומס
-    const later = (await this.allItems()).filter((i) => i.status === 'pending' && i.retryAt > now);
-    if (later.length) await this.wake(Math.min(...later.map((i) => i.retryAt)));
+    const all = await this.allItems();
+    const times = [
+      ...all.filter((i) => i.status === 'pending' && i.retryAt > now).map((i) => i.retryAt),
+      ...all.filter((i) => i.video?.state === 'uploaded').map((i) => Math.max(now + 1000, i.video.retryAt || 0)),
+      ...all.filter((i) => i.video?.state === 'fetching').map((i) => i.video.at + FETCH_MS),
+    ];
+    if (times.length) await this.wake(Math.min(...times));
   }
 
   async process(id) {
@@ -165,6 +202,9 @@ export class Library {
     item.attempts = (item.attempts || 0) + 1;
     if (item.attempts > MAX_ATTEMPTS) return this.save(id, { status: 'failed', error: item.error || 'לא הצלחתי לקרוא את הסרטון. נסו שוב.' });
     item = await this.save(id, { status: 'working', startedAt: Date.now(), attempts: item.attempts });
+
+    // קריאה ראשונה: מתחילים גם את הצפייה בסרטון (ברקע; כשהיא מסתיימת – קוראים שוב עם מה שנראה ונשמע)
+    if (!item.video && this.canWatch()) item = (await this.queueVideo(item)) || item;
 
     const categories = await this.categoryNames();
     const fetchFn = this.env.FETCH || fetch;
@@ -187,6 +227,116 @@ export class Library {
     const codes = latest.codesEdited ? latest.codes : result.codes;
     await this.ensureCategory(category, result.emoji);
     await this.save(id, { ...result, category, codes, status: 'ready', error: '', retryAt: 0 });
+  }
+
+  // ---------- צפייה בסרטון (Gemini) ----------
+  canWatch() {
+    return Boolean(this.env.GEMINI_API_KEY);
+  }
+
+  // יוטיוב – Gemini צופה ישירות מהקישור; אחר – GitHub Actions מוריד את הסרטון ומעלה אותו
+  async queueVideo(item) {
+    const video = youtubeId(item.url);
+    if (video) return this.save(item.id, { video: { state: 'uploaded', youtube: `https://www.youtube.com/watch?v=${video}`, at: Date.now(), tries: 0 } });
+    return this.save(item.id, { video: await this.dispatchFetch(item) });
+  }
+
+  async dispatchFetch(item) {
+    const { GITHUB_TOKEN, GITHUB_REPO } = this.env;
+    if (!GITHUB_TOKEN || !GITHUB_REPO) return { state: 'need_upload', error: NEED_UPLOAD.off };
+    try {
+      const res = await (this.env.FETCH || fetch)(`https://api.github.com/repos/${GITHUB_REPO}/dispatches`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${GITHUB_TOKEN}`, accept: 'application/vnd.github+json', 'x-github-api-version': '2022-11-28', 'user-agent': 'gta6-videos', 'content-type': 'application/json' },
+        body: JSON.stringify({ event_type: 'gta6-fetch', client_payload: { id: item.id } }),
+      });
+      if (!res.ok) return { state: 'need_upload', error: NEED_UPLOAD.off };
+    } catch {
+      return { state: 'need_upload', error: NEED_UPLOAD.off };
+    }
+    return { state: 'fetching', at: Date.now() };
+  }
+
+  // "לצפות בסרטון" (גם שוב, או אחרי שנכשל)
+  async startWatch(item) {
+    if (!this.canWatch()) return json(400, { error: 'צפייה בסרטונים עוד לא מחוברת' });
+    if (['fetching', 'uploaded'].includes(item.video?.state)) return json(200, { item });
+    if (item.video?.file) await deleteFile(this.env, item.video.file.name);
+    const next = await this.queueVideo(item);
+    await this.wake();
+    return json(200, { item: next });
+  }
+
+  // הסרטון עלה ל-Gemini (מהטלפון או מההורדה האוטומטית)
+  async videoReady(item, file) {
+    if (!file || typeof file.name !== 'string' || typeof file.uri !== 'string') return json(400, { error: 'בקשה לא תקינה' });
+    if (item.video?.file && item.video.file.name !== file.name) await deleteFile(this.env, item.video.file.name);
+    const next = await this.save(item.id, { video: { state: 'uploaded', file: { name: file.name, uri: file.uri, mimeType: file.mimeType }, at: Date.now(), tries: 0 } });
+    await this.wake();
+    return json(200, { item: next });
+  }
+
+  // ההורדה האוטומטית נכשלה (מ-gta6-fetch.yml)
+  async fetchFailed(body) {
+    const item = ID_RE.test(String(body.id || '')) ? await this.storage.get(itemKey(body.id)) : null;
+    if (!item) return json(404, { error: 'הסרטון לא נמצא' });
+    if (item.video?.state !== 'fetching') return json(200, { ok: true });
+    await this.save(item.id, { video: { state: 'need_upload', error: NEED_UPLOAD[body.reason] || NEED_UPLOAD.blocked } });
+    return json(200, { ok: true });
+  }
+
+  // בכל alarm: הורדות שלא חזרו, וסרטונים שמחכים לצפייה
+  async videoWork() {
+    const now = Date.now();
+    for (const item of await this.allItems()) {
+      const v = item.video;
+      if (v?.state === 'fetching' && now - v.at > FETCH_MS) await this.save(item.id, { video: { state: 'need_upload', error: NEED_UPLOAD.timeout } });
+      if (v?.state === 'uploaded' && !(v.retryAt > now)) await this.watch(item);
+    }
+  }
+
+  async watchModel() {
+    if (this.env.WATCH_MODEL) return this.env.WATCH_MODEL;
+    const cached = await this.storage.get('wmodel');
+    if (cached && Date.now() - cached.at < 24 * 3600 * 1000) return cached.name;
+    const name = pickWatchModel(await listModels(this.env));
+    if (!name) throw Object.assign(new Error('לא מצאתי אצל Google מודל שיודע לצפות בסרטונים.'), { status: 0 });
+    await this.storage.put('wmodel', { name, at: Date.now() });
+    return name;
+  }
+
+  async watch(item) {
+    const v = item.video;
+    const fail = (error) => this.save(item.id, { video: { state: 'failed', error } });
+    try {
+      // קובץ שעלה – מחכים ש-Google יסיים לעבד אותו
+      if (v.file) {
+        let state = await fileState(this.env, v.file.name);
+        const until = Date.now() + FILE_WAIT_MS;
+        while (state === 'PROCESSING' && Date.now() < until) {
+          await sleep(5000);
+          state = await fileState(this.env, v.file.name);
+        }
+        if (state === 'PROCESSING') return this.save(item.id, { video: { ...v, retryAt: Date.now() + 20_000 } });
+        if (state !== 'ACTIVE') return fail('Google לא הצליח לקרוא את קובץ הסרטון. נסו להעלות שוב.');
+      }
+      // מגבלה יומית של צפיות (עולה כסף)
+      const date = new Date().toISOString().slice(0, 10);
+      const day = (await this.storage.get('vday')) || {};
+      const count = day.date === date ? day.count : 0;
+      if (count >= (Number(this.env.DAILY_VIDEOS) || 40)) return fail('הגענו למגבלה היומית של צפייה בסרטונים. אפשר לנסות שוב מחר ("לצפות בסרטון").');
+      await this.storage.put('vday', { date, count: count + 1 });
+
+      const text = await watchVideo(this.env, await this.watchModel(), v.youtube ? { youtube: v.youtube } : v.file);
+      if (v.file) await deleteFile(this.env, v.file.name);
+      // קוראים שוב עם מה שנראה ונשמע (הקטגוריה / קודים שנערכו ידנית נשמרים)
+      await this.save(item.id, { watched: text, video: { state: 'watched', at: Date.now() }, status: 'pending', attempts: 0, retryAt: 0 });
+    } catch (e) {
+      const tries = (v.tries || 0) + 1;
+      if (googleTemporary(e) && tries < WATCH_TRIES) return this.save(item.id, { video: { ...v, tries, retryAt: Date.now() + 60_000 } });
+      if (v.file) await deleteFile(this.env, v.file.name);
+      return fail(/[\u0590-\u05FF]/.test(e?.message || '') ? e.message : 'לא הצלחתי לצפות בסרטון.');
+    }
   }
 
   async save(id, patch) {

@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react';
 import { ExternalLink, KeyRound, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { codesOf, isWaiting, PLATFORMS, sourceOf } from '../lib/videos';
 import CodeRow from './CodeRow';
+import WatchSection from './WatchSection';
 
 const NEW = '__new__';
 const EMPTY = { code: '', effect: '', platform: 'לא ידוע' };
 
-// פרטי סרטון: כותרת, תקציר, קודים (עם עריכה ידנית), הערה, קטגוריה, לקרוא שוב, מחיקה
-export default function VideoSheet({ item, categories, onClose, onUpdate, onDelete, onRetry }) {
+// פרטי סרטון: כותרת, תקציר, צפייה בסרטון, קודים (עם עריכה ידנית), הערה, קטגוריה, לקרוא שוב, מחיקה
+export default function VideoSheet({ item, categories, onClose, onUpdate, onDelete, onRetry, onWatch, onUpload }) {
   const [note, setNote] = useState(item.note || '');
   const [editing, setEditing] = useState(null); // רשימת קודים בעריכה, או null
 
@@ -68,6 +69,8 @@ export default function VideoSheet({ item, categories, onClose, onUpdate, onDele
         {item.status === 'failed' && <p className="text-red-600 dark:text-red-400 text-sm">{item.error || 'הקריאה נכשלה'}</p>}
         {item.summary && <p className="leading-relaxed">{item.summary}</p>}
 
+        <WatchSection item={item} onWatch={onWatch} onUpload={onUpload} />
+
         <section className="space-y-2">
           <div className="flex items-center gap-2">
             <h3 className="font-bold flex items-center gap-1.5"><KeyRound size={18} className="text-accent-ink" /> קודים</h3>
@@ -79,7 +82,7 @@ export default function VideoSheet({ item, categories, onClose, onUpdate, onDele
           </div>
 
           {!editing && !codes.length && !isWaiting(item) && (
-            <p className="text-sm text-muted">לא מצאתי קודים בסרטון. קוד שמופיע רק על המסך – אפשר להוסיף כאן ידנית.</p>
+            <p className="text-sm text-muted">לא מצאתי קודים בסרטון. אם ראיתם קוד שפספסתי – אפשר להוסיף כאן ידנית.</p>
           )}
           {!editing && codes.length > 0 && (
             <ul className="space-y-2">{codes.map((c) => <CodeRow key={c.code} code={c} />)}</ul>
