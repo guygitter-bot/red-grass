@@ -1,9 +1,10 @@
-// כרטיס לקוח: שם ועסק (נשמרים), ומקום לטופס הקליטה ולהצעות שיגיעו בהמשך
+// כרטיס לקוח: שם ועסק (נשמרים), טופס הקליטה (9 חלקים) והצעות
 import { ArrowRight, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { go } from '../lib/route';
 import { proposalCost, shekel } from '../lib/pricing';
+import Intake from '../components/Intake';
 import { Button, Card, ErrorLine, Field, inputClass } from '../components/ui';
 
 export default function Client({ id }) {
@@ -59,7 +60,7 @@ export default function Client({ id }) {
       {client && (
         <>
           <h1 className="text-2xl font-extrabold">{client.business || client.name}</h1>
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div>
             <Card>
               <form onSubmit={save} className="space-y-3">
                 <h2 className="font-bold">פרטים</h2>
@@ -78,12 +79,9 @@ export default function Client({ id }) {
                 </div>
               </form>
             </Card>
-
-            <Card className="border-dashed">
-              <h2 className="font-bold">טופס קליטה</h2>
-              <p className="mt-1 text-sm text-muted">כאן יופיע הטופס: הכלים שיש לעסק, מה חסר, ועוד (9 חלקים). בקרוב.</p>
-            </Card>
           </div>
+
+          <Intake key={id} clientId={id} serverIntake={client.intake} serverUpdatedAt={client.updatedAt} />
 
           <Card>
             <h2 className="font-bold">הצעות מחיר</h2>

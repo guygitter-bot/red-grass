@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import worker, { Studio } from './worker.js';
 import { login, MAX_TRIES, TRIES_WINDOW_MS } from './lib/auth.js';
-import { safeClient, safeSettings, DEFAULT_SETTINGS } from './lib/model.js';
+import { safeClient, safeIntake, safeSettings, DEFAULT_SETTINGS } from './lib/model.js';
 
 const ORIGIN = 'https://promptika.pages.dev';
 
@@ -106,18 +106,18 @@ test('clients: create, list, read, update, delete, propose stub', async () => {
   const made = await call('POST', '/clients', { name: 'לקוח לדוגמה', business: 'עסק בדוי' }, token);
   assert.equal(made.status, 201);
   const { id } = made.data.client;
-  assert.deepEqual(made.data.client.intake, {});
+  assert.deepEqual(made.data.client.intake, safeIntake({}));
   assert.deepEqual(made.data.client.proposals, []);
 
   const list = await call('GET', '/clients', undefined, token);
   assert.equal(list.data.clients.length, 1);
   assert.equal(list.data.clients[0].name, 'לקוח לדוגמה');
 
-  const upd = await call('PUT', `/clients/${id}`, { client: { business: 'עסק אחר', id: 'hack', intake: { tools: 'אקסל' } } }, token);
+  const upd = await call('PUT', `/clients/${id}`, { client: { business: 'עסק אחר', id: 'hack', intake: { business: { name: 'עסק בדוי' } } } }, token);
   assert.equal(upd.data.client.id, id);
   assert.equal(upd.data.client.business, 'עסק אחר');
   assert.equal(upd.data.client.name, 'לקוח לדוגמה');
-  assert.equal(upd.data.client.intake.tools, 'אקסל');
+  assert.equal(upd.data.client.intake.business.name, 'עסק בדוי');
 
   assert.equal((await call('POST', `/clients/${id}/propose`, {}, token)).status, 501);
   assert.equal((await call('DELETE', `/clients/${id}`, undefined, token)).status, 200);
@@ -126,7 +126,8 @@ test('clients: create, list, read, update, delete, propose stub', async () => {
 
 test('old data keeps working: safeClient / safeSettings fill defaults', () => {
   const c = safeClient({ id: 'x1', name: 'ישן' });
-  assert.deepEqual(c.intake, {});
+  assert.deepEqual(c.intake, safeIntake({}));
+  assert.deepEqual(safeClient({ intake: 'junk' }).intake, safeIntake({}));
   assert.deepEqual(c.proposals, []);
   const p = safeClient({ proposals: [{ tools: [{ name: 'בוט', buildHours: '12', price: 9999 }] }] }).proposals[0];
   assert.equal(p.version, 1);
@@ -134,4 +135,47 @@ test('old data keeps working: safeClient / safeSettings fill defaults', () => {
   assert.deepEqual(Object.keys(p.tools[0]).sort(), ['buildHours', 'monthlyHours', 'name', 'problem', 'spec']);
   assert.equal(p.tools[0].buildHours, 12);
   assert.deepEqual(safeSettings(undefined), DEFAULT_SETTINGS);
+});
+
+test('intake: round-trip through PUT, junk stripped, limits and enums enforced', async () => {
+  const { call } = setup();
+  const { token } = (await call('POST', '/login', { password: 'test-pass-1' })).data;
+  const { id } = (await call('POST', '/clients', { name: 'לקוח לדוגמה' }, token)).data.client;
+  const intake = {
+    business: { name: 'עסק בדוי', field: 'תחום', employees: '7', roles: 'מי עושה מה', evil: 'x' },
+    tools: [{ tool: 'אקסל', purpose: 'מעקב', monthlyCost: 50, extra: 1 }, 'not-a-row'],
+    pains: [{ pain: 'שכחתי לחזור', lastTime: 'שלשום', frequency: 'כל יום', hoursPerMonth: -5 }],
+    missing: ['תזכורות', 5],
+    tech: { maintain: 'partly', sensitive: 'maybe', sensitiveNote: 'הערה' },
+    unknown: { a: 1 },
+  };
+  const put = await call('PUT', `/clients/${id}`, { client: { intake } }, token);
+  assert.equal(put.status, 200);
+  const got = (await call('GET', `/clients/${id}`, undefined, token)).data.client.intake;
+  assert.equal(got.business.name, 'עסק בדוי');
+  assert.equal(got.business.employees, 7);
+  assert.equal(got.business.evil, undefined);
+  assert.equal(got.unknown, undefined);
+  assert.deepEqual(got.tools[0], { tool: 'אקסל', purpose: 'מעקב', monthlyCost: 50 });
+  assert.equal(got.tools[1].tool, '');
+  assert.equal(got.pains[0].hoursPerMonth, 0);
+  assert.deepEqual(got.missing, ['תזכורות', '']);
+  assert.equal(got.tech.maintain, 'partly');
+  assert.equal(got.tech.sensitive, '');
+  // עדכון של שם בלבד לא מוחק את הטופס
+  await call('PUT', `/clients/${id}`, { client: { name: 'שם חדש' } }, token);
+  assert.equal((await call('GET', `/clients/${id}`, undefined, token)).data.client.intake.business.name, 'עסק בדוי');
+});
+
+test('intake: rows capped, long text cut, bad numbers cleared', () => {
+  const i = safeIntake({
+    tools: Array.from({ length: 100 }, () => ({ tool: 'x' })),
+    business: { roles: 'ש'.repeat(5000), employees: 'abc' },
+    pains: [{ hoursPerMonth: 99999 }],
+  });
+  assert.equal(i.tools.length, 30);
+  assert.equal(i.business.roles.length, 3000);
+  assert.equal(i.business.employees, '');
+  assert.equal(i.pains[0].hoursPerMonth, 1000);
+  assert.equal(safeIntake(null).tech.maintain, '');
 });

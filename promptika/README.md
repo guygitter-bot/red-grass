@@ -3,7 +3,7 @@
 כלי פנימי לבעלים אחד, שבונה כלי AI לעסקים קטנים: קליטת לקוח (הכלים שיש לו / מה חסר) → Claude ממליץ על כלי AI,
 כותב אפיון ומעריך **שעות** → הקוד מחשב עלות הקמה ותחזוקה לפי ההגדרות.
 
-> **שלב נוכחי: שלד.** כניסה, לקוחות, הגדרות ושרת. טופס הקליטה (9 חלקים) וההצעות האוטומטיות יתווספו בהמשך
+> **שלב נוכחי:** כניסה, לקוחות, הגדרות, שרת וטופס הקליטה (9 חלקים). ההצעות האוטומטיות יתווספו בהמשך
 > על ידי 👨‍💻 המתכנת של `tsevet/` – שעורך רק קבצים בתוך `promptika/`.
 
 - **האפליקציה** – https://promptika.pages.dev (`web/`, React + Vite + Tailwind, RTL, PWA)
@@ -12,7 +12,7 @@
 ## מסכים (ניווט לפי #)
 - **כניסה** – בפעם הראשונה קובעים סיסמה, אחר כך נכנסים איתה.
 - `#/` – רשימת לקוחות + "לקוח חדש".
-- `#/client/:id` – כרטיס לקוח: שם ועסק, מקום לטופס הקליטה ולהצעות.
+- `#/client/:id` – כרטיס לקוח: שם ועסק, טופס הקליטה (9 חלקים מתקפלים, שמירה אוטומטית) והצעות.
 - `#/settings` – הגדרות התמחור + יציאה.
 
 ## מבנה השרת (`api/`)
@@ -34,7 +34,14 @@
 ## מבנה הנתונים (ב-Studio)
 - `auth` – `{ salt, hash, tries, tokens }` (הסיסמה רק כ-hash, האסימונים רק כ-sha256).
 - `settings` – `hourlyRate` (₪), `hostingMonthly` (₪), `apiMonthlyAvg` (₪), `depositPercent` (50), `revisionRounds` (2), `vatIncluded` (false).
-- `client:<id>` – `{ id, name, business, createdAt, updatedAt, intake: {}, proposals: [] }`.
+- `client:<id>` – `{ id, name, business, createdAt, updatedAt, intake: {…}, proposals: [] }`.
+- `intake` (טופס הקליטה, הכול אופציונלי; `safeIntake` ב-`api/lib/model.js`, מראה ב-`web/src/lib/intake.js` – לשנות בשניהם):
+  - `business` `{ name, field, employees, roles }` · `offer` `{ items, topEarner }` · `customers` `{ ideal, reach }`
+  - `tools` – שורות `{ tool, purpose, monthlyCost (₪) }` · `pains` – שורות `{ pain, lastTime, frequency, hoursPerMonth }` · `missing` – שורות טקסט
+  - `goal` `{ success }` · `budget` `{ budget, timeline }`
+  - `tech` `{ maintain: 'yes'|'no'|'partly'|'', dataLocation, decider, sensitive: 'yes'|'no'|'', sensitiveNote }`
+  - מספר ריק = `''`; עד 30 שורות לכל רשימה; מפתחות לא מוכרים נזרקים. שמירה אוטומטית (800ms) ב-`PUT /clients/:id`, וטיוטה ב-localStorage (`pk_draft_<id>`) עד שמירה מוצלחת.
+  - הגדרות החלקים והתוויות: `web/src/data/intakeSections.js`; הממשק: `web/src/components/Intake.jsx`.
 - הצעה (בתוך הלקוח) – `{ id, version, createdAt, tools: [{ name, problem, spec, buildHours, monthlyHours }], notes }`.
 
 כל שדה אופציונלי ומקבל ברירת מחדל ב-`safeSettings` / `safeClient` – נתונים ישנים ממשיכים לעבוד. שדה חדש = ברירת מחדל שם.
