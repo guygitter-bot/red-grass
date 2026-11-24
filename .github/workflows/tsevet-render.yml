@@ -42,13 +42,13 @@ jobs:
           op=$(curl -sf -H "authorization: Bearer $TSEVET_TOKEN" "$TSEVET_API/render/job?id=$RENDER_ID" | python3 -c "import json,sys; print(json.load(sys.stdin)['op'])") || op=""
           printf '%s' "$op" | grep -Eq '^[a-z_]*$' || op=""
           echo "op=$op" >> "$GITHUB_OUTPUT"
-      # כותרות מונפשות מצוירות בדפדפן (Chromium)
+      # כותרות מונפשות ואנימציית HTML ("תנועה") מצוירות בדפדפן (Chromium)
       - uses: actions/setup-node@v4
-        if: steps.job.outputs.op == 'motion_graphics'
+        if: steps.job.outputs.op == 'motion_graphics' || steps.job.outputs.op == 'animation'
         with:
           node-version: "22"
       - name: Browser for animated titles
-        if: steps.job.outputs.op == 'motion_graphics'
+        if: steps.job.outputs.op == 'motion_graphics' || steps.job.outputs.op == 'animation'
         run: |
           npm install -g --silent playwright@1.63.0
           npx --yes playwright@1.63.0 install --with-deps chromium
