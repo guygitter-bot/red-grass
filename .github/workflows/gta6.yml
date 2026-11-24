@@ -2,7 +2,7 @@ name: gta6
 
 # GTA 6 – סרטונים וקודים (gta6/):
 #   api -> Cloudflare Worker "gta6-videos-api" (כותרת וקודים לכל סרטון עם Claude)
-#   web -> Cloudflare Pages "gta6-videos" -> https://gta6-videos.pages.dev
+#   web -> Cloudflare Pages "gta6-videos" -> https://gta6-videos-97q.pages.dev
 on:
   push:
     branches: [main]
@@ -118,4 +118,4 @@ jobs:
         env:
           URL: ${{ steps.publish.outputs.deployment-url }}
         run: |
-          echo "Published: https://gta6-videos.pages.dev ($URL)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Published: https://gta6-videos-97q.pages.dev ($URL)" >> "$GITHUB_STEP_SUMMARY"
