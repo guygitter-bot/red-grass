@@ -1,5 +1,5 @@
-// פרומפטיקה – כלי פנימי לבעלים: לקוחות, אפיון והצעות מחיר.
-// ניווט: #/ (לקוחות) · #/client/:id (כרטיס לקוח) · #/client/:id/proposal/:pid (הצעה) · #/settings (הגדרות)
+// פרומפטיקה – כלי פנימי לבעלים: לקוחות, אפיון והמלצות למערכות.
+// ניווט: #/ (לקוחות) · #/client/:id (כרטיס לקוח) · #/client/:id/proposal/:pid (המלצות) · #/settings (הגדרות)
 import { useEffect, useState } from 'react';
 import { getToken } from './lib/api';
 import { useRoute } from './lib/route';

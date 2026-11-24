@@ -4,6 +4,7 @@ const num = (v, fallback, min = 0, max = 1_000_000) => {
   const n = Number(v);
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
 };
+const oneOf = (v, allowed) => (allowed.includes(v) ? v : '');
 const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
 
 export const DEFAULT_SETTINGS = {
@@ -39,12 +40,16 @@ export function safeBuildHours(b) {
 const list = (v, max = 20, len = 300) => (Array.isArray(v) ? v.slice(0, max).map((x) => str(x, len)).filter(Boolean) : []);
 const score = (v) => Math.round(num(v, 3, 1, 5));
 
-// כלי בהצעה: ה-AI מחזיר רק שעות – אין כאן שדה של כסף (חוץ מהערכת עלות ה-API החודשית שבסכמה)
+// מערכת מומלצת: החלפה של מערכת קיימת (kind: replace + replaces) או מערכת חדשה (new).
+// ה-AI מחזיר רק שעות (לתכנון פנימי) – אין כאן שדה של כסף, חוץ מהערכת עלות ה-API שבסכמה (לעתיד)
 export function safeTool(t) {
   t = obj(t);
   return {
+    kind: oneOf(t.kind, ['replace', 'new']) || 'new',
+    replaces: str(t.replaces, 200),
     name: str(t.name, 120),
     problem: str(t.problem, 2000),
+    whatItDoes: str(t.whatItDoes, 3000),
     benefit: score(t.benefit),
     effort: score(t.effort),
     savedHoursPerMonth: hours(t.savedHoursPerMonth),
@@ -73,6 +78,10 @@ export function safeProposal(p) {
     version: Math.round(num(p.version, 1, 1, 1000)),
     createdAt: num(p.createdAt, 0, 0, Number.MAX_SAFE_INTEGER),
     understanding: str(p.understanding, 5000),
+    currentSystems: (Array.isArray(p.currentSystems) ? p.currentSystems : []).slice(0, 30).map((x) => {
+      x = obj(x);
+      return { name: str(x.name, 200), verdict: oneOf(x.verdict, ['replace', 'keep', 'connect']) || 'keep', note: str(x.note, 1000) };
+    }).filter((x) => x.name),
     missingQuestions: list(p.missingQuestions, 15, 500),
     tools: (Array.isArray(p.tools) ? p.tools : []).slice(0, 30).map(safeTool),
     timeline: (Array.isArray(p.timeline) ? p.timeline : []).slice(0, 12).map((x) => ({ stage: str(obj(x).stage, 200), duration: str(obj(x).duration, 100) })),
@@ -87,7 +96,6 @@ const optNum = (v, max) => {
   const n = Number(v);
   return Number.isFinite(n) ? Math.min(max, Math.max(0, n)) : '';
 };
-const oneOf = (v, allowed) => (allowed.includes(v) ? v : '');
 const rows = (v, fn) => (Array.isArray(v) ? v.slice(0, MAX_ROWS).map(fn) : []);
 export const MAX_ROWS = 30;
 
@@ -101,7 +109,7 @@ export function safeIntake(i) {
     customers: { ideal: str(cu.ideal, 3000), reach: str(cu.reach, 3000) },
     tools: rows(i.tools, (r) => {
       r = obj(r);
-      return { tool: str(r.tool, 120), purpose: str(r.purpose, 500), monthlyCost: optNum(r.monthlyCost, 1_000_000) };
+      return { tool: str(r.tool, 120), purpose: str(r.purpose, 500), issues: str(r.issues, 2000), replace: oneOf(r.replace, ['yes', 'maybe', 'no']), monthlyCost: optNum(r.monthlyCost, 1_000_000) };
     }),
     pains: rows(i.pains, (r) => {
       r = obj(r);

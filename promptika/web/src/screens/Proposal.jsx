@@ -1,49 +1,40 @@
-// מסך הצעת המחיר ללקוח: #/client/:id/proposal/:pid – 8 סעיפים, עריכה במקום, גרסאות, הדפסה והעתקה לוואטסאפ
+// מסך ההמלצות ללקוח: #/client/:id/proposal/:pid – 6 סעיפים, עריכה במקום, גרסאות, הדפסה והעתקה לוואטסאפ (בלי כסף)
 import { ArrowRight, Check, Copy, CopyPlus, Printer } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { copyText } from '../lib/clipboard';
-import { packagesOf, safeSettings, stageHours } from '../lib/pricing';
-import { duplicateProposal, newProposalId, updateProposal } from '../lib/proposals';
+import { duplicateProposal, newProposalId, normalizeProposal, updateProposal } from '../lib/proposals';
 import { go } from '../lib/route';
 import { buildSummary } from '../lib/summary';
 import { useProposalSave } from '../lib/useProposalSave';
 import { Button, ErrorLine, Logo } from '../components/ui';
-import { BuildSection, MonthlySection } from '../components/proposal/Money';
-import { NextStepSection, TermsSection } from '../components/proposal/Closing';
-import { RecommendSection, SpecSection, TimelineSection, UnderstandingSection } from '../components/proposal/Understanding';
+import { NextStepSection } from '../components/proposal/Closing';
+import { SpecSection, TimelineSection } from '../components/proposal/Spec';
+import { BuildSection, CurrentSystemsSection, UnderstandingSection } from '../components/proposal/Understanding';
 
 const SAVE_TEXT = { dirty: 'שומר…', saving: 'שומר…', saved: 'נשמר ✓', error: 'לא נשמר – מנסה שוב' };
 
 export default function Proposal({ clientId, pid }) {
   const [client, setClient] = useState(null);
-  const [settings, setSettings] = useState(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
     api('GET', `/clients/${clientId}`)
       .then((c) => setClient(c.client))
       .catch((e) => setError(e.message));
-    const loadSettings = () => api('GET', '/settings').then((s) => setSettings(safeSettings(s.settings))).catch((e) => setError(e.message));
-    loadSettings();
-    // חזרה מהגדרות (או מלשונית אחרת) – מרעננים, והסכומים מתעדכנים
-    window.addEventListener('focus', loadSettings);
-    return () => {
-      window.removeEventListener('focus', loadSettings);
-    };
   }, [clientId]);
 
   if (error) return <ErrorLine text={error} />;
-  if (!client || !settings) return <p className="text-muted">טוען…</p>;
-  return <ProposalView key={clientId} client={client} settings={settings} pid={pid} />;
+  if (!client) return <p className="text-muted">טוען…</p>;
+  return <ProposalView key={clientId} client={client} pid={pid} />;
 }
 
-function ProposalView({ client, settings, pid }) {
+function ProposalView({ client, pid }) {
   const { proposals, change, status } = useProposalSave(client.id, client.proposals);
-  const [single, setSingle] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const p = proposals.find((x) => x.id === pid);
+  const raw = proposals.find((x) => x.id === pid);
+  const p = raw && normalizeProposal(raw);
   const back = (
     <a href={`#/client/${client.id}`} className="inline-flex items-center gap-1 text-sm font-medium text-turq-ink print:hidden">
       <ArrowRight size={16} aria-hidden />
@@ -54,7 +45,7 @@ function ProposalView({ client, settings, pid }) {
     return (
       <div className="space-y-3">
         {back}
-        <p className="text-muted">ההצעה לא נמצאה.</p>
+        <p className="text-muted">הגרסה לא נמצאה.</p>
       </div>
     );
   }
@@ -62,8 +53,6 @@ function ProposalView({ client, settings, pid }) {
   // שינוי בגרסה הזאת בלבד
   const set = (patch) => change((list) => updateProposal(list, pid, (x) => ({ ...x, ...patch })));
   const setTool = (i, patch) => set({ tools: p.tools.map((t, j) => (j === i ? { ...t, ...patch } : t)) });
-  const packs = packagesOf(p.tools, single);
-  const stages = p.tools.map(stageHours);
 
   function duplicate() {
     const r = duplicateProposal(proposals, pid, Date.now(), newProposalId());
@@ -73,8 +62,7 @@ function ProposalView({ client, settings, pid }) {
   }
 
   async function copySummary() {
-    const pack = packs.length > 1 ? packs[1] : packs[0];
-    const text = buildSummary({ business: client.business || client.name, tools: pack.tools, settings, nextStep: p.nextStep, packageLabel: packs.length > 1 ? pack.label : '' });
+    const text = buildSummary({ business: client.business || client.name, understanding: p.understanding, tools: p.tools, nextStep: p.nextStep });
     if (await copyText(text)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
@@ -88,12 +76,12 @@ function ProposalView({ client, settings, pid }) {
 
       {/* כותרת מותג – רק בהדפסה */}
       <div className="hidden items-center justify-between border-b-2 border-black pb-2 print:flex">
-        <Logo />
+        <span className="flex items-center gap-2"><Logo /><span className="text-sm font-bold">Promptika – אפיון מערכות</span></span>
         <span className="text-sm">{client.business || client.name} · גרסה {p.version}{date ? ` · ${date}` : ''}</span>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 print:hidden">
-        <h1 className="me-auto text-2xl font-extrabold">הצעה – {client.business || client.name}</h1>
+        <h1 className="me-auto text-2xl font-extrabold">המלצות למערכות – {client.business || client.name}</h1>
         <span className="text-sm text-muted" role="status" aria-live="polite">{SAVE_TEXT[status] || ''}</span>
       </div>
 
@@ -115,18 +103,6 @@ function ProposalView({ client, settings, pid }) {
             <CopyPlus size={18} aria-hidden />
             שכפול לגרסה חדשה
           </Button>
-          <div className="inline-flex rounded-lg border border-line p-0.5" role="group" aria-label="סוג הצעה">
-            {[[true, 'חבילה אחת'], [false, '3 חבילות']].map(([v, label]) => (
-              <button
-                key={label}
-                aria-pressed={single === v}
-                onClick={() => setSingle(v)}
-                className={`rounded-md px-3 py-2 text-sm font-medium ${single === v ? 'bg-night text-orange' : 'text-ink'}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => window.print()}>
@@ -138,16 +114,14 @@ function ProposalView({ client, settings, pid }) {
             {copied ? 'הועתק ✓' : 'העתקה לוואטסאפ'}
           </Button>
         </div>
-        <p className="text-xs text-muted">כל טקסט ומספר בהצעה ניתן לעריכה – לחצו עליו. השינויים נשמרים לגרסה הזאת בלבד.</p>
+        <p className="text-xs text-muted">כל טקסט ומספר במסמך ניתן לעריכה – לחצו עליו. השינויים נשמרים לגרסה הזאת בלבד.</p>
       </div>
 
       <UnderstandingSection p={p} set={set} />
-      <RecommendSection p={p} setTool={setTool} />
+      <CurrentSystemsSection p={p} set={set} />
+      <BuildSection p={p} setTool={setTool} />
       <SpecSection p={p} setTool={setTool} />
       <TimelineSection p={p} set={set} />
-      <BuildSection p={p} packs={packs} settings={settings} setTool={setTool} stages={stages} />
-      <MonthlySection packs={packs} settings={settings} />
-      <TermsSection settings={settings} p={p} set={set} />
       <NextStepSection p={p} set={set} />
     </div>
   );

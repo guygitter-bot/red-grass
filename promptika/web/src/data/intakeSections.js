@@ -26,11 +26,16 @@ export const INTAKE_SECTIONS = [
     ],
   },
   {
-    id: 'tools', key: 'tools', kind: 'rows', title: 'כלים קיימים', hint: 'מה כבר משתמשים בו היום – אקסל, וואטסאפ, מערכת ניהול…',
-    rowLabel: 'כלי', addLabel: 'הוספת כלי', empty: 'עוד לא נוסף כלי.',
+    id: 'tools', key: 'tools', kind: 'rows', title: 'המערכות היום', hint: 'במה העסק עובד היום – ומה מפריע בו',
+    rowLabel: 'מערכת', addLabel: 'הוספת מערכת', empty: 'עוד לא נוספה מערכת.',
     fields: [
-      { key: 'tool', label: 'איזה כלי?', type: 'text', placeholder: 'אקסל, וואטסאפ, CRM…' },
-      { key: 'purpose', label: 'למה משתמשים בו?', type: 'text', placeholder: 'מעקב לקוחות, תזכורות…' },
+      { key: 'tool', label: 'איזו מערכת / כלי?', type: 'text', placeholder: 'אקסל, וואטסאפ, CRM…' },
+      { key: 'purpose', label: 'למה משתמשים בה?', type: 'text', placeholder: 'מעקב לקוחות, תזכורות…' },
+      { key: 'issues', label: 'מה מפריע בה?', type: 'area', wide: true, placeholder: 'מה איטי, מסורבל או חסר' },
+      {
+        key: 'replace', label: 'להחליף אותה?', type: 'choice',
+        options: [{ value: 'yes', label: 'להחליף' }, { value: 'maybe', label: 'אולי' }, { value: 'no', label: 'להשאיר' }],
+      },
       { key: 'monthlyCost', label: 'כמה עולה בחודש?', type: 'number', placeholder: '0', suffix: '₪' },
     ],
   },
@@ -45,8 +50,8 @@ export const INTAKE_SECTIONS = [
     ],
   },
   {
-    id: 'missing', key: 'missing', kind: 'list', title: 'כלים חסרים', hint: 'מה הלקוח אומר שחסר לו, במילים שלו.',
-    rowLabel: 'חסר', addLabel: 'הוספת שורה', empty: 'עוד לא נוסף דבר.', placeholder: 'למשל: משהו שישלח תזכורות ללקוחות',
+    id: 'missing', key: 'missing', kind: 'list', title: 'מערכות שהיה רוצה', hint: 'מה הלקוח היה רוצה שיהיה לו – במילים שלו',
+    rowLabel: 'מערכת', addLabel: 'הוספת שורה', empty: 'עוד לא נוסף דבר.', placeholder: 'למשל: מערכת שתזכיר ללקוחות על תור',
   },
   {
     id: 'goal', key: 'goal', kind: 'fields', title: 'יעד במספרים', hint: 'איך נדע שהצליח.',
@@ -55,9 +60,8 @@ export const INTAKE_SECTIONS = [
     ],
   },
   {
-    id: 'budget', key: 'budget', kind: 'fields', title: 'תקציב ולוח זמנים', hint: 'כמה מוכנים להשקיע ועד מתי.',
+    id: 'budget', key: 'budget', kind: 'fields', title: 'לוח זמנים', hint: 'עד מתי צריך את זה',
     fields: [
-      { key: 'budget', label: 'מה התקציב?', type: 'text', placeholder: 'סכום או טווח, חד־פעמי וחודשי' },
       { key: 'timeline', label: 'עד מתי צריך את זה?', type: 'text', placeholder: 'תאריך או "בחודש הקרוב"' },
     ],
   },

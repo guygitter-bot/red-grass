@@ -14,7 +14,7 @@ const rows = (v, fn) => (Array.isArray(v) ? v.slice(0, MAX_ROWS).map(fn) : []);
 
 // שורה ריקה לכל סוג של רשימה חוזרת
 export const EMPTY_ROW = {
-  tools: { tool: '', purpose: '', monthlyCost: '' },
+  tools: { tool: '', purpose: '', issues: '', replace: '', monthlyCost: '' },
   pains: { pain: '', lastTime: '', frequency: '', hoursPerMonth: '' },
   missing: '',
 };
@@ -41,7 +41,8 @@ export function safeIntake(i) {
     customers: { ideal: str(cu.ideal, 3000), reach: str(cu.reach, 3000) },
     tools: rows(i.tools, (r) => {
       r = obj(r);
-      return { tool: str(r.tool, 120), purpose: str(r.purpose, 500), monthlyCost: optNum(r.monthlyCost, 1_000_000) };
+      // issues / replace חדשים – שורה ישנה בלעדיהם מקבלת ברירת מחדל
+      return { tool: str(r.tool, 120), purpose: str(r.purpose, 500), issues: str(r.issues, 2000), replace: oneOf(r.replace, ['yes', 'maybe', 'no']), monthlyCost: optNum(r.monthlyCost, 1_000_000) };
     }),
     pains: rows(i.pains, (r) => {
       r = obj(r);
