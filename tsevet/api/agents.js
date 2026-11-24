@@ -6,6 +6,7 @@ import { CODE_TOOLS } from './dev.js';
 import { CREATE_TOOLS, CREATORS, FILE_MAKERS } from './create.js';
 import { SITE_TOOLS } from './sites.js';
 import { SOCIAL_TOOLS } from './meta.js';
+import { AUDIO_TOOLS } from './audio.js';
 
 // שלוש רמות מודל. לכל בוט ברירת מחדל (tier), ואפשר לשנות אותה בהגדרות של האפליקציה.
 export const MODELS = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5', opus: 'claude-opus-5-5' };
@@ -568,7 +569,7 @@ const READ_FILE = {
     required: ['id'],
   },
 };
-export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, skills = [], gen = false, assign = false, noHandoff = false, github = false, bursa = false, code = false, create = false, imageGen = false, docs = false } = {}) => [
+export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, skills = [], gen = false, assign = false, noHandoff = false, github = false, bursa = false, code = false, create = false, imageGen = false, docs = false, audio = false } = {}) => [
   ...webTools(model, agent),
   ...(maagar ? MAAGAR_TOOLS : []),
   ...(maagar && agent === 'librarian' ? LIBRARIAN_TOOLS(team) : []),
@@ -576,6 +577,7 @@ export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, sk
   ...(github && SKILL_SEEKERS.includes(agent) ? GITHUB_TOOLS : []),
   ...(skills.length ? [USE_SKILL(skills)] : []),
   ...(docs && agent === 'social' ? SOCIAL_TOOLS : []),
+  ...(audio ? AUDIO_TOOLS : []),
   // הסוכנות (agency.js): ספריית המומחים – לכל הבוטים
   ...AGENCY_TOOLS,
   {
@@ -649,7 +651,7 @@ export function transcript(history, owner = 'הבעלים') {
 // תור אחד של בוט. tools = { app_info, remember, forget, edit_video } (פונקציות שמחזירות טקסט).
 // model = המודל של הבוט, team = מי זמין בערוץ, images = תמונות מההודעה האחרונה. מחזיר { text, handoff, usage[] }
 // maagar = יש חיבור למאגר AI, skills = הסקילים שהבוט הזה למד
-export async function runAgent(client, { agent, notes, history, owner, image, images = image ? [image] : [], model = MODEL, team = TG_KEYS, channel = 'tg', maagar = false, skills = [], pending = [], gen = false, task = '', assign = false, github = false, check = false, bursa = false, code = false, create = false, imageGen = false, extra = '' }, tools) {
+export async function runAgent(client, { agent, notes, history, owner, image, images = image ? [image] : [], model = MODEL, team = TG_KEYS, channel = 'tg', maagar = false, skills = [], pending = [], gen = false, task = '', assign = false, github = false, check = false, bursa = false, code = false, create = false, imageGen = false, audio = false, extra = '' }, tools) {
   // task = הוראה לתור הזה (שלב שהמנהל הקצה, או "סכם" למנהל). בשלב של תוכנית אין העברה הלאה
   const noHandoff = Boolean(task) && agent !== 'manager';
   const intro = `The conversation so far (latest at the bottom):\n\n${transcript(history, owner)}\n\n` +
@@ -667,7 +669,7 @@ export async function runAgent(client, { agent, notes, history, owner, image, im
       ...fallback,
       output_config: { effort: 'medium' },
       system: [{ type: 'text', text: systemPrompt(agent, notes, { team, channel, maagar, skills, pending, gen, github, check, extra }), cache_control: { type: 'ephemeral' } }],
-      tools: TOOLS(agent, team, model, { maagar, skills, gen, assign, noHandoff, github, bursa, code, create, imageGen, docs: channel === 'app' }),
+      tools: TOOLS(agent, team, model, { maagar, skills, gen, assign, noHandoff, github, bursa, code, create, imageGen, audio, docs: channel === 'app' }),
       messages,
     });
     usage.push({ model, ...(response.usage || {}) });

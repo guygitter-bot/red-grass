@@ -115,6 +115,11 @@
 - פרסום ב-alarm של Team (`runSocial`): פייסבוק – `/photos`, `/videos`, `/feed`; אינסטגרם – container ← בדיקה כל חצי דקה עד FINISHED ← `media_publish`. אינסטגרם מקבל רק JPEG – האפליקציה ממירה תמונה אחרת לפני האישור.
 - עוד לא: קמפיינים ממומנים (שלב שני) וקריאת נתונים מהעמוד.
 
+## 🎙️ קריינות, מוזיקה ואפקטים (ElevenLabs, באישור)
+- `make_audio` (`api/audio.js`, קריאייטיב + עורך וידאו + סושיאל): קריינות בעברית (ברירת מחדל הקול "נועה", `eleven_v4`, כמו בסרטוני ההדרכה), מוזיקה (`/v1/music`, אינסטרומנטלית, 10-180 שניות) או אפקט (`/v1/sound-generation`). `audio_voices` – הקולות שבחשבון.
+- צורך קרדיטים במנוי, ולכן רק **הצעה** עם "ליצור" (`/app/audio/approve`), תקרה `DAILY_AUDIO` (20). היצירה ב-alarm של Team (`runAudio`), והקובץ נכנס להודעה (`made`) – עורך הווידאו משלב אותו בסרטון.
+- הסוד `ELEVENLABS_API_KEY` (אותו של mat-kon) עובר לשרת ב-`tsevet.yml`.
+
 ## פרסום אתר 🌐 (קריאייטיב + המתכנת, באישור)
 - `publish_page` (`api/sites.js`): דף HTML שנוצר ב-`make_file` עולה לאתר משלו ב-Cloudflare Pages – `https://<שם>.pages.dev` – **רק אחרי "לפרסם"** בכרטיס (`/app/site/approve`); אותו שם = עדכון (גם באישור). "להוריד מהאוויר" מוחק את הפרויקט. עד 50 אתרים.
 - `.github/workflows/tsevet-site.yml` + `render/site.py`: מוריד את הדף והתמונות שבו (`/site/job`, `/site/input` עם הטוקן), יוצר פרויקט ומעלה עם wrangler, ומחזיר את הכתובת האמיתית (Cloudflare מוסיף סיומת אם השם תפוס אצל אחרים).

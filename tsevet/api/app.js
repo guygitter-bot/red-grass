@@ -20,6 +20,7 @@ import { approve as approveGen, cancel as cancelGen, dailyLimit, genReady, genVi
 import { approveDev, cancelDev, devView, discardDev, mergeDev } from './dev.js';
 import { approveImage, cancelImage, dailyImages, imageView } from './create.js';
 import { approveSite, cancelSite, removeSite, siteView } from './sites.js';
+import { approveAudio, audioView, cancelAudio } from './audio.js';
 import { approvePost, cancelPost, disconnectMeta, metaStatus, postView, saveMetaApp, startMeta } from './meta.js';
 import { approveRender, cancelRender, renderView } from './render.js';
 import { approveSkill, declineSkill } from './maagar.js';
@@ -221,6 +222,12 @@ async function convView(t, id, origin) {
       if (p) posts.push(p);
       if (p?.status === 'publishing') pending = true;
     }
+    const audios = [];
+    for (const aid of h.audios || []) {
+      const a = await audioView(t, aid, origin);
+      if (a) audios.push(a);
+      if (a?.status === 'working') pending = true;
+    }
     const devs = [];
     // אותה בקשה בכמה הודעות (הצעה, ואז "מוכן") – הכרטיס מוצג רק בהודעה האחרונה
     const later = new Set(history.slice(i + 1).flatMap((x) => x.devs || []));
@@ -241,6 +248,7 @@ async function convView(t, id, origin) {
       ...(renders.length ? { renders } : {}),
       ...(sites.length ? { sites } : {}),
       ...(posts.length ? { posts } : {}),
+      ...(audios.length ? { audios } : {}),
       ...(gens.length ? { gens } : {}),
       ...(devs.length ? { devs } : {}),
       ...(images.length ? { images } : {}),
@@ -354,7 +362,7 @@ async function costs(storage, clipsLimit = 0) {
   const prev = israelDate(new Date(`${month}-01T12:00:00Z`).getTime() - 5 * 24 * HOUR).slice(0, 7);
   const read = async (m) => {
     const c = (await storage.get(`cost:${m}`)) || {};
-    return { month: m, usd: c.usd || 0, days: c.days || {}, agents: c.agents || {}, clips: c.clips || 0, devs: c.devs || 0, devUsd: c.devUsd || 0, images: c.images || 0, smartEdits: c.smartEdits || 0, smartUsd: c.smartUsd || 0 };
+    return { month: m, usd: c.usd || 0, days: c.days || {}, agents: c.agents || {}, clips: c.clips || 0, devs: c.devs || 0, devUsd: c.devUsd || 0, images: c.images || 0, smartEdits: c.smartEdits || 0, smartUsd: c.smartUsd || 0, audios: c.audios || 0 };
   };
   const now = await read(month);
   return { today: now.days[date.slice(8)] || 0, now, prev: await read(prev), ils: ILS, clipsToday: (await storage.get(`clips:${date}`)) || 0, clipsLimit };
@@ -467,6 +475,11 @@ export async function handleApp(t, path, body, headers, origin) {
       return startMeta(t, origin);
     case '/app/meta/disconnect':
       return disconnectMeta(t);
+    // קריינות / מוזיקה (ElevenLabs): רק אחרי אישור (audio.js)
+    case '/app/audio/approve':
+      return approveAudio(t, body.id);
+    case '/app/audio/cancel':
+      return cancelAudio(storage, body.id);
     case '/app/social/approve':
       return approvePost(t, body, origin);
     case '/app/social/cancel':

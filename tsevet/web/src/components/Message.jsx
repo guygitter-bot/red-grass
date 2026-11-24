@@ -12,6 +12,7 @@ import { DevCard } from './DevCard';
 import { ImageCard } from './ImageCard';
 import { SiteCard } from './SiteCard';
 import { PostCard } from './PostCard';
+import { AudioCard } from './AudioCard';
 import { SkillCard } from './SkillCard';
 
 function Body({ m }) {
@@ -44,6 +45,13 @@ function Body({ m }) {
         <div className="mt-2 space-y-2">
           {m.images.map((g) => (
             <ImageCard key={g.id} image={g} />
+          ))}
+        </div>
+      )}
+      {m.audios?.length > 0 && (
+        <div className="mt-2 space-y-2">
+          {m.audios.map((x) => (
+            <AudioCard key={x.id} audio={x} />
           ))}
         </div>
       )}

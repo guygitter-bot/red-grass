@@ -135,6 +135,7 @@ const ai = {
         if (Array.isArray(results) && results[0]?.type === 'tool_result') {
           return { stop_reason: 'end_turn', content: [{ type: 'text', text: /started/i.test(results[0].content) ? 'התחלתי לערוך 🎬 בחרתי **גוון קולנועי**. הסרטון יופיע כאן כשיהיה מוכן.' : 'לא הצלחתי להתחיל את העריכה. אפשר לנסות שוב?' }], usage };
         }
+        if (role.startsWith('You are "עורך וידאו"') && /קריינות/.test(prompt) && !JSON.stringify(req.messages).includes('audio proposal')) return { stop_reason: 'tool_use', content: [{ type: 'text', text: 'הנה הצעה לקריינות 👇' }, { type: 'tool_use', id: 'a1', name: 'make_audio', input: { kind: 'voice', text: 'בלי AI, העסק שלך הולך אחורה. בואו נשנה את זה.', summary: 'קריינות לפתיחת הסרטון' } }], usage };
         if (role.startsWith('You are "עורך וידאו"')) {
           const video = [...prompt.matchAll(/\[file (\w+): video/g)].pop();
           if (video && /ריל|כתוביות/.test(prompt)) return { stop_reason: 'tool_use', content: [{ type: 'text', text: 'הכנתי תוכנית לעריכה חכמה 👇' }, { type: 'tool_use', id: 't1', name: 'edit_video', input: { op: 'smart_edit', files: [video[1]], tool: 'ghost-editor', brief: 'ריל אנכי של 30 שניות: הטייקים הטובים, בלי שתיקות, כתוביות בעברית, זומים ואפקטים עדינים.' } }], usage };
@@ -170,6 +171,7 @@ const env = {
   GEMINI_API_KEY: 'dev',
   ALLOWED_ORIGINS: 'http://localhost:5173,http://localhost:4173',
   GITHUB_TOKEN: TOKEN,
+  ELEVENLABS_API_KEY: 'dev',
   GITHUB_REPO: 'local/dev',
   FILES: memoryBucket(),
   AI_CLIENT: ai,
@@ -215,6 +217,11 @@ const env = {
     if (url.startsWith('https://api.github.com/search/code')) return new Response(JSON.stringify({ items: [{ path: 'skills/trip-planner/SKILL.md', repository: { full_name: 'good/travel-skills' } }] }));
     if (url === 'https://api.github.com/repos/good/travel-skills') return new Response(JSON.stringify({ full_name: 'good/travel-skills', owner: { login: 'good' }, stargazers_count: 850, pushed_at: new Date().toISOString(), license: { spdx_id: 'MIT' }, html_url: 'https://github.com/good/travel-skills' }));
     if (url.startsWith('https://api.github.com/repos/good/travel-skills/contents/')) return new Response('# Trip planner\nPlan day by day.');
+    // ElevenLabs מדומה: שנייה של שקט
+    if (url.startsWith('https://api.elevenlabs.io/')) {
+      await wait(1500);
+      return new Response(process.env.DEV_MP3 ? readFileSync(process.env.DEV_MP3) : new Uint8Array(400), { headers: { 'content-type': 'audio/mpeg' } });
+    }
     // Meta מדומה (פייסבוק ואינסטגרם): כל פרסום מצליח מיד
     if (url.startsWith('https://graph.facebook.com/')) {
       const path = new URL(url).pathname;
