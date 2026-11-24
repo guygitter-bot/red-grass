@@ -1616,6 +1616,11 @@ test('social: connect Facebook/Instagram once, then publish posts and reels only
   const { url } = (await call(env, '/app/meta/start', {}, token)).data;
   const state = new URL(url).searchParams.get('state');
   assert.match(url, /instagram_content_publish/);
+  // Facebook Login for Business: config_id במקום רשימת הרשאות
+  await call(env, '/app/meta/app', { appId: '12345678', secret: '', configId: '987654321' }, token);
+  const withConfig = new URL((await call(env, '/app/meta/start', {}, token)).data.url);
+  assert.equal(withConfig.searchParams.get('config_id'), '987654321');
+  assert.equal(withConfig.searchParams.get('scope'), null);
   // state מזויף – נדחה
   assert.equal((await worker.fetch(new Request(`${API}/meta/callback?code=c&state=bad`), env)).status, 400);
   const { url: url2 } = (await call(env, '/app/meta/start', {}, token)).data;
