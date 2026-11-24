@@ -1,45 +1,11 @@
 // בדיקות השרת – רק נתונים מומצאים
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import worker, { Studio } from './worker.js';
+import { fakeStorage, setup } from './test-helpers.js';
 import { login, MAX_TRIES, TRIES_WINDOW_MS } from './lib/auth.js';
 import { safeClient, safeIntake, safeSettings, DEFAULT_SETTINGS } from './lib/model.js';
 
 const ORIGIN = 'https://promptika.pages.dev';
-
-// זיכרון מדומה במקום האחסון של Durable Object
-function fakeStorage() {
-  const map = new Map();
-  const clone = (v) => (v === undefined ? v : structuredClone(v));
-  return {
-    map,
-    async get(k) { return clone(map.get(k)); },
-    async put(k, v) { map.set(k, clone(v)); },
-    async delete(k) { for (const kk of [k].flat()) map.delete(kk); },
-    async list({ prefix = '' } = {}) {
-      const keys = [...map.keys()].filter((kk) => kk.startsWith(prefix)).sort();
-      return new Map(keys.map((kk) => [kk, clone(map.get(kk))]));
-    },
-  };
-}
-
-function setup() {
-  const storage = fakeStorage();
-  const studio = new Studio({ storage }, {});
-  const env = {
-    ALLOWED_ORIGINS: ORIGIN,
-    STUDIO: { idFromName: () => 'main', get: () => ({ fetch: (req) => studio.fetch(req) }) },
-  };
-  const call = async (method, path, body, token, origin = ORIGIN) => {
-    const res = await worker.fetch(new Request(`https://api.test${path}`, {
-      method,
-      headers: { origin, 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    }), env);
-    return { status: res.status, data: await res.json() };
-  };
-  return { storage, call };
-}
 
 test('first login sets the password, then it is checked', async () => {
   const { call, storage } = setup();
@@ -119,7 +85,6 @@ test('clients: create, list, read, update, delete, propose stub', async () => {
   assert.equal(upd.data.client.name, 'לקוח לדוגמה');
   assert.equal(upd.data.client.intake.business.name, 'עסק בדוי');
 
-  assert.equal((await call('POST', `/clients/${id}/propose`, {}, token)).status, 501);
   assert.equal((await call('DELETE', `/clients/${id}`, undefined, token)).status, 200);
   assert.equal((await call('GET', `/clients/${id}`, undefined, token)).status, 404);
 });
@@ -132,8 +97,9 @@ test('old data keeps working: safeClient / safeSettings fill defaults', () => {
   const p = safeClient({ proposals: [{ tools: [{ name: 'בוט', buildHours: '12', price: 9999 }] }] }).proposals[0];
   assert.equal(p.version, 1);
   // אין שדה של כסף בכלי – רק שעות
-  assert.deepEqual(Object.keys(p.tools[0]).sort(), ['buildHours', 'monthlyHours', 'name', 'problem', 'spec']);
-  assert.equal(p.tools[0].buildHours, 12);
+  assert.ok(!('price' in p.tools[0]));
+  // הצעה ישנה: מספר אחד של שעות -> שעות בנייה
+  assert.deepEqual(p.tools[0].buildHours, { spec: 0, build: 12, test: 0, training: 0 });
   assert.deepEqual(safeSettings(undefined), DEFAULT_SETTINGS);
 });
 

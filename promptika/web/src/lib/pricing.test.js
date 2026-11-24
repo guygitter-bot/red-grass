@@ -37,6 +37,12 @@ describe('pricing', () => {
     expect(proposalCost({ tools: [{ buildHours: 'abc' }] }, settings).build).toBe(0);
   });
 
+  it('build hours by stage (new proposals) and as one number (old)', () => {
+    const staged = { tools: [{ buildHours: { spec: 2, build: 6, test: 1, training: 1 }, monthlyHours: 0 }] };
+    expect(proposalCost(staged, settings).buildHours).toBe(10);
+    expect(proposalCost(staged, settings).build).toBe(2000);
+  });
+
   it('ignores any money the AI might send', () => {
     expect(proposalCost({ tools: [{ buildHours: 1, price: 99999 }] }, settings).build).toBe(200);
   });

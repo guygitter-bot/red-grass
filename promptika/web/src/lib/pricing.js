@@ -18,11 +18,18 @@ export function safeSettings(s = {}) {
   };
 }
 
+// שעות הקמה של כלי: מספר (הצעה ישנה) או לפי שלב { spec, build, test, training }
+export function buildHoursOf(tool = {}) {
+  const b = tool.buildHours;
+  if (b && typeof b === 'object') return n(b.spec) + n(b.build) + n(b.test) + n(b.training);
+  return n(b);
+}
+
 // כלי אחד: עלות הקמה = שעות × תעריף; תחזוקה חודשית (שעות בלבד) = שעות בחודש × תעריף
 export function toolCost(tool = {}, settings) {
   const { hourlyRate } = safeSettings(settings);
   return {
-    build: round(n(tool.buildHours) * hourlyRate),
+    build: round(buildHoursOf(tool) * hourlyRate),
     monthlyWork: round(n(tool.monthlyHours) * hourlyRate),
   };
 }
@@ -31,7 +38,7 @@ export function toolCost(tool = {}, settings) {
 export function proposalCost(proposal = {}, settings) {
   const s = safeSettings(settings);
   const tools = Array.isArray(proposal.tools) ? proposal.tools : [];
-  const buildHours = tools.reduce((sum, t) => sum + n(t.buildHours), 0);
+  const buildHours = tools.reduce((sum, t) => sum + buildHoursOf(t), 0);
   const monthlyHours = tools.reduce((sum, t) => sum + n(t.monthlyHours), 0);
   const build = round(buildHours * s.hourlyRate);
   const monthly = tools.length ? round(monthlyHours * s.hourlyRate + s.hostingMonthly + s.apiMonthlyAvg) : 0;
