@@ -1,0 +1,29 @@
+{
+  "name": "GTA 6 סרטונים",
+  "short_name": "GTA 6 סרטונים",
+  "description": "סרטוני GTA 6 עם כותרת לכל סרטון ורשימת קודים",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#120c18",
+  "theme_color": "#d6266f",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "share_target": {
+    "action": "./",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
+}
