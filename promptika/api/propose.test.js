@@ -8,9 +8,10 @@ import { PROPOSE_PER_HOUR } from './routes/clients.js';
 
 const GOOD = {
   understanding: 'עסק בדוי לבדיקה',
+  currentSystems: [{ name: 'אקסל', verdict: 'replace', note: 'הכול ידני' }, { name: 'וואטסאפ', verdict: 'weird' }, { verdict: 'keep' }],
   missingQuestions: [],
   tools: [
-    { name: 'כלי קל', problem: 'בעיה', benefit: 3, effort: 1, savedHoursPerMonth: 4, estimate: true, buildHours: { spec: 2, build: 6, test: 2, training: 1 }, monthlyHours: 1, price: 5000 },
+    { kind: 'replace', replaces: 'אקסל', name: 'כלי קל', problem: 'בעיה', whatItDoes: 'מנהל לקוחות', benefit: 3, effort: 1, savedHoursPerMonth: 4, estimate: true, buildHours: { spec: 2, build: 6, test: 2, training: 1 }, monthlyHours: 1, price: 5000 },
     { name: 'כלי כבד', problem: 'בעיה 2', benefit: 5, effort: 5, savedHoursPerMonth: 9999, buildHours: { spec: 3, build: 900, test: -4, training: 'x' }, monthlyHours: 2, totalCost: 1, apiMonthlyEstimate: 40 },
   ],
   timeline: [{ stage: 'בנייה', duration: 'שבועיים' }],
@@ -58,11 +59,17 @@ test('creates a proposal: money stripped, hours clamped, ranked', async () => {
   assert.equal(heavy.savedHoursPerMonth, 500);
   assert.equal(heavy.estimate, true);
   assert.equal(heavy.apiMonthlyEstimate, 40);
+  // החלפה / חדשה, והמערכות היום
+  assert.equal(p.tools[0].kind, 'replace');
+  assert.equal(p.tools[0].replaces, 'אקסל');
+  assert.equal(p.tools[0].whatItDoes, 'מנהל לקוחות');
+  assert.equal(heavy.kind, 'new');
+  assert.deepEqual(p.currentSystems, [{ name: 'אקסל', verdict: 'replace', note: 'הכול ידני' }, { name: 'וואטסאפ', verdict: 'keep', note: '' }]);
   // דירוג: תועלת פחות מאמץ (3-1=2 לפני 5-5=0)
   assert.equal(p.tools[0].name, 'כלי קל');
   // הקליטה נשלחה כנתונים, וההנחיה בעברית
   assert.match(ai.calls[0].messages[0].content[0].text, /הודעות שהולכות לאיבוד/);
-  assert.match(ai.calls[0].system[0].text, /אל תחשב כסף/);
+  assert.match(ai.calls[0].system[0].text, /אל תכתוב מחירים/);
 });
 
 test('new versions never overwrite old ones', async () => {
@@ -116,6 +123,8 @@ test('parse helpers', () => {
   assert.equal(parseAnswer(JSON.stringify({ tools: [{ name: '' }] })), null);
   assert.deepEqual(stripMoney({ a: 1, cost: 2, nested: [{ priceIls: 3, b: 4 }] }), { a: 1, nested: [{ b: 4 }] });
   assert.ok(!intakeText(safeClient({ business: 'עסק בדוי' })).includes('""'));
+  const t = intakeText(safeClient({ intake: { budget: { budget: '9999', timeline: 'חודש' } } }));
+  assert.ok(!t.includes('9999') && t.includes('חודש'));
 });
 
 test('old skeleton proposals still load and version on', () => {
@@ -123,6 +132,8 @@ test('old skeleton proposals still load and version on', () => {
   const p = old.proposals[0];
   assert.deepEqual(p.tools[0].buildHours, { spec: 0, build: 10, test: 0, training: 0 });
   assert.deepEqual(p.missingQuestions, []);
+  assert.deepEqual(p.currentSystems, []);
+  assert.equal(p.tools[0].kind, 'new');
   assert.equal(p.notes, 'הערה');
   assert.equal(newVersion(old.proposals, GOOD, 1, 'b2').version, 2);
 });

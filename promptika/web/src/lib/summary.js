@@ -1,16 +1,25 @@
-// סיכום קצר בעברית להעתקה לוואטסאפ: כלים, עלות הקמה, עלות חודשית וצעד הבא. פונקציה טהורה.
-import { packageCost, shekel, vatLabel } from './pricing';
+// סיכום קצר בעברית להעתקה לוואטסאפ: הבנה במשפט, המערכות לבנייה וצעד הבא. בלי כסף. פונקציה טהורה.
+import { normalizeTool } from './proposals';
 
-export function buildSummary({ business = '', tools = [], settings, nextStep = '', packageLabel = '' }) {
-  const c = packageCost(tools, settings);
+// משפט ראשון של ההבנה
+const firstLine = (t = '') => {
+  const m = String(t).trim().match(/^[^.!?\n]+[.!?]?/);
+  return m ? m[0].trim() : '';
+};
+
+export function buildSummary({ business = '', understanding = '', tools = [], nextStep = '' }) {
   const lines = [];
-  lines.push(business ? `הצעה עבור ${business}${packageLabel ? ` (${packageLabel})` : ''}` : 'הצעת מחיר');
-  if (tools.length) {
-    lines.push('', 'מה נבנה:');
-    tools.forEach((t, i) => lines.push(`${i + 1}. ${t.name || 'כלי'}`));
+  lines.push(business ? `המלצות למערכות – ${business}` : 'המלצות למערכות');
+  const one = firstLine(understanding);
+  if (one) lines.push(one);
+  const list = tools.map(normalizeTool);
+  if (list.length) {
+    lines.push('', 'מה כדאי לבנות:');
+    list.forEach((t, i) => {
+      const inst = t.kind === 'replace' && t.replaces ? ` (במקום ${t.replaces})` : '';
+      lines.push(`${i + 1}. ${t.name || 'מערכת'}${inst}`);
+    });
   }
-  lines.push('', `עלות הקמה: ${shekel(c.build)} (${vatLabel(settings)})`);
-  lines.push(`עלות חודשית: ${shekel(c.monthly)} (${vatLabel(settings)})`);
   if (nextStep) lines.push('', `הצעד הבא: ${nextStep}`);
   return lines.join('\n');
 }

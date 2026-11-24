@@ -1,14 +1,16 @@
 // הצעה מ-Claude: מנתוני הקליטה -> JSON לפי הסכמה. Claude מחזיר רק שעות; הכסף מחושב באפליקציה.
 import { safeProposal } from './model.js';
 
-// ההנחיה – כפי שהבעלים ניסח (לא לשנות בלי לשאול)
-export const SYSTEM_HE = `אתה יועץ של "פרומפטיקה" – עסק שמלמד ובונה כלי AI לבעלי עסקים קטנים. קיבלת נתוני לקוח. תחזיר JSON בלבד לפי הסכמה. כללים: לכל כאב ציין את הפעם האחרונה שהוא קרה כפי שהלקוח אמר, אל תמציא עובדות שלא נאמרו. המלץ על 2-5 כלים, מדורגים לפי תועלת מול מאמץ. לכל כלי: כאב שהוא פותר, קלט, פלט, משתמשים, מסכים, חיבורים, "לא כלול", ושעות עבודה מוערכות לפי שלב (אפיון, בנייה, בדיקות, הדרכה) ושעות תחזוקה חודשיות. אל תחשב כסף, רק שעות. שעות חיסכון ללקוח הן הערכה, סמן estimate:true, ואל תבטיח חיסכון או הכנסה. אם חסר מידע חשוב, החזר missingQuestions במקום לנחש. עברית פשוטה, קצרה, בלי ז'רגון.`;
+// ההנחיה – לפי האפיון של הבעלים: להציע מערכות לבנות (החלפה של קיימת או חדשה), בלי כסף
+export const SYSTEM_HE = `אתה יועץ של "פרומפטיקה" – עסק שבונה מערכות וכלי AI לבעלי עסקים קטנים. קיבלת אפיון של לקוח: המערכות והכלים שהוא עובד איתם היום ומה מפריע לו בהם, הכאבים שלו, ומה הוא היה רוצה שיהיה לו. תחזיר JSON בלבד לפי הסכמה. המטרה: להציע לבעלים אילו מערכות לבנות ללקוח – החלפה של מערכת קיימת (kind:"replace", ושם המערכת שהיא מחליפה ב-replaces) או מערכת חדשה שתקל עליו את העבודה (kind:"new"). כללים: לכל מערכת שהלקוח עובד איתה היום תן המלצה ב-currentSystems: להחליף (replace), להשאיר (keep) או לחבר אליה (connect), עם הסבר קצר. לכל כאב ציין את הפעם האחרונה שהוא קרה כפי שהלקוח אמר, אל תמציא עובדות שלא נאמרו. המלץ על 2-5 מערכות לבנות, מדורגות לפי תועלת מול מאמץ. לכל מערכת: הכאב שהיא פותרת, מה היא עושה, קלט, פלט, משתמשים, מסכים, חיבורים, "לא כלול", והערכת שעות בנייה לפי שלב (אפיון, בנייה, בדיקות, הדרכה) ושעות תחזוקה חודשיות – לתכנון פנימי בלבד. אל תכתוב מחירים או כסף. שעות חיסכון ללקוח הן הערכה, סמן estimate:true, ואל תבטיח חיסכון או הכנסה. אם חסר מידע חשוב, החזר missingQuestions במקום לנחש. עברית פשוטה, קצרה, בלי ז'רגון.`;
 
 export const SCHEMA = `{
   "understanding": "string",
   "missingQuestions": ["string"],
+  "currentSystems": [{ "name": "string (as the client named it)", "verdict": "replace" | "keep" | "connect", "note": "string" }],
   "tools": [{
-    "name": "string", "problem": "string (the pain + when it last happened, as the client said)",
+    "kind": "replace" | "new", "replaces": "string (name of the current system, only for replace)",
+    "name": "string", "problem": "string (the pain + when it last happened, as the client said)", "whatItDoes": "string",
     "benefit": 1-5, "effort": 1-5, "savedHoursPerMonth": number, "estimate": true,
     "input": "string", "output": "string", "users": "string",
     "screens": ["string"], "integrations": ["string"], "notIncluded": ["string"],
@@ -39,7 +41,9 @@ export function intakeText(client) {
     }
     return v === '' || v === null || v === undefined ? undefined : v;
   };
-  const data = compact({ business: client.business, intake: client.intake }) || {};
+  // שדה התקציב הוסתר מהטופס (המחיר ללקוח קבוע) – לא שולחים אותו
+  const intake = { ...(client.intake || {}), budget: { timeline: client.intake?.budget?.timeline } };
+  const data = compact({ business: client.business, intake }) || {};
   return `<client_intake>\n${JSON.stringify(data, null, 2)}\n</client_intake>`;
 }
 

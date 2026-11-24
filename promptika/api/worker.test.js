@@ -109,7 +109,7 @@ test('intake: round-trip through PUT, junk stripped, limits and enums enforced',
   const { id } = (await call('POST', '/clients', { name: 'לקוח לדוגמה' }, token)).data.client;
   const intake = {
     business: { name: 'עסק בדוי', field: 'תחום', employees: '7', roles: 'מי עושה מה', evil: 'x' },
-    tools: [{ tool: 'אקסל', purpose: 'מעקב', monthlyCost: 50, extra: 1 }, 'not-a-row'],
+    tools: [{ tool: 'אקסל', purpose: 'מעקב', issues: 'איטי', replace: 'yes', monthlyCost: 50, extra: 1 }, { tool: 'וואטסאפ', replace: 'bogus' }, 'not-a-row'],
     pains: [{ pain: 'שכחתי לחזור', lastTime: 'שלשום', frequency: 'כל יום', hoursPerMonth: -5 }],
     missing: ['תזכורות', 5],
     tech: { maintain: 'partly', sensitive: 'maybe', sensitiveNote: 'הערה' },
@@ -122,8 +122,9 @@ test('intake: round-trip through PUT, junk stripped, limits and enums enforced',
   assert.equal(got.business.employees, 7);
   assert.equal(got.business.evil, undefined);
   assert.equal(got.unknown, undefined);
-  assert.deepEqual(got.tools[0], { tool: 'אקסל', purpose: 'מעקב', monthlyCost: 50 });
-  assert.equal(got.tools[1].tool, '');
+  assert.deepEqual(got.tools[0], { tool: 'אקסל', purpose: 'מעקב', issues: 'איטי', replace: 'yes', monthlyCost: 50 });
+  assert.equal(got.tools[1].replace, '');
+  assert.equal(got.tools[2].tool, '');
   assert.equal(got.pains[0].hoursPerMonth, 0);
   assert.deepEqual(got.missing, ['תזכורות', '']);
   assert.equal(got.tech.maintain, 'partly');

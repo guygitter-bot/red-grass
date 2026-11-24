@@ -13,7 +13,8 @@ describe('rows', () => {
     let i = emptyIntake();
     i = addRow(i, 'tools');
     i = addRow(i, 'tools');
-    expect(i.tools).toEqual([{ tool: '', purpose: '', monthlyCost: '' }, { tool: '', purpose: '', monthlyCost: '' }]);
+    const empty = { tool: '', purpose: '', issues: '', replace: '', monthlyCost: '' };
+    expect(i.tools).toEqual([empty, empty]);
     i = setRowField(i, 'tools', 1, 'tool', 'אקסל');
     i = removeRow(i, 'tools', 0);
     expect(i.tools).toHaveLength(1);
@@ -54,6 +55,7 @@ describe('sectionStatus', () => {
     i = setRowField(i, 'tools', 0, 'tool', 'אקסל');
     expect(sectionStatus(i, sec('tools'))).toBe('partial');
     i = setRowField(setRowField(i, 'tools', 0, 'purpose', 'מעקב'), 'tools', 0, 'monthlyCost', 0);
+    i = setRowField(setRowField(i, 'tools', 0, 'issues', 'איטי'), 'tools', 0, 'replace', 'yes');
     expect(sectionStatus(i, sec('tools'))).toBe('filled');
   });
   test('list section and optional note', () => {
@@ -82,6 +84,23 @@ describe('save payload and safeIntake', () => {
   test('old clients with empty intake get defaults', () => {
     expect(safeIntake({})).toEqual(emptyIntake());
     expect(safeIntake(undefined)).toEqual(emptyIntake());
+  });
+});
+
+describe('current systems rows', () => {
+  test('old rows without issues/replace still work', () => {
+    const i = safeIntake({ tools: [{ tool: 'אקסל', purpose: 'מעקב', monthlyCost: 20 }] });
+    expect(i.tools[0]).toEqual({ tool: 'אקסל', purpose: 'מעקב', issues: '', replace: '', monthlyCost: 20 });
+  });
+  test('new fields are cleaned', () => {
+    const i = safeIntake({ tools: [{ tool: 'x', issues: 'ד'.repeat(3000), replace: 'maybe' }, { replace: 'bad' }] });
+    expect(i.tools[0].issues).toHaveLength(2000);
+    expect(i.tools[0].replace).toBe('maybe');
+    expect(i.tools[1].replace).toBe('');
+  });
+  test('budget stays in data but only timeline is shown', () => {
+    expect(emptyIntake().budget).toEqual({ budget: '', timeline: '' });
+    expect(sec('budget').fields.map((f) => f.key)).toEqual(['timeline']);
   });
 });
 

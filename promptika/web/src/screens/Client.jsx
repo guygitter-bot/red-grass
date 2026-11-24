@@ -3,13 +3,12 @@ import { ArrowRight, Sparkles, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { go } from '../lib/route';
-import { buildHoursOf, proposalCost, shekel } from '../lib/pricing';
+import { countKinds, normalizeTool } from '../lib/proposals';
 import Intake from '../components/Intake';
 import { Button, Card, ErrorLine, Field, inputClass } from '../components/ui';
 
 export default function Client({ id }) {
   const [client, setClient] = useState(null);
-  const [settings, setSettings] = useState(null);
   const [name, setName] = useState('');
   const [business, setBusiness] = useState('');
   const [saved, setSaved] = useState(false);
@@ -19,12 +18,11 @@ export default function Client({ id }) {
   const [questions, setQuestions] = useState([]);
 
   useEffect(() => {
-    Promise.all([api('GET', `/clients/${id}`), api('GET', '/settings')])
-      .then(([c, s]) => {
+    api('GET', `/clients/${id}`)
+      .then((c) => {
         setClient(c.client);
         setName(c.client.name);
         setBusiness(c.client.business);
-        setSettings(s.settings);
       })
       .catch((e) => setError(e.message));
   }, [id]);
@@ -42,7 +40,7 @@ export default function Client({ id }) {
     }
   }
 
-  // Claude ממליץ על כלים ומעריך שעות; נשמר כגרסה חדשה בשרת
+  // Claude ממליץ על מערכות לבנות; נשמר כגרסה חדשה בשרת
   async function propose() {
     setProposing(true);
     setProposeError('');
@@ -50,7 +48,7 @@ export default function Client({ id }) {
       const res = await api('POST', `/clients/${id}/propose`, {});
       setQuestions(res.missingQuestions || []);
       if (res.client) setClient((c) => ({ ...c, proposals: res.client.proposals }));
-      else if (!res.proposal) setProposeError('לא נוצרה הצעה – חסר מידע. אפשר למלא את הטופס ולנסות שוב.');
+      else if (!res.proposal) setProposeError('לא נוצרו המלצות – חסר מידע. אפשר למלא את הטופס ולנסות שוב.');
     } catch (err) {
       setProposeError(err.message);
     } finally {
@@ -104,47 +102,46 @@ export default function Client({ id }) {
 
           <Card className="space-y-3">
             <div className="flex flex-wrap items-center gap-3">
-              <h2 className="font-bold">הצעות מחיר</h2>
+              <h2 className="font-bold">המלצות למערכות</h2>
               <Button className="ms-auto" onClick={propose} disabled={proposing}>
                 <Sparkles size={18} aria-hidden />
-                {proposing ? 'Claude חושב… (עד דקה)' : 'ליצור הצעה'}
+                {proposing ? 'Claude חושב… (עד דקה)' : 'ליצור המלצות'}
               </Button>
             </div>
             <ErrorLine text={proposeError} />
             {questions.length > 0 && (
               <div className="rounded-lg border border-orange bg-soft p-3" role="status">
-                <p className="font-bold text-orange-ink">כדאי להשלים לפני ההצעה הבאה:</p>
+                <p className="font-bold text-orange-ink">כדאי להשלים לפני הסבב הבא:</p>
                 <ul className="mt-1 list-disc space-y-0.5 ps-5 text-sm">
                   {questions.map((q, i) => (
                     <li key={i}>{q}</li>
                   ))}
                 </ul>
-                <p className="mt-1 text-xs text-muted">אפשר לעדכן את הטופס למעלה וללחוץ שוב "ליצור הצעה".</p>
+                <p className="mt-1 text-xs text-muted">אפשר לעדכן את הטופס למעלה וללחוץ שוב "ליצור המלצות".</p>
               </div>
             )}
             {client.proposals.length === 0 ? (
-              <p className="text-sm text-muted">עוד אין הצעות. מלאו את הטופס (כמה שאפשר) ולחצו "ליצור הצעה" – Claude ימליץ על כלים ויעריך שעות, והסכומים יחושבו לפי ההגדרות.</p>
+              <p className="text-sm text-muted">מלאו את הטופס – במיוחד 'המערכות היום' ו'מערכות שהיה רוצה' – ולחצו 'ליצור המלצות'.</p>
             ) : (
               <ul className="space-y-3">
                 {[...client.proposals].reverse().map((p) => {
-                  const cost = proposalCost(p, settings);
+                  const kinds = countKinds(p);
                   return (
                     <li key={p.id} className="rounded-lg border border-line p-3">
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
                         <span className="font-bold">גרסה {p.version}</span>
                         {p.createdAt > 0 && <span className="text-muted">{new Date(p.createdAt).toLocaleDateString('he-IL')}</span>}
-                        <span>{p.tools.length} כלים</span>
-                        <span>הקמה <bdi>{shekel(cost.build)}</bdi></span>
-                        <span>חודשי <bdi>{shekel(cost.monthly)}</bdi></span>
+                        <span>{kinds.total} מערכות</span>
+                        <span className="text-muted">{kinds.replace} להחלפה · {kinds.fresh} חדשות</span>
                         <a href={`#/client/${id}/proposal/${p.id}`} className="ms-auto font-bold text-turq-ink underline">לפתוח</a>
                       </div>
                       {p.understanding && <p className="mt-2 text-sm text-muted">{p.understanding}</p>}
                       {p.tools.length > 0 && (
                         <ol className="mt-2 space-y-1 text-sm">
-                          {p.tools.map((t, i) => (
+                          {p.tools.map(normalizeTool).map((t, i) => (
                             <li key={i}>
                               <span className="font-bold">{i + 1}. {t.name}</span>
-                              <span className="text-muted"> · <bdi>{buildHoursOf(t)}</bdi> שעות הקמה · <bdi>{t.monthlyHours || 0}</bdi> בחודש</span>
+                              <span className="text-muted"> · {t.kind === 'replace' ? `במקום ${t.replaces || '…'}` : 'חדשה'}</span>
                               {t.problem && <span className="block text-muted">{t.problem}</span>}
                             </li>
                           ))}

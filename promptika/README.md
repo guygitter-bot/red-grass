@@ -1,10 +1,16 @@
 # פרומפטיקה (Promptika)
 
-כלי פנימי לבעלים אחד, שבונה כלי AI לעסקים קטנים: קליטת לקוח (הכלים שיש לו / מה חסר) → Claude ממליץ על כלי AI,
-כותב אפיון ומעריך **שעות** → הקוד מחשב עלות הקמה ותחזוקה לפי ההגדרות.
+כלי פנימי לבעלים אחד, שבונה מערכות וכלי AI לעסקים קטנים. **המטרה: לדעת אילו מערכות לבנות לכל לקוח** –
+להחליף מערכת שהוא עובד איתה היום, או לבנות מערכת חדשה שהוא היה רוצה, כדי להקל עליו את העבודה.
 
-> **שלב נוכחי:** כניסה, לקוחות, הגדרות, שרת וטופס הקליטה (9 חלקים). ההצעות האוטומטיות יתווספו בהמשך
-> על ידי 👨‍💻 המתכנת של `tsevet/` – שעורך רק קבצים בתוך `promptika/`.
+## האפיון (מה המערכת עושה)
+1. **קליטת לקוח** – טופס של 9 חלקים. העיקר: "המערכות היום" (לכל מערכת: למה משתמשים בה, מה מפריע בה, להחליף / אולי / להשאיר)
+   ו"מערכות שהיה רוצה" (במילים שלו), יחד עם הכאבים (כולל "הפעם האחרונה שזה קרה"), היעד ולוח הזמנים.
+2. **המלצות מ-Claude** – לכל מערכת קיימת: להחליף / להשאיר / לחבר אליה, עם הסבר. ואז 2-5 מערכות לבנות,
+   כל אחת "החלפה של X" או "מערכת חדשה", מדורגות לפי תועלת מול מאמץ. חסר מידע → שאלות במקום ניחוש.
+3. **מסך המלצות** – הבנת הלקוח · המערכות היום · מה לבנות · אפיון לכל מערכת (מה עושה, קלט, פלט, משתמשים, מסכים, חיבורים,
+   "לא כלול", הערכת שעות בנייה לתכנון פנימי) · לוח זמנים · צעד הבא. עריכה במקום, גרסאות, הדפסה / PDF והעתקה לוואטסאפ.
+4. **בלי כסף במסכים.** המחיר ללקוח קבוע (fix price). חישוב הצעות מחיר נשאר בקוד כאופציה לעתיד (`web/src/lib/pricing.js` + הגדרות התמחור בשרת), לא מוצג.
 
 - **האפליקציה** – https://promptika.pages.dev (`web/`, React + Vite + Tailwind, RTL, PWA)
 - **השרת** – Worker `promptika-api` (`api/`) + Durable Object `Studio` אחד (`main`) לכל הנתונים.
@@ -12,13 +18,12 @@
 ## מסכים (ניווט לפי #)
 - **כניסה** – בפעם הראשונה קובעים סיסמה, אחר כך נכנסים איתה.
 - `#/` – רשימת לקוחות + "לקוח חדש".
-- `#/client/:id` – כרטיס לקוח: שם ועסק, טופס הקליטה (9 חלקים מתקפלים, שמירה אוטומטית) והצעות.
-- `#/client/:id/proposal/:pid` – **מסך ההצעה** (8 סעיפים: הבנת הלקוח, המלצה, אפיון לכל כלי, לוח זמנים, עלות הקמה, תחזוקה חודשית, תנאים, צעד הבא).
-  כל טקסט ומספר שעות ניתן לעריכה במקום; שמירה אוטומטית (800ms, "נשמר ✓") לגרסה הזאת בלבד (`PUT /clients/:id` עם כל מערך ההצעות).
-  בורר גרסאות + "שכפול לגרסה חדשה" (`lib/proposals.js`; גרסה ישנה לא משתנה). "חבילה אחת / 3 חבילות". אין קישור ציבורי – הבעלים שולח בעצמו:
-  "הדפסה / PDF" (`window.print()`, CSS הדפסה ב-`index.css`: דף לבן, כותרת Promptika, בלי כפתורים) ו"העתקה לוואטסאפ" (`lib/summary.js`).
+- `#/client/:id` – כרטיס לקוח: שם ועסק, טופס הקליטה (9 חלקים מתקפלים, שמירה אוטומטית) והמלצות למערכות ("ליצור המלצות").
+- `#/client/:id/proposal/:pid` – **מסך ההמלצות** (6 חלקים, לפי האפיון למעלה). כל טקסט ומספר ניתן לעריכה במקום; שמירה אוטומטית
+  (800ms, "נשמר ✓") לגרסה הזאת בלבד (`PUT /clients/:id` עם כל מערך הגרסאות). בורר גרסאות + "שכפול לגרסה חדשה" (`lib/proposals.js`).
+  אין קישור ציבורי – הבעלים שולח בעצמו: "הדפסה / PDF" ו"העתקה לוואטסאפ" (`lib/summary.js`), בלי מחירים.
   הקוד: `screens/Proposal.jsx`, `components/proposal/*`, `components/Editable.jsx`, `lib/useProposalSave.js`.
-- `#/settings` – הגדרות התמחור + יציאה.
+- `#/settings` – מצב לילה ויציאה. הגדרות התמחור מוסתרות (לעתיד).
 
 ## מבנה השרת (`api/`)
 - `worker.js` – רק מסדר את הכתובות (CORS לאתר עצמו, גודל בקשה) ומעביר ל-`Studio`.
@@ -34,7 +39,7 @@
 | `GET` / `PUT /settings` | הגדרות (עדכון חלקי) |
 | `GET` / `POST /clients` | רשימה / לקוח חדש |
 | `GET` / `PUT` / `DELETE /clients/:id` | לקוח אחד |
-| `POST /clients/:id/propose` | Claude ממליץ על 2-5 כלים ומעריך שעות → גרסה חדשה בהצעות (עד 10 בשעה) |
+| `POST /clients/:id/propose` | Claude ממליץ אילו מערכות לבנות (החלפה / חדשה) → גרסה חדשה של ההמלצות (עד 10 בשעה) |
 
 ## מבנה הנתונים (ב-Studio)
 - `auth` – `{ salt, hash, tries, tokens }` (הסיסמה רק כ-hash, האסימונים רק כ-sha256).
@@ -42,27 +47,27 @@
 - `client:<id>` – `{ id, name, business, createdAt, updatedAt, intake: {…}, proposals: [] }`.
 - `intake` (טופס הקליטה, הכול אופציונלי; `safeIntake` ב-`api/lib/model.js`, מראה ב-`web/src/lib/intake.js` – לשנות בשניהם):
   - `business` `{ name, field, employees, roles }` · `offer` `{ items, topEarner }` · `customers` `{ ideal, reach }`
-  - `tools` – שורות `{ tool, purpose, monthlyCost (₪) }` · `pains` – שורות `{ pain, lastTime, frequency, hoursPerMonth }` · `missing` – שורות טקסט
-  - `goal` `{ success }` · `budget` `{ budget, timeline }`
+  - `tools` (המערכות היום) – שורות `{ tool, purpose, issues, replace: 'yes'|'maybe'|'no'|'', monthlyCost (₪) }` · `pains` – שורות `{ pain, lastTime, frequency, hoursPerMonth }` · `missing` (מערכות שהיה רוצה) – שורות טקסט
+  - `goal` `{ success }` · `budget` `{ budget (מוסתר, לא נשלח ל-Claude), timeline }`
   - `tech` `{ maintain: 'yes'|'no'|'partly'|'', dataLocation, decider, sensitive: 'yes'|'no'|'', sensitiveNote }`
   - מספר ריק = `''`; עד 30 שורות לכל רשימה; מפתחות לא מוכרים נזרקים. שמירה אוטומטית (800ms) ב-`PUT /clients/:id`, וטיוטה ב-localStorage (`pk_draft_<id>`) עד שמירה מוצלחת.
   - הגדרות החלקים והתוויות: `web/src/data/intakeSections.js`; הממשק: `web/src/components/Intake.jsx`.
-- הצעה (בתוך הלקוח) – `{ id, version, createdAt, understanding, missingQuestions[], tools[], timeline[{stage,duration}], nextStep, notes }`.
-  כלי: `{ name, problem, benefit 1-5, effort 1-5, savedHoursPerMonth, estimate: true, input, output, users, screens[], integrations[],
+- גרסת המלצות (בתוך הלקוח, `proposals[]`) – `{ id, version, createdAt, understanding, missingQuestions[], currentSystems[{ name, verdict: 'replace'|'keep'|'connect', note }], tools[], timeline[{stage,duration}], nextStep, notes }`.
+  מערכת מומלצת: `{ kind: 'replace'|'new', replaces, name, whatItDoes, problem, benefit 1-5, effort 1-5, savedHoursPerMonth, estimate: true, input, output, users, screens[], integrations[],
   notIncluded[], buildHours: { spec, build, test, training }, monthlyHours, apiMonthlyEstimate, range, rangeDrivers }`.
-  הצעה ישנה (מהשלד) עם `buildHours` כמספר נקראת כשעות "בנייה" (`safeProposal`). גרסה חדשה לא דורסת ישנה.
+  גרסה ישנה בלי `currentSystems` / `kind` מקבלת `[]` / `'new'`. הצעה מהשלד עם `buildHours` כמספר נקראת כשעות "בנייה" (`safeProposal`). גרסה חדשה לא דורסת ישנה.
 
 כל שדה אופציונלי ומקבל ברירת מחדל ב-`safeSettings` / `safeClient` – נתונים ישנים ממשיכים לעבוד. שדה חדש = ברירת מחדל שם.
 
-## ההצעה מ-Claude (`api/lib/propose.js`, `api/lib/ai.js`)
-- רק מהשרת (`ANTHROPIC_API_KEY`), `claude-opus-5-5` עם fallback. ההנחיה בעברית (`SYSTEM_HE`) – כפי שהבעלים ניסח, לא לשנות בלי לשאול.
+## ההמלצות מ-Claude (`api/lib/propose.js`, `api/lib/ai.js`)
+- רק מהשרת (`ANTHROPIC_API_KEY`), `claude-opus-5-5` עם fallback. ההנחיה בעברית (`SYSTEM_HE`) – לפי האפיון של הבעלים (מערכות לבנות, בלי כסף); לא לשנות בלי לשאול.
 - התשובה JSON בלבד, נבדקת בקוד; לא תקינה → ניסיון אחד נוסף → שגיאה בעברית.
 - כל שדה כסף שהמודל מחזיר נמחק (`stripMoney`, חוץ מ-`apiMonthlyEstimate` שבסכמה); שעות מוגבלות ל-0–500; כלים מדורגים לפי תועלת פחות מאמץ.
 - רק שאלות חסרות (בלי כלים) → לא נשמרת גרסה, השאלות מוצגות מעל ההצעות.
 - תוכן הקליטה לא נכתב ללוג. בדיקות עם Claude מדומה (`propose.test.js`).
 
-## כסף – רק בקוד
-**ה-AI מחזיר רק שעות, לעולם לא סכומים.** החישוב ב-`web/src/lib/pricing.js` (פונקציות טהורות + בדיקות):
+## כסף – לעתיד (לא מוצג)
+המחיר ללקוח קבוע, ולכן אין סכומים במסכים. **ה-AI מחזיר רק שעות, לעולם לא סכומים.** כשיחזרו הצעות מחיר – החישוב ב-`web/src/lib/pricing.js` (פונקציות טהורות + בדיקות):
 - הקמה = שורות לפי שלב (אפיון / בנייה / בדיקות / הדרכה): שעות × תעריף = סכום (`packageCost`).
 - חודשי = שעות תחזוקה × תעריף + אחסון (פעם אחת לחבילה) + AI (סכום `apiMonthlyEstimate` של הכלים; בלי הערכה – `apiMonthlyAvg`), כל רכיב בשורה משלו.
 - חבילות (`packagesOf`): בסיס = הכלי הראשון; מומלץ = 2 הראשונים (2-3 כלים) או 3 (4+); מורחב = הכול. כלי אחד – הכול זהה. "חבילה אחת" = כל הכלים.
