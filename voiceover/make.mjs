@@ -25,8 +25,12 @@ const { voices = [] } = await call('/v1/voices');
 const heb = (v) => (v.verified_languages || []).some((l) => l.language === 'he');
 const same = voices.filter((v) => !req.gender || v.labels?.gender === req.gender);
 same.sort((a, b) => heb(b) - heb(a));
-const byName = req.voice_name && voices.find((v) => v.name.toLowerCase().startsWith(req.voice_name.toLowerCase()));
-const tries = [req.voice_id, byName?.voice_id, ...same.map((v) => v.voice_id)].filter(Boolean);
+// שם הקול: אפשר כמה כתיבים (למשל ["ארז", "Erez"]); אם ביקשו שם ולא נמצא – עוצרים (לא מחליפים לקול אחר בשקט)
+const names = [].concat(req.voice_name || []).map((n) => n.toLowerCase());
+const byName = names.length && voices.find((v) => names.some((n) => v.name.toLowerCase().includes(n)));
+console.log('כל הקולות בחשבון:', voices.map((v) => v.name).join(' | '));
+if (names.length && !byName) { console.log('הקול לא נמצא:', names.join(', ')); process.exit(1); }
+const tries = byName ? [byName.voice_id] : [req.voice_id, ...same.map((v) => v.voice_id)].filter(Boolean);
 console.log('קולות במגדר המבוקש:', same.map((v) => `${v.name}${heb(v) ? ' (he)' : ''}`).join(', '));
 
 let res, used;
