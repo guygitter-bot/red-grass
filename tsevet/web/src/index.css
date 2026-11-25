@@ -69,6 +69,45 @@ body {
 .office-walk {
   animation: office-walk 0.9s ease-out both;
 }
+/* המשרד חי: אורות, מסכים, עציצים והבוטים עצמם (components/Office.jsx) */
+@keyframes o-twinkle { 0%, 100% { opacity: 0.85; } 45% { opacity: 0.15; } 55% { opacity: 0.9; } }
+.o-twinkle { animation: o-twinkle 4.5s ease-in-out infinite; }
+@keyframes o-fly { 0% { transform: translate(0, 0); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { transform: translate(58px, -29px); opacity: 0; } }
+.o-fly { animation: o-fly 11s linear infinite; }
+@keyframes o-draw { from { stroke-dashoffset: 60; } to { stroke-dashoffset: 0; } }
+.o-draw { stroke-dasharray: 60; animation: o-draw 2.4s ease-in-out infinite alternate; }
+@keyframes o-bar { 0%, 100% { transform: scaleY(0.4); } 50% { transform: scaleY(1.2); } }
+.o-bar { transform-box: fill-box; transform-origin: bottom; animation: o-bar 1.1s ease-in-out infinite; }
+@keyframes o-breathe { 0%, 100% { opacity: 0.15; } 50% { opacity: 0.6; } }
+.o-breathe { animation: o-breathe 3.5s ease-in-out infinite; }
+@keyframes o-neon { 0%, 100% { stroke-opacity: 1; } 50% { stroke-opacity: 0.55; } }
+.o-neon { animation: o-neon 2.2s ease-in-out infinite; }
+@keyframes o-flicker { 0%, 100% { opacity: 0.35; } 30% { opacity: 0.6; } 60% { opacity: 0.3; } 80% { opacity: 0.55; } }
+.o-flicker { animation: o-flicker 0.9s steps(3) infinite; }
+@keyframes o-steam { 0% { transform: translateY(2px); opacity: 0; } 40% { opacity: 0.8; } 100% { transform: translateY(-5px); opacity: 0; } }
+.o-steam { animation: o-steam 2.2s ease-out infinite; }
+@keyframes o-sway { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
+.o-sway { transform-box: fill-box; transform-origin: bottom center; animation: o-sway 5s ease-in-out infinite; }
+/* בוט פנוי מסתובב בחדר: ליד השולחן, לחלון, חזרה */
+@keyframes o-wander {
+  0%, 22% { transform: translate(0, 0); }
+  35%, 55% { transform: translate(-95%, 12%); }
+  68%, 82% { transform: translate(60%, 30%); }
+  100% { transform: translate(0, 0); }
+}
+.o-wander { animation: o-wander 16s ease-in-out infinite; }
+@keyframes o-type { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3%); } }
+.o-type { animation: o-type 0.5s ease-in-out infinite; }
+@keyframes o-dot { 0%, 100% { opacity: 0.25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-2px); } }
+.o-dot { animation: o-dot 0.9s ease-in-out infinite; }
+@keyframes o-plane { from { transform: translateX(-10vw); } to { transform: translateX(110vw); } }
+.o-plane { left: 0; animation: o-plane 26s linear infinite; }
+@keyframes o-blink { 0%, 60%, 100% { opacity: 1; } 70%, 90% { opacity: 0.1; } }
+.o-blink { animation: o-blink 1.2s steps(1) infinite; }
+@keyframes o-cloud { from { transform: translateX(-30%); } to { transform: translateX(120%); } }
+.o-cloud { left: 0; animation: o-cloud 60s linear infinite; }
+
 @media (prefers-reduced-motion: reduce) {
-  .pulse-ring, .office-walk { animation: none; }
+  .pulse-ring, .office-walk, .o-twinkle, .o-fly, .o-draw, .o-bar, .o-breathe, .o-neon, .o-flicker, .o-steam,
+  .o-sway, .o-wander, .o-type, .o-dot, .o-plane, .o-blink, .o-cloud { animation: none; }
 }
