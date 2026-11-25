@@ -16,7 +16,7 @@ const STALE_MS = 40 * 60 * 1000;
 const SMART_STALE_MS = 100 * 60 * 1000;
 // תקרת הוצאה לעריכה חכמה אחת (דולר) ומספר עריכות ביום
 export const SMART_MAX_USD = 12;
-export const dailySmart = (env) => Number(env.DAILY_SMART) || 3;
+export const dailySmart = (env) => Number(env.DAILY_SMART) || 5;
 // montage = OpenMontage (calesthio/OpenMontage, AGPLv3, רץ רק ב-Actions): סרטון שלם מרעיון, גם בלי קבצים, רק ממקורות חינמיים
 // rea = rea-video (JuneYaooo/rea-video, Apache-2.0, רץ רק ב-Actions): לא עורך – מפרק סרטון ומחזיר דוח HTML (איך כל שוט צולם / נוצר, ואיך לעשות דומה)
 export const SMART_TOOLS = { auto: 'הכי מתאים', 'ghost-editor': 'Ghost Editor', shorts: 'Claude Shorts', ffmpeg: 'FFmpeg', montage: 'OpenMontage – אולפן', rea: 'rea-video – פירוק סרטון' };
