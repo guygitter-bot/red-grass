@@ -1746,3 +1746,96 @@ test('ElevenLabs voice-over and music: only after approval, the result is an aud
   assert.match(music.error, /קרדיטים/);
   assert.equal(calls.find((c) => c.url.includes('/v1/music')).body.music_length_ms, 180000);
 });
+
+// ---------- קישור מגוגל -> קובץ בשיחה ----------
+test('bots import files from Google links: a Drive video the editor can edit, Docs as text, private files refused', async () => {
+  const fetched = [];
+  const video = new Uint8Array(40).fill(5);
+  const FETCH = async (url, init = {}) => {
+    fetched.push(url);
+    const u = new URL(url);
+    if (u.hostname === 'drive.usercontent.google.com') {
+      const id = u.searchParams.get('id');
+      if (id === 'VIDEO1234567') return new Response(video, { headers: { 'content-type': 'application/octet-stream', 'content-length': '40', 'content-disposition': 'attachment; filename="trip.mp4"' } });
+      if (id === 'PRIVATE12345') return new Response('<html>Sign in</html>', { headers: { 'content-type': 'text/html' } });
+      // קובץ גדול: קודם דף האזהרה, ואז הקובץ
+      if (id === 'BIGFILE12345' && !u.searchParams.get('uuid')) return new Response('<form id="download-form" action="https://drive.usercontent.google.com/download" method="get"><input type="hidden" name="id" value="BIGFILE12345"><input type="hidden" name="export" value="download"><input type="hidden" name="confirm" value="t"><input type="hidden" name="uuid" value="abc-123"></form>', { headers: { 'content-type': 'text/html' } });
+      if (id === 'BIGFILE12345') return new Response(video, { headers: { 'content-type': 'video/mp4', 'content-length': '40' } });
+    }
+    if (u.hostname === 'docs.google.com' && u.pathname.startsWith('/document/d/DOC123456789')) return new Response('סיכום הפגישה\nשורה שנייה', { headers: { 'content-type': 'text/plain; charset=utf-8' } });
+    if (u.hostname === 'docs.google.com' && u.pathname.startsWith('/document/d/PRIVDOC12345')) return new Response('<html>login</html>', { headers: { 'content-type': 'text/html' } });
+    if (url.includes('api.github.com')) return new Response(null, { status: 204 });
+    return new Response(JSON.stringify({ ok: true }));
+  };
+  const { env } = setupEnv({ replies: [] }, { FETCH });
+  const token = await signIn(env);
+  const results = [];
+  const replies = (calls) => ({ replies: [...calls.map((input, i) => ({ stop: 'tool_use', content: [{ type: 'tool_use', id: `l${i}`, name: 'import_link', input }] })), { content: text('ייבאתי') }] });
+  const aiCalls = [];
+  env.AI_CLIENT = fakeAI(replies([
+    { url: 'https://drive.google.com/file/d/VIDEO1234567/view?usp=sharing' },
+    { url: 'https://drive.google.com/file/d/PRIVATE12345/view' },
+    { url: 'https://docs.google.com/document/d/DOC123456789/edit' },
+    { url: 'https://docs.google.com/document/d/PRIVDOC12345/edit' },
+    { url: 'https://drive.google.com/open?id=BIGFILE12345' },
+  ]), aiCalls);
+  const { data: conv } = await call(env, '/app/conv/new', {}, token);
+  await call(env, '/app/send', { id: conv.id, text: 'תערוך את הסרטון מהדרייב', to: 'editor' }, token);
+  await env.team.alarm();
+  assert.ok(aiCalls[0].tools.some((x) => x.name === 'import_link'));
+  for (let i = 1; i <= 5; i++) results.push(JSON.stringify(aiCalls[i].messages.at(-1).content[0].content));
+  assert.match(results[0], /Imported as \[file \w+: video \\"trip\.mp4\\"\]/);
+  assert.match(results[1], /not shared publicly/);
+  assert.match(results[2], /document/);
+  assert.match(results[3], /not shared publicly/);
+  assert.match(results[4], /Imported as \[file \w+: video/);
+  assert.ok(fetched.some((u) => u.includes('/document/d/DOC123456789/export?format=txt')));
+  assert.ok(fetched.some((u) => u.includes('uuid=abc-123')));
+  const files = (await call(env, '/app/conv', { id: conv.id }, token)).data.messages.at(-1).files;
+  assert.deepEqual(files.map((f) => f.kind).sort(), ['doc', 'video', 'video']);
+  // עורך הווידאו מקבל את הסרטון כמו העלאה
+  const vid = files.find((f) => f.name === 'trip.mp4');
+  env.AI_CLIENT = fakeAI({ replies: [
+    { stop: 'tool_use', content: tool('edit_video', { op: 'color_grade', files: [vid.id], preset: 'warm' }) },
+    { content: text('מתחיל') },
+  ] }, []);
+  await call(env, '/app/send', { id: conv.id, text: 'צבע חם', to: 'editor' }, token);
+  await env.team.alarm();
+  assert.ok(fetched.some((u) => u.endsWith('/dispatches')));
+});
+
+test('a big file with no length is stored in equal 10MB parts, and stops at the size limit', async () => {
+  const { importLink } = await import('./links.js');
+  const parts = [];
+  let completed = 0;
+  let aborted = 0;
+  const bucket = {
+    async createMultipartUpload() {
+      return {
+        async uploadPart(n, data) { parts.push(data.length); return { partNumber: n }; },
+        async complete() { completed++; },
+        async abort() { aborted++; },
+      };
+    },
+  };
+  const stream = (total) => new ReadableStream({
+    start(c) {
+      for (let sent = 0; sent < total; sent += 3_000_000) c.enqueue(new Uint8Array(Math.min(3_000_000, total - sent)));
+      c.close();
+    },
+  });
+  const storage = new Map();
+  const t = { storage: { get: async (k) => storage.get(k), put: async (k, v) => storage.set(k, v) }, env: {
+    FILES: bucket,
+    FETCH: async () => new Response(stream(25 * 1024 * 1024), { headers: { 'content-type': 'video/mp4' } }),
+  } };
+  const made = [];
+  const out = await importLink(t, { url: 'https://drive.google.com/file/d/LONGVIDEO123/view' }, made);
+  assert.match(out, /Imported/);
+  assert.deepEqual(parts, [10 * 1024 * 1024, 10 * 1024 * 1024, 5 * 1024 * 1024]);
+  assert.equal(completed, 1);
+  // מעבר לתקרה – מבוטל
+  t.env.FETCH = async () => new Response(stream(600 * 1024 * 1024), { headers: { 'content-type': 'video/mp4' } });
+  assert.match(await importLink(t, { url: 'https://drive.google.com/file/d/HUGEVIDEO123/view' }, made), /too big/);
+  assert.equal(aborted, 1);
+});

@@ -29,6 +29,7 @@ import { CREATORS, FILE_MAKERS, imagesReady, makeFile, proposeImage } from './cr
 import { proposeSite, siteDone, siteFail, siteInput, siteJob } from './sites.js';
 import { finishMeta, proposePost, runSocial, socialAccounts } from './meta.js';
 import { AUDIO_MAKERS, audioReady, audioVoices, proposeAudio, runAudio } from './audio.js';
+import { importLink } from './links.js';
 import { designSkills } from './design.js';
 import { FIND_SKILLS } from './findskills.js';
 import { DEFAULT_BUDGET, isDue, nextOf } from './schedule.js';
@@ -509,6 +510,8 @@ export class Team {
       },
       edit_video: (input) => startRender(this, job, input, renders),
       // קריאת מסמך מהשיחה (PDF / Word / Excel / טקסט)
+      // קישור מגוגל / קישור ישיר -> קובץ בשיחה (links.js)
+      import_link: (input) => importLink(this, input, made),
       read_file: async ({ id, from }) => {
         const block = await this.docBlock(id, from);
         return block ? [block] : 'No such document. Use an id that appears as [file <id>: document ...].';

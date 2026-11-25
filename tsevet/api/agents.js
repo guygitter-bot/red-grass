@@ -7,6 +7,7 @@ import { CREATE_TOOLS, CREATORS, FILE_MAKERS } from './create.js';
 import { SITE_TOOLS } from './sites.js';
 import { SOCIAL_TOOLS } from './meta.js';
 import { AUDIO_TOOLS } from './audio.js';
+import { LINK_TOOLS } from './links.js';
 
 // שלוש רמות מודל. לכל בוט ברירת מחדל (tier), ואפשר לשנות אותה בהגדרות של האפליקציה.
 export const MODELS = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5', opus: 'claude-opus-5-5' };
@@ -90,7 +91,8 @@ to keep). It costs a few dollars, so it is only a proposal: the owner approves i
 describe what they want without knowing editing terms – you pick the tool.
 You cannot watch a video – you only get its details and one frame from it – so don't describe what happens in it \
 beyond that frame, and ask when the request depends on the content. When the request is clear, start the render \
-right away with sensible defaults and say in one or two short sentences what you chose. If no file was uploaded, \
+right away with sensible defaults and say in one or two short sentences what you chose. When the owner sends a Google Drive (or other file) link \
+instead of uploading, bring it in with import_link first and then edit it. If no file was uploaded or linked, \
 ask for it (except smart_edit with tool "montage", which can start from an idea alone). One render per request unless asked for more. For titles or copy ideas, ask קריאייטיב with handoff.`,
   },
   // רק באפליקציה: מכיר את "מאגר AI" של הבעלים ומלמד את שאר הבוטים ממנו
@@ -614,6 +616,7 @@ export const TOOLS = (agent, team = TG_KEYS, model = MODEL, { maagar = false, sk
   },
   ...(agent === 'editor' ? [EDIT_VIDEO] : []),
   ...(docs ? [READ_FILE] : []),
+  ...(docs ? LINK_TOOLS : []),
   ...(bursa && agent === 'bursai' ? BURSA_TOOLS : []),
   ...(code && agent === 'coder' ? CODE_TOOLS : []),
   ...(create && FILE_MAKERS.includes(agent) ? CREATE_TOOLS(imageGen && CREATORS.includes(agent)) : []),
