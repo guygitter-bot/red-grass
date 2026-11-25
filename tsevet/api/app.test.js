@@ -1805,7 +1805,7 @@ test('bots import files from Google links: a Drive video the editor can edit, Do
 });
 
 test('a big file with no length is stored in equal 10MB parts, and stops at the size limit', async () => {
-  const { importLink } = await import('./links.js');
+  const { importLink, LINK_MAX } = await import('./links.js');
   const parts = [];
   let completed = 0;
   let aborted = 0;
@@ -1834,8 +1834,16 @@ test('a big file with no length is stored in equal 10MB parts, and stops at the 
   assert.match(out, /Imported/);
   assert.deepEqual(parts, [10 * 1024 * 1024, 10 * 1024 * 1024, 5 * 1024 * 1024]);
   assert.equal(completed, 1);
-  // מעבר לתקרה – מבוטל
-  t.env.FETCH = async () => new Response(stream(600 * 1024 * 1024), { headers: { 'content-type': 'video/mp4' } });
-  assert.match(await importLink(t, { url: 'https://drive.google.com/file/d/HUGEVIDEO123/view' }, made), /too big/);
+  // התקרה האמיתית 3GB
+  assert.equal(LINK_MAX.video, 3 * 1024 * 1024 * 1024);
+  // מעבר לתקרה – מבוטל (תקרה קטנה לבדיקה, כדי לא לייצר 2GB בזיכרון)
+  const real = LINK_MAX.video;
+  LINK_MAX.video = 30 * 1024 * 1024;
+  t.env.FETCH = async () => new Response(stream(40 * 1024 * 1024), { headers: { 'content-type': 'video/mp4' } });
+  try {
+    assert.match(await importLink(t, { url: 'https://drive.google.com/file/d/HUGEVIDEO123/view' }, made), /too big/);
+  } finally {
+    LINK_MAX.video = real;
+  }
   assert.equal(aborted, 1);
 });
