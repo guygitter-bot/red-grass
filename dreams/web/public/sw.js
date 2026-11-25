@@ -21,6 +21,6 @@ self.addEventListener('fetch', (e) => {
         }
         return res;
       })
-      .catch(() => caches.match(req).then((r) => r || caches.match('./'))),
+      .catch(() => caches.match(req, { ignoreVary: true }).then((r) => r || (req.mode === 'navigate' ? caches.match('./', { ignoreVary: true }) : Response.error()))),
   );
 });

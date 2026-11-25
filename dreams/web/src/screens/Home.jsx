@@ -1,7 +1,7 @@
 import Layout, { H2 } from '../components/Layout';
 import Moon from '../components/Moon';
 import { useApp } from '../context';
-import { nightKey, isMorning, nightLabel } from '../lib/night';
+import { nightKey, upcomingNight, isMorning, nightLabel } from '../lib/night';
 import { kindById } from '../lib/kinds';
 import { recallRate, streak } from '../lib/stats';
 
@@ -12,6 +12,8 @@ export default function Home() {
   const intention = data.nights[key];
   const morning = isMorning();
   const loggedTonight = data.entries.some((e) => e.night === key && e.type !== 'nap');
+  const dreamTonight = data.entries.some((e) => e.night === key && e.type === 'dream');
+  const next = morning ? data.nights[upcomingNight()] : null;
   const rate = recallRate(data.entries);
   const days = streak(data.entries);
   const recent = data.entries.slice(0, 3);
@@ -24,10 +26,10 @@ export default function Home() {
           <p className="text-sm m-0 opacity-70">{nightLabel(key)}</p>
           {morning && loggedTonight ? (
             <>
-              <h2 className="serif text-3xl lg:text-4xl font-bold mt-2 mb-3 leading-tight">החלום של הלילה<br />נרשם.</h2>
-              <p className="m-0 mb-5 opacity-85 max-w-md">בערב אפשר לבחור כוונה חדשה. עד אז – אולי עולה עוד פרט, או חלום נוסף מאותו לילה.</p>
+              <h2 className="serif text-3xl lg:text-4xl font-bold mt-2 mb-3 leading-tight">{dreamTonight ? <>החלום של הלילה<br />נרשם.</> : <>הלילה נרשם<br />ביומן.</>}</h2>
+              <p className="m-0 mb-5 opacity-85 max-w-md">{next ? <>הכוונה ללילה הבא: <span className="serif">{next.phrase}</span></> : 'אפשר כבר לבחור כוונה ללילה הבא. ואם עולה עוד פרט – להוסיף.'}</p>
               <div className="flex flex-wrap gap-2">
-                <a href="#/journal" className="btn btn-primary">ליומן</a>
+                <a href="#/intend" className="btn btn-primary">{next ? 'לשנות את הכוונה' : 'כוונה ללילה הבא'}</a>
                 <a href="#/morning" className="btn border-white/25 text-[#efe6d2]">להוסיף חלום</a>
               </div>
             </>
@@ -41,7 +43,10 @@ export default function Home() {
                   'כדאי לרשום עכשיו, לפני שהחלום נמוג. גם קטע קטן או תחושה.'
                 )}
               </p>
-              <a href="#/morning" className="btn btn-dawn">לרשום את החלום</a>
+              <div className="flex flex-wrap gap-2">
+                <a href="#/morning" className="btn btn-dawn">לרשום את החלום</a>
+                <a href="#/intend" className="btn border-white/25 text-[#efe6d2]">{next ? 'הכוונה ללילה הבא' : 'כוונה ללילה הבא'}</a>
+              </div>
             </>
           ) : intention ? (
             <>

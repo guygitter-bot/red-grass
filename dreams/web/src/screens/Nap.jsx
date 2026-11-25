@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context';
 import Moon from '../components/Moon';
-import { nightKey } from '../lib/night';
+import { nightKey, upcomingNight } from '../lib/night';
 import { safeEntry } from '../lib/store';
 import { keepAwake, chime, speak, stopSpeaking, buzz } from '../lib/night-tools';
 
@@ -11,7 +11,7 @@ const MIN_HOLD = 20; // שחרור לפני 20 שניות = כנראה בטעו�
 // בהשראת הניסוי של Lacaux ועמיתים (2021) וההתקן Dormio של MIT (2020, 2023).
 export default function Nap() {
   const { data, update, setToast } = useApp();
-  const tonight = data.nights[nightKey()];
+  const tonight = data.nights[upcomingNight()] || data.nights[nightKey()];
   const [topic, setTopic] = useState(tonight?.text || '');
   const [state, setState] = useState('setup'); // setup | ready | holding | woke | short
   const [glimpses, setGlimpses] = useState([]);
@@ -124,7 +124,7 @@ export default function Nap() {
               <button
                 className="btn border-[#2a2338] text-[#b8acd6]"
                 onClick={() => {
-                  setGlimpses((g) => (note.trim() ? [...g, note.trim()] : g));
+                  setGlimpses((g) => [...g, note.trim() || '(לא עלה כלום)']);
                   setNote('');
                   setState('ready');
                 }}
@@ -132,7 +132,7 @@ export default function Nap() {
                 לשמור ולחזור לנמנם
               </button>
             )}
-            <button className="btn border-[#2a2338] text-[#b8acd6]" onClick={() => finish(note.trim() ? [...glimpses, note.trim()] : glimpses)}>
+            <button className="btn border-[#2a2338] text-[#b8acd6]" onClick={() => finish(note.trim() ? [...glimpses, note.trim()] : glimpses.filter((g) => g !== '(לא עלה כלום)').length ? glimpses : [])}>
               לסיים ולשמור ביומן
             </button>
           </div>

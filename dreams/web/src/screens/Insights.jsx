@@ -57,7 +57,7 @@ export default function Insights() {
               <div className="text-sm text-muted">ברצף ביומן</div>
             </div>
           </div>
-          <p className="text-sm text-muted mb-0 mt-3">אצל רוב האנשים הזכירה עולה בשבועות הראשונים של רישום קבוע.</p>
+          <p className="text-sm text-muted mb-0 mt-3">נהוג להמליץ על רישום קבוע כדי לזכור יותר. כאן אפשר לראות אם זה עובד אצלך.</p>
         </section>
 
         <section className="sheet p-5">

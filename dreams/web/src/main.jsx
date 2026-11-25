@@ -10,6 +10,16 @@ applyTheme();
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(() => {});
+    // כבר בביקור הראשון: לשמור את הקבצים שנטענו, כדי שהאפליקציה תיפתח גם בלי רשת
+    try {
+      const urls = performance
+        .getEntriesByType('resource')
+        .map((r) => r.name)
+        .filter((u) => u.startsWith(window.location.origin) && !u.includes('/sw.js'));
+      caches.open('zc-v1').then((c) => c.addAll(['./', ...new Set(urls)])).catch(() => {});
+    } catch {
+      // אין מטמון בדפדפן הזה
+    }
   });
 }
 

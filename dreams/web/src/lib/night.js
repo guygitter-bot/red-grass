@@ -27,6 +27,11 @@ export function isMorning(date = new Date()) {
 
 const DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 
+// הלילה שהכוונה מיועדת לו: בבוקר ובצהריים (4:00–15:00) – הלילה של היום, אחרת – הלילה הנוכחי
+export function upcomingNight(date = new Date()) {
+  return isMorning(date) ? ymd(new Date(date)) : nightKey(date);
+}
+
 // "ליל שלישי, 24.11"
 export function nightLabel(key) {
   const [y, m, d] = key.split('-').map(Number);

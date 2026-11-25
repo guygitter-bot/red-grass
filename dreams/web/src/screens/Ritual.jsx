@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '../context';
 import Moon from '../components/Moon';
-import { nightKey } from '../lib/night';
+import { upcomingNight } from '../lib/night';
 import { kindById } from '../lib/kinds';
 import { keepAwake, chime, speak, stopSpeaking } from '../lib/night-tools';
 
@@ -10,7 +10,7 @@ const BREATHS = 6; // 6 נשימות של 10 שניות (4 שאיפה, 6 נשי�
 // טקס השינה – מבוסס על ההנחיות של דירדרה ברט (1993): לעבור על השאלה, לדמיין תמונה, לחזור על הכוונה, ולהתכונן להתעוררות שקטה
 export default function Ritual() {
   const { data, update } = useApp();
-  const key = nightKey();
+  const key = upcomingNight();
   const intention = data.nights[key];
   const [step, setStep] = useState(0);
   const [breath, setBreath] = useState(0);
@@ -106,7 +106,9 @@ export default function Ritual() {
       <p className="serif text-3xl font-bold leading-snug">{phrase}</p>
       <button
         className="btn btn-primary mt-2"
+        disabled={reps >= 3}
         onClick={() => {
+          if (reps >= 3) return;
           if (voice) speak(phrase);
           setReps((r) => r + 1);
           if (reps + 1 >= 3) setTimeout(next, 1200);

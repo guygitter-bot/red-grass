@@ -2,12 +2,12 @@ import { useState } from 'react';
 import Layout, { H2 } from '../components/Layout';
 import { useApp } from '../context';
 import { KINDS, kindById, makePhrase } from '../lib/kinds';
-import { nightKey, nightLabel } from '../lib/night';
+import { upcomingNight, nightLabel } from '../lib/night';
 
 // בחירת הכוונה ללילה: סוג, שאלה, משפט קצר ותמונה אחת
 export default function Intend() {
   const { data, update } = useApp();
-  const key = nightKey();
+  const key = upcomingNight();
   const cur = data.nights[key];
   const [kind, setKind] = useState(cur?.kind || 'problem');
   const [text, setText] = useState(cur?.text || '');
