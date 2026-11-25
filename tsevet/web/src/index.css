@@ -60,3 +60,15 @@ body {
 .pulse-ring {
   animation: pulse-ring 1.4s ease-out infinite;
 }
+
+/* המשרד: בוט שנכנס למשרד של בוט אחר */
+@keyframes office-walk {
+  0% { transform: translateX(-140%); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+.office-walk {
+  animation: office-walk 0.9s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pulse-ring, .office-walk { animation: none; }
+}

@@ -238,9 +238,10 @@ export class Team {
     await this.setBusy(key, null);
   }
 
-  async setBusy(key, agent) {
+  // from = הבוט שהעביר אליו את העבודה (במשרד: "הלך אליו")
+  async setBusy(key, agent, from = null) {
     const busy = (await this.storage.get('busy')) || {};
-    if (agent) busy[key] = { agent, at: Date.now() };
+    if (agent) busy[key] = { agent, at: Date.now(), ...(from && from !== agent ? { from } : {}) };
     else delete busy[key];
     await this.storage.put('busy', busy);
   }
@@ -582,10 +583,12 @@ export class Team {
     // תוכנית של המנהל: job.plan = השלבים שנשארו, job.step / job.steps = איפה אנחנו, job.rounds = כמה תוכניות היו
     const limit = () => (job.rounds ? MAX_PLAN_TURNS : MAX_TURNS);
     // job.budget = תקרת הוצאה למשימה (משימות קבועות); job.spent = כמה עלתה עד עכשיו
+    let prev = null;
     while (agent && job.turns < limit() && !(job.budget && job.spent >= job.budget)) {
+      prev = current === agent ? prev : current;
       current = agent;
       const { token, prefix } = app ? {} : this.speaker(job, agent);
-      if (app) await this.setBusy(key, agent);
+      if (app) await this.setBusy(key, agent, prev);
       else await typing(this.env, token, job);
       const history = (await this.storage.get(key)) || [];
       const notes = (await this.storage.get('notes')) || [];
