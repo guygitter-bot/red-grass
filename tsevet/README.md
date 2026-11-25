@@ -107,7 +107,7 @@
 - **פירוק סרטון** – `tool: 'rea'` (**rea-video**, JuneYaooo/rea-video, Apache-2.0, גרסה קבועה `REA_VIDEO_SHA`): לא עורך, אלא מפרק סרטון אחד
   שוט אחרי שוט (צילום / AI / תלת־ממד / אנימציה / הקלטת מסך, כתוביות, מוזיקה וסאונד, חיתוכים, תאורה) ואיך לעשות דומה. התוצאה: דוח HTML בעברית
   (`out/report.html` → `PUT /render/result?type=html`), שנשמר בשיחה כקובץ מסמך. Gemini (`GEMINI_API_KEY`) משפר את הפירוק אם יש מפתח. באישור בכפתור, כמו כל עריכה חכמה.
-- עולה כמה דולרים, ולכן רק **הצעה** עם כפתור "לערוך" (`/app/render/approve`), תקרה יומית `DAILY_SMART` (3) ותקרה לעריכה `SMART_MAX_USD` / `--max-budget-usd` (12$).
+- עולה כמה דולרים, ולכן רק **הצעה** עם כפתור "לערוך" (`/app/render/approve`), תקרה יומית `DAILY_SMART` (5) ותקרה לעריכה `SMART_MAX_USD` / `--max-budget-usd` (12$).
 - `.github/workflows/tsevet-smartedit.yml` + `render/smart.py`: מתקין את הסקיל בגרסה קבועה (SHA), מוריד את הקבצים, מריץ `claude -p` ומעלה את התוצאה עם העלות (`?usd=`), שנרשמת במסך העלויות.
   הטוקן של השרת לא זמין לשלב של Claude; הבריף והפלט לא מודפסים בלוג (המאגר ציבורי). מקומית (`dev.mjs`) – עריכה מדומה בלי Claude.
 - Higgsfield ו-OpenMontage לא הותקנו: Higgsfield דורש חשבון בתשלום והתחברות אישית, OpenMontage ברישיון AGPL וכבד מאוד.
