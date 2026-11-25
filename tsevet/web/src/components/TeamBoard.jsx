@@ -4,7 +4,7 @@ import { Video } from 'lucide-react';
 import { findAgent } from '../lib/agents';
 import { ils, usd } from '../lib/format';
 import { newConversation } from '../lib/convs';
-import { Room, Skyline } from './Office';
+import { Room, Sky, Skyline } from './Office';
 
 export default function TeamBoard({ team }) {
   if (!team) return <p className="p-8 text-center text-muted">רגע…</p>;
@@ -28,6 +28,7 @@ export default function TeamBoard({ team }) {
   return (
     <div className="mx-auto flex max-w-3xl flex-col items-center px-3 pb-8 pt-3 lg:min-h-full lg:max-w-none lg:flex-row lg:items-start lg:justify-center lg:gap-8 lg:px-8 lg:py-6">
       <div className="relative w-full max-w-[680px] shrink-0 overflow-hidden rounded-[1.75rem] border border-line lg:max-w-[1000px] lg:flex-1" style={{ background: 'linear-gradient(180deg, #050816 0%, #0b1433 55%, #16214d 100%)' }}>
+        <Sky />
         <Skyline />
         <div className="relative px-3 pb-4 pt-3 sm:px-5">
           <div className="mb-1 text-center text-xs font-medium tracking-wide text-white/60">🏙️ המשרד · קומה 42</div>
