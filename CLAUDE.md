@@ -373,6 +373,10 @@
 - מ-impeccable הותקנו רק ההנחיות (`SKILL.md`, `reference/`); כלי ה-`scripts/` לא הותקן (מוריד ומריץ קובץ חיצוני) – במקומו בודקים בצילומי מסך עם Playwright.
 - לתלת־ממד (Three.js): `threejs-aaa-graphics-builder`, `threejs-procedural-materials`, `threejs-bloom`, `threejs-camera-direction`, `threejs-game-ui-designer` – רק ההנחיות (בלי scripts ובלי הורדות); בודקים בצילומי מסך עם Playwright.
 
+### Clipify – תחליף ל-Opus Clip (`.claude/skills/clipify`)
+- סקיל `louisedesadeleer/clipify` (MIT): מוצא רגעים טובים בסרטון ארוך, חותך לקליפים, ממיר ל-9:16 עם מעקב אחרי הדובר, וכתוביות מילה-מילה. מפעילים: `/clipify` + סרטון.
+- Whisper מותקן בפעם הראשונה (`pip install openai-whisper`); עברית – `--model small --language he`, וכתוביות בעברית לבדוק כיוון (אחרת `text_png`).
+
 ### כלי עריכת וידאו (`.claude/skills/` – `color-grade`, `beats-and-cuts`, `before-and-after`, `hand-drawn`, `motion-graphics`)
 - מצרפים סרטון בצ'אט וכותבים `/color-grade` וכו'. הסבר בעברית: `.claude/skills/video-tools/README.md`; קוד משותף: `video-tools/lib.py` (ffmpeg + Pillow).
 - טקסט בעברית: רק דרך `text_png` / `pill_png` (Pillow עם raqm) או Chromium – `drawtext` של ffmpeg הופך עברית. הגופן: `video-tools/fonts/Rubik.ttf` (OFL).
