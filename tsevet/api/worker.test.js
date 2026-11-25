@@ -212,3 +212,46 @@ test('helpers', () => {
   assert.match(transcript([{ who: 'owner', text: 'היי' }, { who: 'campaigns', text: 'שלום' }], 'גיא'), /גיא: היי\n\n📊 קמפיינים: שלום/);
   assert.ok(Math.abs(priceOf({ model: 'claude-opus-5-5', input_tokens: 1e6 }) - 4) < 1e-9);
 });
+
+test('every bot turn has the Fable advisor, and its tokens are priced', async () => {
+  const { env, aiCalls } = fakeEnv({ route: 'creative', replies: [{ content: [{ type: 'text', text: 'שלום' }] }] });
+  await claimOwner(env);
+  await post(env, 'creative', dm(OWNER, 'תן לי רעיון'));
+  await env.team.alarm();
+  const turn = aiCalls.find((c) => c.model !== 'claude-haiku-5-5');
+  assert.ok(turn);
+  // היועץ ראשון, ושתי ה-betas יחד (fallback + advisor)
+  assert.deepEqual(turn.tools[0], { type: 'advisor_20260301', name: 'advisor', model: 'claude-fable-5-2', max_uses: 2, caching: { type: 'ephemeral', ttl: '5m' } });
+  assert.deepEqual(turn.betas, ['server-side-fallback-2026-07-01', 'advisor-tool-2026-03-01']);
+  assert.match(turn.system[0].text, /advisor/);
+  // הבוט (Sonnet) + היועץ (Fable) – כל אחד לפי המחיר שלו
+  const usd = priceOf({ model: 'claude-sonnet-5-5', input_tokens: 5, iterations: [
+    { type: 'message', input_tokens: 1e6, output_tokens: 0 },
+    { type: 'advisor_message', model: 'claude-fable-5-2', input_tokens: 0, output_tokens: 1e6 },
+  ] });
+  assert.ok(Math.abs(usd - 42) < 1e-9);
+});
+
+test('a 400 that is not about the advisor does not turn the advisor off', async () => {
+  const { env, aiCalls } = fakeEnv({ route: 'creative', replies: [{ error: 400 }, { error: 400 }, { content: [{ type: 'text', text: 'שוב' }] }] });
+  await claimOwner(env);
+  await post(env, 'creative', dm(OWNER, 'תמונה שבורה'));
+  await env.team.alarm();
+  await post(env, 'creative', dm(OWNER, 'ועכשיו?'));
+  await env.team.alarm();
+  const last = aiCalls.filter((c) => c.model !== 'claude-haiku-5-5').at(-1);
+  assert.equal(last.tools[0].type, 'advisor_20260301');
+});
+
+// אחרון בקובץ: אחרי 400 היועץ נכבה עד שהשרת עולה מחדש
+test('if the account rejects the advisor, the bot answers without it', async () => {
+  const { env, aiCalls, messages } = fakeEnv({ route: 'creative', replies: [{ error: 400 }, { content: [{ type: 'text', text: 'עניתי בלי יועץ' }] }] });
+  await claimOwner(env);
+  await post(env, 'creative', dm(OWNER, 'תן לי רעיון'));
+  await env.team.alarm();
+  const turns = aiCalls.filter((c) => c.model !== 'claude-haiku-5-5');
+  assert.equal(turns.length, 2);
+  assert.equal(turns[1].tools[0]?.type === 'advisor_20260301', false);
+  assert.ok(!turns[1].betas.includes('advisor-tool-2026-03-01'));
+  assert.match(messages().at(-1).body.text, /עניתי בלי יועץ/);
+});

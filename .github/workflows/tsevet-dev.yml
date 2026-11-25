@@ -78,11 +78,14 @@ jobs:
       - name: Claude makes the change
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          MODEL: ${{ vars.TSEVET_DEV_MODEL || 'claude-opus-5-5' }}
+          # Sonnet מבצע, Fable 5.2 יועץ (.claude/skills/fable-advisor)
+          MODEL: ${{ vars.TSEVET_DEV_MODEL || 'claude-sonnet-5-5' }}
+          ADVISOR: ${{ vars.TSEVET_DEV_ADVISOR || 'claude-fable-5-2' }}
         run: |
           # shellcheck disable=SC2086
           claude -p "$(cat .dev/prompt.txt)" ${MCP_ARGS} \
             --model "$MODEL" \
+            $([ "$ADVISOR" = off ] && echo '--settings {"advisorModel":""}' || echo "--advisor $ADVISOR") \
             --max-turns 100 \
             --permission-mode acceptEdits \
             --allowedTools "Read,Edit,Write,Glob,Grep,Bash(cd:*),Bash(ls:*),Bash(cat:*),Bash(npm test:*),Bash(npm run build:*),Bash(npm run test:*),Bash(npx vitest:*),Bash(node --test:*),Bash(git diff:*),Bash(git status:*),mcp__codebase-memory-mcp" \

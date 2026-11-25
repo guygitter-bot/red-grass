@@ -126,7 +126,10 @@ jobs:
             5. אל תריצו פקודות git (לא commit ולא push) – ה-workflow עושה את זה אחריכם.
             6. בסוף כתבו לקובץ ${{ runner.temp }}/summary.md סיכום קצר בעברית פשוטה (לא טכנית) למשתמשת:
                מה השתנה, איך להשתמש בזה, ומה כדאי לבדוק אחרי העלייה. אם משהו בבקשה לא היה ברור או לא בוצע – כתבו זאת שם.
+          # Sonnet מבצע; Fable 5.2 יועץ מ-.claude/settings.json (.claude/skills/fable-advisor)
           claude_args: |
+            --model ${{ vars.SEDER_MODEL || 'claude-sonnet-5-5' }}
+            ${{ vars.SEDER_ADVISOR == 'off' && '--settings ''{"advisorModel":""}''' || '' }}
             --max-turns 80
             --allowedTools "Read,Edit,Write,Glob,Grep,Bash(npm test),Bash(npm run build),Bash(npx vitest:*),Bash(node --test:*),Bash(git status),Bash(git diff:*),Bash(ls:*)"
       # כמה ההרצה עלתה בפועל – גם אם נכשלה (מוריד מהיתרה שמוצגת באפליקציה)
