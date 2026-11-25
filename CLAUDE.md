@@ -377,6 +377,10 @@
 - סקיל `louisedesadeleer/clipify` (MIT): מוצא רגעים טובים בסרטון ארוך, חותך לקליפים, ממיר ל-9:16 עם מעקב אחרי הדובר, וכתוביות מילה-מילה. מפעילים: `/clipify` + סרטון.
 - Whisper מותקן בפעם הראשונה (`pip install openai-whisper`); עברית – `--model small --language he`, וכתוביות בעברית לבדוק כיוון (אחרת `text_png`).
 
+### קריינות מ-ElevenLabs לסרטונים (`voiceover/`)
+- כותבים את הטקסט (עם ניקוד) ושם קול (`voice_name`, מהקולות שבחשבון) ב-`voiceover/request.json` ודוחפים לענף עבודה → `voiceover.yml` מחזיר `voiceover/out/<name>.mp3` + תזמון.
+- המנוי ב-ElevenLabs: רק `mp3_44100_128`; קולות מהספרייה הציבורית לא זמינים עד שמוסיפים אותם ל-My Voices.
+
 ### כלי עריכת וידאו (`.claude/skills/` – `color-grade`, `beats-and-cuts`, `before-and-after`, `hand-drawn`, `motion-graphics`)
 - מצרפים סרטון בצ'אט וכותבים `/color-grade` וכו'. הסבר בעברית: `.claude/skills/video-tools/README.md`; קוד משותף: `video-tools/lib.py` (ffmpeg + Pillow).
 - טקסט בעברית: רק דרך `text_png` / `pill_png` (Pillow עם raqm) או Chromium – `drawtext` של ffmpeg הופך עברית. הגופן: `video-tools/fonts/Rubik.ttf` (OFL).
