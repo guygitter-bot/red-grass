@@ -342,6 +342,13 @@
 - בדיקה: `cd sidra_2k/api && npm test` · `cd sidra_2k/web && npm test && npm run build`. אותם כללים: טלפון + מחשב + מצב לילה, `useEffect` עם סוגריים.
 - לוגואים אמיתיים מ-`cdn.nba.com` (ב-CSP של `_headers`), עם נפילה לציור משלנו. **למזג לבד** אחרי שהבדיקות ירוקות ולבדוק שהעלייה הצליחה.
 
+### זימון חלומות (`dreams/`)
+- תיאור: `dreams/README.md`; עיצוב: `dreams/DESIGN.md`; רעיונות שלא בוצעו: `dreams/IDEAS.md`. כוונה ללילה, טקס שינה (לפי Barrett 1993), תנומת אדיסון (מחזיקים ירח; שחרור = צלצול), רישום בבוקר, יומן, תובנות, "ללמוד" עם מקורות.
+- `dreams/web` → https://zimun-chalomot.pages.dev (בלי שרת). עלייה: `dreams.yml` אחרי מיזוג ל-main.
+- בדיקה: `cd dreams/web && npm test && npm run build`. טלפון + מחשב + מצב לילה (ברירת המחדל כאן לילה), `useEffect` עם סוגריים.
+- **החלומות רק במכשיר** (`zc_data`, גיבוי/שחזור בהגדרות) – לא לשלוח אותם לשום שרת בלי שהמשתמש ביקש. שדה חדש – ברירת מחדל ב-`safeEntry` / `safeIntention` / `safeSettings`. "לילה" = מ-15:00 עד 15:00 (`lib/night.js`).
+- כל נתון מחקרי במסך "ללמוד" – עם מקור. לא להבטיח תוצאה, ולא ייעוץ רפואי.
+
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).
 

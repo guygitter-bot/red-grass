@@ -1,0 +1,15 @@
+{
+  "name": "זימון חלומות",
+  "short_name": "חלומות",
+  "description": "לבקש חלום על שאלה, ולזכור אותו בבוקר",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#16112a",
+  "theme_color": "#16112a",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

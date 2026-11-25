@@ -1,0 +1,225 @@
+@import "tailwindcss";
+
+/* מצב לילה: מחלקה dark על html (src/lib/theme.js). ברירת המחדל – לילה. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* הצבעים במקום אחד (תוכנית העיצוב: dreams/DESIGN.md):
+   page = רקע, card = משטחים, ink = טקסט, muted = משני, line = מסגרות,
+   accent = לילך (הלילה), dawn = אפרסק של שחר (הבוקר), soft = רקע מודגש עדין */
+@theme {
+  --color-page: #f1eef6;
+  --color-card: #ffffff;
+  --color-ink: #221a3a;
+  --color-muted: #5f5878;
+  --color-line: #d9d2e8;
+  --color-soft: #ebe5f7;
+  --color-accent: #5b3fb3;
+  --color-accent-ink: #ffffff;
+  --color-dawn: #a8501f;
+  --color-dawn-soft: #fbe9dc;
+  --color-moon: #efe6d2;
+  --color-sky: #16112a;
+  --font-sans: system-ui, -apple-system, "Segoe UI", "Arial Hebrew", Arial, sans-serif;
+  --font-serif: "Frank Ruhl Libre", "Noto Serif Hebrew", "David", "Times New Roman", serif;
+}
+
+.dark {
+  color-scheme: dark;
+  --color-page: #16112a;
+  --color-card: #211a3a;
+  --color-ink: #efe6d2;
+  --color-muted: #a99fc4;
+  --color-line: #362d57;
+  --color-soft: #2b2249;
+  --color-accent: #c9b8f2;
+  --color-accent-ink: #16112a;
+  --color-dawn: #f2c4a0;
+  --color-dawn-soft: #3a2a2c;
+}
+
+/* בסיס בשכבה משלו, כדי שמחלקות הרכיבים וה-utilities יגברו */
+@layer base {
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  font-family: var(--font-sans);
+  background: var(--color-page);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+body {
+  font-size: 17px;
+  line-height: 1.65;
+}
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+}
+:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+}
+
+/* כותרות ומשפט הכוונה – אות סריפית, כמו כתב יד של יומן */
+.serif {
+  font-family: var(--font-serif);
+  letter-spacing: 0.005em;
+}
+
+/* רכיבים בשכבה משלהם, כדי שמחלקות של Tailwind (bg-..., border-...) יגברו עליהם */
+@layer components {
+
+.btn {
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: 999px;
+  border: 1.5px solid var(--color-line);
+  background: transparent;
+  font-weight: 650;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  touch-action: manipulation;
+  text-decoration: none;
+}
+.btn:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.btn-primary {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  border-color: var(--color-accent);
+}
+.btn-dawn {
+  background: var(--color-dawn);
+  color: var(--color-page);
+  border-color: var(--color-dawn);
+}
+.btn-sm {
+  min-height: 44px;
+  padding: 0 16px;
+  font-size: 15px;
+}
+
+/* משטח: לא כרטיס סטנדרטי – פינה אחת עגולה יותר, כמו דף מקופל */
+.sheet {
+  background: var(--color-card);
+  border: 1px solid var(--color-line);
+  border-radius: 22px 22px 22px 6px;
+}
+
+.field {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--color-page);
+  border: 1.5px solid var(--color-line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  min-height: 48px;
+}
+.field:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+textarea.field {
+  resize: vertical;
+  line-height: 1.7;
+}
+
+/* בחירה (צ'יפ) */
+.chip {
+  min-height: 44px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--color-line);
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.chip[aria-pressed="true"] {
+  background: var(--color-soft);
+  border-color: var(--color-accent);
+  font-weight: 700;
+}
+
+}
+
+/* רשימות ממוספרות בתוכן */
+ol.ps-5 {
+  list-style: decimal;
+}
+ul.ps-5 {
+  list-style: disc;
+}
+
+/* שמי לילה – לבמות הלילה (זהים בשני המצבים) */
+.sky {
+  background:
+    radial-gradient(1.2px 1.2px at 14% 22%, #fff9 50%, transparent 51%),
+    radial-gradient(1px 1px at 33% 64%, #fff6 50%, transparent 51%),
+    radial-gradient(1.6px 1.6px at 58% 12%, #fffb 50%, transparent 51%),
+    radial-gradient(1px 1px at 76% 44%, #fff7 50%, transparent 51%),
+    radial-gradient(1.4px 1.4px at 91% 78%, #fff8 50%, transparent 51%),
+    radial-gradient(1px 1px at 44% 88%, #fff5 50%, transparent 51%),
+    radial-gradient(120% 80% at 80% 0%, #2d2257 0%, #16112a 60%);
+  color: #efe6d2;
+}
+
+/* מסך לילה עמום – כמעט שחור, טקסט חלש כדי לא להעיר */
+.dim {
+  background: #050308;
+  color: #6f6488;
+}
+
+/* נשימה: עיגול שמתרחב ומתכווץ (4 שניות שאיפה, 6 נשיפה) */
+.breathe {
+  animation: breathe 10s ease-in-out infinite;
+}
+@keyframes breathe {
+  0% { transform: scale(0.55); opacity: 0.55; }
+  40% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.55); opacity: 0.55; }
+}
+
+/* הירח של תנומת אדיסון: זוהר כשמחזיקים */
+.moon-hold {
+  transition: filter 0.6s, transform 0.6s;
+}
+.moon-hold.holding {
+  filter: drop-shadow(0 0 28px #c9b8f2aa);
+  transform: scale(0.97);
+}
+
+.fade-in {
+  animation: fadein 0.5s ease-out;
+}
+@keyframes fadein {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+  .breathe {
+    animation: none;
+  }
+}
