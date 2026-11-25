@@ -84,10 +84,13 @@ jobs:
       - name: Claude fixes
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          MODEL: ${{ vars.BUDGET_FIX_MODEL || 'claude-opus-5-5' }}
+          # Sonnet מבצע, Fable 5.2 יועץ (.claude/skills/fable-advisor)
+          MODEL: ${{ vars.BUDGET_FIX_MODEL || 'claude-sonnet-5-5' }}
+          ADVISOR: ${{ vars.BUDGET_FIX_ADVISOR || 'claude-fable-5-2' }}
         run: |
           claude -p "$(cat .fix/prompt.txt)" \
             --model "$MODEL" \
+            $([ "$ADVISOR" = off ] && echo '--settings {"advisorModel":""}' || echo "--advisor $ADVISOR") \
             --max-turns 80 \
             --permission-mode acceptEdits \
             --allowedTools "Read,Edit,Write,Glob,Grep,Bash(cd:*),Bash(ls:*),Bash(npm test:*),Bash(npm run build:*),Bash(npx vitest:*),Bash(node --test:*),Bash(git diff:*),Bash(git status:*)" \

@@ -119,12 +119,15 @@ jobs:
       - name: Claude edits the video
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          MODEL: ${{ vars.TSEVET_SMART_MODEL || 'claude-opus-5-5' }}
+          # Sonnet מבצע, Fable 5.2 יועץ (.claude/skills/fable-advisor)
+          MODEL: ${{ vars.TSEVET_SMART_MODEL || 'claude-sonnet-5-5' }}
+          ADVISOR: ${{ vars.TSEVET_SMART_ADVISOR || 'claude-fable-5-2' }}
           MAX_USD: ${{ vars.TSEVET_SMART_MAX_USD || '12' }}
         working-directory: .smart
         run: |
           claude -p "$(cat prompt.txt)" \
             --model "$MODEL" \
+            $([ "$ADVISOR" = off ] && echo '--settings {"advisorModel":""}' || echo "--advisor $ADVISOR") \
             --max-turns 250 \
             --max-budget-usd "$MAX_USD" \
             --permission-mode acceptEdits \

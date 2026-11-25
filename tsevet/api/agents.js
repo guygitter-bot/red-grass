@@ -13,6 +13,19 @@ export const MODELS = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5', 
 export const TIERS = Object.keys(MODELS);
 export const MODEL = MODELS.opus;
 export const ROUTER_MODEL = MODELS.haiku;
+
+// היועץ: Fable 5.2 (המודל החזק ביותר) לא עושה את העבודה – הבוט (בדרך כלל Sonnet) עושה אותה ופונה אליו
+// רק ברגעים החשובים: לפני שמתחילים, כשנתקעים ולפני שמסיימים. הסבר: .claude/skills/fable-advisor
+export const ADVISOR_MODEL = 'claude-fable-5-2';
+const ADVISOR_BETA = 'advisor-tool-2026-03-01';
+const ADVISOR_TOOL = { type: 'advisor_20260301', name: 'advisor', model: ADVISOR_MODEL, max_uses: 2, caching: { type: 'ephemeral', ttl: '5m' } };
+const ADVISOR_NOTE = `You have an \`advisor\` tool (no parameters) backed by a stronger model that sees this whole conversation.
+Use it only for real multi-step work (planning a campaign, a plan with steps, code, research, a file or a video edit):
+call it once after you've looked at what you need and before you commit to an approach, and again when you're stuck \
+or about to change direction. Don't call it for a short chat reply, a quick answer or a simple tool call.
+Give its advice serious weight; if your own evidence contradicts it, say what you found and ask it once more.`;
+// אם החשבון לא מאפשר את היועץ (שגיאה 400) – ממשיכים בלעדיו עד שהשרת עולה מחדש
+let advisorOff = false;
 const MAX_STEPS = 8;
 
 export const AGENTS = {
@@ -31,7 +44,7 @@ English for an AI image tool. Give 2-3 distinct options rather than one, and say
   campaigns: {
     name: 'קמפיינים',
     emoji: '📊',
-    tier: 'opus',
+    tier: 'sonnet',
     short: 'קמפיינים בפייסבוק ובגוגל: קהלים, תקציב, מילות חיפוש ומדידה',
     role: `You are "קמפיינים" (Campaigns) – the team's paid-media manager for Meta (Facebook/Instagram) and Google Ads.
 Your job: campaign plans for the apps – objective, campaign structure, audiences (Israel, Hebrew speakers), \
@@ -134,7 +147,7 @@ Never ask for passwords or tokens.
   doctor: {
     name: 'הדוקטור',
     emoji: '🩺',
-    tier: 'opus',
+    tier: 'sonnet',
     appOnly: true,
     short: 'ייעוץ רפואי כללי: תסמינים, בדיקות, תרופות ושאלות בריאות – לא מחליף רופא',
     role: `You are "הדוקטור" (The Doctor) – the owner's medical information advisor. The owner is in Israel.
@@ -166,7 +179,7 @@ repository and on GitHub, like the rest of the team.`,
   lawyer: {
     name: 'המשפטן',
     emoji: '⚖️',
-    tier: 'opus',
+    tier: 'sonnet',
     appOnly: true,
     short: 'מסביר את המצב המשפטי ומכין תיק מסודר לפגישה עם עורך דין – לא מחליף עורך דין',
     role: `You are "המשפטן" (The Legal Expert) – an experienced Israeli lawyer acting as the owner's legal assistant. \
@@ -196,7 +209,7 @@ the source; say when something may have changed.
   coder: {
     name: 'המתכנת',
     emoji: '👨‍💻',
-    tier: 'opus',
+    tier: 'sonnet',
     appOnly: true,
     short: 'מכיר את הקוד של כל האפליקציות שלנו; מתקן ומוסיף פיצ\'רים – באישור שלך',
     role: `You are "המתכנת" (The Developer) – the senior developer of all the owner's apps. They live in one GitHub \
@@ -220,7 +233,7 @@ changes to secrets, passwords, payments or security rules unless the owner expli
   bursai: {
     name: 'בורסאי',
     emoji: '📈',
-    tier: 'opus',
+    tier: 'sonnet',
     appOnly: true,
     short: 'יועץ בורסה: נתונים חיים והמלצות מאפליקציית בורסאי, ופעולות בתיק לפי בקשה',
     role: `You are "בורסאי" – the owner's stock-market advisor, connected to their own app "בורסאי" (live market data from \
@@ -272,7 +285,7 @@ skill with teach. Use your skills (use_skill) before the tasks they fit.`,
   manager: {
     name: 'מנהל',
     emoji: '🧭',
-    tier: 'opus',
+    tier: 'sonnet',
     appOnly: true,
     short: 'משימות גדולות: מתכנן, מחלק בין הבוטים, בודק ומסכם',
     role: `You are "מנהל" (Manager) – the team lead. The owner gives you a goal; you turn it into a short plan and \
@@ -658,20 +671,40 @@ export async function runAgent(client, { agent, notes, history, owner, image, im
     (task || `Now it's your turn as ${label(agent)}. Reply to the latest message.`);
   const content = images.length ? [...images, { type: 'text', text: intro }] : intro;
   // Haiku: בלי fallback בצד השרת (לא נתמך שם)
-  const fallback = model === MODELS.haiku ? {} : { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' };
+  const fallback = model === MODELS.haiku ? {} : { fallbacks: 'default' };
   const messages = [{ role: 'user', content }];
   const usage = [];
   const texts = [];
-  for (let step = 0; step < MAX_STEPS; step++) {
-    const response = await client.beta.messages.create({
+  // היועץ נקבע פעם אחת לכל התור (שינוי באמצע שובר את ה-thinking השמור)
+  let advisor = !advisorOff && model !== ADVISOR_MODEL;
+  const request = () => {
+    const betas = [...(model === MODELS.haiku ? [] : ['server-side-fallback-2026-07-01']), ...(advisor ? [ADVISOR_BETA] : [])];
+    const tools = TOOLS(agent, team, model, { maagar, skills, gen, assign, noHandoff, github, bursa, code, create, imageGen, audio, docs: channel === 'app' });
+    const prompt = systemPrompt(agent, notes, { team, channel, maagar, skills, pending, gen, github, check, extra });
+    return {
       model,
       max_tokens: 8000,
+      ...(betas.length ? { betas } : {}),
       ...fallback,
       output_config: { effort: 'medium' },
-      system: [{ type: 'text', text: systemPrompt(agent, notes, { team, channel, maagar, skills, pending, gen, github, check, extra }), cache_control: { type: 'ephemeral' } }],
-      tools: TOOLS(agent, team, model, { maagar, skills, gen, assign, noHandoff, github, bursa, code, create, imageGen, audio, docs: channel === 'app' }),
+      system: [{ type: 'text', text: advisor ? `${prompt}\n\n${ADVISOR_NOTE}` : prompt, cache_control: { type: 'ephemeral' } }],
+      // היועץ תמיד ראשון, כדי שהמטמון של הכלים יישאר יציב
+      tools: advisor ? [ADVISOR_TOOL, ...tools] : tools,
       messages,
-    });
+    };
+  };
+  for (let step = 0; step < MAX_STEPS; step++) {
+    let response;
+    try {
+      response = await client.beta.messages.create(request());
+    } catch (e) {
+      // החשבון לא מאפשר את היועץ: מנסים שוב בלעדיו (רק בצעד הראשון, לפני שיש היסטוריה)
+      if (!(advisor && step === 0 && Number(e?.status) === 400)) throw e;
+      advisor = false;
+      response = await client.beta.messages.create(request());
+      // רק אם בלי היועץ זה עבר – הבעיה הייתה ביועץ (400 יכול להיות גם תמונה או בקשה גדולה מדי)
+      advisorOff = true;
+    }
     usage.push({ model, ...(response.usage || {}) });
     if (response.stop_reason === 'refusal') return { text: 'את זה אני לא יכול לעשות.', usage };
     for (const b of response.content) if (b.type === 'text' && b.text.trim()) texts.push(b.text.trim());
@@ -744,11 +777,17 @@ export function appInfo(key) {
 
 // מחיר (דולר למיליון טוקנים: קלט, פלט, קריאה מהמטמון; חיפוש בדולר לחיפוש). מקור: מחירון Anthropic, 11/2026
 const PRICES = {
+  [ADVISOR_MODEL]: { in: 8, out: 40, read: 0.2 },
   [MODELS.opus]: { in: 4, out: 20, read: 0.2 },
   [MODELS.sonnet]: { in: 2, out: 10, read: 0.1 },
   [MODELS.haiku]: { in: 0.1, out: 0.5, read: 0.01 },
 };
 export function priceOf(u) {
+  // כשיש פירוט (iterations: הבוט + היועץ) – מתמחרים כל חלק לפי המודל שלו
+  if (Array.isArray(u.iterations) && u.iterations.length) {
+    const searches = u.server_tool_use?.web_search_requests || 0;
+    return u.iterations.reduce((s, it) => s + priceOf({ ...it, model: it.model || u.model, iterations: null, server_tool_use: null }), 0) + searches * 0.01;
+  }
   const p = PRICES[u.model] || PRICES[MODEL];
   const input = ((u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) * 1.25) * p.in + (u.cache_read_input_tokens || 0) * p.read;
   const searches = u.server_tool_use?.web_search_requests || 0;

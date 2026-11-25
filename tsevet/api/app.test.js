@@ -176,13 +176,13 @@ test('a message in the app: the team picks a bot, it answers and hands off', asy
   assert.equal(view.title, 'קמפיין לסדר');
   // לכל בוט המודל שלו, ובאפליקציה כל הצוות זמין (כולל עורך הווידאו)
   const [, campaigns, creative] = aiCalls;
-  assert.equal(campaigns.model, MODELS.opus);
+  assert.equal(campaigns.model, MODELS.sonnet);
   assert.equal(creative.model, MODELS.sonnet);
   assert.match(campaigns.system[0].text, /עורך וידאו/);
   assert.match(campaigns.system[0].text, /private team app/);
   // עלויות לפי בוט
   const costs = (await call(env, '/app/costs', {}, token)).data;
-  assert.ok(costs.now.agents.campaigns > costs.now.agents.creative);
+  assert.ok(costs.now.agents.campaigns > 0 && costs.now.agents.creative > 0);
   assert.ok(costs.now.agents.router > 0);
   assert.ok(Math.abs(costs.today - costs.now.usd) < 1e-9);
 });
@@ -191,7 +191,7 @@ test('a message to one bot skips the routing; the model level can be changed in 
   const { env, aiCalls } = setupEnv({ replies: [{ content: text('בסדר') }] });
   const token = await signIn(env);
   const set = await call(env, '/app/settings', { models: { creative: 'opus', campaigns: 'nonsense' } }, token);
-  assert.deepEqual(set.data.models, { creative: 'opus', campaigns: 'opus', editor: 'sonnet', librarian: 'sonnet', social: 'sonnet', doctor: 'opus', lawyer: 'opus', coder: 'opus', bursai: 'opus', travel: 'sonnet', manager: 'opus' });
+  assert.deepEqual(set.data.models, { creative: 'opus', campaigns: 'sonnet', editor: 'sonnet', librarian: 'sonnet', social: 'sonnet', doctor: 'sonnet', lawyer: 'sonnet', coder: 'sonnet', bursai: 'sonnet', travel: 'sonnet', manager: 'sonnet' });
   const { data: conv } = await call(env, '/app/conv/new', {}, token);
   await call(env, '/app/send', { id: conv.id, text: 'רעיון', to: 'creative' }, token);
   await env.team.alarm();
@@ -655,7 +655,7 @@ test('the manager splits a task, each teammate does its step in order, and the m
   assert.equal(view.busy, null);
 
   const [manager, creative, campaigns, review] = aiCalls;
-  assert.equal(manager.model, MODELS.opus);
+  assert.equal(manager.model, MODELS.sonnet);
   assert.ok(manager.tools.some((t) => t.name === 'assign'));
   assert.ok(!manager.tools.some((t) => t.name === 'handoff'));
   // הבוט בשלב מקבל את ההוראה שלו, ובלי כלי העברה
@@ -968,14 +968,14 @@ test('updating an installed skill keeps the old version working until approved; 
 });
 
 // ---------- הדוקטור ----------
-test('the doctor bot: careful medical rules, more research, the strong model, and it can learn skills', async () => {
+test('the doctor bot: careful medical rules, more research, Sonnet with the Fable advisor, and it can learn skills', async () => {
   const { env, aiCalls } = setupEnv({ replies: [{ content: text('מידע כללי. זה מידע כללי ולא תחליף לרופא') }] });
   const token = await signIn(env);
   const { data: conv } = await call(env, '/app/conv/new', {}, token);
   await call(env, '/app/send', { id: conv.id, text: 'מה אומר ערך גבוה של ALT?', to: 'doctor' }, token);
   await env.team.alarm();
   const d = aiCalls[0];
-  assert.equal(d.model, MODELS.opus);
+  assert.equal(d.model, MODELS.sonnet);
   assert.match(d.system[0].text, /^You are "הדוקטור"/);
   assert.match(d.system[0].text, /מד"א 101/);
   assert.match(d.system[0].text, /never tell the owner to start, stop or change a prescribed medicine/);

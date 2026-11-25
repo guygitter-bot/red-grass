@@ -43,7 +43,7 @@ function Models({ agents }) {
 
   return (
     <Card title="כמה חכם כל בוט">
-      <p className="mb-3 text-sm text-muted">חזק = חכם יותר ויקר יותר. חסכוני = מהיר וזול.</p>
+      <p className="mb-3 text-sm text-muted">חזק = חכם יותר ויקר יותר. חסכוני = מהיר וזול. בכל רמה Fable 5.2 משמש יועץ בשלבים החשובים.</p>
       {error && <p className="mb-2 text-sm text-bad">{error}</p>}
       <ul className="space-y-3">
         {agents.map((a) => (
