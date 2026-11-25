@@ -1,83 +1,41 @@
-// לוח הצוות: הבוטים כעיגולים על מעגל, מחוברים בקווים דקים. לחיצה על בוט פותחת שיחה אליו
+// לוח הצוות: "המשרד" – קומה במגדל בלילה, משרד גדול למנהל ומשרד לכל בוט (components/Office.jsx).
+// לחיצה על משרד פותחת שיחה עם הבוט
 import { Video } from 'lucide-react';
-import { avatarSize, boardLayout } from '../lib/board';
-import { hueOf, photoOf } from '../lib/agents';
+import { findAgent } from '../lib/agents';
 import { ils, usd } from '../lib/format';
 import { newConversation } from '../lib/convs';
-import { Spinner } from './ui';
-
-function Node({ agent, agents, pos, size, many, onClick }) {
-  const hue = hueOf(agent.key, agents);
-  return (
-    <button
-      onClick={onClick}
-      className="absolute flex flex-col items-center text-center"
-      style={{ left: `${pos.x}%`, top: `${pos.y}%`, width: `${size}%`, transform: 'translate(-50%, -50%)' }}
-      aria-label={`שיחה עם ${agent.name}`}
-    >
-      <span className="relative block w-full" style={{ aspectRatio: '1' }}>
-        {agent.busy && <span className="pulse-ring absolute inset-0 rounded-full border-2" style={{ borderColor: `hsl(${hue} 85% 62%)` }} />}
-        <span
-          className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border-[3px] bg-card"
-          style={{ borderColor: `hsl(${hue} 80% 60%)`, boxShadow: `0 0 24px hsl(${hue} 80% 60% / 0.35)`, fontSize: `${size * 0.5}cqw` }}
-        >
-          {photoOf(agent.key) ? (
-            <img src={photoOf(agent.key)} alt="" className="h-full w-full object-cover" decoding="async" />
-          ) : (
-            <span style={{ lineHeight: 1 }}>{agent.emoji}</span>
-          )}
-        </span>
-        {!agent.busy && <span className="absolute bottom-[6%] end-[6%] h-[18%] w-[18%] rounded-full border-2 border-card bg-ok" title="פנוי" />}
-      </span>
-      {/* רקע לשם, כדי שהקווים לא יחתכו את הטקסט */}
-      <span className="mt-1 flex w-max max-w-[30cqw] flex-col lg:max-w-[19cqw] items-center rounded-lg bg-card/90 px-1.5 py-0.5">
-        <span className={`font-bold leading-tight lg:text-base ${many ? 'text-xs' : 'text-sm'}`}>{agent.name}</span>
-        <span className={`text-[11px] leading-tight text-muted lg:line-clamp-2 lg:text-xs ${many ? 'hidden sm:block' : ''}`}>{agent.short}</span>
-        {agent.busy && (
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-accent-ink">
-            <Spinner size={10} /> עובד…
-          </span>
-        )}
-      </span>
-    </button>
-  );
-}
+import { Room, Skyline } from './Office';
 
 export default function TeamBoard({ team }) {
   if (!team) return <p className="p-8 text-center text-muted">רגע…</p>;
   const agents = team.agents;
-  const n = agents.length;
-  // המנהל באמצע, השאר סביבו. מ-4 בוטים – בטלפון רק השם
-  const { pos, lines, mid } = boardLayout(agents);
-  const size = avatarSize(mid >= 0 ? n - 1 : n);
-  const manager = mid >= 0 ? agents[mid] : null;
+  const manager = findAgent(agents, 'manager');
+  const others = agents.filter((a) => a !== manager);
+  // מי הלך למי: בוט שעובד עם from = הבוט שהעביר אליו. ה-from "יושב" אצלו, והמשרד שלו ריק
+  const awayAt = Object.fromEntries(agents.filter((a) => a.busy && a.from).map((a) => [a.from, a]));
+  const room = (a, big = false) => (
+    <Room
+      key={a.key}
+      agent={a}
+      agents={agents}
+      big={big}
+      visitor={a.busy && a.from ? findAgent(agents, a.from) : null}
+      away={!a.busy ? awayAt[a.key] : null}
+      onClick={() => newConversation(a.key)}
+    />
+  );
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col items-center px-4 pb-8 pt-4 lg:min-h-full lg:max-w-none lg:flex-row lg:items-center lg:justify-center lg:gap-10 lg:px-8 lg:py-6">
-      <div
-        className="relative aspect-square w-full max-w-[620px] shrink-0 rounded-[2rem] lg:w-[min(calc(100dvh-3rem),calc(100vw-20rem-26rem))] lg:max-w-[900px] border border-line bg-card"
-        style={{ containerType: 'inline-size', backgroundImage: 'radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--color-accent) 14%, transparent), transparent 65%)' }}
-      >
-        <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full" aria-hidden="true">
-          {lines.map(([a, b]) => {
-            const hot = agents[a].busy || agents[b].busy;
-            return (
-              <line
-                key={`${a}-${b}`}
-                x1={pos[a].x}
-                y1={pos[a].y}
-                x2={pos[b].x}
-                y2={pos[b].y}
-                stroke={hot ? 'var(--color-accent)' : 'var(--color-line)'}
-                strokeWidth={hot ? 0.5 : 0.35}
-                strokeDasharray={hot ? '1.5 1.5' : undefined}
-              />
-            );
-          })}
-        </svg>
-        {agents.map((a, i) => (
-          <Node key={a.key} agent={a} agents={agents} pos={pos[i]} size={size} many={n > 3} onClick={() => newConversation(a.key)} />
-        ))}
+    <div className="mx-auto flex max-w-3xl flex-col items-center px-3 pb-8 pt-3 lg:min-h-full lg:max-w-none lg:flex-row lg:items-start lg:justify-center lg:gap-8 lg:px-8 lg:py-6">
+      <div className="relative w-full max-w-[680px] shrink-0 overflow-hidden rounded-[1.75rem] border border-line lg:max-w-[1000px] lg:flex-1" style={{ background: 'linear-gradient(180deg, #050816 0%, #0b1433 55%, #16214d 100%)' }}>
+        <Skyline />
+        <div className="relative px-3 pb-4 pt-3 sm:px-5">
+          <div className="mb-1 text-center text-xs font-medium tracking-wide text-white/60">🏙️ המשרד · קומה 42</div>
+          {manager && (
+            <div className="mx-auto w-[78%] sm:w-[56%] lg:w-[34%]">{room(manager, true)}</div>
+          )}
+          <div className="mt-2 grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-3 lg:grid-cols-5">{others.map((a) => room(a))}</div>
+        </div>
       </div>
 
       {/* במחשב: טור לצד הלוח */}

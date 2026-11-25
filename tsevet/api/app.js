@@ -388,10 +388,13 @@ export async function handleApp(t, path, body, headers, origin) {
 
     case '/app/team': {
       const settings = await getSettings(storage);
-      const busy = Object.values((await storage.get('busy')) || {}).map((b) => b.agent);
+      const busyList = Object.values((await storage.get('busy')) || {});
+      const busy = busyList.map((b) => b.agent);
+      // מי "בא" לבוט שעובד (העביר אליו עבודה) – למשרד באפליקציה
+      const visitor = (k) => busyList.find((b) => b.agent === k && b.from)?.from;
       const c = await costs(storage);
       return {
-        agents: AGENT_KEYS.map((k) => ({ key: k, name: AGENTS[k].name, emoji: AGENTS[k].emoji, short: AGENTS[k].short, tier: settings.models[k], busy: busy.includes(k) })),
+        agents: AGENT_KEYS.map((k) => ({ key: k, name: AGENTS[k].name, emoji: AGENTS[k].emoji, short: AGENTS[k].short, tier: settings.models[k], busy: busy.includes(k), ...(visitor(k) ? { from: visitor(k) } : {}) })),
         convs: await convList(t),
         costs: { today: c.today, month: c.now.usd, ils: ILS },
         video: Boolean(t.env.GITHUB_TOKEN && t.env.FILES),

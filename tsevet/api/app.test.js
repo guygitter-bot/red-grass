@@ -1847,3 +1847,17 @@ test('a big file with no length is stored in equal 10MB parts, and stops at the 
   }
   assert.equal(aborted, 1);
 });
+
+test('office: a bot that handed work over shows as visiting the busy bot', async () => {
+  const { env } = setupEnv();
+  const token = await signIn(env);
+  await env.team.setBusy('app:x', 'editor', 'creative');
+  await env.team.setBusy('app:y', 'travel', 'travel');
+  const { data } = await call(env, '/app/team', {}, token);
+  const by = Object.fromEntries(data.agents.map((a) => [a.key, a]));
+  assert.equal(by.editor.busy, true);
+  assert.equal(by.editor.from, 'creative');
+  assert.equal(by.travel.busy, true);
+  assert.equal(by.travel.from, undefined);
+  assert.equal(by.creative.from, undefined);
+});
