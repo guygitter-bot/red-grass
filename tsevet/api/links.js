@@ -5,7 +5,7 @@
 import { addFile, newId } from './app.js';
 
 // גבולות לקובץ מקישור (גדולים יותר מהעלאה מהטלפון: סרטון מ-Drive יכול להיות ארוך)
-export const LINK_MAX = { video: 2 * 1024 * 1024 * 1024, audio: 100 * 1024 * 1024, image: 30 * 1024 * 1024, doc: 20 * 1024 * 1024 };
+export const LINK_MAX = { video: 3 * 1024 * 1024 * 1024, audio: 100 * 1024 * 1024, image: 30 * 1024 * 1024, doc: 20 * 1024 * 1024 };
 const mb = (n) => `${Math.round(n / 1024 / 1024)}MB`;
 const NOT_SHARED = 'Google asked to sign in – the file is not shared publicly. Ask the owner to open it in Drive → Share → General access: "Anyone with the link", then send the link again.';
 const PART = 10 * 1024 * 1024;

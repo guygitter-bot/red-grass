@@ -1834,8 +1834,8 @@ test('a big file with no length is stored in equal 10MB parts, and stops at the 
   assert.match(out, /Imported/);
   assert.deepEqual(parts, [10 * 1024 * 1024, 10 * 1024 * 1024, 5 * 1024 * 1024]);
   assert.equal(completed, 1);
-  // התקרה האמיתית 2GB
-  assert.equal(LINK_MAX.video, 2 * 1024 * 1024 * 1024);
+  // התקרה האמיתית 3GB
+  assert.equal(LINK_MAX.video, 3 * 1024 * 1024 * 1024);
   // מעבר לתקרה – מבוטל (תקרה קטנה לבדיקה, כדי לא לייצר 2GB בזיכרון)
   const real = LINK_MAX.video;
   LINK_MAX.video = 30 * 1024 * 1024;
