@@ -1,9 +1,11 @@
 // כל הנתונים נשמרים רק במכשיר (localStorage). אין שרת – החלומות פרטיים.
 import { KINDS } from './kinds';
 import { nightKey } from './night';
+import { HD_TYPES, HD_AUTHORITIES, LENSES } from './lenses';
 
 const KEY = 'zc_data';
 const KIND_IDS = KINDS.map((k) => k.id);
+const LENS_IDS = LENSES.map((l) => l.id);
 const RELATED = ['yes', 'partly', 'no'];
 export const MOODS = ['😊', '😌', '😐', '😟', '😱'];
 
@@ -14,6 +16,26 @@ export function newId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
+function safeHd(h) {
+  const o = h && typeof h === 'object' ? h : {};
+  return {
+    type: HD_TYPES.some((t) => t.id === o.type) ? o.type : null,
+    authority: HD_AUTHORITIES.some((a) => a.id === o.authority) ? o.authority : null,
+  };
+}
+
+// תשובות לשאלות העדשות: { [מזהה עדשה]: [מחרוזות] }. עדשה לא מוכרת או מידע שבור – נזרקים.
+function safeLensNotes(n) {
+  const out = {};
+  if (!n || typeof n !== 'object' || Array.isArray(n)) return out;
+  for (const id of LENS_IDS) {
+    if (!Array.isArray(n[id])) continue;
+    out[id] = n[id].slice(0, 12).map((x) => str(x, 3000));
+    if (!out[id].some((x) => x.trim())) delete out[id];
+  }
+  return out;
+}
+
 export function safeSettings(s) {
   const o = s && typeof s === 'object' ? s : {};
   return {
@@ -21,6 +43,8 @@ export function safeSettings(s) {
     chime: o.chime !== false, // צלצול עדין
     napCycles: [2, 3, 4, 5].includes(o.napCycles) ? o.napCycles : 3,
     seenIntro: o.seenIntro === true,
+    // Human Design: סוג ותוקף (לא חובה; null = לא יודע/ת)
+    hd: safeHd(o.hd),
   };
 }
 
@@ -54,6 +78,7 @@ export function safeEntry(e) {
     lucid: o.lucid === true,
     tags: Array.isArray(o.tags) ? [...new Set(o.tags.map((t) => str(t, 40).trim()).filter(Boolean))].slice(0, 20) : [],
     // רישומי תנומת אדיסון: מה עלה בכל סבב
+    lensNotes: safeLensNotes(o.lensNotes), // תשובות לשאלות מכל עדשה
     glimpses: Array.isArray(o.glimpses) ? o.glimpses.map((g) => str(g, 2000)).filter(Boolean).slice(0, 10) : [],
   };
 }

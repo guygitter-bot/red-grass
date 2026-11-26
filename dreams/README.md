@@ -22,6 +22,7 @@
 ## הלוגיקה (`web/src/lib/`, פונקציות טהורות + בדיקות)
 - `night.js` – **מפתח לילה**: מ-15:00 עד 15:00 למחרת זה אותו לילה (כוונה ב-23:30 וחלום ב-07:00 → אותו לילה).
 - `store.js` – `safeData` / `safeEntry` / `safeIntention` / `safeSettings`: שדה חדש חייב ברירת מחדל שם. `mergeImport` לשחזור (מאחד, לא מוחק).
+- `lenses.js` – ארבע עדשות לפירוש חלום (Human Design, יונג, מסורת ישראל, שיטות טיפוליות): `LENSES`, `HD_TYPES` / `HD_AUTHORITIES`, ו-`lensQuestions(lens, entry, settings, intention)` (שאלות מותאמות; בלי AI ובלי רשת). התשובות ב-`entry.lensNotes`, הסוג והתוקף ב-`settings.hd`. מסך החלום: `components/LensSection.jsx`; מקורות ב"ללמוד".
 - `stats.js` – זכירה, רצף, הצלחת זימון, תגיות, חיפוש.
 - `night-tools.js` – מסך דולק (Wake Lock, מתחדש כשחוזרים לאפליקציה), צלצול ב-WebAudio, הקראה (רק אם יש קול עברי במכשיר), רטט.
 
