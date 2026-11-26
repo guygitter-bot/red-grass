@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { safeData, safeEntry, safeIntention, exportText, mergeImport } from './store';
+import { safeData, safeEntry, safeIntention, safeSettings, exportText, mergeImport } from './store';
 
 describe('safe*', () => {
   it('נתונים ריקים / שבורים לא מפילים', () => {
@@ -19,6 +19,23 @@ describe('safe*', () => {
   });
   it('תגיות בלי כפילויות', () => {
     expect(safeEntry({ tags: ['ים', 'ים ', '', 'בית'] }).tags).toEqual(['ים', 'בית']);
+  });
+  it('רשומה ישנה: lensNotes ריק, והגדרות בלי hd', () => {
+    expect(safeEntry({ id: 'a' }).lensNotes).toEqual({});
+    expect(safeSettings({}).hd).toEqual({ type: null, authority: null });
+  });
+  it('תשובות עדשות: עדשה לא מוכרת ומידע שבור נזרקים, הטקסט נחתך', () => {
+    const n = safeEntry({ lensNotes: { jung: ['א', 5, 'x'.repeat(5000)], zzz: ['ב'], hd: 'no', jewish: ['', ' '] } }).lensNotes;
+    expect(Object.keys(n)).toEqual(['jung']);
+    expect(n.jung[0]).toBe('א');
+    expect(n.jung[1]).toBe('');
+    expect(n.jung[2].length).toBe(3000);
+    expect(safeEntry({ lensNotes: [1] }).lensNotes).toEqual({});
+  });
+  it('hd לא תקין הופך ל-null, תקין נשמר', () => {
+    expect(safeSettings({ hd: { type: 'zzz', authority: 5 } }).hd).toEqual({ type: null, authority: null });
+    expect(safeSettings({ hd: 'x' }).hd).toEqual({ type: null, authority: null });
+    expect(safeSettings({ hd: { type: 'projector', authority: 'splenic' } }).hd).toEqual({ type: 'projector', authority: 'splenic' });
   });
   it('כוונה עם סוג לא מוכר', () => {
     expect(safeIntention({ kind: 'zzz', text: 'שאלה' }).kind).toBe('problem');

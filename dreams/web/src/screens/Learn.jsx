@@ -1,4 +1,5 @@
 import Layout, { H2 } from '../components/Layout';
+import { LENSES } from '../lib/lenses';
 
 // הצד הלימודי: מה ידוע במחקר, מה מסורת, ואיך לתרגל. כל נתון עם מקור.
 const STUDIES = [
@@ -96,6 +97,25 @@ export default function Learn() {
             <dd className="m-0 text-muted">לבחור "כוונה: חלום צלול", ולחזור על המשפט ולדמיין את הרגע שבו מבינים בתוך החלום שזה חלום.</dd>
           </div>
         </dl>
+
+        <H2 className="mt-8">תורות לפירוש חלומות</H2>
+        <p className="text-muted mt-0">
+          אלה מסורות ושיטות פירוש, לא ממצאי מחקר. הן מציעות שאלות להתבוננות, לא תשובות ולא חיזוי. בדף כל חלום אפשר לבחור "לפרש דרך עדשה".
+        </p>
+        <ul className="list-none p-0 m-0 grid gap-4">
+          {LENSES.map((l) => (
+            <li key={l.id} className="sheet p-5">
+              <h3 className="serif text-lg font-bold m-0"><span aria-hidden="true">{l.icon}</span> {l.name}</h3>
+              <p className="m-0 mt-2">{l.about}</p>
+              <p className="text-sm text-muted mt-2 mb-0">{l.basis}</p>
+              <ul className="list-none p-0 mt-2 mb-0 grid gap-1 text-sm">
+                {l.sources.map((s) => (
+                  <li key={s.url}><a href={s.url} target="_blank" rel="noopener noreferrer" className="text-accent">{s.name}</a></li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
 
         <section className="sheet bg-dawn-soft p-5 mt-8">
           <H2 className="text-lg">בריאות ובטיחות</H2>

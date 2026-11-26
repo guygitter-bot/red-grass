@@ -349,6 +349,7 @@
 - בדיקה: `cd dreams/web && npm test && npm run build`. טלפון + מחשב + מצב לילה (ברירת המחדל כאן לילה), `useEffect` עם סוגריים.
 - **החלומות רק במכשיר** (`zc_data`, גיבוי/שחזור בהגדרות) – לא לשלוח אותם לשום שרת בלי שהמשתמש ביקש. שדה חדש – ברירת מחדל ב-`safeEntry` / `safeIntention` / `safeSettings`. "לילה" = מ-15:00 עד 15:00 (`lib/night.js`).
 - כל נתון מחקרי במסך "ללמוד" – עם מקור. לא להבטיח תוצאה, ולא ייעוץ רפואי.
+- עדשות לפירוש (`web/src/lib/lenses.js`: Human Design, יונג, מסורת ישראל, גשטלט/אולמן/היל): שאלות הרהור מקומיות בלי AI ובלי רשת, תשובות ב-`entry.lensNotes`. מוצגות כמסורות לא כעובדות; Human Design מסומן כאזוטרי בלי ראיות. ציטוט או מקור חדש – רק אחרי אימות.
 
 ### טוטו (`toto_predictor/`)
 - תיאור: `toto_predictor/README.md`. רץ בהפעלה ידנית (`toto-weekly.yml`), האתר ב-GitHub Pages (`pages-deploy.yml`).

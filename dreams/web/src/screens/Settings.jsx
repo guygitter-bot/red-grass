@@ -4,6 +4,7 @@ import { useApp } from '../context';
 import { exportText, mergeImport, safeData } from '../lib/store';
 import { hebrewVoice, speak, chime } from '../lib/night-tools';
 import { isDark, toggleTheme } from '../lib/theme';
+import { HD_TYPES, HD_AUTHORITIES } from '../lib/lenses';
 
 function Toggle({ label, hint, on, onChange }) {
   return (
@@ -24,6 +25,7 @@ export default function Settings() {
   const [hasVoice, setHasVoice] = useState(Boolean(hebrewVoice()));
   const [confirm, setConfirm] = useState(false);
   const [err, setErr] = useState('');
+  const setHd = (k, v) => update((d) => ({ ...d, settings: { ...d.settings, hd: { ...d.settings.hd, [k]: v || null } } }));
   const set = (k, v) => update((d) => ({ ...d, settings: { ...d.settings, [k]: v } }));
 
   // רשימת הקולות נטענת באיחור בחלק מהדפדפנים
@@ -92,6 +94,30 @@ export default function Settings() {
               ))}
             </div>
           </label>
+        </section>
+
+        <section className="sheet p-5">
+          <H2 className="text-lg">Human Design</H2>
+          <p className="text-muted mt-0">
+            לא חובה. הבחירה משמשת רק לניסוח שאלות מותאמות בעדשת Human Design בדף החלום. זו מערכת רוחנית-אזוטרית בלי ראיות מדעיות, ומשתמשים בה כאן רק להתבוננות עצמית. האפליקציה לא מחשבת תרשים.
+          </p>
+          <label className="block mb-3">
+            <span className="block font-semibold mb-1">סוג</span>
+            <select className="field" value={s.hd?.type || ''} onChange={(e) => setHd('type', e.target.value)}>
+              <option value="">לא יודע/ת</option>
+              {HD_TYPES.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+            {s.hd?.type && <span className="block text-sm text-muted mt-1">{HD_TYPES.find((t) => t.id === s.hd.type)?.meaning}</span>}
+          </label>
+          <label className="block">
+            <span className="block font-semibold mb-1">תוקף (Authority)</span>
+            <select className="field" value={s.hd?.authority || ''} onChange={(e) => setHd('authority', e.target.value)}>
+              <option value="">לא יודע/ת</option>
+              {HD_AUTHORITIES.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+            {s.hd?.authority && <span className="block text-sm text-muted mt-1">{HD_AUTHORITIES.find((a) => a.id === s.hd.authority)?.meaning}</span>}
+          </label>
+          <p className="text-sm mt-3 mb-0"><a href="#/learn" className="text-accent">על התורות ועל מה שאין להן הוכחה</a></p>
         </section>
 
         <section className="sheet p-5">
