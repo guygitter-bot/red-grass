@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Layout from '../components/Layout';
 import DreamForm from '../components/DreamForm';
+import LensSection from '../components/LensSection';
 import { useApp } from '../context';
 import { nightLabel } from '../lib/night';
 import { kindById } from '../lib/kinds';
@@ -76,6 +77,27 @@ export default function Entry({ param }) {
             <h3 className="font-bold m-0 mb-1">מה החלום אומר על השאלה</h3>
             <p className="m-0 whitespace-pre-wrap">{e.answer}</p>
           </section>
+        )}
+        {e.type !== 'none' && (
+          <LensSection
+            key={e.id}
+            entry={e}
+            intention={intention}
+            settings={data.settings}
+            onSave={(lensId, notes) => {
+              update((d) => ({
+                ...d,
+                entries: d.entries.map((x) => {
+                  if (x.id !== e.id) return x;
+                  const next = { ...(x.lensNotes || {}) };
+                  if (notes.some((n) => n.trim())) next[lensId] = notes;
+                  else delete next[lensId];
+                  return { ...x, lensNotes: next };
+                }),
+              }));
+              setToast('התשובות נשמרו');
+            }}
+          />
         )}
         <div className="flex flex-wrap gap-2 mt-8">
           <button className="btn btn-primary" onClick={() => setEdit(true)}>{e.type === 'none' ? 'בכל זאת נזכרתי – לרשום' : 'לערוך'}</button>
