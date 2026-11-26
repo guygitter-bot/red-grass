@@ -369,6 +369,11 @@
   (`bis-fix`, `budget-fix`, `mat-kon-fix`, `tsevet-dev`, `tsevet-smartedit`, `seder-requests`): `--model` Sonnet + `--advisor claude-fable-5-2`;
   לשינוי בלי קוד – משתני GitHub `<APP>_MODEL` / `<APP>_ADVISOR` (`off` לכיבוי). בוט או workflow חדש עם Claude – באותה שיטה.
 
+### הסוכנות – 283 מומחים (`.claude/skills/agency`)
+- Agency Agents (MIT, `.claude/skills/LICENSE-agency-agents`), אותה גרסה כמו בבוטים של צוות (`AGENCY_SHA`). מפעילים בצ'אט: `/agency` או "סוכנות".
+- סקיל אחד שטוען מומחה אחד לפי צורך (חיפוש ב-`INDEX.md`) – לא כ-subagents, כדי לא לטעון 283 תיאורים לכל שיחה.
+- עדכון גרסה: `AGENCY_SHA` ב-`tsevet/api` **וגם** להעתיק מחדש את `experts/`. הכללים במאגר תמיד גוברים על המומחה.
+
 ### סקילים לעיצוב (`.claude/skills/frontend-design`, `.claude/skills/impeccable`)
 - `frontend-design` (Anthropic) ו-`impeccable` (pbakaus, Apache-2.0) – לעיצוב מחדש ולעיצוב מסכים חדשים, כדי שהאפליקציות לא ייראו אותו דבר (בלי הכתום הקבוע). לכל אפליקציה זהות משלה, ותוכנית העיצוב ב-`<app>/DESIGN.md`.
 - מ-impeccable הותקנו רק ההנחיות (`SKILL.md`, `reference/`); כלי ה-`scripts/` לא הותקן (מוריד ומריץ קובץ חיצוני) – במקומו בודקים בצילומי מסך עם Playwright.
