@@ -2,12 +2,23 @@
 // האפליקציה שולחת ל-AI סיכום של התקציב (aiContext) – ההכנסות, ההוצאות, התשלומים והתחזית. התשובות נשמרות.
 import { useState } from 'react';
 import { Lightbulb, Send, Sparkles, Trash2 } from 'lucide-react';
-import { aiContext, monthName, thisMonth } from '../lib/budget';
+import { aiContext, money, monthName, thisMonth } from '../lib/budget';
+import { bySupplier, findingsText } from '../lib/insights';
 import { askAi, remove } from '../lib/store';
 import Markdown from './Markdown';
 import { Button, inputCls } from './ui';
 
+// הסיכום שנשלח ל-AI: התקציב, הממצאים האוטומטיים (שינויי תעריף, חיובים כפולים...) וההוצאה לפי ספק
+function context(data, month) {
+  const suppliers = bySupplier(data, month)
+    .slice(0, 30)
+    .map((s) => `- ${s.supplier}: ${money(s.total)}${s.change ? ` (לעומת ${money(s.prev)} בחודש הקודם)` : ''}`);
+  return [aiContext(data, month), findingsText(data, month), suppliers.length ? `הוצאות לפי ספק החודש:\n${suppliers.join('\n')}` : ''].filter(Boolean).join('\n\n');
+}
+
 const PRESETS = [
+  ['🔎', 'מה השתנה החודש', 'מה השתנה החודש? עברו על הממצאים האוטומטיים ועל ההוצאות לפי ספק: אילו תעריפים עלו, איפה יש חיוב כפול או חיוב שלא הגיע, ומה לעשות עם כל אחד – לפי סדר דחיפות.'],
+  ['🔁', 'להחליף ספק', 'לאילו ספקים כדאי לבדוק מעבר או מיקוח (חשמל, סלולר, אינטרנט, טלוויזיה, ביטוחים, מנויים)? לכל אחד: כמה משלמים היום, מה מחיר סביר בשוק בערך, וכמה אפשר לחסוך.'],
   ['📊', 'תמונת מצב', 'תנו לי תמונת מצב של התקציב: איך אנחנו עומדים, מה המגמה בחודשים האחרונים ובחודשים הקרובים, ומה הכי חשוב לשים לב אליו.'],
   ['💰', 'איפה אפשר לחסוך', 'איפה אפשר לחסוך? תנו רשימה מסודרת של רעיונות חיסכון לפי הנתונים שלנו, עם הערכה כמה כל אחד יחסוך בחודש ובשנה, מהקל והמשתלם ביותר.'],
   ['🛡️', 'ביטוחים', 'עברו על הביטוחים שלנו: האם יש כפילויות (חיים, בריאות, משכנתא, רכב, דירה), מה נראה יקר, ומה כדאי לבדוק מול סוכן או השוואת מחירים.'],
@@ -31,7 +42,7 @@ export default function InsightsView({ data }) {
     setBusy(q);
     setError('');
     try {
-      const { id } = await askAi(aiContext(data, month), q.trim(), month);
+      const { id } = await askAi(context(data, month), q.trim(), month);
       setOpenId(id);
       setQuestion('');
     } catch (err) {
@@ -89,7 +100,7 @@ export default function InsightsView({ data }) {
         {data.insights.map((x, i) => {
           const open = openId ? openId === x.id : i === 0;
           return (
-            <article key={x.id} className="rounded-2xl bg-card shadow-sm">
+            <article key={x.id} className="rounded-2xl border border-line bg-card">
               <button onClick={() => setOpenId(open ? '-' : x.id)} className="flex w-full items-start gap-2 p-4 text-right">
                 <div className="min-w-0 flex-1">
                   <div className="font-bold">{x.question.length > 90 ? `${x.question.slice(0, 90)}…` : x.question}</div>

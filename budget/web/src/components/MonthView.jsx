@@ -14,7 +14,7 @@ const GROUPS = [
 
 export function Stat({ label, value, tone = '', sub }) {
   return (
-    <div className="rounded-2xl bg-card p-3 shadow-sm lg:p-4">
+    <div className="rounded-2xl border border-line bg-card p-3 lg:p-4">
       <div className="text-xs text-muted lg:text-sm">{label}</div>
       <div className={`num text-lg font-bold lg:text-2xl ${tone}`}>{value}</div>
       {sub && <div className="text-xs text-muted">{sub}</div>}
@@ -76,7 +76,7 @@ export default function MonthView({ data, month, go }) {
       </div>
 
       {byCat && (
-        <section className="mb-5 rounded-2xl bg-card p-4 shadow-sm">
+        <section className="mb-5 rounded-2xl border border-line bg-card p-4">
           <h2 className="mb-3 font-bold">הוצאות לפי קטגוריה</h2>
           {cats.map((c) => (
             <div key={c.category} className="mb-2">
@@ -93,7 +93,7 @@ export default function MonthView({ data, month, go }) {
       )}
 
       {s.lines.length === 0 && (
-        <div className="rounded-2xl bg-card p-6 text-center text-muted shadow-sm">
+        <div className="rounded-2xl border border-line bg-card p-6 text-center text-muted">
           אין עדיין הוצאות או הכנסות בחודש הזה.
           <br />
           מתחילים מהקבועות: משכורת, שכירות או משכנתא, חשבונות, ביטוחים, תשלומים…
@@ -106,7 +106,7 @@ export default function MonthView({ data, month, go }) {
           if (!lines.length) return null;
           const total = lines.reduce((a, l) => a + l.amount, 0);
           return (
-            <section key={title} className="rounded-2xl bg-card shadow-sm">
+            <section key={title} className="rounded-2xl border border-line bg-card">
               <div className="flex items-center justify-between border-b border-line px-4 py-3">
                 <h2 className="font-bold">{title}</h2>
                 <span className={`num font-bold ${kind === 'income' ? 'text-plus' : 'text-minus'}`}>{money(total)}</span>

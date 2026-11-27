@@ -2,8 +2,8 @@
 import { useMemo, useState } from 'react';
 import { addMonths, byCategory, cardTable, endingSoon, forecast, money, monthName, monthSummary, thisMonth } from '../lib/budget';
 
-// צבעים לקטגוריות וכרטיסים – נראים טוב על רקע בהיר וכהה
-const PALETTE = ['#2a9d8f', '#e9a23b', '#e76f51', '#4f8fd6', '#9b6ee0', '#e0629f', '#7fb069', '#9aa0a6'];
+// צבעים לקטגוריות וכרטיסים – משתני CSS (index.css), בהירים וכהים
+const PALETTE = ['var(--cat-1)', 'var(--cat-2)', 'var(--cat-3)', 'var(--cat-4)', 'var(--cat-5)', 'var(--cat-6)', 'var(--cat-7)', 'var(--color-alert)'];
 const W = 360;
 
 const compact = (n) => {
@@ -13,7 +13,7 @@ const compact = (n) => {
 
 function Card({ title, hint, children }) {
   return (
-    <section className="rounded-2xl bg-card p-4 shadow-sm">
+    <section className="rounded-2xl border border-line bg-card p-4">
       <h2 className="font-bold">{title}</h2>
       <p className="mb-3 text-xs text-muted">{hint}</p>
       {children}

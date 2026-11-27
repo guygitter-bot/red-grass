@@ -36,7 +36,7 @@ export default function Login() {
 
   return (
     <div className="flex min-h-dvh items-center justify-center p-4">
-      <form onSubmit={submit} className="w-full max-w-sm rounded-3xl bg-card p-6 shadow-sm">
+      <form onSubmit={submit} className="w-full max-w-sm rounded-3xl border border-line bg-card p-6">
         <div className="mb-5 flex flex-col items-center gap-2 text-center">
           <span className="rounded-2xl bg-soft p-3 text-accent-ink">
             <Wallet size={32} />

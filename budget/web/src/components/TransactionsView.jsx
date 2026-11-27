@@ -91,7 +91,7 @@ export default function TransactionsView({ data }) {
             <Upload size={20} /> {busy ? 'קורא…' : 'בחירת קבצים'}
             <input type="file" multiple accept=".xlsx,.xls,.csv,.html,.htm" className="hidden" onChange={pick} disabled={busy} />
           </label>
-          <section className="mb-4 rounded-2xl bg-card p-4 text-sm shadow-sm">
+          <section className="mb-4 rounded-2xl border border-line bg-card p-4 text-sm">
             <h2 className="mb-2 font-bold">איך מורידים את הקובץ</h2>
             <ul className="space-y-2">
               {HELP.map(([name, text]) => (
@@ -116,7 +116,7 @@ export default function TransactionsView({ data }) {
             {state.files
               .filter((f) => f.count)
               .map((f) => (
-                <div key={f.index} className="flex flex-wrap items-center gap-2 rounded-2xl bg-card p-3 text-sm shadow-sm">
+                <div key={f.index} className="flex flex-wrap items-center gap-2 rounded-2xl border border-line bg-card p-3 text-sm">
                   <span className="font-bold">{f.issuer || (f.kind === 'card' ? 'כרטיס אשראי' : 'בנק')}</span>
                   <span className="text-muted">
                     {f.count} תנועות · {f.name}
@@ -153,7 +153,7 @@ export default function TransactionsView({ data }) {
               <option key={c} value={c} />
             ))}
           </datalist>
-          <ul className="mb-28 overflow-hidden rounded-2xl bg-card shadow-sm lg:mb-24">
+          <ul className="mb-28 overflow-hidden rounded-2xl border border-line bg-card lg:mb-24">
             {shown.length === 0 && <li className="p-4 text-center text-sm text-muted">אין כאן תנועות</li>}
             {shown.map((r) => (
               <li key={r.key} className="flex items-start gap-3 border-b border-line px-3 py-3 last:border-0">

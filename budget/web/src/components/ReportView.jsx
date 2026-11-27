@@ -65,11 +65,11 @@ export default function ReportView({ data, month, go }) {
         </button>
       </div>
 
-      {s.lines.length === 0 && <div className="rounded-2xl bg-card p-6 text-center text-muted shadow-sm">אין הוצאות או הכנסות בחודש הזה.</div>}
+      {s.lines.length === 0 && <div className="rounded-2xl border border-line bg-card p-6 text-center text-muted">אין הוצאות או הכנסות בחודש הזה.</div>}
 
       <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
         {groups.map((g) => (
-          <section key={`${g.kind}:${g.category}`} className="break-inside-avoid overflow-hidden rounded-2xl bg-card shadow-sm print:border print:border-line print:shadow-none">
+          <section key={`${g.kind}:${g.category}`} className="break-inside-avoid overflow-hidden rounded-2xl border border-line bg-card print:border print:border-line print:shadow-none">
             <h2 className={`border-b border-line px-3 py-2.5 font-bold ${g.kind === 'income' ? 'text-plus' : ''}`}>{g.category}</h2>
             <table className="w-full table-fixed text-sm">
               <thead>
@@ -111,7 +111,7 @@ export default function ReportView({ data, month, go }) {
       </div>
 
       {s.lines.length > 0 && (
-        <section className="mt-4 break-inside-avoid rounded-2xl bg-card p-4 shadow-sm print:border print:border-line print:shadow-none lg:max-w-md">
+        <section className="mt-4 break-inside-avoid rounded-2xl border border-line bg-card p-4 print:border print:border-line print:shadow-none lg:max-w-md">
           <h2 className="mb-2 font-bold">סיכום החודש</h2>
           <div className="flex justify-between py-1">
             <span>סה״כ הכנסות</span>
