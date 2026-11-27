@@ -14,15 +14,15 @@ export function Sheet({ title, onClose, children }) {
     };
   }, [onClose]);
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 lg:items-center" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/45 lg:items-center" onClick={onClose}>
       <div
-        className="max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl bg-card p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-xl lg:max-w-lg lg:rounded-3xl"
+        className="max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl border border-line bg-card p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-xl lg:max-w-lg lg:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label={title}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold">{title}</h2>
+          <h2 className="text-xl font-black tracking-tight">{title}</h2>
           <button onClick={onClose} className="rounded-full p-2 text-muted hover:bg-soft" aria-label="סגירה">
             <X size={20} />
           </button>
@@ -43,15 +43,15 @@ export function Field({ label, hint, children }) {
   );
 }
 
-export const inputCls = 'w-full rounded-xl border border-line bg-page px-3 py-2.5 text-base outline-none focus:border-accent';
+export const inputCls = 'w-full rounded-xl border border-line bg-page px-3 py-2.5 text-base outline-none focus:border-ink';
 
 export function Button({ kind = 'primary', className = '', ...props }) {
   const look = {
-    primary: 'bg-accent text-white hover:opacity-90',
-    ghost: 'border border-line bg-card hover:bg-soft',
+    primary: 'bg-accent text-on-accent hover:opacity-90',
+    ghost: 'border border-ink/70 bg-card hover:bg-soft',
     danger: 'border border-line bg-card text-minus hover:bg-soft',
   }[kind];
-  return <button {...props} className={`rounded-xl px-4 py-2.5 font-medium disabled:opacity-50 ${look} ${className}`} />;
+  return <button {...props} className={`rounded-full px-5 py-2.5 font-bold disabled:opacity-50 ${look} ${className}`} />;
 }
 
 // בחירה אחת מכמה (כפתורים צמודים)
@@ -63,7 +63,7 @@ export function Segmented({ value, options, onChange }) {
           key={v}
           type="button"
           onClick={() => onChange(v)}
-          className={`flex-1 rounded-lg px-2 py-2 text-sm font-medium ${value === v ? 'bg-card text-accent-ink shadow-sm' : 'text-muted'}`}
+          className={`flex-1 rounded-lg px-2 py-2 text-sm font-medium ${value === v ? 'bg-card font-bold text-ink shadow-sm' : 'text-muted'}`}
         >
           {label}
         </button>

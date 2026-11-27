@@ -73,7 +73,7 @@ export default function Settings({ data, records }) {
   const months = Array.from({ length: 25 }, (_, i) => addMonths(now, i - 12));
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="mb-4 text-2xl font-bold">הגדרות</h1>
+      <h1 className="mb-4 text-3xl font-black tracking-tight">הגדרות</h1>
       {msg && (
         <p className="mb-4 rounded-xl bg-soft p-3 text-sm" onClick={() => setMsg('')}>
           {msg}

@@ -17,7 +17,7 @@ export default function YearView({ data, open }) {
           <ChevronRight />
         </button>
         <div className="text-center">
-          <h1 className="text-xl font-bold lg:text-2xl">
+          <h1 className="text-2xl font-black tracking-tight lg:text-3xl">
             {monthName(from, true)} – {monthName(addMonths(from, 11), true)}
           </h1>
           {from !== thisMonth() && (
@@ -34,15 +34,15 @@ export default function YearView({ data, open }) {
       <div className="mb-4 grid grid-cols-3 gap-2 text-center">
         <div className="rounded-2xl border border-line bg-card p-3">
           <div className="text-xs text-muted">הכנסות ב-12 חודשים</div>
-          <div className="num font-bold text-plus">{money(totals.income)}</div>
+          <div className="big-num text-xl text-plus">{money(totals.income)}</div>
         </div>
         <div className="rounded-2xl border border-line bg-card p-3">
           <div className="text-xs text-muted">הוצאות ב-12 חודשים</div>
-          <div className="num font-bold text-minus">{money(totals.expense)}</div>
+          <div className="big-num text-xl text-minus">{money(totals.expense)}</div>
         </div>
         <div className="rounded-2xl border border-line bg-card p-3">
           <div className="text-xs text-muted">נשאר</div>
-          <div className={`num font-bold ${totals.income - totals.expense < 0 ? 'text-minus' : 'text-plus'}`}>{money(totals.income - totals.expense, true)}</div>
+          <div className={`big-num text-xl ${totals.income - totals.expense < 0 ? 'text-minus' : 'text-plus'}`}>{money(totals.income - totals.expense, true)}</div>
         </div>
       </div>
 

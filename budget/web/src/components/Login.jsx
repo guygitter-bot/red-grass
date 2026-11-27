@@ -41,7 +41,7 @@ export default function Login() {
           <span className="rounded-2xl bg-soft p-3 text-accent-ink">
             <Wallet size={32} />
           </span>
-          <h1 className="text-2xl font-bold">תקציב הבית</h1>
+          <h1 className="text-3xl font-black tracking-tight">תקציב הבית</h1>
           <p className="text-sm text-muted">{ready === false ? 'פעם ראשונה – בוחרים סיסמה. היא תשמש בטלפון ובמחשב.' : 'כניסה עם הסיסמה'}</p>
         </div>
         <input

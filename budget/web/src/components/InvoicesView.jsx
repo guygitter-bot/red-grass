@@ -120,7 +120,7 @@ function SupplierCard({ s }) {
     alert(`נוספה הוצאה קבועה: ${s.supplier}, ${money(last.amount)}`);
   };
   return (
-    <article className="rounded-2xl border border-line bg-card">
+    <article className="min-w-0 rounded-2xl border border-line bg-card">
       <button onClick={() => setOpen(!open)} className="flex w-full items-start gap-3 p-4 text-right">
         <div className="min-w-0 flex-1">
           <div className="font-bold">{s.supplier}</div>
@@ -129,7 +129,7 @@ function SupplierCard({ s }) {
           </div>
         </div>
         <div className="shrink-0 text-left">
-          <div className="num font-bold">{money(last.amount)}</div>
+          <div className="num text-lg leading-tight font-black">{money(last.amount)}</div>
           {change && Math.abs(change.pct) >= 1 && (
             <div className={`num text-xs font-medium ${change.diff > 0 ? 'text-alert' : 'text-plus'}`}>
               {change.diff > 0 ? '↑' : '↓'} {Math.abs(change.pct)}%
@@ -229,7 +229,7 @@ export default function InvoicesView({ data }) {
     <div className="mx-auto max-w-3xl">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold">חשבוניות מהמייל</h1>
+          <h1 className="text-3xl font-black tracking-tight">חשבוניות מהמייל</h1>
           <p className="text-sm text-muted">
             {state.state?.lastRun ? `בדיקה אחרונה ${ago(state.state.lastRun)}` : 'עוד לא נבדק'}
             {total > 0 && ` · ${money(total)} בחשבוניות של ${monthName(thisMonth())}`}
