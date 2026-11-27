@@ -1,9 +1,7 @@
 // סמלי הקבוצות: הלוגו האמיתי מהאתר של ה-NBA (cdn.nba.com, מאושר ב-CSP שב-public/_headers).
 // אם הוא לא נטען (בלי אינטרנט, או שהכתובת השתנתה) – מוצג ציור משלנו בצבעי הקבוצה.
 import { useState } from 'react';
-
-const NBA_ID = { LAL: '1610612747', SAS: '1610612759' };
-const NAMES = { LAL: 'לוס אנג\'לס לייקרס', SAS: 'סן אנטוניו ספרס' };
+import { TEAM } from '../lib/series';
 
 function Lakers() {
   return (
@@ -43,16 +41,39 @@ function Spurs() {
   );
 }
 
+function Kings() {
+  return (
+    <svg viewBox="0 0 200 200" aria-label="קינגס" role="img">
+      <circle cx="100" cy="100" r="92" fill="#8a969c" />
+      <circle cx="100" cy="100" r="84" fill="#121418" />
+      <circle cx="100" cy="100" r="74" fill="none" stroke="#5a2d81" strokeWidth="8" />
+      <path d="M52 112 60 62l24 26 16-34 16 34 24-26 8 50z" fill="#c4ced4" />
+      <rect x="52" y="116" width="96" height="10" rx="3" fill="#c4ced4" />
+      <circle cx="60" cy="60" r="6" fill="#5a2d81" />
+      <circle cx="100" cy="50" r="6" fill="#5a2d81" />
+      <circle cx="140" cy="60" r="6" fill="#5a2d81" />
+      <text x="100" y="158" textAnchor="middle" fontFamily="Oswald,Impact,sans-serif" fontWeight="700" fontSize="30" fill="#c4ced4" letterSpacing="4">
+        KINGS
+      </text>
+    </svg>
+  );
+}
+
+const DRAWN = { LAL: Lakers, SAS: Spurs, SAC: Kings };
+
 export default function Logo({ team, className = '' }) {
   const [failed, setFailed] = useState(false);
   return (
     <span className={`block ${className}`}>
-      {failed ? (
-        team === 'LAL' ? <Lakers /> : <Spurs />
+      {failed || !TEAM[team] ? (
+        (() => {
+          const Drawn = DRAWN[team] || Lakers;
+          return <Drawn />;
+        })()
       ) : (
         <img
-          src={`https://cdn.nba.com/logos/nba/${NBA_ID[team]}/primary/L/logo.svg`}
-          alt={NAMES[team]}
+          src={`https://cdn.nba.com/logos/nba/${TEAM[team].nba}/primary/L/logo.svg`}
+          alt={`${TEAM[team].city} ${TEAM[team].name}`}
           className="h-full w-full object-contain"
           draggable="false"
           onError={() => setFailed(true)}
