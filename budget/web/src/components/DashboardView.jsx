@@ -1,11 +1,24 @@
 // מסך הבית "סקירה": כותרת עם הסכום הראשי, ארבע אריחים, כמה עולה כל ספק, מה דחוף, לאן הולך הכסף וכמה חויב בכל חודש
 import { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, FileSpreadsheet, FileText, Sparkles, Upload } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FileSpreadsheet, FileText, Mail, Sparkles, Upload } from 'lucide-react';
 import { addMonths, byCategory, forecast, money, monthName, monthSummary, thisMonth } from '../lib/budget';
 import { bySupplier, headline } from '../lib/insights';
 
 const SHOWN = 12;
-const KICKER = { price: 'שינוי תעריף', spike: 'עלייה חריגה', double: 'חיוב כפול', missing: 'לוודא', overlap: 'כפל כיסוי', ending: 'מסתיים', subscriptions: 'מנויים' };
+const KICKER = {
+  price: 'שינוי תעריף',
+  spike: 'עלייה חריגה',
+  double: 'חיוב כפול',
+  missing: 'לוודא',
+  overlap: 'כפל כיסוי',
+  ending: 'מסתיים',
+  subscriptions: 'מנויים',
+  'invoice-price': 'שינוי בחשבונית',
+  'invoice-item': 'סעיף חדש',
+  'invoice-double': 'חשבונית כפולה',
+  'invoice-missing': 'חשבונית חסרה',
+  'invoice-note': 'מהחשבונית',
+};
 // צבע לכל רמת דחיפות: מסגרת + כותרת קטנה
 const LEVEL = {
   urgent: ['border-s-alert', 'text-alert'],
@@ -95,7 +108,7 @@ function Alerts({ list, open }) {
           const [border, text] = LEVEL[f.level] || LEVEL.info;
           return (
             <li key={f.id}>
-              <button onClick={open} className={`block w-full rounded-xl border border-line border-s-4 bg-page/60 p-3 text-right hover:bg-soft ${border}`}>
+              <button onClick={() => open(f)} className={`block w-full rounded-xl border border-line border-s-4 bg-page/60 p-3 text-right hover:bg-soft ${border}`}>
                 <div className={`text-xs font-medium ${text}`}>
                   {KICKER[f.kind] || 'ממצא'}
                   {f.supplier ? ` · ${f.supplier}` : ''}
@@ -210,7 +223,7 @@ export default function DashboardView({ data, month, go }) {
   const total = slices.reduce((a, c) => a + c.amount, 0);
   const colorOf = (cat) => slices.find((s) => s.category === cat)?.color || catColor(6);
   const now = thisMonth();
-  const hasData = data.items.length > 0;
+  const hasData = data.items.length > 0 || data.invoices.length > 0;
 
   const pill = 'flex items-center gap-1.5 rounded-full border border-line bg-card px-4 py-2 text-sm font-medium hover:bg-soft';
   return (
@@ -236,6 +249,9 @@ export default function DashboardView({ data, month, go }) {
           </button>
           <button onClick={() => go('transactions')} className={pill}>
             <Upload size={16} /> ייבוא תנועות
+          </button>
+          <button onClick={() => go('invoices')} className={pill}>
+            <Mail size={16} /> חשבוניות מהמייל
           </button>
           <button onClick={() => go('report', month)} className={pill}>
             <FileText size={16} /> דוח חודשי
@@ -268,7 +284,7 @@ export default function DashboardView({ data, month, go }) {
               <SupplierList rows={suppliers} total={h.expense} colorOf={colorOf} />
             </div>
             <div className="order-1 min-w-0 lg:order-2">
-              <Alerts list={h.findings} open={() => go('month', month)} />
+              <Alerts list={h.findings} open={(f) => go(f?.kind?.startsWith('invoice') ? 'invoices' : 'month', month)} />
             </div>
             <div className="order-3 min-w-0 space-y-4">
               <Donut slices={slices} total={total} />

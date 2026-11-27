@@ -2,7 +2,7 @@
 // ניווט לפי כתובת (#/month/2027-03, #/report/2027-03, #/year, #/charts, #/ai, #/cards, #/items, #/settings, #/fixes, #/transactions, #/more)
 // כדי שכפתור "חזרה" יעבוד.
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, CalendarDays, ChevronDown, ChevronLeft, Cloud, CloudOff, CreditCard, FileSpreadsheet, FileText, LayoutDashboard, ListChecks, Menu, Moon, RefreshCw, Settings as Gear, Sparkles, Sun, TrendingUp, Wallet, Wrench } from 'lucide-react';
+import { BarChart3, CalendarDays, ChevronDown, ChevronLeft, Cloud, CloudOff, CreditCard, FileSpreadsheet, FileText, LayoutDashboard, ListChecks, Mail, Menu, Moon, RefreshCw, Settings as Gear, Sparkles, Sun, TrendingUp, Wallet, Wrench } from 'lucide-react';
 import { prepare, thisMonth } from './lib/budget';
 import { sync, useStore } from './lib/store';
 import { isDark, setTheme } from './lib/theme';
@@ -18,6 +18,7 @@ import InsightsView from './components/InsightsView';
 import CardsView from './components/CardsView';
 import FixesView from './components/FixesView';
 import TransactionsView from './components/TransactionsView';
+import InvoicesView from './components/InvoicesView';
 
 function parseHash() {
   const [, page = 'home', arg] = window.location.hash.replace(/^#/, '').split('/');
@@ -25,7 +26,7 @@ function parseHash() {
   return { page: PAGES.includes(page) ? page : 'home', month };
 }
 
-const PAGES = ['home', 'month', 'report', 'year', 'charts', 'ai', 'cards', 'items', 'settings', 'fixes', 'transactions', 'more'];
+const PAGES = ['home', 'month', 'report', 'year', 'charts', 'ai', 'cards', 'items', 'settings', 'fixes', 'transactions', 'invoices', 'more'];
 
 // כל המסכים (בטלפון: רשימת "עוד"; במחשב: לשוניות בכותרת + תפריט "עוד")
 const NAV = [
@@ -35,6 +36,7 @@ const NAV = [
   ['year', 'שנה קדימה', TrendingUp],
   ['charts', 'גרפים', BarChart3],
   ['ai', 'תובנות AI', Sparkles],
+  ['invoices', 'חשבוניות', Mail],
   ['transactions', 'ייבוא תנועות', FileSpreadsheet],
   ['cards', 'כרטיסי אשראי', CreditCard],
   ['items', 'הכול', ListChecks],
@@ -50,8 +52,8 @@ const TABS = [
   ['more', 'עוד', Menu],
 ];
 // הלשוניות שמוצגות ישר בכותרת במחשב; השאר בתפריט "עוד"
-const TOP = ['home', 'month', 'report', 'year', 'charts', 'ai'];
-const MORE = ['charts', 'transactions', 'year', 'cards', 'items', 'settings', 'fixes'];
+const TOP = ['home', 'month', 'report', 'invoices', 'charts', 'ai'];
+const MORE = ['invoices', 'charts', 'transactions', 'year', 'cards', 'items', 'settings', 'fixes'];
 
 function MoreView({ go }) {
   return (
@@ -195,6 +197,7 @@ export default function App() {
           {route.page === 'items' && <ItemsView data={data} />}
           {route.page === 'settings' && <Settings data={data} records={records} />}
           {route.page === 'fixes' && <FixesView />}
+          {route.page === 'invoices' && <InvoicesView data={data} />}
           {route.page === 'transactions' && <TransactionsView data={data} />}
           {route.page === 'more' && <MoreView go={go} />}
         </main>

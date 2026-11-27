@@ -1,6 +1,7 @@
 // "מה השתנה?" – תובנות מהנתונים, בלי AI: כמה עולה כל ספק בחודש, שינויי תעריף, חיובים כפולים אפשריים,
 // חיובים שלא הגיעו, ביטוחים כפולים, מנויים ותשלומים שמסתיימים. פונקציות טהורות עם בדיקות (insights.test.js).
-import { addMonths, lastMonth, monthName, monthSummary, money, monthsBetween } from './budget';
+import { addMonths, lastMonth, monthName, monthSummary, money, monthsBetween, thisMonth } from './budget';
+import { invoiceFindings } from './invoices';
 
 // ---------- ספק ----------
 
@@ -12,7 +13,23 @@ const KNOWN = [
   'וולט', 'wolt', 'netflix', 'נטפליקס', 'spotify', 'ספוטיפיי', 'apple', 'google', 'גוגל', 'amazon', 'microsoft', 'anthropic', 'openai',
   'פנגו', 'pango', 'סלופארק', 'איתוראן', 'פלאפון', 'מקס', 'כאל', 'ישראכרט',
 ];
-const ALIASES = { 'פניקס': 'הפניקס', 'סופר פארם': 'סופר-פארם', wolt: 'וולט', 'נטפליקס': 'netflix', 'ספוטיפיי': 'spotify', 'גוגל': 'google' };
+const ALIASES = {
+  'פניקס': 'הפניקס',
+  'סופר פארם': 'סופר-פארם',
+  wolt: 'וולט',
+  pango: 'פנגו',
+  netflix: 'Netflix',
+  'נטפליקס': 'Netflix',
+  spotify: 'Spotify',
+  'ספוטיפיי': 'Spotify',
+  google: 'Google',
+  'גוגל': 'Google',
+  apple: 'Apple',
+  amazon: 'Amazon',
+  microsoft: 'Microsoft',
+  anthropic: 'Anthropic',
+  openai: 'OpenAI',
+};
 
 // שם ספק אחיד מתוך שם של הוצאה
 export function supplierOf(name) {
@@ -166,6 +183,10 @@ export function findings(data, month) {
     add({ kind: 'subscriptions', level: 'info', title: `${subs.length} מנויים`, amount: total, text: `${money(total)} בחודש (${money(total * 12)} בשנה). לעבור ולבטל מה שלא בשימוש` });
   }
 
+  // ממצאים מהחשבוניות שנאספו מהמייל – נכון לסוף החודש (או להיום, בחודש הנוכחי)
+  const end = month === thisMonth() ? new Date().toISOString().slice(0, 10) : `${addMonths(month, 1)}-01`;
+  for (const f of invoiceFindings(data, end)) out.push(f);
+
   // עלייה שנובעת מחיוב כפול – מספיק הממצא של החיוב הכפול
   const doubles = new Set(out.filter((x) => x.kind === 'double').map((x) => x.supplier));
   const order = { urgent: 0, check: 1, info: 2 };
@@ -182,8 +203,8 @@ export function headline(data, month) {
     net: s.net,
     suppliers: bySupplier(data, month).length,
     urgent: f.filter((x) => x.level === 'urgent').length,
-    raises: f.filter((x) => (x.kind === 'price' && x.amount > 0) || x.kind === 'spike').length,
-    toCheck: f.filter((x) => x.kind === 'missing' || x.kind === 'double').length,
+    raises: f.filter((x) => (['price', 'invoice-price'].includes(x.kind) && x.amount > 0) || x.kind === 'spike').length,
+    toCheck: f.filter((x) => ['missing', 'double', 'invoice-missing', 'invoice-double', 'invoice-item'].includes(x.kind)).length,
     findings: f,
   };
 }

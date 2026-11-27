@@ -9,6 +9,7 @@
 //   POST /fix/list | /fix/send {text, image?, view?, device?} | /fix/approve|reject|retry|reply {number, text?}
 //                                   בקשות שינוי מתוך האפליקציה (ראו fixes.js)
 //   GET  /fix/image?id=             צילום המסך של בקשה – רק לתהליך ב-GitHub (authorization: Bearer <GITHUB_TOKEN>)
+//   POST /mail/list | /mail/add {email, password} | /mail/remove {id} | /mail/run   תיבות Gmail לאיסוף חשבוניות (ראו mail/)
 //   POST /logout
 // הכניסה: authorization: Bearer <סוד> שמתקבל אחרי סיסמה.
 import { Budget } from './budget.js';
@@ -16,7 +17,7 @@ import { Budget } from './budget.js';
 export { Budget };
 
 const MAX_BODY_BYTES = 2.5 * 1024 * 1024;
-const ROUTES = ['/status', '/setup', '/login', '/sync', '/password', '/reset', '/ai', '/logout', '/fix/list', '/fix/send', '/fix/approve', '/fix/reject', '/fix/retry', '/fix/reply'];
+const ROUTES = ['/status', '/setup', '/login', '/sync', '/password', '/reset', '/ai', '/logout', '/fix/list', '/fix/send', '/fix/approve', '/fix/reject', '/fix/retry', '/fix/reply', '/mail/list', '/mail/add', '/mail/remove', '/mail/run'];
 
 function safeEqual(a, b) {
   a = String(a);
