@@ -12,6 +12,8 @@ const PER_RUN = 40;
 const AI_PER_DAY = 150;
 const MAX_MAIL_BYTES = 12_000_000;
 const SEEN_KEEP = 6000;
+// ריצה אחת לא יותר מ-5 דקות; מה שנשאר ממשיך בריצה הבאה (דקה אחרי)
+const RUN_MS = 5 * 60 * 1000;
 const DAY = 24 * 60 * 60 * 1000;
 
 export const QUERY = (days) => `newer_than:${days}d (חשבונית OR "חשבונית מס" OR קבלה OR invoice OR receipt OR "דרישת תשלום" OR "חשבון לתקופה" OR "פירוט חיובים" OR "החשבון שלך" OR "חיוב חודשי")`;
@@ -123,18 +125,51 @@ export class Mailbox {
     return true;
   }
 
-  // ריצה על כל התיבות. client = לקוח Claude
+  // מייל אחד: פירוק ו-Claude. מחזיר { mail, data } או null כשזו לא חשבונית
+  async readOne(client, raw) {
+    const mail = parseMail(raw);
+    const { invoice } = await extractInvoice(client, mail);
+    return invoice ? { mail, data: invoice } : null;
+  }
+
+  async aiLeft() {
+    const day = new Date(this.now()).toISOString().slice(0, 10);
+    const usage = (await this.storage.get('mail-ai')) || {};
+    return usage.day !== day || usage.count < AI_PER_DAY;
+  }
+
+  // ניתוק כל התיבות (במחיקת כל הנתונים)
+  async clear() {
+    await this.storage.delete(['mail-accounts', 'mail-seen', 'mail-state']);
+  }
+
+  // ריצה על כל התיבות. client = לקוח Claude. מחזיר more=true כשנשאר עוד מה לקרוא
   async run(client) {
     const state = await this.state();
     // ריצה תקועה (יותר מ-20 דקות) לא חוסמת
     if (state.running && this.now() - state.startedAt < 20 * 60 * 1000) return state;
-    await this.storage.put('mail-state', { ...state, running: true, startedAt: this.now() });
+    const started = this.now();
+    await this.storage.put('mail-state', { ...state, running: true, startedAt: started });
     const seen = new Set((await this.storage.get('mail-seen')) || []);
     let checked = 0;
     let found = 0;
+    let more = false;
     const errors = [];
     const list = await this.accounts();
+    // שמירה תוך כדי, כדי שריצה שנעצרה באמצע לא תאבד את מה שכבר נעשה
+    const persist = async () => {
+      const current = await this.accounts();
+      await this.storage.put('mail-accounts', current.map((a) => {
+        const x = list.find((y) => y.id === a.id);
+        return x ? { ...a, lastRun: x.lastRun, lastError: x.lastError, found: x.found, firstDone: x.firstDone } : a;
+      }));
+      await this.storage.put('mail-seen', [...seen].slice(-SEEN_KEEP));
+    };
     for (const account of list) {
+      if (this.now() - started > RUN_MS) {
+        more = true;
+        break;
+      }
       let imap;
       try {
         const password = await open(this.env.MAIL_KEY, account.box);
@@ -143,31 +178,45 @@ export class Mailbox {
         await imap.selectAll();
         const uids = (await imap.searchGmail(QUERY(account.firstDone ? NEXT_DAYS : FIRST_DAYS))).sort((a, b) => b - a);
         const todo = uids.filter((u) => !seen.has(`${account.id}:${u}`)).slice(0, PER_RUN);
-        const records = [];
+        let stopped = false;
         for (const uid of todo) {
+          if (this.now() - started > RUN_MS) {
+            stopped = true;
+            break;
+          }
           // מכסת ה-AI להיום נגמרה – ממשיכים מחר מאותו מקום
-          if (!(await this.takeAi())) break;
+          if (!(await this.takeAi())) {
+            stopped = true;
+            break;
+          }
           const raw = await this.withTimeout(imap.fetch(uid), 60000, 'fetch');
+          const invoice = raw && raw.length <= MAX_MAIL_BYTES ? await this.readOne(client, raw) : null;
+          // נקרא (חשבונית או לא) – לא קוראים אותו שוב; נשמר מיד
           seen.add(`${account.id}:${uid}`);
           checked += 1;
-          if (!raw || raw.length > MAX_MAIL_BYTES) continue;
-          const mail = parseMail(raw);
-          const { invoice } = await extractInvoice(client, mail);
-          if (!invoice) continue;
+          if (!invoice) {
+            await persist();
+            continue;
+          }
+          const { mail } = invoice;
           found += 1;
-          records.push({
+          account.found = (account.found || 0) + 1;
+          await this.putRecords([{
             id: `inv:${hash(mail.messageId || `${account.id}:${uid}`)}`,
             t: 'invoice',
-            ...invoice,
+            ...invoice.data,
             mailbox: account.email,
             from: (mail.from.match(/<([^>]+)>/)?.[1] || mail.from).slice(0, 80),
             subject: mail.subject.slice(0, 150),
             received: Number.isFinite(Date.parse(mail.date)) ? new Date(mail.date).toISOString().slice(0, 10) : '',
             pdf: mail.pdfs.length > 0,
-          });
+          }]);
+          await persist();
         }
-        if (records.length) await this.putRecords(records);
-        Object.assign(account, { lastRun: this.now(), lastError: '', found: (account.found || 0) + records.length, firstDone: account.firstDone || todo.length < PER_RUN });
+        // נשארו מיילים (עוד מהיסטוריה, או שהריצה נעצרה) – ממשיכים בריצה הבאה
+        const backlog = stopped || uids.filter((u) => !seen.has(`${account.id}:${u}`)).length > 0;
+        if (backlog && (await this.aiLeft())) more = true;
+        Object.assign(account, { lastRun: this.now(), lastError: '', firstDone: account.firstDone || !backlog });
       } catch (e) {
         console.error('mail run failed', account.id, String(e?.message || e).slice(0, 120));
         account.lastError = mailError(e);
@@ -177,11 +226,8 @@ export class Mailbox {
         if (imap) await imap.logout();
       }
     }
-    // שומרים רק את המזהים של התיבות, בלי כפילויות
-    const current = await this.accounts();
-    await this.storage.put('mail-accounts', current.map((a) => list.find((x) => x.id === a.id) || a));
-    await this.storage.put('mail-seen', [...seen].slice(-SEEN_KEEP));
-    const done = { running: false, startedAt: state.startedAt || 0, lastRun: this.now(), checked, found, errors };
+    await persist();
+    const done = { running: false, startedAt: started, lastRun: this.now(), checked, found, errors, more };
     await this.storage.put('mail-state', done);
     return done;
   }

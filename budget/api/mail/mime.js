@@ -1,7 +1,12 @@
 // פירוק מייל גולמי (MIME): כותרות, טקסט, וקובצי PDF מצורפים. בלי ספריות.
 // מטפל ב-base64, quoted-printable, כותרות מקודדות (=?UTF-8?B?...?=) ובקידודים עבריים ישנים.
 
-const latin1 = new TextDecoder('latin1');
+// בתים -> מחרוזת שבה כל תו הוא בית אחד (0-255), בלי מיפוי של windows-1252
+export function binary(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return s;
+}
 
 function decodeBytes(bytes, charset = 'utf-8') {
   const cs = String(charset || 'utf-8').toLowerCase().replace(/^"|"$/g, '');
@@ -89,7 +94,7 @@ const htmlToText = (html) =>
 
 // raw: Uint8Array של המייל כולו. מחזיר { from, subject, date, messageId, text, pdfs: [{ name, data (base64) }] }
 export function parseMail(raw, { maxPdfBytes = 4_000_000 } = {}) {
-  const text = latin1.decode(raw);
+  const text = binary(raw);
   const { headers, body } = splitHeaders(text);
   const out = { from: decodeWords(headers.from), subject: decodeWords(headers.subject), date: headers.date || '', messageId: (headers['message-id'] || '').trim(), text: '', html: '', pdfs: [] };
 

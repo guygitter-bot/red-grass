@@ -97,7 +97,7 @@ jobs:
           # המפתח שמצפין את סיסמאות האפליקציה של Gmail. נוצר פעם אחת ולא מודפס; יצירה מחדש תחייב לחבר את התיבות שוב
           # אם אי אפשר לקרוא את הרשימה – לא יוצרים מפתח חדש (כדי לא לדרוס את הקיים)
           list=$(npx --yes wrangler@4.146.0 secret list) || { echo "::warning::could not list secrets"; exit 0; }
-          if printf '%s' "$list" | grep -q '"MAIL_KEY"'; then
+          if printf '%s' "$list" | grep -q 'MAIL_KEY'; then
             echo "MAIL_KEY exists"
           else
             openssl rand -base64 32 | tr -d '\n' | npx --yes wrangler@4.146.0 secret put MAIL_KEY

@@ -1,8 +1,9 @@
 // לקוח IMAP מינימלי (רק מה שצריך כדי לקרוא חשבוניות מ-Gmail): התחברות, חיפוש, הורדת מייל, יציאה.
 // החיבור: TLS ל-imap.gmail.com:993 דרך cloudflare:sockets. בבדיקות מעבירים connect מדומה.
 
+import { binary } from './mime.js';
+
 const enc = new TextEncoder();
-const latin1 = new TextDecoder('latin1');
 
 export class Imap {
   constructor(socket) {
@@ -16,7 +17,7 @@ export class Imap {
   static async open(connect, host = 'imap.gmail.com', port = 993) {
     const imap = new Imap(connect({ hostname: host, port }, { secureTransport: 'on', allowHalfOpen: false }));
     const greeting = await imap.line();
-    if (!/^\* (OK|PREAUTH)/.test(latin1.decode(greeting))) throw new Error('imap greeting');
+    if (!/^\* (OK|PREAUTH)/.test(binary(greeting))) throw new Error('imap greeting');
     return imap;
   }
 
@@ -72,7 +73,7 @@ export class Imap {
       }
       await this.writer.write(enc.encode(`${c}\r\n`));
       if (i + 1 < chunks.length && chunks[i + 1] instanceof Uint8Array) {
-        const cont = latin1.decode(await this.line());
+        const cont = binary(await this.line());
         if (!cont.startsWith('+')) throw new Error(`imap: ${cont.slice(0, 80)}`);
       }
     }
@@ -80,7 +81,7 @@ export class Imap {
     const literals = [];
     for (;;) {
       const raw = await this.line();
-      const text = latin1.decode(raw);
+      const text = binary(raw);
       if (text.startsWith(`${tag} `)) {
         if (!/^\S+ OK/.test(text)) throw Object.assign(new Error(text.slice(tag.length + 1, 200)), { imap: true });
         return { lines, literals };

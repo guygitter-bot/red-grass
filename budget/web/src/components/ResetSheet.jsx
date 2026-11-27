@@ -31,6 +31,7 @@ export default function ResetSheet({ onBackup, onClose, onDone }) {
         <div className="space-y-1 text-sm">
           <p className="font-bold">זה ימחק הכול, ואי אפשר לבטל.</p>
           <p>כל ההכנסות, ההוצאות, התשלומים, היתרה, מעקב הכרטיסים ותשובות ה-AI יימחקו – בשרת ובכל המכשירים (טלפון ומחשב).</p>
+          <p>גם תיבות המייל המחוברות ינותקו (צריך לחבר אותן מחדש).</p>
           <p>הסיסמה נשארת. מומלץ לשמור גיבוי לפני.</p>
         </div>
       </div>

@@ -215,6 +215,8 @@ export class Budget {
       writes[`r:${r.id}`] = gone;
     }
     await this.write(writes);
+    // גם תיבות המייל המחוברות מתנתקות (הסיסמאות נמחקות)
+    await this.mailbox().clear();
     return { ok: true, rev: d.rev };
   }
 
@@ -249,11 +251,11 @@ export class Budget {
     await this.load();
     const mail = this.mailbox();
     if (!mail.ready || !(await mail.accounts()).length) return;
-    try {
-      await mail.run(this.aiClient());
-    } finally {
-      await this.storage.setAlarm(mail.nextDaily());
-    }
+    // הריצה היומית הבאה נקבעת מראש, גם אם הריצה הזאת תיעצר באמצע
+    await this.storage.setAlarm(mail.nextDaily());
+    const done = await mail.run(this.aiClient());
+    // נשאר עוד (למשל חצי השנה הראשונה) – ממשיכים בעוד דקה
+    if (done?.more) await this.storage.setAlarm(this.now() + 60 * 1000);
   }
 
   async write(writes) {

@@ -15,9 +15,20 @@ const median = (list) => {
 const periodDays = (inv) => (inv.periodFrom && inv.periodTo ? Math.max(1, days(inv.periodFrom, inv.periodTo) + 1) : 0);
 
 // כל החשבוניות לפי ספק: [{ supplier, category, invoices (מהחדשה), last, prev, change, gap }]
+// אותה חשבונית שהגיעה לשתי תיבות (או הועברה) – נספרת פעם אחת: אותו ספק, אותו סכום, ואותו תאריך או אותה תקופה
+export function uniqueInvoices(list) {
+  const seen = new Set();
+  return list.filter((inv) => {
+    const key = `${supplierOf(inv.supplier)}|${Math.round(inv.amount * 100)}|${inv.periodFrom && inv.periodTo ? `${inv.periodFrom}~${inv.periodTo}` : inv.date}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function invoicesBySupplier(data) {
   const map = new Map();
-  for (const inv of data.invoices || []) {
+  for (const inv of uniqueInvoices(data.invoices || [])) {
     if (!inv.date) continue;
     const key = supplierOf(inv.supplier);
     if (!map.has(key)) map.set(key, { supplier: key, category: inv.category, invoices: [] });

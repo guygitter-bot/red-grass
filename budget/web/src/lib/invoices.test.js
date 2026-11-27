@@ -20,6 +20,8 @@ const records = [
   // כפולה
   inv('n1', 'Netflix', '2026-10-01', 55),
   inv('n2', 'Netflix', '2026-10-04', 55),
+  // אותה חשבונית בשתי תיבות – לא כפולה ולא מסתירה את העלייה
+  inv('a3copy', 'סלקום', '2026-10-05', 129, { mailbox: 'spouse@gmail.com' }),
   { id: 'gone', t: 'invoice', supplier: 'נמחק', amount: 1, deleted: true, updatedAt: 1 },
 ];
 const data = prepare(records);
@@ -28,7 +30,7 @@ describe('חשבוניות', () => {
   it('ברירות מחדל לחשבונית ישנה / חסרה', () => {
     const s = safeInvoice({ id: 'x', supplier: 'א', received: '2026-01-02' });
     expect(s).toMatchObject({ date: '2026-01-02', amount: 0, items: [], category: 'אחר' });
-    expect(data.invoices).toHaveLength(11);
+    expect(data.invoices).toHaveLength(12);
   });
 
   it('לפי ספק, מהחדשה לישנה', () => {

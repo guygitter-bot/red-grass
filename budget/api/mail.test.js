@@ -44,6 +44,14 @@ test('פירוק מייל: כותרות, טקסט מתוך HTML ו-PDF', () => {
   assert.equal(decodeWords('=?iso-8859-8?Q?=F9=EC=E5=ED?='), 'שלום');
 });
 
+test('מייל בעברית ב-8bit ונושא UTF-8 בלי קידוד', () => {
+  const raw = enc.encode(['From: בזק <b@bezeq.co.il>', 'Subject: חשבונית בזק לחודש נובמבר', 'Content-Type: text/plain; charset=utf-8', 'Content-Transfer-Encoding: 8bit', '', 'בחודש זה: ב, ג, ד, ן – סה"כ 89 ₪'].join('\r\n'));
+  const m = parseMail(raw);
+  assert.equal(m.subject, 'חשבונית בזק לחודש נובמבר');
+  assert.match(m.from, /^בזק/);
+  assert.match(m.text, /ב, ג, ד, ן – סה"כ 89 ₪/);
+});
+
 test('הצפנה של סיסמת האפליקציה', async () => {
   const box = await seal('k1', 'abcd efgh');
   assert.ok(!JSON.stringify(box).includes('abcd'));
@@ -225,6 +233,39 @@ test('חיבור Gmail מהאפליקציה ואיסוף חשבוניות', asyn
   assert.equal((await call('/mail/run', {}, t)).status, 200);
   assert.equal((await call('/mail/remove', { id: list.data.accounts[0].id }, t)).status, 200);
   assert.equal((await call('/mail/list', {}, t)).data.accounts.length, 0);
+
+  // מחיקת כל הנתונים מנתקת גם את התיבות
+  await call('/mail/add', { email: 'me@gmail.com', password: 'apppass1234567890' }, t);
+  assert.equal((await call('/reset', { password: 'secret123' }, t)).status, 200);
+  assert.equal((await call('/mail/list', {}, t)).data.accounts.length, 0);
+  assert.ok(![...storage.map.keys()].includes('mail-seen'));
+});
+
+test('ריצה ארוכה נעצרת וממשיכה בריצה הבאה, בלי לקרוא שוב את מה שכבר נקרא', async () => {
+  const g = fakeGmail();
+  let calls = 0;
+  const AI_CLIENT = { beta: { messages: { create: async () => { calls += 1; return { stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'record_invoice', input: { is_invoice: false } }] }; } } } };
+  const storage = fakeStorage();
+  let time = 1_800_000_000_000;
+  // כל קריאה לשעון מקדמת אותו בדקה – אחרי כמה מיילים עובר הזמן של ריצה אחת
+  const NOW = () => (time += 60 * 1000);
+  const b = new Budget({ storage }, { MAIL_KEY: 'k', CONNECT: g.connect, AI_CLIENT, NOW });
+  await b.load();
+  const { seal: s2 } = await import('./mail/secret.js');
+  await storage.put('mail-accounts', [{ id: 'm1', email: 'me@gmail.com', box: await s2('k', 'apppass1234567890'), firstDone: false }]);
+  await b.alarm();
+  const first = calls;
+  assert.ok(first >= 1);
+  const state = await storage.get('mail-state');
+  assert.equal(state.running, false);
+  if (first < 2) {
+    // נשאר מייל – הריצה הבאה נקבעה לעוד דקה
+    assert.equal(state.more, true);
+    await b.alarm();
+  }
+  assert.equal(calls, 2);
+  await b.alarm();
+  assert.equal(calls, 2);
 });
 
 test('בלי מפתח הצפנה – חיבור מיילים כבוי', async () => {
