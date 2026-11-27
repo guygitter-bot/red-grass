@@ -1,12 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import worker, { Series, originAllowed } from './worker.js';
-import { cleanGame, cleanName, over } from './series.js';
+import { PREVIOUS_WINNER, TEAM_CODES, cleanGame, cleanName, over } from './series.js';
 
-// זיכרון מדומה במקום האחסון של Durable Object
-function fakeEnv() {
-  const map = new Map();
+// זיכרון מדומה במקום האחסון של Durable Object (אפשר להתחיל עם נתונים קיימים)
+function fakeEnv(seed = {}) {
+  const map = new Map(Object.entries(seed));
   const storage = {
+    map,
     async get(k) {
       return structuredClone(map.get(k));
     },
@@ -16,6 +17,7 @@ function fakeEnv() {
   };
   let obj = null;
   return {
+    storage,
     ALLOWED_ORIGINS: 'https://sidra-2k.pages.dev,https://*.sidra-2k.pages.dev',
     SERIES: { idFromName: (n) => n, get: () => ({ fetch: (req) => (obj ||= new Series({ storage }, { NOW: () => 1000 })).fetch(req) }) },
     restart: () => {
@@ -33,28 +35,64 @@ async function call(env, path, body = {}, origin = ORIGIN, token = env.token) {
 }
 
 // סביבה עם מאסטר מחובר (סיסמה נקבעה)
-async function masterEnv() {
-  const env = fakeEnv();
+async function masterEnv(seed) {
+  const env = fakeEnv(seed);
   const { data } = await call(env, '/setup', { password: '1234' });
   env.token = data.token;
   return env;
 }
 
-test('סדרה ריקה בהתחלה', async () => {
-  const { data } = await call(fakeEnv(), '/get');
-  assert.deepEqual(data.games, []);
-  assert.deepEqual(data.players, { LAL: '', SAS: '' });
+test('מעבר מהגרסה הראשונה: הסדרה הישנה להיסטוריה, וסדרה חדשה קינגס נגד לייקרס', async () => {
+  const v1 = {
+    players: { LAL: 'אבא', SAS: 'בן' },
+    games: [
+      { winner: 'LAL', lal: 102, sas: 98 },
+      { winner: 'SAS', lal: null, sas: null },
+      { winner: 'SAS' },
+      { winner: 'SAS' },
+      { winner: 'SAS' },
+    ],
+    rev: 5,
+  };
+  const env = fakeEnv({ series: v1 });
+  let r = await call(env, '/setup', { password: '1234' });
+  env.token = r.data.token;
+  const { data } = await call(env, '/get');
+  assert.deepEqual(data.teams, ['SAC', 'LAL']);
+  assert.equal(data.era, 'שנות ה-2000');
+  assert.equal(data.games.length, 0);
+  assert.equal(data.history.length, 1);
+  const h = data.history[0];
+  assert.deepEqual(h.teams, ['LAL', 'SAS']);
+  assert.equal(h.era, '2010');
+  assert.equal(h.winner, 'SAS');
+  assert.equal(h.winnerName, PREVIOUS_WINNER);
+  assert.deepEqual(h.score, { LAL: 1, SAS: 4 });
+  assert.equal(data.master, true);
+  // לא רץ שוב
+  env.restart();
+  r = await call(env, '/get');
+  assert.equal(r.data.history.length, 1);
+  assert.equal(r.data.master, true);
+});
+
+test('מעבר כשהסדרה הישנה לא נרשמה עד הסוף – עדיין נרשם המנצח שהמשתמש ציין', async () => {
+  const env = fakeEnv({ series: { players: { LAL: 'a', SAS: 'b' }, games: [{ winner: 'LAL' }], rev: 1 } });
+  const { data } = await call(env, '/get');
+  assert.equal(data.history[0].winnerName, PREVIOUS_WINNER);
+  assert.equal(data.history[0].score, null);
 });
 
 test('רישום משחקים לפי הסדר, ומשחק כפול לא נרשם פעמיים', async () => {
   const env = await masterEnv();
-  await call(env, '/game', { n: 0, winner: 'LAL', lal: 102, sas: 98 });
-  let { data } = await call(env, '/game', { n: 0, winner: 'SAS' }); // מכשיר שני לחץ על אותו משחק
+  await call(env, '/game', { n: 0, winner: 'SAC', pts: { SAC: 102, LAL: 98 } });
+  let { data } = await call(env, '/game', { n: 0, winner: 'LAL' }); // מכשיר שני לחץ על אותו משחק
   assert.equal(data.games.length, 1);
-  ({ data } = await call(env, '/game', { n: 1, winner: 'SAS', lal: 'x' }));
+  ({ data } = await call(env, '/game', { n: 1, winner: 'LAL', pts: { SAC: 'x' } }));
   assert.equal(data.games.length, 2);
-  assert.equal(data.games[0].lal, 102);
-  assert.equal(data.games[1].lal, null);
+  assert.deepEqual(data.games[0].pts, { SAC: 102, LAL: 98 });
+  assert.equal(data.games[1].pts.SAC, null);
+  assert.equal((await call(env, '/game', { n: 2, winner: 'SAS' })).data.games.length, 2, 'קבוצה שלא בסדרה');
   env.restart();
   ({ data } = await call(env, '/get'));
   assert.equal(data.games.length, 2, 'נשמר גם אחרי הפעלה מחדש');
@@ -62,10 +100,10 @@ test('רישום משחקים לפי הסדר, ומשחק כפול לא נרשם
 
 test('אחרי 4 ניצחונות הסדרה נגמרת', async () => {
   const env = await masterEnv();
-  for (let n = 0; n < 4; n++) await call(env, '/game', { n, winner: 'SAS' });
-  const { data } = await call(env, '/game', { n: 4, winner: 'LAL' });
+  for (let n = 0; n < 4; n++) await call(env, '/game', { n, winner: 'LAL' });
+  const { data } = await call(env, '/game', { n: 4, winner: 'SAC' });
   assert.equal(data.games.length, 4);
-  assert.ok(over(data.games));
+  assert.ok(over(data));
 });
 
 test('ביטול המשחק האחרון רק כשהמספר תואם', async () => {
@@ -78,16 +116,37 @@ test('ביטול המשחק האחרון רק כשהמספר תואם', async ()
   assert.equal(data.games.length, 1);
 });
 
-test('שמות שחקנים וסדרה חדשה', async () => {
+test('שמות שחקנים, יתרון ביתיות רק לפני משחק 1, ואיפוס', async () => {
   const env = await masterEnv();
-  let r = await call(env, '/players', { LAL: 'אבא', SAS: '' });
+  let r = await call(env, '/players', { players: { SAC: 'אבא', LAL: '' } });
   assert.equal(r.status, 400);
-  r = await call(env, '/players', { LAL: ' אבא ', SAS: 'הבן' });
-  assert.deepEqual(r.data.players, { LAL: 'אבא', SAS: 'הבן' });
+  r = await call(env, '/players', { players: { SAC: ' אבא ', LAL: 'בן' }, home: 'LAL' });
+  assert.deepEqual(r.data.players, { SAC: 'אבא', LAL: 'בן' });
+  assert.deepEqual(r.data.teams, ['LAL', 'SAC']);
   await call(env, '/game', { n: 0, winner: 'LAL' });
+  r = await call(env, '/players', { players: { SAC: 'אבא', LAL: 'בן' }, home: 'SAC' });
+  assert.deepEqual(r.data.teams, ['LAL', 'SAC'], 'אחרי משחק 1 לא משנים');
   r = await call(env, '/reset');
   assert.equal(r.data.games.length, 0);
-  assert.equal(r.data.players.LAL, 'אבא');
+  assert.equal(r.data.players.LAL, 'בן');
+});
+
+test('סדרה חדשה: סדרה שהוכרעה עוברת להיסטוריה', async () => {
+  const env = await masterEnv();
+  await call(env, '/players', { players: { SAC: 'אבא', LAL: 'בן' } });
+  assert.equal((await call(env, '/new', { teams: ['LAL', 'LAL'] })).status, 400);
+  assert.equal((await call(env, '/new', { teams: ['LAL', 'BOS'] })).status, 400);
+  for (let n = 0; n < 4; n++) await call(env, '/game', { n, winner: 'SAC' });
+  const { data } = await call(env, '/new', { teams: ['SAS', 'LAL'], era: '2014', players: { SAS: 'בן', LAL: 'אבא' } });
+  assert.deepEqual(data.teams, ['SAS', 'LAL']);
+  assert.equal(data.era, '2014');
+  assert.equal(data.games.length, 0);
+  assert.equal(data.history.length, 2);
+  assert.equal(data.history[1].winnerName, 'אבא');
+  assert.deepEqual(data.history[1].score, { SAC: 4, LAL: 0 });
+  // סדרה שלא הוכרעה – לא נכנסת להיסטוריה
+  const r = await call(env, '/new', { teams: ['SAC', 'LAL'], era: 'x' });
+  assert.equal(r.data.history.length, 2);
 });
 
 test('רק המאסטר משנה; כולם רואים', async () => {
@@ -101,15 +160,15 @@ test('רק המאסטר משנה; כולם רואים', async () => {
   assert.equal(r.data.master, true);
   const token = r.data.token;
   assert.equal((await call(env, '/setup', { password: 'other' })).status, 409, 'אי אפשר לקבוע סיסמה פעמיים');
-  await call(env, '/game', { n: 0, winner: 'SAS' }, ORIGIN, token);
+  await call(env, '/game', { n: 0, winner: 'SAC' }, ORIGIN, token);
   // צופה (בלי סוד, או עם סוד מזויף)
   r = await call(env, '/get');
   assert.equal(r.data.games.length, 1);
   assert.equal(r.data.master, false);
   assert.equal(r.data.locked, true);
   assert.equal(JSON.stringify(r.data).includes('salt'), false, 'הסיסמה לא נשלחת');
-  for (const path of ['/game', '/undo', '/players', '/reset']) {
-    assert.equal((await call(env, path, { n: 1, winner: 'LAL', LAL: 'a', SAS: 'b' }, ORIGIN, 'fake')).status, 403, path);
+  for (const path of ['/game', '/undo', '/players', '/new', '/reset']) {
+    assert.equal((await call(env, path, { n: 1, winner: 'LAL', teams: ['SAS', 'LAL'], players: { SAC: 'a', LAL: 'b' } }, ORIGIN, 'fake')).status, 403, path);
   }
   // כניסה ממכשיר אחר
   assert.equal((await call(env, '/login', { password: 'nope' })).status, 401);
@@ -134,7 +193,13 @@ test('אתר זר נחסם', async () => {
 });
 
 test('ניקוי נתונים', () => {
-  assert.equal(cleanGame({ winner: 'BOS' }), null);
-  assert.equal(cleanGame({ winner: 'LAL', sas: 999 }).sas, null);
+  assert.equal(cleanGame({ winner: 'BOS' }, ['SAC', 'LAL']), null);
+  assert.equal(cleanGame({ winner: 'LAL', pts: { SAC: 999 } }, ['SAC', 'LAL']).pts.SAC, null);
+  assert.equal(cleanGame({ winner: 'LAL', lal: 90, sas: 80 }, ['LAL', 'SAS']).pts.SAS, 80, 'הצורה הישנה');
   assert.equal(cleanName('x'.repeat(50)).length, 20);
+});
+
+test('רשימת הקבוצות זהה בשרת ובאפליקציה', async () => {
+  const { TEAM } = await import('../web/src/lib/series.js');
+  assert.deepEqual(Object.keys(TEAM).sort(), [...TEAM_CODES].sort());
 });

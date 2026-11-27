@@ -1,5 +1,5 @@
 // קונפטי בצבעי האלוף – ציור על canvas שנמחק בסוף
-const COLORS = { LAL: ['#552583', '#fdb927', '#7a3cc0', '#ffffff'], SAS: ['#c4ced4', '#121418', '#8a969c', '#ffffff'] };
+const COLORS = { LAL: ['#552583', '#fdb927', '#7a3cc0', '#ffffff'], SAS: ['#c4ced4', '#121418', '#8a969c', '#ffffff'], SAC: ['#5a2d81', '#c4ced4', '#121418', '#ffffff'] };
 
 export function confetti(team) {
   if (!team || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
@@ -13,7 +13,7 @@ export function confetti(team) {
   cv.width = W * dpr;
   cv.height = H * dpr;
   ctx.scale(dpr, dpr);
-  const cols = COLORS[team];
+  const cols = COLORS[team] || ['#fdb927', '#ffffff'];
   const ps = Array.from({ length: 180 }, () => ({
     x: Math.random() * W,
     y: -20 - Math.random() * H * 0.6,

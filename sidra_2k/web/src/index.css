@@ -18,6 +18,7 @@
   --color-sas: #1a1d22;
   --color-sil: #c4ced4;
   --color-sil2: #8a969c;
+  --color-kings: #5a2d81;
   --font-num: "Oswald", "Rubik", Impact, sans-serif;
 }
 
@@ -174,10 +175,47 @@ input:focus-visible {
   }
 }
 
+/* ===== הקינגס: שחור-כסף עם נגיעת סגול (כדי שלא יתבלבלו עם הלייקרס הסגולים) ===== */
+.team-SAC {
+  background: linear-gradient(200deg, #3b2457, #16121c 55%, #0b0c0f);
+  box-shadow: inset 0 -4px 0 var(--color-kings);
+}
+.dot-SAC {
+  background: var(--color-sil);
+  border-color: var(--color-kings);
+  box-shadow: 0 0 10px #9b6fd1;
+}
+.ticker-SAC {
+  background: linear-gradient(90deg, #3b2457, var(--color-kings), #3b2457);
+  color: #f2f4fa;
+}
+.pick-SAC {
+  background: linear-gradient(135deg, #3b2457, #121418);
+  color: var(--color-sil);
+  box-shadow: 0 8px 24px -10px var(--color-kings);
+}
+.won-SAC {
+  border-color: #9b6fd1;
+  background: linear-gradient(#24163a, #121418);
+  color: #f2f4fa;
+}
+.badge-SAC {
+  background: var(--color-sil);
+  color: #24163a;
+}
+.champ-SAC {
+  background: linear-gradient(160deg, #3b2457, #0b0c0f);
+  color: var(--color-sil);
+}
+
 /* הלוגו של הספרס כהה – הילה עדינה כדי שיבלוט על הרקע השחור */
 .team-SAS .logo-shadow,
 .pick-SAS img,
 .won-SAS img,
-.champ-SAS img {
+.champ-SAS img,
+.team-SAC .logo-shadow,
+.pick-SAC img,
+.won-SAC img,
+.champ-SAC img {
   filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.7)) drop-shadow(0 10px 18px rgba(0, 0, 0, 0.5));
 }

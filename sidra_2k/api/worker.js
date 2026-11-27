@@ -1,20 +1,21 @@
 // השרת של "הסדרה" (Cloudflare Worker). כל הנתונים ב-Durable Object אחד (Series, ראו series.js).
-//   POST /get                         -> הסדרה {players, games, rev, locked, master} – פתוח לכולם (צפייה)
+//   POST /get                         -> הסדרה {teams, era, players, games, rev, history, locked, master} – פתוח לכולם (צפייה)
 //   POST /setup {password}             -> {token, ...} פעם ראשונה: קביעת סיסמת המאסטר
 //   POST /login {password}             -> {token, ...} כניסת מאסטר
 // מכאן רק המאסטר (authorization: Bearer <token>):
 //   POST /logout
-//   POST /game {n, winner, lal?, sas?} -> רישום משחק מספר n+1 (רק אם הוא באמת הבא)
+//   POST /game {n, winner, pts?}      -> רישום משחק מספר n+1 (רק אם הוא באמת הבא)
 //   POST /undo {n}                     -> ביטול המשחק האחרון (רק אם יש n משחקים)
-//   POST /players {LAL, SAS}           -> מי משחק עם איזו קבוצה
-//   POST /reset                        -> סדרה חדשה (השמות נשארים)
+//   POST /players {players, home?}     -> מי משחק עם איזו קבוצה (ויתרון ביתיות – רק לפני משחק 1)
+//   POST /new {teams, era, players}    -> סדרה חדשה (סדרה שהוכרעה עוברת להיסטוריה)
+//   POST /reset                        -> אותה סדרה מההתחלה (השמות נשארים)
 // מקבלים בקשות רק מהאתר של האפליקציה.
 import { Series } from './series.js';
 
 export { Series };
 
 const MAX_BODY_BYTES = 4096;
-const ROUTES = ['/get', '/setup', '/login', '/logout', '/game', '/undo', '/players', '/reset'];
+const ROUTES = ['/get', '/setup', '/login', '/logout', '/game', '/undo', '/players', '/new', '/reset'];
 
 // כתובת מותרת? (* בהגדרה = כל רצף אותיות)
 export function originAllowed(origin, list) {
