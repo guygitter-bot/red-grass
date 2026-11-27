@@ -14,7 +14,7 @@ const compact = (n) => {
 function Card({ title, hint, children }) {
   return (
     <section className="rounded-2xl border border-line bg-card p-4">
-      <h2 className="font-bold">{title}</h2>
+      <h2 className="font-black tracking-tight">{title}</h2>
       <p className="mb-3 text-xs text-muted">{hint}</p>
       {children}
     </section>
@@ -304,7 +304,7 @@ export default function ChartsView({ data }) {
   const now = thisMonth();
   return (
     <div>
-      <h1 className="mb-4 text-2xl font-bold">גרפים</h1>
+      <h1 className="mb-4 text-3xl font-black tracking-tight">גרפים</h1>
       <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
         <div className="lg:col-span-2">
           <IncomeExpense data={data} now={now} />

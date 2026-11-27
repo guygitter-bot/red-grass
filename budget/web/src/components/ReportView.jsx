@@ -41,7 +41,7 @@ export default function ReportView({ data, month, go }) {
           <ChevronRight />
         </button>
         <div className="text-center">
-          <h1 className="text-xl font-bold lg:text-2xl">דוח חודשי – {monthName(month)}</h1>
+          <h1 className="text-2xl font-black tracking-tight lg:text-3xl">דוח חודשי – {monthName(month)}</h1>
           {month !== now && (
             <button onClick={() => go(now)} className="text-sm text-accent-ink print:hidden">
               חזרה לחודש הנוכחי
@@ -112,7 +112,7 @@ export default function ReportView({ data, month, go }) {
 
       {s.lines.length > 0 && (
         <section className="mt-4 break-inside-avoid rounded-2xl border border-line bg-card p-4 print:border print:border-line print:shadow-none lg:max-w-md">
-          <h2 className="mb-2 font-bold">סיכום החודש</h2>
+          <h2 className="mb-2 font-black tracking-tight">סיכום החודש</h2>
           <div className="flex justify-between py-1">
             <span>סה״כ הכנסות</span>
             <span className="num font-bold text-plus">{money(s.income)}</span>

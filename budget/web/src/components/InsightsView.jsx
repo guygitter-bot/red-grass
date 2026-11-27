@@ -56,7 +56,7 @@ export default function InsightsView({ data }) {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <h1 className="mb-1 flex items-center gap-2 text-2xl font-bold">
+      <h1 className="mb-1 flex items-center gap-2 text-3xl font-black tracking-tight">
         <Sparkles className="text-accent" /> תובנות AI
       </h1>
       <p className="mb-4 text-sm text-muted">היועץ מקבל סיכום של התקציב (הכנסות, הוצאות, תשלומים, תחזית) ונותן תובנות והמלצות. לא ייעוץ פיננסי מקצועי.</p>

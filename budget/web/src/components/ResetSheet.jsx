@@ -54,7 +54,7 @@ export default function ResetSheet({ onBackup, onClose, onDone }) {
         <button
           disabled={typed.trim() !== WORDS || !password || busy}
           onClick={go}
-          className="flex-1 rounded-xl bg-minus px-4 py-2.5 font-medium text-white disabled:opacity-40"
+          className="flex-1 rounded-xl bg-minus px-4 py-2.5 font-medium text-on-accent disabled:opacity-40"
         >
           {busy ? 'מוחק…' : 'מחיקה סופית'}
         </button>

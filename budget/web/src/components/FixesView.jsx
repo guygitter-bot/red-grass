@@ -151,7 +151,7 @@ export default function FixesView() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <h1 className="mb-1 flex items-center gap-2 text-2xl font-bold">
+      <h1 className="mb-1 flex items-center gap-2 text-3xl font-black tracking-tight">
         <Wrench className="text-accent" /> בקשת שינוי באפליקציה
       </h1>
       <p className="mb-4 text-sm text-muted">

@@ -16,7 +16,7 @@ export function Stat({ label, value, tone = '', sub }) {
   return (
     <div className="rounded-2xl border border-line bg-card p-3 lg:p-4">
       <div className="text-xs text-muted lg:text-sm">{label}</div>
-      <div className={`num text-lg font-bold lg:text-2xl ${tone}`}>{value}</div>
+      <div className={`big-num text-xl lg:text-3xl ${tone}`}>{value}</div>
       {sub && <div className="text-xs text-muted">{sub}</div>}
     </div>
   );
@@ -37,7 +37,7 @@ export default function MonthView({ data, month, go }) {
           <ChevronRight />
         </button>
         <div className="text-center">
-          <h1 className="text-2xl font-bold">{monthName(month)}</h1>
+          <h1 className="text-3xl font-black tracking-tight">{monthName(month)}</h1>
           {month !== now && (
             <button onClick={() => go(now)} className="text-sm text-accent-ink">
               חזרה לחודש הנוכחי
@@ -62,7 +62,7 @@ export default function MonthView({ data, month, go }) {
       </div>
 
       <div className="mb-4 flex gap-2">
-        <button onClick={() => setEdit({ kind: 'expense' })} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-accent px-3 py-2.5 font-medium text-white">
+        <button onClick={() => setEdit({ kind: 'expense' })} className="flex flex-1 items-center justify-center gap-1 rounded-xl bg-accent px-3 py-2.5 font-medium text-on-accent">
           <Plus size={18} /> הוצאה
         </button>
         <button onClick={() => setEdit({ kind: 'income' })} className="flex flex-1 items-center justify-center gap-1 rounded-xl border border-line bg-card px-3 py-2.5 font-medium">
@@ -77,7 +77,7 @@ export default function MonthView({ data, month, go }) {
 
       {byCat && (
         <section className="mb-5 rounded-2xl border border-line bg-card p-4">
-          <h2 className="mb-3 font-bold">הוצאות לפי קטגוריה</h2>
+          <h2 className="mb-3 font-black tracking-tight">הוצאות לפי קטגוריה</h2>
           {cats.map((c) => (
             <div key={c.category} className="mb-2">
               <div className="flex justify-between text-sm">
@@ -108,7 +108,7 @@ export default function MonthView({ data, month, go }) {
           return (
             <section key={title} className="rounded-2xl border border-line bg-card">
               <div className="flex items-center justify-between border-b border-line px-4 py-3">
-                <h2 className="font-bold">{title}</h2>
+                <h2 className="font-black tracking-tight">{title}</h2>
                 <span className={`num font-bold ${kind === 'income' ? 'text-plus' : 'text-minus'}`}>{money(total)}</span>
               </div>
               <ul>

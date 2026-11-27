@@ -22,7 +22,7 @@ export default function CardsView({ data }) {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <h1 className="mb-1 text-2xl font-bold">כרטיסי אשראי</h1>
+      <h1 className="mb-1 text-3xl font-black tracking-tight">כרטיסי אשראי</h1>
       <p className="mb-4 text-sm text-muted">כמה ירד מכל כרטיס בחודש. למעקב ולגרפים בלבד – לא נכנס לסיכום החודש (ההוצאות עצמן כבר רשומות בנפרד).</p>
 
       <div className="mb-4 rounded-2xl border border-line bg-card p-4">

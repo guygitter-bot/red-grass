@@ -78,7 +78,7 @@ export default function TransactionsView({ data }) {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <h1 className="mb-1 flex items-center gap-2 text-2xl font-bold">
+      <h1 className="mb-1 flex items-center gap-2 text-3xl font-black tracking-tight">
         <FileSpreadsheet className="text-accent" /> ייבוא תנועות מהבנק ומהאשראי
       </h1>
       <p className="mb-4 text-sm text-muted">
@@ -87,7 +87,7 @@ export default function TransactionsView({ data }) {
 
       {!state && (
         <>
-          <label className={`mb-4 flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-accent px-4 py-4 font-medium text-white ${busy ? 'opacity-60' : ''}`}>
+          <label className={`mb-4 flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-accent px-4 py-4 font-medium text-on-accent ${busy ? 'opacity-60' : ''}`}>
             <Upload size={20} /> {busy ? 'קורא…' : 'בחירת קבצים'}
             <input type="file" multiple accept=".xlsx,.xls,.csv,.html,.htm" className="hidden" onChange={pick} disabled={busy} />
           </label>

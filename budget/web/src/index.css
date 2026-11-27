@@ -3,60 +3,72 @@
 /* מצב לילה: מחלקה dark על html (נקבעת ב-src/lib/theme.js) */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* כל הצבעים במקום אחד – במצב לילה מחליפים רק אותם:
+/* כל הצבעים במקום אחד – במצב לילה מחליפים רק אותם. עיצוב "נייר חם": רקע שמנת, כרטיסים לבנים עם מסגרת דקה.
    page = רקע המסך, card = כרטיסים, ink = טקסט, muted = טקסט משני, line = מסגרות, soft = רקע מודגש עדין
+   accent = כפתור ראשי (כמעט שחור), on-accent = הטקסט עליו, alert = אדום לבנים (בעיה / דחוף)
    plus = הכנסה, minus = הוצאה */
 @theme {
-  --color-page: #f4f5f7;
+  --font-sans: "Heebo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --color-page: #f7f5f0;
   --color-card: #ffffff;
-  --color-ink: #141b2d;
-  --color-muted: #6a7385;
-  --color-line: #e3e6ec;
-  --color-soft: #eef1f6;
-  --color-accent: #1f2d4d;
-  --color-accent-ink: #1f2d4d;
-  --color-navy: #1f2d4d;
-  --color-alert: #c0391b;
-  --color-amber: #b7791f;
-  --color-plus: #2f7d4f;
-  --color-minus: #c2410c;
-  /* צבעי קטגוריות בגרפים – מרוסנים, נבדקו בנפרד לבהיר ולכהה */
-  --cat-1: #1f2d4d;
-  --cat-2: #b5703c;
-  --cat-3: #3d8a82;
-  --cat-4: #6b7fb3;
-  --cat-5: #8a5a8a;
-  --cat-6: #7e9a4b;
-  --cat-7: #9aa1ad;
+  --color-ink: #141a2a;
+  --color-muted: #6f695d;
+  --color-line: #e7e2d8;
+  --color-soft: #f1eee6;
+  --color-accent: #141a2a;
+  --color-on-accent: #ffffff;
+  --color-accent-ink: #2c3a5a;
+  --color-navy: #2c3a5a;
+  --color-alert: #b4432a;
+  --color-amber: #9a6a14;
+  --color-plus: #2f7a52;
+  --color-minus: #b4432a;
+  /* צבעי קטגוריות בגרפים – אדמתיים ומרוסנים: נייבי, אומבר, טורקיז, שזיף, זית, כחול-אפור, אפור חם.
+     נבדקו עם validate_palette: הפרדה לעיוורי צבעים ולראייה רגילה עוברת; הבהירות הנמוכה מכוונת (ראו DESIGN.md) */
+  --cat-1: #1f2b45;
+  --cat-2: #a0622f;
+  --cat-3: #3f7d74;
+  --cat-4: #6e4a63;
+  --cat-5: #7a7a30;
+  --cat-6: #4a5b88;
+  --cat-7: #8c8579;
+  --bar-now: #141a2a;
+  --bar-past: #2c3a5a;
+  --radius-2xl: 1rem;
+  --radius-xl: 0.75rem;
 }
 
 .dark {
   color-scheme: dark;
-  --color-page: #0d111a;
-  --color-card: #161c29;
-  --color-ink: #e6eaf2;
-  --color-muted: #94a0b6;
-  --color-line: #262e3f;
-  --color-soft: #1d2536;
-  --color-accent: #4a63b8;
-  --color-accent-ink: #9db4ec;
-  --color-navy: #8fa8e0;
-  --color-alert: #f2805f;
+  --color-page: #14120f;
+  --color-card: #1d1a16;
+  --color-ink: #f1ece3;
+  --color-muted: #a39b8d;
+  --color-line: #2c2822;
+  --color-soft: #26221d;
+  --color-accent: #f1ece3;
+  --color-on-accent: #14120f;
+  --color-accent-ink: #b9c6ee;
+  --color-navy: #8ea4e0;
+  --color-alert: #ee8567;
   --color-amber: #e0a94a;
-  --color-plus: #5fc58a;
-  --color-minus: #f0935a;
-  --cat-1: #8fa8e0;
-  --cat-2: #d79a64;
-  --cat-3: #5fb5ab;
-  --cat-4: #a3b3da;
-  --cat-5: #c08fc0;
-  --cat-6: #a8c46f;
-  --cat-7: #7d8596;
+  --color-plus: #67c492;
+  --color-minus: #ee8567;
+  --cat-1: #8ea4e0;
+  --cat-2: #d99a63;
+  --cat-3: #6fd0c2;
+  --cat-4: #b07aa6;
+  --cat-5: #b3b560;
+  --cat-6: #6f86cf;
+  --cat-7: #b0a99b;
+  --bar-now: #f1ece3;
+  --bar-past: #5b6d9e;
 }
 
 html,
 body {
-  font-family: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: "Heebo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  letter-spacing: -0.005em;
   background: var(--color-page);
   color: var(--color-ink);
   -webkit-tap-highlight-color: transparent;
@@ -72,4 +84,29 @@ body {
 }
 .no-scrollbar::-webkit-scrollbar {
   display: none;
+}
+
+/* מספרים גדולים: כבד וצפוף, כמו בכותרות של עיתון */
+.big-num {
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* פוקוס נראה במקלדת בכל מקום */
+:focus-visible {
+  outline: 2px solid var(--color-accent-ink);
+  outline-offset: 2px;
+}
+
+button,
+a {
+  touch-action: manipulation;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
 }

@@ -2,8 +2,9 @@
 // ניווט לפי כתובת (#/month/2027-03, #/report/2027-03, #/year, #/charts, #/ai, #/cards, #/items, #/settings, #/fixes, #/transactions, #/more)
 // כדי שכפתור "חזרה" יעבוד.
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, CalendarDays, ChevronDown, ChevronLeft, Cloud, CloudOff, CreditCard, FileSpreadsheet, FileText, LayoutDashboard, ListChecks, Mail, Menu, Moon, RefreshCw, Settings as Gear, Sparkles, Sun, TrendingUp, Wallet, Wrench } from 'lucide-react';
+import { BarChart3, CalendarDays, ChevronDown, ChevronLeft, Cloud, CloudOff, CreditCard, FileSpreadsheet, FileText, LayoutDashboard, ListChecks, Mail, Menu, Moon, RefreshCw, Search, Settings as Gear, Sparkles, Sun, TrendingUp, Upload, Wrench } from 'lucide-react';
 import { prepare, thisMonth } from './lib/budget';
+import { headline } from './lib/insights';
 import { sync, useStore } from './lib/store';
 import { isDark, setTheme } from './lib/theme';
 import Login from './components/Login';
@@ -58,7 +59,7 @@ const MORE = ['invoices', 'charts', 'transactions', 'year', 'cards', 'items', 's
 function MoreView({ go }) {
   return (
     <div className="mx-auto max-w-lg">
-      <h1 className="mb-4 text-2xl font-bold">עוד</h1>
+      <h1 className="mb-4 text-3xl font-black tracking-tight">עוד</h1>
       <div className="overflow-hidden rounded-2xl border border-line bg-card">
         {NAV.filter(([p]) => MORE.includes(p)).map(([page, label, Icon]) => (
           <button key={page} onClick={() => go(page)} className="flex w-full items-center gap-3 border-b border-line px-4 py-4 text-right font-medium last:border-0 hover:bg-soft">
@@ -95,6 +96,13 @@ export default function App() {
   const [dark, setDark] = useState(isDark());
   const [menu, setMenu] = useState(false);
   const data = useMemo(() => prepare(records), [records]);
+  // מספרים אדומים על הלשוניות: דחופים בסקירה, ממצאי חשבוניות בלשונית החשבוניות
+  const badges = useMemo(() => {
+    const f = headline(data, route.month);
+    return { home: f.urgent, invoices: f.findings.filter((x) => x.kind?.startsWith('invoice')).length };
+  }, [data, route.month]);
+  // מתי עודכנו הנתונים לאחרונה (מהרשומה האחרונה ששונתה)
+  const updated = useMemo(() => records.reduce((a, r) => Math.max(a, r.updatedAt || 0), 0), [records]);
 
   useEffect(() => {
     const onHash = () => {
@@ -119,26 +127,27 @@ export default function App() {
 
   return (
     <div className="min-h-dvh">
-      {/* כותרת עליונה במחשב: שם, לשוניות, סנכרון ומצב לילה */}
-      <header className="sticky top-0 z-30 hidden border-b border-line bg-card/95 backdrop-blur lg:block print:hidden">
-        <div className="mx-auto flex max-w-7xl items-center gap-6 px-8">
-          <div className="flex items-center gap-2 py-4 text-xl font-extrabold">
-            <Wallet className="text-navy" /> תקציב הבית
-          </div>
+      {/* כותרת עליונה במחשב: שם, לשוניות עם מספרים אדומים, כפתורי פעולה, סנכרון ומצב לילה */}
+      <header className="sticky top-0 z-30 hidden border-b border-line bg-page/95 backdrop-blur lg:block print:hidden">
+        <div className="mx-auto flex max-w-7xl items-center gap-5 px-8 xl:gap-7">
+          <button onClick={() => go('home')} className="py-4 text-[26px] leading-none font-black tracking-tight whitespace-nowrap">
+            תקציב הבית
+          </button>
           <nav className="flex flex-1 items-center gap-1">
             {NAV.filter(([p]) => TOP.includes(p)).map(([page, label]) => (
               <button
                 key={page}
                 onClick={() => go(page)}
-                className={`border-b-2 px-3 py-4 text-sm font-medium ${route.page === page ? 'border-navy text-ink' : 'border-transparent text-muted hover:text-ink'}`}
+                className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-4 text-sm font-medium ${route.page === page ? 'border-ink font-bold text-ink' : 'border-transparent text-muted hover:text-ink'}`}
               >
                 {label}
+                {badges[page] > 0 && <span className="num grid h-[18px] min-w-[18px] place-items-center rounded-full bg-alert px-1 text-[11px] leading-none font-bold text-on-accent">{badges[page]}</span>}
               </button>
             ))}
             <div className="relative">
               <button
                 onClick={() => setMenu(!menu)}
-                className={`flex items-center gap-1 border-b-2 px-3 py-4 text-sm font-medium ${!TOP.includes(route.page) ? 'border-navy text-ink' : 'border-transparent text-muted hover:text-ink'}`}
+                className={`flex items-center gap-1 whitespace-nowrap border-b-2 px-3 py-4 text-sm font-medium ${!TOP.includes(route.page) ? 'border-ink font-bold text-ink' : 'border-transparent text-muted hover:text-ink'}`}
               >
                 עוד <ChevronDown size={14} />
               </button>
@@ -163,9 +172,18 @@ export default function App() {
               )}
             </div>
           </nav>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
+            <button onClick={() => go('invoices')} className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-accent px-4 py-2 text-sm font-bold text-on-accent hover:opacity-90">
+              <Search size={15} aria-hidden="true" /> בדוק חשבוניות
+            </button>
+            <button onClick={() => go('ai')} className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-ink/70 px-4 py-2 text-sm font-bold hover:bg-soft">
+              <Sparkles size={15} aria-hidden="true" /> שאל את Claude
+            </button>
+            <button onClick={() => go('transactions')} className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-ink/70 px-4 py-2 text-sm font-bold hover:bg-soft">
+              <Upload size={15} aria-hidden="true" /> ייבוא תנועות
+            </button>
             <SyncIcon status={status} />
-            <button onClick={toggleDark} className="rounded-full p-2 hover:bg-soft" aria-label="מצב לילה">
+            <button onClick={toggleDark} className="rounded-full p-2 text-muted hover:bg-soft" aria-label="מצב לילה">
               {dark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
           </div>
@@ -174,10 +192,8 @@ export default function App() {
 
       <div className="min-w-0">
         {/* כותרת בטלפון */}
-        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-card/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur lg:hidden print:hidden">
-          <div className="flex items-center gap-2 py-3 font-bold">
-            <Wallet size={20} className="text-accent" /> תקציב הבית
-          </div>
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-page/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur lg:hidden print:hidden">
+          <div className="py-3 text-2xl leading-none font-black tracking-tight">תקציב הבית</div>
           <div className="flex items-center">
             <SyncIcon status={status} />
             <button onClick={toggleDark} className="rounded-full p-2 hover:bg-soft" aria-label="מצב לילה">
@@ -187,7 +203,7 @@ export default function App() {
         </header>
 
         <main className={`mx-auto ${route.page === 'home' ? 'max-w-7xl' : 'max-w-5xl'} px-4 pt-4 pb-28 lg:px-8 lg:pt-8 lg:pb-10 print:p-0`}>
-          {route.page === 'home' && <DashboardView data={data} month={route.month} go={go} />}
+          {route.page === 'home' && <DashboardView data={data} month={route.month} go={go} updated={updated} />}
           {route.page === 'month' && <MonthView data={data} month={route.month} go={(m) => go('month', m)} />}
           {route.page === 'year' && <YearView data={data} open={(m) => go('month', m)} />}
           {route.page === 'report' && <ReportView data={data} month={route.month} go={(m) => go('report', m)} />}
@@ -204,15 +220,16 @@ export default function App() {
       </div>
 
       {/* סרגל תחתון בטלפון */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-card pb-[env(safe-area-inset-bottom)] lg:hidden print:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden print:hidden">
         {TABS.map(([page, label, Icon]) => (
           <button
             key={page}
             onClick={() => go(page)}
-            className={`flex flex-col items-center gap-0.5 py-2 text-xs ${route.page === page || (page === 'more' && MORE.includes(route.page)) ? 'text-accent-ink' : 'text-muted'}`}
+            className={`relative flex flex-col items-center gap-0.5 py-2 text-xs ${route.page === page || (page === 'more' && MORE.includes(route.page)) ? 'font-bold text-ink' : 'text-muted'}`}
           >
             <Icon size={22} />
             {label}
+            {badges[page] > 0 && <span className="num absolute top-1 start-1/2 ms-2 grid h-4 min-w-4 place-items-center rounded-full bg-alert px-1 text-[10px] leading-none font-bold text-on-accent">{badges[page]}</span>}
           </button>
         ))}
       </nav>
