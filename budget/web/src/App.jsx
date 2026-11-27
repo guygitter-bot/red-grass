@@ -2,11 +2,12 @@
 // ניווט לפי כתובת (#/month/2027-03, #/report/2027-03, #/year, #/charts, #/ai, #/cards, #/items, #/settings, #/fixes, #/transactions, #/more)
 // כדי שכפתור "חזרה" יעבוד.
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, CalendarDays, ChevronLeft, Cloud, CloudOff, CreditCard, FileSpreadsheet, FileText, ListChecks, Menu, Moon, RefreshCw, Settings as Gear, Sparkles, Sun, TrendingUp, Wallet, Wrench } from 'lucide-react';
+import { BarChart3, CalendarDays, ChevronDown, ChevronLeft, Cloud, CloudOff, CreditCard, FileSpreadsheet, FileText, LayoutDashboard, ListChecks, Menu, Moon, RefreshCw, Settings as Gear, Sparkles, Sun, TrendingUp, Wallet, Wrench } from 'lucide-react';
 import { prepare, thisMonth } from './lib/budget';
 import { sync, useStore } from './lib/store';
 import { isDark, setTheme } from './lib/theme';
 import Login from './components/Login';
+import DashboardView from './components/DashboardView';
 import MonthView from './components/MonthView';
 import YearView from './components/YearView';
 import ItemsView from './components/ItemsView';
@@ -19,15 +20,16 @@ import FixesView from './components/FixesView';
 import TransactionsView from './components/TransactionsView';
 
 function parseHash() {
-  const [, page = 'month', arg] = window.location.hash.replace(/^#/, '').split('/');
+  const [, page = 'home', arg] = window.location.hash.replace(/^#/, '').split('/');
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(arg || '') ? arg : thisMonth();
-  return { page: PAGES.includes(page) ? page : 'month', month };
+  return { page: PAGES.includes(page) ? page : 'home', month };
 }
 
-const PAGES = ['month', 'report', 'year', 'charts', 'ai', 'cards', 'items', 'settings', 'fixes', 'transactions', 'more'];
+const PAGES = ['home', 'month', 'report', 'year', 'charts', 'ai', 'cards', 'items', 'settings', 'fixes', 'transactions', 'more'];
 
-// תפריט הצד במחשב – הכול
+// כל המסכים (בטלפון: רשימת "עוד"; במחשב: לשוניות בכותרת + תפריט "עוד")
 const NAV = [
+  ['home', 'סקירה', LayoutDashboard],
   ['month', 'חודש', CalendarDays],
   ['report', 'דוח חודשי', FileText],
   ['year', 'שנה קדימה', TrendingUp],
@@ -41,19 +43,21 @@ const NAV = [
 ];
 // הסרגל התחתון בטלפון – החמישה העיקריים, והשאר תחת "עוד"
 const TABS = [
+  ['home', 'סקירה', LayoutDashboard],
   ['month', 'חודש', CalendarDays],
   ['report', 'דוח', FileText],
-  ['charts', 'גרפים', BarChart3],
   ['ai', 'תובנות', Sparkles],
   ['more', 'עוד', Menu],
 ];
-const MORE = ['transactions', 'year', 'cards', 'items', 'settings', 'fixes'];
+// הלשוניות שמוצגות ישר בכותרת במחשב; השאר בתפריט "עוד"
+const TOP = ['home', 'month', 'report', 'year', 'charts', 'ai'];
+const MORE = ['charts', 'transactions', 'year', 'cards', 'items', 'settings', 'fixes'];
 
 function MoreView({ go }) {
   return (
     <div className="mx-auto max-w-lg">
       <h1 className="mb-4 text-2xl font-bold">עוד</h1>
-      <div className="overflow-hidden rounded-2xl bg-card shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-line bg-card">
         {NAV.filter(([p]) => MORE.includes(p)).map(([page, label, Icon]) => (
           <button key={page} onClick={() => go(page)} className="flex w-full items-center gap-3 border-b border-line px-4 py-4 text-right font-medium last:border-0 hover:bg-soft">
             <Icon size={20} className="text-accent" />
@@ -87,6 +91,7 @@ export default function App() {
   const { records, status, authed } = useStore();
   const [route, setRoute] = useState(parseHash);
   const [dark, setDark] = useState(isDark());
+  const [menu, setMenu] = useState(false);
   const data = useMemo(() => prepare(records), [records]);
 
   useEffect(() => {
@@ -103,7 +108,7 @@ export default function App() {
   if (!authed) return <Login />;
 
   const go = (page, month) => {
-    window.location.hash = (page === 'month' || page === 'report') && month ? `#/${page}/${month}` : `#/${page}`;
+    window.location.hash = (page === 'home' || page === 'month' || page === 'report') && month ? `#/${page}/${month}` : `#/${page}`;
   };
   const toggleDark = () => {
     setTheme(dark ? 'light' : 'dark');
@@ -111,32 +116,61 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-dvh lg:flex">
-      {/* תפריט צד במחשב */}
-      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-l border-line bg-card p-4 lg:flex print:hidden">
-        <div className="mb-6 flex items-center gap-2 px-2 text-xl font-bold">
-          <Wallet className="text-accent" /> תקציב הבית
-        </div>
-        <nav className="flex-1 space-y-1">
-          {NAV.map(([page, label, Icon]) => (
-            <button
-              key={page}
-              onClick={() => go(page)}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-right font-medium ${route.page === page ? 'bg-soft text-accent-ink' : 'hover:bg-soft'}`}
-            >
-              <Icon size={20} /> {label}
+    <div className="min-h-dvh">
+      {/* כותרת עליונה במחשב: שם, לשוניות, סנכרון ומצב לילה */}
+      <header className="sticky top-0 z-30 hidden border-b border-line bg-card/95 backdrop-blur lg:block print:hidden">
+        <div className="mx-auto flex max-w-7xl items-center gap-6 px-8">
+          <div className="flex items-center gap-2 py-4 text-xl font-extrabold">
+            <Wallet className="text-navy" /> תקציב הבית
+          </div>
+          <nav className="flex flex-1 items-center gap-1">
+            {NAV.filter(([p]) => TOP.includes(p)).map(([page, label]) => (
+              <button
+                key={page}
+                onClick={() => go(page)}
+                className={`border-b-2 px-3 py-4 text-sm font-medium ${route.page === page ? 'border-navy text-ink' : 'border-transparent text-muted hover:text-ink'}`}
+              >
+                {label}
+              </button>
+            ))}
+            <div className="relative">
+              <button
+                onClick={() => setMenu(!menu)}
+                className={`flex items-center gap-1 border-b-2 px-3 py-4 text-sm font-medium ${!TOP.includes(route.page) ? 'border-navy text-ink' : 'border-transparent text-muted hover:text-ink'}`}
+              >
+                עוד <ChevronDown size={14} />
+              </button>
+              {menu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setMenu(false)} />
+                  <div className="absolute start-0 top-full z-50 w-52 overflow-hidden rounded-xl border border-line bg-card py-1 shadow-lg">
+                    {NAV.filter(([p]) => !TOP.includes(p)).map(([page, label, Icon]) => (
+                      <button
+                        key={page}
+                        onClick={() => {
+                          setMenu(false);
+                          go(page);
+                        }}
+                        className="flex w-full items-center gap-3 px-4 py-2.5 text-right text-sm hover:bg-soft"
+                      >
+                        <Icon size={17} className="text-muted" /> {label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </nav>
+          <div className="flex items-center gap-1">
+            <SyncIcon status={status} />
+            <button onClick={toggleDark} className="rounded-full p-2 hover:bg-soft" aria-label="מצב לילה">
+              {dark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
-          ))}
-        </nav>
-        <div className="flex items-center gap-1">
-          <SyncIcon status={status} />
-          <button onClick={toggleDark} className="rounded-full p-2 hover:bg-soft" aria-label="מצב לילה">
-            {dark ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
+          </div>
         </div>
-      </aside>
+      </header>
 
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0">
         {/* כותרת בטלפון */}
         <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-card/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur lg:hidden print:hidden">
           <div className="flex items-center gap-2 py-3 font-bold">
@@ -150,7 +184,8 @@ export default function App() {
           </div>
         </header>
 
-        <main className="mx-auto max-w-5xl px-4 pt-4 pb-28 lg:px-8 lg:pt-8 lg:pb-10 print:p-0">
+        <main className={`mx-auto ${route.page === 'home' ? 'max-w-7xl' : 'max-w-5xl'} px-4 pt-4 pb-28 lg:px-8 lg:pt-8 lg:pb-10 print:p-0`}>
+          {route.page === 'home' && <DashboardView data={data} month={route.month} go={go} />}
           {route.page === 'month' && <MonthView data={data} month={route.month} go={(m) => go('month', m)} />}
           {route.page === 'year' && <YearView data={data} open={(m) => go('month', m)} />}
           {route.page === 'report' && <ReportView data={data} month={route.month} go={(m) => go('report', m)} />}

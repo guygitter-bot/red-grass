@@ -51,7 +51,7 @@ function RequestItem({ req, act, busy }) {
   const open = !['done', 'rejected', 'closed', 'unknown'].includes(req.status);
   const canReply = ['question', 'ready', 'failed'].includes(req.status);
   return (
-    <div className="space-y-2 rounded-2xl bg-card p-4 shadow-sm">
+    <div className="space-y-2 rounded-2xl border border-line bg-card p-4">
       <div className="flex items-start justify-between gap-2">
         <span className="font-medium">{req.title || `בקשה ${req.number}`}</span>
         <span className={`rounded-full px-2 py-0.5 text-xs font-bold whitespace-nowrap ${color}`}>{label}</span>
@@ -160,9 +160,9 @@ export default function FixesView() {
       </p>
 
       {!state.loading && !state.enabled ? (
-        <p className="rounded-2xl bg-card p-4 text-sm shadow-sm">בקשות שינוי עוד לא הופעלו בשרת.</p>
+        <p className="rounded-2xl border border-line bg-card p-4 text-sm">בקשות שינוי עוד לא הופעלו בשרת.</p>
       ) : (
-        <div className="mb-5 space-y-3 rounded-2xl bg-card p-4 shadow-sm">
+        <div className="mb-5 space-y-3 rounded-2xl border border-line bg-card p-4">
           <textarea className={inputCls} rows={4} maxLength={3000} value={text} onChange={(e) => setText(e.target.value)} placeholder="מה לשנות?" />
           {image ? (
             <div className="relative inline-block">

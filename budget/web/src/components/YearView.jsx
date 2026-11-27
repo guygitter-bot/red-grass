@@ -32,21 +32,21 @@ export default function YearView({ data, open }) {
       </div>
 
       <div className="mb-4 grid grid-cols-3 gap-2 text-center">
-        <div className="rounded-2xl bg-card p-3 shadow-sm">
+        <div className="rounded-2xl border border-line bg-card p-3">
           <div className="text-xs text-muted">הכנסות ב-12 חודשים</div>
           <div className="num font-bold text-plus">{money(totals.income)}</div>
         </div>
-        <div className="rounded-2xl bg-card p-3 shadow-sm">
+        <div className="rounded-2xl border border-line bg-card p-3">
           <div className="text-xs text-muted">הוצאות ב-12 חודשים</div>
           <div className="num font-bold text-minus">{money(totals.expense)}</div>
         </div>
-        <div className="rounded-2xl bg-card p-3 shadow-sm">
+        <div className="rounded-2xl border border-line bg-card p-3">
           <div className="text-xs text-muted">נשאר</div>
           <div className={`num font-bold ${totals.income - totals.expense < 0 ? 'text-minus' : 'text-plus'}`}>{money(totals.income - totals.expense, true)}</div>
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl bg-card shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-line bg-card">
         <div className={`hidden gap-2 border-b border-line px-4 py-2 text-sm text-muted lg:grid ${hasBalance ? 'lg:grid-cols-[8rem_1fr_7rem_7rem_7rem_8rem]' : 'lg:grid-cols-[8rem_1fr_7rem_7rem_7rem]'}`}>
           <span>חודש</span>
           <span />

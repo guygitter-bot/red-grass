@@ -16,7 +16,7 @@ function download(name, text, type) {
 
 function Card({ title, children }) {
   return (
-    <section className="mb-4 rounded-2xl bg-card p-4 shadow-sm">
+    <section className="mb-4 rounded-2xl border border-line bg-card p-4">
       <h2 className="mb-3 font-bold">{title}</h2>
       {children}
     </section>
@@ -158,7 +158,7 @@ export default function Settings({ data, records }) {
         יציאה מהמכשיר הזה
       </Button>
 
-      <section className="rounded-2xl border border-minus/40 bg-card p-4 shadow-sm">
+      <section className="rounded-2xl border border-minus/40 bg-card p-4">
         <h2 className="mb-1 font-bold text-minus">אזור מסוכן</h2>
         <p className="mb-3 text-sm text-muted">מחיקה של כל הנתונים בכל המכשירים, כדי להתחיל מחדש.</p>
         <Button kind="danger" className="w-full" onClick={() => setResetOpen(true)}>

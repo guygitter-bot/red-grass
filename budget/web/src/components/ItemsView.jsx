@@ -53,7 +53,7 @@ export default function ItemsView({ data }) {
       <div className="grid gap-4 lg:grid-cols-2">
         {groups.map(([title, list]) =>
           list.length ? (
-            <section key={title} className="rounded-2xl bg-card shadow-sm">
+            <section key={title} className="rounded-2xl border border-line bg-card">
               <h2 className="border-b border-line px-4 py-3 font-bold">
                 {title} <span className="text-sm font-normal text-muted">({list.length})</span>
               </h2>
@@ -74,7 +74,7 @@ export default function ItemsView({ data }) {
           ) : null,
         )}
       </div>
-      {groups.every(([, l]) => !l.length) && <p className="rounded-2xl bg-card p-6 text-center text-muted shadow-sm">{q ? 'לא נמצא' : 'אין כאן כלום עדיין'}</p>}
+      {groups.every(([, l]) => !l.length) && <p className="rounded-2xl border border-line bg-card p-6 text-center text-muted">{q ? 'לא נמצא' : 'אין כאן כלום עדיין'}</p>}
       {edit && <ItemEditor data={data} item={edit.item} kind={edit.kind} month={now} onClose={() => setEdit(null)} />}
     </div>
   );

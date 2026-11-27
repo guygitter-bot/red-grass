@@ -25,7 +25,7 @@ export default function CardsView({ data }) {
       <h1 className="mb-1 text-2xl font-bold">כרטיסי אשראי</h1>
       <p className="mb-4 text-sm text-muted">כמה ירד מכל כרטיס בחודש. למעקב ולגרפים בלבד – לא נכנס לסיכום החודש (ההוצאות עצמן כבר רשומות בנפרד).</p>
 
-      <div className="mb-4 rounded-2xl bg-card p-4 shadow-sm">
+      <div className="mb-4 rounded-2xl border border-line bg-card p-4">
         <div className="mb-3 flex items-center justify-between">
           <button onClick={() => setMonth(addMonths(month, -1))} className="rounded-full p-2 hover:bg-soft" aria-label="חודש קודם">
             <ChevronRight />
@@ -68,7 +68,7 @@ export default function CardsView({ data }) {
       </div>
 
       {rows.length > 0 && (
-        <div className="overflow-x-auto rounded-2xl bg-card shadow-sm">
+        <div className="overflow-x-auto rounded-2xl border border-line bg-card">
           <table className="num w-full text-sm">
             <thead>
               <tr className="border-b border-line text-muted">
