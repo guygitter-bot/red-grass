@@ -10,6 +10,8 @@
 //   card     – חיוב כרטיס אשראי בפועל בחודש (מעקב בלבד, לא נכנס לסיכום): { t: 'card', name, month, amount }
 //              המזהה: card:<name>:<month>
 //   insight  – תשובה של ה-AI שנשמרה: { t: 'insight', question, answer, month, at }
+//   invoice  – חשבונית שנאספה מהמייל (השרת יוצר): { t: 'invoice', supplier, service, category, amount, invoiceDate,
+//              periodFrom, periodTo, dueDate, account, plan, items: [{ name, amount }], notes, mailbox, from, subject, received, pdf }
 //   rule     – קטגוריה שנלמדה לבית עסק בייבוא תנועות: { t: 'rule', merchant, category }
 // רשומה ישנה בלי שדה מסוים מקבלת ברירת מחדל (ראו safeItem).
 
@@ -76,6 +78,29 @@ export function safeItem(r) {
   };
 }
 
+// חשבונית עם ברירות מחדל; date = תאריך החשבונית, ואם אין – תאריך המייל
+export function safeInvoice(r) {
+  const date = [r.invoiceDate, r.received].find((d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '')) || '';
+  return {
+    id: r.id,
+    supplier: String(r.supplier || ''),
+    service: String(r.service || ''),
+    category: String(r.category || 'אחר'),
+    amount: num(r.amount),
+    date,
+    periodFrom: r.periodFrom || '',
+    periodTo: r.periodTo || '',
+    dueDate: r.dueDate || '',
+    account: String(r.account || ''),
+    plan: String(r.plan || ''),
+    items: Array.isArray(r.items) ? r.items.map((i) => ({ name: String(i?.name || ''), amount: num(i?.amount) })).filter((i) => i.name) : [],
+    notes: String(r.notes || ''),
+    mailbox: String(r.mailbox || ''),
+    subject: String(r.subject || ''),
+    pdf: !!r.pdf,
+  };
+}
+
 // החודש האחרון שבו הרשומה פעילה ('' = בלי סוף)
 export function lastMonth(item) {
   if (item.type === 'once') return item.start;
@@ -100,12 +125,14 @@ export function prepare(records) {
   const cards = [];
   const insights = [];
   const rules = new Map();
+  const invoices = [];
   let settings = { balance: null, balanceMonth: '' };
   for (const r of records) {
     if (!r || r.deleted) continue;
     if (r.t === 'item') items.push(safeItem(r));
     else if (r.t === 'override' && isMonth(r.month)) overrides.set(`${r.itemId}:${r.month}`, num(r.amount));
     else if (r.t === 'card' && isMonth(r.month) && r.name) cards.push({ id: r.id, name: String(r.name), month: r.month, amount: num(r.amount) });
+    else if (r.t === 'invoice' && r.supplier) invoices.push(safeInvoice(r));
     else if (r.t === 'rule' && r.merchant && r.category) rules.set(String(r.merchant), String(r.category));
     else if (r.t === 'insight' && r.answer) insights.push({ id: r.id, question: String(r.question || ''), answer: String(r.answer), month: r.month || '', at: num(r.at || r.updatedAt) });
     else if (r.t === 'settings') {
@@ -117,7 +144,8 @@ export function prepare(records) {
   }
   items.sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name, 'he'));
   insights.sort((a, b) => b.at - a.at);
-  return { items, overrides, settings, cards, insights, rules };
+  invoices.sort((a, b) => b.date.localeCompare(a.date));
+  return { items, overrides, settings, cards, insights, rules, invoices };
 }
 
 // כל השורות של חודש אחד + סיכום

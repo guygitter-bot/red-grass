@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Lightbulb, Send, Sparkles, Trash2 } from 'lucide-react';
 import { aiContext, money, monthName, thisMonth } from '../lib/budget';
 import { bySupplier, findingsText } from '../lib/insights';
+import { invoicesText } from '../lib/invoices';
 import { askAi, remove } from '../lib/store';
 import Markdown from './Markdown';
 import { Button, inputCls } from './ui';
@@ -13,11 +14,12 @@ function context(data, month) {
   const suppliers = bySupplier(data, month)
     .slice(0, 30)
     .map((s) => `- ${s.supplier}: ${money(s.total)}${s.change ? ` (לעומת ${money(s.prev)} בחודש הקודם)` : ''}`);
-  return [aiContext(data, month), findingsText(data, month), suppliers.length ? `הוצאות לפי ספק החודש:\n${suppliers.join('\n')}` : ''].filter(Boolean).join('\n\n');
+  return [aiContext(data, month), findingsText(data, month), invoicesText(data), suppliers.length ? `הוצאות לפי ספק החודש:\n${suppliers.join('\n')}` : ''].filter(Boolean).join('\n\n');
 }
 
 const PRESETS = [
   ['🔎', 'מה השתנה החודש', 'מה השתנה החודש? עברו על הממצאים האוטומטיים ועל ההוצאות לפי ספק: אילו תעריפים עלו, איפה יש חיוב כפול או חיוב שלא הגיע, ומה לעשות עם כל אחד – לפי סדר דחיפות.'],
+  ['🧾', 'בדיקת חשבוניות', 'עברו על החשבוניות מהמייל: איפה התעריף עלה, איזה סעיף חדש נוסף, איפה יש חשבונית כפולה או חסרה, ומה לעשות בכל מקרה (להתקשר לספק, לבקש זיכוי, לבטל).'],
   ['🔁', 'להחליף ספק', 'לאילו ספקים כדאי לבדוק מעבר או מיקוח (חשמל, סלולר, אינטרנט, טלוויזיה, ביטוחים, מנויים)? לכל אחד: כמה משלמים היום, מה מחיר סביר בשוק בערך, וכמה אפשר לחסוך.'],
   ['📊', 'תמונת מצב', 'תנו לי תמונת מצב של התקציב: איך אנחנו עומדים, מה המגמה בחודשים האחרונים ובחודשים הקרובים, ומה הכי חשוב לשים לב אליו.'],
   ['💰', 'איפה אפשר לחסוך', 'איפה אפשר לחסוך? תנו רשימה מסודרת של רעיונות חיסכון לפי הנתונים שלנו, עם הערכה כמה כל אחד יחסוך בחודש ובשנה, מהקל והמשתלם ביותר.'],

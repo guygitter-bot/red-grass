@@ -4,6 +4,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { advise } from './ai.js';
 import { Fixes } from './fixes.js';
+import { Mailbox } from './mail/mailbox.js';
 
 const SESSION_MS = 365 * 24 * 60 * 60 * 1000;
 const MAX_SESSIONS = 20;
@@ -95,6 +96,24 @@ export class Budget {
       if (path === 'password') return json(200, await this.password(body));
       if (path === 'reset') return json(200, await this.reset(body));
       if (path === 'ai') return json(200, await this.ai(body));
+      if (path.startsWith('mail/')) {
+        const mail = this.mailbox();
+        const action = path.slice(5);
+        if (action === 'list') return json(200, await mail.list());
+        if (action === 'add') {
+          const res = await mail.add(body);
+          // הריצה הראשונה מתחילה מיד ברקע
+          await this.storage.setAlarm(this.now() + 1000);
+          return json(200, res);
+        }
+        if (action === 'remove') return json(200, await mail.remove(body));
+        if (action === 'run') {
+          if (!mail.ready) throw fail(503, 'חיבור מיילים עוד לא הופעל בשרת');
+          if (!(await mail.accounts()).length) throw fail(400, 'עוד לא חוברה תיבת מייל');
+          await this.storage.setAlarm(this.now() + 500);
+          return json(200, { ok: true });
+        }
+      }
       if (path.startsWith('fix/')) {
         const fixes = new Fixes({ storage: this.storage, env: this.env, now: this.now, origin: request.headers.get('x-origin') || '' });
         const action = path.slice(4);
@@ -199,6 +218,44 @@ export class Budget {
     return { ok: true, rev: d.rev };
   }
 
+  mailbox() {
+    return new Mailbox({ storage: this.storage, env: this.env, now: this.now, putRecords: (list) => this.putRecords(list) });
+  }
+
+  aiClient() {
+    return this.env.AI_CLIENT || new Anthropic({ apiKey: this.env.ANTHROPIC_API_KEY });
+  }
+
+  // רשומות שהשרת עצמו יוצר (חשבוניות מהמייל) – נכנסות כמו שינוי ממכשיר, ומסתנכרנות לכולם
+  async putRecords(list) {
+    const d = this.d;
+    const writes = {};
+    for (const raw of list) {
+      const old = d.recs.get(raw.id);
+      // חשבונית שהמשתמש מחק – לא מחזירים
+      if (old?.deleted) continue;
+      const rec = cleanRecord({ ...raw, updatedAt: Math.max(this.now(), (old?.updatedAt || 0) + 1) });
+      if (!rec) continue;
+      d.rev += 1;
+      const saved = { ...rec, rev: d.rev };
+      d.recs.set(rec.id, saved);
+      writes[`r:${rec.id}`] = saved;
+    }
+    await this.write(writes);
+  }
+
+  // ריצה יומית: איסוף חשבוניות מהמיילים
+  async alarm() {
+    await this.load();
+    const mail = this.mailbox();
+    if (!mail.ready || !(await mail.accounts()).length) return;
+    try {
+      await mail.run(this.aiClient());
+    } finally {
+      await this.storage.setAlarm(mail.nextDaily());
+    }
+  }
+
   async write(writes) {
     const keys = Object.keys(writes);
     // עד 128 מפתחות בכל כתיבה
@@ -217,7 +274,7 @@ export class Budget {
     if (usage.count >= AI_PER_DAY) throw fail(429, 'הגעתם למספר השאלות להיום. אפשר לשאול שוב מחר');
     usage.count += 1;
     await this.storage.put('ai-usage', usage);
-    const client = this.env.AI_CLIENT || new Anthropic({ apiKey: this.env.ANTHROPIC_API_KEY });
+    const client = this.aiClient();
     try {
       return { answer: await advise(client, context, question), left: AI_PER_DAY - usage.count };
     } catch (err) {
