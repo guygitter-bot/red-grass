@@ -491,13 +491,15 @@ export function looseAfter(data, meal) {
 }
 
 // ארוחות של היום שקיבלו אינסולין ועבר זמן – אבל אין מדידה שעתיים אחרי (תזכורת במסך).
-// נחשבת כל מדידה מ-90 דקות אחרי: בתוך הארוחה, "מדידה בלי ארוחה", או מהחיישן
+// נחשבת כל מדידה מ-90 דקות אחרי: בתוך הארוחה, "מדידה בלי ארוחה", או מהחיישן.
+// גם סוכר "לפני" של ארוחה מאוחרת יותר באותו יום נחשב בדיקה (למשל ארוחת בוקר שנייה ב-9:30)
 export function waitingForCheck(data, date = today(), time = nowTime()) {
   return data.meals.filter((m) => {
     if (m.date !== date || m.insulin === '') return false;
     const passed = minutes(time) - minutes(m.time);
     if (passed < 110 || passed > 5 * 60) return false;
     if (m.readings.some((r) => minutesAfter(m.time, r.time) >= 90)) return false;
+    if (data.meals.some((x) => x.id !== m.id && x.date === m.date && x.before !== '' && minutes(x.time) > minutes(m.time))) return false;
     if (looseAfter(data, m).some((r) => r.mins >= 90)) return false;
     if (cgmAt(data, m.date, minutes(m.time) + 120, 30) !== '') return false;
     return true;
