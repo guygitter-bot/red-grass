@@ -112,6 +112,18 @@ describe('יומן סוכר', () => {
     expect(outcome(two.meals[0], two).after).toHaveLength(0);
   });
 
+  test('סוכר "לפני" של ארוחה מאוחרת יותר נחשב בדיקה לארוחה הקודמת', () => {
+    const a = { id: 'a', t: 'meal', date: BASE, time: '07:11', insulin: 1, before: 96 };
+    const b = { id: 'b', t: 'meal', date: BASE, time: '09:30', insulin: 2, before: 128 };
+    const data = prepare([a, b]);
+    expect(waitingForCheck(data, BASE, '10:32')).toHaveLength(0);
+    expect(waitingForCheck(data, BASE, '11:30').map((m) => m.id)).toEqual(['b']);
+    // ארוחה מאוחרת בלי סוכר "לפני" – התזכורת נשארת
+    expect(waitingForCheck(prepare([a, { ...b, before: '' }]), BASE, '10:32').map((m) => m.id)).toEqual(['a']);
+    // פריט נוסף באותה דקה הוא אותה ארוחה – לא נחשב בדיקה
+    expect(waitingForCheck(prepare([a, { ...b, time: '07:11' }]), BASE, '09:15').map((m) => m.id)).toEqual(['a', 'b']);
+  });
+
   test('סיכום ל-AI וייצוא', () => {
     const data = prepare(records);
     const ctx = aiContext(data, BASE);
