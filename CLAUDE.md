@@ -385,3 +385,9 @@
 ### כלי עריכת וידאו (`.claude/skills/` – `color-grade`, `beats-and-cuts`, `before-and-after`, `hand-drawn`, `motion-graphics`)
 - מצרפים סרטון בצ'אט וכותבים `/color-grade` וכו'. הסבר בעברית: `.claude/skills/video-tools/README.md`; קוד משותף: `video-tools/lib.py` (ffmpeg + Pillow).
 - טקסט בעברית: רק דרך `text_png` / `pill_png` (Pillow עם raqm) או Chromium – `drawtext` של ffmpeg הופך עברית. הגופן: `video-tools/fonts/Rubik.ttf` (OFL).
+
+### סרטון ביקורת – לקוח סמוי (`.claude/skills/mystery-video`)
+- `/mystery-video` + קישור דרייב + דוח ביקורת → סרטון 7–8 דק׳: כניסה ויציאה, רגעים לפי הדוח, מעברי דעיכה, כתוביות לבנות **רק לנציג/ה**,
+  שתי קבוצות של 3–4 כרטיסי שימור/שיפור קטנים (לפני הישיבה בעמדה ולקראת סופה), שקופית פתיחה (סאני + ZoomAct, המלל בדיוק כמו בשקופית) וסיכום.
+- הכול חינמי וכאן (Whisper של OpenAI – huggingface חסום, ffmpeg, Pillow). פלט yuv420p (אחרת לא מתנגן בטלפון).
+- **הסרטונים והדוחות לא נכנסים למאגר** (ציבורי, פנים ושמות של עובדים) – רק ב-scratchpad ונשלחים ב-`SendUserFile`.
