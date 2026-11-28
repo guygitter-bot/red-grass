@@ -63,6 +63,7 @@ def build(raw, job, transcript, duration, cfg):
 
     # כתוביות: בתוך קטע, ולפי תוויות דוברים כשיש
     rep = job.get("rep_speaker")
+    rep_only = bool(job.get("transcript_rep_only"))
     def speaker_at(s, e):
         spk = {t.get("speaker") for t in transcript if t.get("speaker") and t["start"] < e and t["end"] > s}
         return spk
@@ -75,6 +76,9 @@ def build(raw, job, transcript, duration, cfg):
         if not text or not host or e <= s:
             dropped += 1; continue
         if rep and (spk := speaker_at(s, e)) and rep not in spk:
+            dropped += 1; continue
+        # תמלול של הנציג/ה בלבד: כתובית שלא נופלת על אף משפט בתמלול – כנראה של הדוגם
+        if rep_only and not any(t["start"] < e and t["end"] > s for t in transcript):
             dropped += 1; continue
         host["subs"].append({"start": s, "end": min(e, host["end"]), "text": text})
     if dropped:

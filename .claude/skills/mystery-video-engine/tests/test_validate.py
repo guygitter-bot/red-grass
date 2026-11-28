@@ -62,6 +62,14 @@ def test_subs_only_rep_and_inside_clips():
     assert any("subtitles dropped" in w for w in warns)
 
 
+def test_rep_only_transcript_drops_shopper_subs():
+    rep_lines = [{"start": 100, "end": 104, "text": "שלום, אפשר לעזור?"}]
+    r = raw([(95, 130, 1)], subs=[(100, 104, "שלום, אפשר לעזור?"), (110, 113, "כמה זה עולה?")])
+    plan, _ = validate.build(r, {"transcript_rep_only": True}, rep_lines, DUR, CFG)
+    texts = [s["text"] for c in plan for s in c["subs"]]
+    assert texts == ["שלום, אפשר לעזור?"], texts
+
+
 def test_two_groups_inside_clips_and_capped():
     groups = [{"at": 120, "cards": [{"kind": "keep", "text": str(i)} for i in range(6)]},
               {"at": 300, "cards": [{"kind": "keep", "text": "x"}] * 3},

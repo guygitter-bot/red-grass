@@ -18,10 +18,16 @@ def build_request(job, transcript, sheets, duration, cfg):
         lines.append(f"[{s['start']:.1f}-{s['end']:.1f}]{spk}{f0} {s['text']}")
     must = [{"start": m["start"], "end": m["end"]} for m in job.get("must_include", [])]
     markers = {k: v for k, v in (job.get("markers") or {}).items() if v is not None}
+    labels = "yes" if any(s.get("speaker") for s in transcript) else "no"
+    if job.get("rep_speaker"):
+        labels += f" (the rep is speaker {job['rep_speaker']}; subtitle only that speaker)"
+    rep_only = ("The transcript contains ONLY the sales rep's speech (the shopper was filtered out). Every line is "
+                "the rep; infer the shopper's side from the rep's answers, the report and the frames.\n"
+                if job.get("transcript_rep_only") else "")
     text = (
         f"Recording length: {duration:.1f} seconds.\n"
-        f"Rep: {job.get('rep_name') or 'unknown'}. Speaker labels in transcript: "
-        f"{'yes' if any(s.get('speaker') for s in transcript) else 'no'}.\n"
+        f"Rep: {job.get('rep_name') or 'unknown'}. Speaker labels in transcript: {labels}.\n"
+        f"{rep_only}"
         f"Domain vocabulary (for spelling fixes): {', '.join(job.get('vocabulary', []))}\n\n"
         f"Required ranges (must_include, source seconds): {json.dumps(must)}\n"
         f"Markers from the user (source seconds): {json.dumps(markers)}\n\n"
