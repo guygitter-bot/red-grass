@@ -1,0 +1,22 @@
+{
+  "video": "/data/visits/12345/raw.mp4",
+  "report": "<the full text of the audit report: scores, answers and the written summary>",
+  "score": "85.00",
+  "transcript": "/data/visits/12345/transcript.json",
+  "rep_speaker": "B",
+  "rep_name": "<rep first name>",
+  "must_include": [
+    {"start": 300.0, "end": 330.0}
+  ],
+  "markers": {"entry_start": 24.0, "desk_start": 400.0, "exit_end": null},
+  "vocabulary": ["סמסונג", "גלקסי", "טרייד-אין", "יבואן רשמי", "יבוא מקביל"],
+  "branding": {
+    "intro_lines": ["ביקור חווית לקוח", "קניון לדוגמה SAMSUNG", "עיר לדוגמה", "חודש שנה"],
+    "logo_top": "assets/sunny.png",
+    "logo_bottom": "assets/zoomact.png",
+    "photo": null
+  },
+  "output": {"size": "1280x720", "target_min": 420, "target_max": 480, "sub_bottom": 62},
+  "model": "claude-opus-5-5",
+  "effort": "high"
+}
