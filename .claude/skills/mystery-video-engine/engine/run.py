@@ -28,7 +28,10 @@ def load_transcript(job, src, out):
     if isinstance(t, dict):
         t = t.get("segments", [])
     if t:
-        return [{"start": float(s["start"]), "end": float(s["end"]), "text": s["text"].strip(),
+        # transcript_offset: כמה שניות להוסיף לזמני התמלול כדי שיתאימו לסרטון
+        # (כשהתמלול נעשה מהקלטת קול נפרדת שהתחילה בזמן אחר; מאותו קובץ – 0)
+        off = float(job.get("transcript_offset", 0))
+        return [{"start": float(s["start"]) + off, "end": float(s["end"]) + off, "text": s["text"].strip(),
                  **({"speaker": str(s["speaker"])} if s.get("speaker") is not None else {})} for s in t]
     audio, tj = os.path.join(out, "audio.wav"), os.path.join(out, "transcript.json")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", src, "-ac", "1", "-ar", "16000", audio], check=True)
