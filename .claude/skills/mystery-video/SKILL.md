@@ -36,8 +36,9 @@ description: >-
 
 ## שלבים
 ```bash
-SK=/home/user/red-grass/.claude/skills/mystery-video/scripts
-W=<scratchpad>/mv && mkdir -p $W/src && cd $W
+# SK = תיקיית scripts שליד הקובץ הזה (כל מחשב שם אותה במקום אחר – למצוא אותה, לא לנחש)
+SK=$(dirname "$(find "$PWD" ~/.claude /home -path '*mystery-video/scripts/render.py' 2>/dev/null | head -1)")
+W=<scratchpad או תיקייה זמנית>/mv && mkdir -p $W/src && cd $W
 ```
 1. **התקנה (פעם בשיחה, ברקע):** `pip install -q openai-whisper librosa` (מתקין torch, כמה דקות).
    huggingface חסום – לכן Whisper של OpenAI ולא faster-whisper.
