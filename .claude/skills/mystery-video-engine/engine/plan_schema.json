@@ -1,0 +1,77 @@
+{
+  "type": "object",
+  "properties": {
+    "markers": {
+      "type": "object",
+      "description": "Source seconds. Use -1 when not found.",
+      "properties": {
+        "entry_start": {"type": "number"},
+        "desk_start": {"type": "number"},
+        "exit_end": {"type": "number"}
+      },
+      "required": ["entry_start", "desk_start", "exit_end"],
+      "additionalProperties": false
+    },
+    "clips": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "start": {"type": "number"},
+          "end": {"type": "number"},
+          "priority": {"type": "integer", "enum": [1, 2, 3]},
+          "reason": {"type": "string"}
+        },
+        "required": ["start", "end", "priority", "reason"],
+        "additionalProperties": false
+      }
+    },
+    "subtitles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "start": {"type": "number"},
+          "end": {"type": "number"},
+          "text": {"type": "string"}
+        },
+        "required": ["start", "end", "text"],
+        "additionalProperties": false
+      }
+    },
+    "card_groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "at": {"type": "number"},
+          "cards": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {"type": "string", "enum": ["keep", "fix"]},
+                "text": {"type": "string"}
+              },
+              "required": ["kind", "text"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["at", "cards"],
+        "additionalProperties": false
+      }
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "keep": {"type": "array", "items": {"type": "string"}},
+        "fix": {"type": "array", "items": {"type": "string"}}
+      },
+      "required": ["keep", "fix"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["markers", "clips", "subtitles", "card_groups", "summary"],
+  "additionalProperties": false
+}
