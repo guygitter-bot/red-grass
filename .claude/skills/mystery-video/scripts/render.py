@@ -19,7 +19,8 @@ W, H, FADE = 1280, 720, 0.6
 work = os.path.join(os.path.dirname(os.path.abspath(OUT)), "work")
 os.makedirs(work, exist_ok=True)
 plan = json.load(open(PLAN))
-ENC = ["-c:v", "libx264", "-preset", "medium", "-crf", "19", "-pix_fmt", "yuv420p",
+# קבצי ביניים: preset מהיר ואיכות גבוהה (crf 18) – הקידוד הסופי הוא שקובע את הגודל
+ENC = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
        "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2"]
 FINAL = ["-c:v", "libx264", "-preset", "medium", "-crf", "21", "-pix_fmt", "yuv420p", "-profile:v", "high",
          "-level", "4.0", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart"]
@@ -70,7 +71,10 @@ def clip(i, seg):
     return out, dur
 
 
-parts = [still(i, s) if "image" in s else clip(i, s) for i, s in enumerate(plan)]
+# בונים כמה קטעים במקביל (כל ffmpeg משתמש בכמה ליבות) – מהיר פי 2-3
+from concurrent.futures import ThreadPoolExecutor
+with ThreadPoolExecutor(max_workers=max(1, min(4, (os.cpu_count() or 2) // 2 + 1))) as pool:
+    parts = list(pool.map(lambda a: still(*a) if "image" in a[1] else clip(*a), enumerate(plan)))
 args, vf, af = [], [], []
 for p, _ in parts:
     args += ["-i", p]
